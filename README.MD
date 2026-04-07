@@ -56,6 +56,26 @@ py Repo_Privacy_Guardian.py --root C:/path/to/repos --repos MyRepo --fix --dry-r
 py Repo_Privacy_Guardian.py --gui
 ```
 
+## CLI/GUI parity for agentic workflows
+
+GUI and CLI use the same execution pipeline and policy logic.
+
+- same checks and severity model
+- same remediation decisions and safety guardrails
+- same JSON/HTML/LOG artifacts
+
+This parity lets you choose UX style without changing audit behavior:
+
+- GUI for guided/manual operation
+- CLI for automation with code agents and agentic IDEs (Codex, Cursor, Antigravity, VS Code with GitHub Copilot, etc.)
+
+Recommended for agent-based execution:
+
+1. Run CLI in dry-run first.
+2. Review the guidance (risk, possible consequence, suggestion).
+3. Authorize only the remediations you intend.
+4. Re-run until policy status is PASS.
+
 ## Policy 📜
 
 The repository includes a generic governance baseline in docs/POLICY.md.

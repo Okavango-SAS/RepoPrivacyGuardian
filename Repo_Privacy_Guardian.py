@@ -2360,8 +2360,17 @@ class GuiApp:  # pragma: no cover
         self.messagebox = messagebox
         self.root = ctk.CTk()
         self.root.title("Repo Publication Guard")
-        self.root.geometry("1320x920")
-        self.root.minsize(1160, 780)
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        window_w = min(max(int(screen_w * 0.9), 1120), 1560)
+        window_h = min(max(int(screen_h * 0.9), 760), 980)
+        window_x = max((screen_w - window_w) // 2, 0)
+        window_y = max((screen_h - window_h) // 2, 0)
+        self._top_stack_width_threshold = 1320
+        self._options_stack_width_threshold = 1220
+        self.root.geometry(f"{window_w}x{window_h}+{window_x}+{window_y}")
+        self.root.minsize(min(1120, screen_w), min(700, screen_h))
+        self.root.maxsize(screen_w, screen_h)
 
         self.root_var = tk.StringVar(value=str(DEFAULT_ROOT))
         self.policy_var = tk.StringVar(value=str(DEFAULT_POLICY))
@@ -2387,9 +2396,13 @@ class GuiApp:  # pragma: no cover
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
 
-        app = ctk.CTkFrame(self.root, fg_color="#E8EEF6", corner_radius=0)
+        app = ctk.CTkScrollableFrame(
+            self.root,
+            fg_color="#E8EEF6",
+            corner_radius=0,
+            border_width=0,
+        )
         app.grid(row=0, column=0, sticky="nsew")
-        app.grid_rowconfigure(5, weight=1)
         app.grid_columnconfigure(0, weight=1)
 
         header = ctk.CTkFrame(app, fg_color="#0B4F7A", corner_radius=14)
@@ -2412,6 +2425,7 @@ class GuiApp:  # pragma: no cover
         top_row.grid(row=1, column=0, sticky="we", padx=16)
         top_row.grid_columnconfigure(0, weight=2)
         top_row.grid_columnconfigure(1, weight=1)
+        self._top_row = top_row
 
         settings_card = ctk.CTkFrame(
             top_row,
@@ -2422,6 +2436,7 @@ class GuiApp:  # pragma: no cover
         )
         settings_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         settings_card.grid_columnconfigure(1, weight=1)
+        self._settings_card = settings_card
         ctk.CTkLabel(
             settings_card,
             text="Run Configuration",
@@ -2527,6 +2542,9 @@ class GuiApp:  # pragma: no cover
         )
         profile_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         profile_card.grid_columnconfigure(1, weight=1)
+        self._profile_card = profile_card
+        self._compact_top_layout = False
+
         ctk.CTkLabel(
             profile_card,
             text="Owner Profile",
@@ -2700,33 +2718,86 @@ class GuiApp:  # pragma: no cover
             border_color="#D1DDEA",
         )
         options_card.grid(row=3, column=0, sticky="we", padx=16, pady=6)
-        for col in range(3):
-            options_card.grid_columnconfigure(col, weight=1)
+        options_card.grid_columnconfigure(0, weight=1)
+        options_card.grid_columnconfigure(1, weight=1)
+        self._options_card = options_card
         ctk.CTkLabel(
             options_card,
             text="Audit Options",
             font=("Segoe UI Semibold", 16),
             text_color="#113150",
-        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
 
-        option_items = [
+        safe_options = ctk.CTkFrame(
+            options_card,
+            fg_color="#F3FAFF",
+            corner_radius=10,
+            border_width=1,
+            border_color="#C9DDEE",
+        )
+        safe_options.grid(row=1, column=0, sticky="nsew", padx=(14, 7), pady=(0, 12))
+        safe_options.grid_columnconfigure(0, weight=1)
+        self._safe_options_card = safe_options
+        ctk.CTkLabel(
+            safe_options,
+            text="Safe / Advisory",
+            font=("Segoe UI Semibold", 13),
+            text_color="#12405E",
+        ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
+
+        safe_items = [
             ("Public remotes only", self.public_only_var),
-            ("Apply fix", self.fix_var),
-            ("Force push", self.push_var),
             ("Redact third-party emails", self.redact_var),
             ("Low-confidence emails are blocking", self.low_confidence_blocking_var),
-            ("Purge detected secret files (safe)", self.purge_detected_secret_files_var),
-            ("Purge all detected secret files (risky)", self.purge_all_detected_secret_files_var),
             ("Dry run", self.dry_run_var),
         ]
-        for idx, (label, var) in enumerate(option_items):
+        for idx, (label, var) in enumerate(safe_items, start=1):
             ctk.CTkCheckBox(
-                options_card,
+                safe_options,
                 text=label,
                 variable=var,
                 font=("Segoe UI", 12),
                 text_color="#1E293B",
-            ).grid(row=1 + idx // 3, column=idx % 3, sticky="w", padx=14, pady=4)
+            ).grid(row=idx, column=0, sticky="w", padx=12, pady=4)
+
+        destructive_options = ctk.CTkFrame(
+            options_card,
+            fg_color="#FFF4F4",
+            corner_radius=10,
+            border_width=1,
+            border_color="#E3B8B8",
+        )
+        destructive_options.grid(row=1, column=1, sticky="nsew", padx=(7, 14), pady=(0, 12))
+        destructive_options.grid_columnconfigure(0, weight=1)
+        self._destructive_options_card = destructive_options
+        self._compact_options_layout = False
+        ctk.CTkLabel(
+            destructive_options,
+            text="Destructive / Write Actions",
+            font=("Segoe UI Semibold", 13),
+            text_color="#7B1E1E",
+        ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
+        ctk.CTkLabel(
+            destructive_options,
+            text="Enable only after reviewing risk and consequence.",
+            font=("Segoe UI", 11),
+            text_color="#8F3A3A",
+        ).grid(row=1, column=0, sticky="w", padx=12, pady=(0, 4))
+
+        destructive_items = [
+            ("Apply fix", self.fix_var),
+            ("Force push", self.push_var),
+            ("Purge detected secret files (safe)", self.purge_detected_secret_files_var),
+            ("Purge all detected secret files (risky)", self.purge_all_detected_secret_files_var),
+        ]
+        for idx, (label, var) in enumerate(destructive_items, start=2):
+            ctk.CTkCheckBox(
+                destructive_options,
+                text=label,
+                variable=var,
+                font=("Segoe UI", 12),
+                text_color="#1E293B",
+            ).grid(row=idx, column=0, sticky="w", padx=12, pady=4)
 
         repos_card = ctk.CTkFrame(
             app,
@@ -2835,6 +2906,76 @@ class GuiApp:  # pragma: no cover
         self.output.grid(row=1, column=0, sticky="nsew", padx=14, pady=(0, 12))
 
         self.refresh_repos()
+        self.root.bind("<Configure>", self._on_root_resize)
+        self.root.after(0, self._apply_responsive_layout)
+
+    def _get_logical_window_width(self) -> int:
+        geometry = self.root.wm_geometry().split("+", maxsplit=1)[0]
+        width_text = geometry.split("x", maxsplit=1)[0]
+        try:
+            width = int(width_text)
+        except ValueError:
+            width = self.root.winfo_width()
+
+        scale = 1.0
+        try:
+            scale = float(self.ctk.ScalingTracker.get_window_scaling(self.root))
+        except Exception:
+            pass
+
+        safe_scale = scale if scale > 0 else 1.0
+        return int(round(width / safe_scale))
+
+    def _on_root_resize(self, event) -> None:
+        del event
+        self._apply_responsive_layout()
+
+    def _apply_responsive_layout(self) -> None:
+        width = self._get_logical_window_width()
+        self._apply_top_layout(compact=width <= self._top_stack_width_threshold)
+        self._apply_options_layout(compact=width <= self._options_stack_width_threshold)
+
+    def _apply_top_layout(self, compact: bool) -> None:
+        if compact == self._compact_top_layout:
+            return
+
+        self._compact_top_layout = compact
+        if compact:
+            self._top_row.grid_columnconfigure(0, weight=1)
+            self._top_row.grid_columnconfigure(1, weight=1)
+            self._settings_card.grid_configure(row=0, column=0, padx=0, pady=(0, 8), sticky="we")
+            self._profile_card.grid_configure(row=1, column=0, padx=0, pady=(8, 0), sticky="we")
+            return
+
+        self._top_row.grid_columnconfigure(0, weight=2)
+        self._top_row.grid_columnconfigure(1, weight=1)
+        self._settings_card.grid_configure(row=0, column=0, padx=(0, 8), pady=0, sticky="nsew")
+        self._profile_card.grid_configure(row=0, column=1, padx=(8, 0), pady=0, sticky="nsew")
+
+    def _apply_options_layout(self, compact: bool) -> None:
+        if compact == self._compact_options_layout:
+            return
+
+        self._compact_options_layout = compact
+        if compact:
+            self._safe_options_card.grid_configure(row=1, column=0, padx=14, pady=(0, 8), sticky="we")
+            self._destructive_options_card.grid_configure(
+                row=2,
+                column=0,
+                padx=14,
+                pady=(0, 12),
+                sticky="we",
+            )
+            return
+
+        self._safe_options_card.grid_configure(row=1, column=0, padx=(14, 7), pady=(0, 12), sticky="nsew")
+        self._destructive_options_card.grid_configure(
+            row=1,
+            column=1,
+            padx=(7, 14),
+            pady=(0, 12),
+            sticky="nsew",
+        )
 
     def log(self, msg: str) -> None:
         self.output.insert("end", msg + "\n")
