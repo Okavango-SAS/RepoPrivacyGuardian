@@ -41,6 +41,16 @@ DEFAULT_PLACEHOLDER = "redacted-contributor@example.invalid"
 DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "Audit_Results"
 GUI_DEFAULT_PUBLIC_ONLY = False
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
+REDACTED_EMAIL = "<redacted-email>"
+REDACTED_SECRET = "<redacted-secret>"
+REDACTED_PATH = "<redacted-path>"
+EMAIL_NOISE_DOMAINS = {
+    "example.com",
+    "example.org",
+    "example.net",
+    "localhost",
+    "localdomain",
+}
 GITHUB_EMAIL_PRIVACY_HELP = (
     "GitHub privacy checklist:\n"
     '1. Enable "Keep my email addresses private"\n'
@@ -71,8 +81,12 @@ DEFAULT_IGNORE_BASELINE = [
 ]
 
 SENSITIVE_FILENAME_RE = re.compile(
-    r"^\.env$|^\.env\.|\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|id_rsa|"
-    r"secrets?\.|credentials?\.|token|__pycache__/|\.pyc$",
+    r"(^|/)\.env(\..*)?$|"
+    r"\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|"
+    r"(^|/)id_rsa$|"
+    r"(^|/)(secrets?|credentials?|token)([._-]|$)|"
+    r"(^|/)__pycache__(/|$)|"
+    r"\.pyc$",
     re.IGNORECASE,
 )
 
@@ -90,7 +104,7 @@ SECRET_REMEDIATE_FILENAME_RE = re.compile(
     r"(^|/)\.env(\..*)?$|"
     r"\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|"
     r"(^|/)id_rsa$|"
-    r"secret|credential|token|password|passwd|api[_-]?key",
+    r"(^|/)(secret|credential|token|password|passwd|api[_-]?key)([._-]|$)",
     re.IGNORECASE,
 )
 
@@ -101,8 +115,10 @@ SIMPLE_EMAIL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-
 EXFIL_CODE_RE = re.compile(
     r"Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|HttpClient|WebClient|"
     r"requests\.|httpx|aiohttp|urllib|urlopen|websockets|socket\.|"
-    r"upload|webhook|telemetry|analytics"
+    r"\bupload\b|\bwebhook\b|\btelemetry\b|\banalytics\b"
 )
+
+GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)(?:\.git)?$", re.IGNORECASE)
 
 CODE_EXTENSIONS = {
     ".py",
@@ -153,6 +169,9 @@ class GuardRunConfig:
     noreply_email: str
     placeholder_email: str
     max_matches: int
+    confirm_each_repo_fix: bool = True
+    allow_non_owner_push: bool = False
+    allowed_remote_owners: list[str] = field(default_factory=list)
     report_json: str | None = None
 
 
@@ -252,6 +271,8 @@ class RepoPublicationGuard:  # pragma: no cover
         push: bool,
         dry_run: bool,
         max_matches: int,
+        allow_non_owner_push: bool,
+        allowed_remote_owners: list[str],
         logger: Callable[[str], None],
     ) -> None:
         self.root = root
@@ -266,7 +287,17 @@ class RepoPublicationGuard:  # pragma: no cover
         self.push = push
         self.dry_run = dry_run
         self.max_matches = max_matches
+        self.allow_non_owner_push = allow_non_owner_push
+        self.allowed_remote_owners = {
+            owner.strip().lower()
+            for owner in allowed_remote_owners
+            if owner.strip()
+        }
         self.log = logger
+
+        inferred_owner = infer_github_username_from_noreply(self.noreply_email)
+        if inferred_owner:
+            self.allowed_remote_owners.add(inferred_owner.lower())
 
         self.required_ignore_patterns = self._load_required_ignore_patterns()
 
@@ -445,7 +476,11 @@ class RepoPublicationGuard:  # pragma: no cover
         matches: list[str] = []
         assert proc.stdout is not None
         for idx, line in enumerate(proc.stdout, start=1):
-            emails = EMAIL_RE.findall(line)
+            emails = [
+                email
+                for email in EMAIL_RE.findall(line)
+                if is_relevant_email_candidate(email)
+            ]
             leaked = [email for email in emails if not self._is_allowed_email(email)]
             if leaked:
                 uniq = ", ".join(sorted(set(leaked)))
@@ -457,6 +492,32 @@ class RepoPublicationGuard:  # pragma: no cover
             proc.wait(timeout=10)
         except subprocess.TimeoutExpired:
             proc.kill()
+        return matches
+
+    def _scan_tracked_non_allowed_emails(self, repo: Path) -> list[str]:
+        matches: list[str] = []
+        for file_path in self._iter_tracked_files(repo):
+            rel = file_path.relative_to(repo).as_posix()
+            try:
+                data = file_path.read_bytes()
+            except OSError:
+                continue
+            if b"\x00" in data:
+                continue
+            text = data.decode("utf-8", errors="replace")
+            for idx, line in enumerate(text.splitlines(), start=1):
+                emails = [
+                    email
+                    for email in EMAIL_RE.findall(line)
+                    if is_relevant_email_candidate(email)
+                ]
+                leaked = [email for email in emails if not self._is_allowed_email(email)]
+                if not leaked:
+                    continue
+                uniq = ", ".join(sorted(set(leaked)))
+                matches.append(f"{rel}:{idx}:{uniq}:{line.strip()[:200]}")
+                if len(matches) >= self.max_matches:
+                    return matches
         return matches
 
     def _scan_history_secret_files(self, repo: Path) -> list[str]:
@@ -635,7 +696,7 @@ class RepoPublicationGuard:  # pragma: no cover
         report.tracked_secret_matches = self._scan_tracked_content(repo, SECRET_CONTENT_RE)
         report.tracked_secret_files = self._extract_file_paths_from_match_lines(report.tracked_secret_matches)
         report.tracked_path_matches = self._scan_tracked_content(repo, PERSONAL_PATH_RE)
-        report.tracked_email_matches = self._scan_tracked_content(repo, EMAIL_RE)
+        report.tracked_email_matches = self._scan_tracked_non_allowed_emails(repo)
 
         report.history_secret_matches = self._scan_history_patch(repo, SECRET_CONTENT_RE)
         report.history_secret_files = self._scan_history_secret_files(repo)
@@ -738,6 +799,8 @@ class RepoPublicationGuard:  # pragma: no cover
 
         for line in candidate_lines:
             for email in EMAIL_RE.findall(line):
+                if not is_relevant_email_candidate(email):
+                    continue
                 if self._is_allowed_email(email):
                     continue
 
@@ -850,6 +913,11 @@ class RepoPublicationGuard:  # pragma: no cover
             report.fix_actions.append(
                 f"[dry-run] would append secret file ignore entries: {len(ignore_entries)}"
             )
+            preview_entries = ", ".join(ignore_entries[:5])
+            if preview_entries:
+                report.fix_actions.append(f"[dry-run] ignore entries preview: {preview_entries}")
+            if len(ignore_entries) > 5:
+                report.fix_actions.append("[dry-run] ignore entries preview truncated")
         else:
             changed = self._append_gitignore_lines(
                 repo,
@@ -865,6 +933,11 @@ class RepoPublicationGuard:  # pragma: no cover
                 report.fix_actions.append(
                     f"[dry-run] would untrack secret files: {len(tracked_targets)}"
                 )
+                preview_targets = ", ".join(tracked_targets[:5])
+                if preview_targets:
+                    report.fix_actions.append(f"[dry-run] secret file untrack preview: {preview_targets}")
+                if len(tracked_targets) > 5:
+                    report.fix_actions.append("[dry-run] secret file untrack preview truncated")
             else:
                 for path in tracked_targets:
                     self._git_checked(repo, "rm", "--cached", "--", path)
@@ -895,6 +968,15 @@ class RepoPublicationGuard:  # pragma: no cover
 
         if self.dry_run:
             report.fix_actions.append("[dry-run] history rewrite would run")
+            report.fix_actions.append(f"[dry-run] mailmap enabled: {bool(mailmap)}")
+            report.fix_actions.append(f"[dry-run] replace-text enabled: {bool(replace_text)}")
+            if purge_paths:
+                preview_paths = ", ".join(purge_paths[:5])
+                report.fix_actions.append(f"[dry-run] purge paths preview: {preview_paths}")
+                if len(purge_paths) > 5:
+                    report.fix_actions.append("[dry-run] purge paths preview truncated")
+            if purge_by_filename_signals:
+                report.fix_actions.append("[dry-run] sensitive filename signal purge regex enabled")
             return
 
         self._ensure_git_filter_repo()
@@ -949,6 +1031,29 @@ class RepoPublicationGuard:  # pragma: no cover
         self._git_checked(repo, "config", "--local", "user.name", self.owner_name)
         self._git_checked(repo, "config", "--local", "user.email", self.noreply_email)
 
+    def _validate_push_owner(self, report: RepoReport) -> None:
+        if self.allow_non_owner_push:
+            return
+
+        if not self.allowed_remote_owners:
+            raise RuntimeError(
+                "push blocked: no allowed remote owners configured. "
+                "Use --allow-remote-owner or --allow-non-owner-push."
+            )
+
+        owner = parse_github_remote_owner(report.origin_url or "")
+        if not owner:
+            raise RuntimeError(
+                "push blocked: unable to infer origin owner from remote URL. "
+                "Use --allow-non-owner-push to bypass this guardrail."
+            )
+
+        if owner.lower() not in self.allowed_remote_owners:
+            allowed = ", ".join(sorted(self.allowed_remote_owners))
+            raise RuntimeError(
+                f"push blocked: origin owner '{owner}' is not in allowed owner set ({allowed})."
+            )
+
     def _push_if_requested(self, repo: Path, report: RepoReport) -> None:
         if not self.push:
             return
@@ -957,6 +1062,9 @@ class RepoPublicationGuard:  # pragma: no cover
         if self.dry_run:
             report.fix_actions.append("[dry-run] force push skipped")
             return
+
+        self._validate_push_owner(report)
+        report.fix_actions.append("validated remote owner before force push")
 
         self._git_checked(repo, "fetch", "origin", branch)
         self._git_checked(repo, "push", "--force-with-lease", "origin", branch)
@@ -1107,6 +1215,121 @@ def resolve_optional_json_export_path(raw_value: str | None, default_name: str) 
     return raw
 
 
+def infer_github_username_from_noreply(email: str) -> str | None:
+    normalized = email.strip().lower()
+    match = re.match(r"^[0-9]+\+([^@]+)@users\.noreply\.github\.com$", normalized)
+    if not match:
+        return None
+    return match.group(1)
+
+
+def parse_github_remote_owner(remote_url: str) -> str | None:
+    if not remote_url:
+        return None
+    match = GITHUB_REMOTE_RE.search(remote_url.strip())
+    if not match:
+        return None
+    return match.group(1)
+
+
+def is_relevant_email_candidate(email: str) -> bool:
+    lowered = email.strip().lower()
+    if not lowered or "@" not in lowered:
+        return False
+
+    local, domain = lowered.rsplit("@", 1)
+    if not local or not domain:
+        return False
+
+    if domain in EMAIL_NOISE_DOMAINS:
+        return False
+    if domain.endswith(".local") or domain.endswith(".invalid") or domain.endswith(".example"):
+        return False
+    if domain.replace(".", "").isdigit():
+        return False
+
+    if "." not in domain:
+        return False
+    tld = domain.rsplit(".", 1)[-1]
+    if len(tld) < 2 or not tld.isalpha():
+        return False
+
+    return True
+
+
+def redact_sensitive_text(value: str) -> str:
+    text = str(value)
+    text = SECRET_CONTENT_RE.sub(REDACTED_SECRET, text)
+    text = re.sub(r"C:\\Users\\[^\\\s]+", r"C:\\Users\\<redacted>", text, flags=re.IGNORECASE)
+    text = re.sub(r"/Users/[^/\s]+", "/Users/<redacted>", text)
+    text = re.sub(r"/home/[^/\s]+", "/home/<redacted>", text)
+    text = re.sub(r"AppData\\[^\\\s]+", r"AppData\\<redacted>", text, flags=re.IGNORECASE)
+    text = EMAIL_RE.sub(REDACTED_EMAIL, text)
+    return text
+
+
+def _redact_email_list(emails: list[str]) -> list[str]:
+    if not emails:
+        return []
+    return [REDACTED_EMAIL for _ in emails]
+
+
+def _redact_text_list(items: list[str]) -> list[str]:
+    return [redact_sensitive_text(item) for item in items]
+
+
+def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
+    payload = dict(report.__dict__)
+    payload["path"] = redact_sensitive_text(report.path)
+    payload["clean_status"] = redact_sensitive_text(report.clean_status or "")
+    payload["author_emails"] = _redact_email_list(report.author_emails)
+    payload["committer_emails"] = _redact_email_list(report.committer_emails)
+    payload["unexpected_emails"] = _redact_email_list(report.unexpected_emails)
+    payload["tracked_secret_matches"] = _redact_text_list(report.tracked_secret_matches)
+    payload["tracked_path_matches"] = _redact_text_list(report.tracked_path_matches)
+    payload["tracked_email_matches"] = _redact_text_list(report.tracked_email_matches)
+    payload["tracked_secret_files"] = _redact_text_list(report.tracked_secret_files)
+    payload["history_secret_matches"] = _redact_text_list(report.history_secret_matches)
+    payload["history_path_matches"] = _redact_text_list(report.history_path_matches)
+    payload["history_email_matches"] = _redact_text_list(report.history_email_matches)
+    payload["history_secret_files"] = _redact_text_list(report.history_secret_files)
+    payload["history_sensitive_added"] = _redact_text_list(report.history_sensitive_added)
+    payload["history_sensitive_deleted"] = _redact_text_list(report.history_sensitive_deleted)
+    payload["secret_file_candidates"] = _redact_text_list(report.secret_file_candidates)
+    payload["secret_file_autopurge_candidates"] = _redact_text_list(report.secret_file_autopurge_candidates)
+    payload["secret_file_manual_review_candidates"] = _redact_text_list(report.secret_file_manual_review_candidates)
+    payload["secret_history_purge_paths"] = _redact_text_list(report.secret_history_purge_paths)
+    payload["tracked_but_ignored"] = _redact_text_list(report.tracked_but_ignored)
+    payload["gitignore_missing_patterns"] = _redact_text_list(report.gitignore_missing_patterns)
+    payload["exfil_code_indicators"] = _redact_text_list(report.exfil_code_indicators)
+    payload["backups_created"] = _redact_text_list(report.backups_created)
+    payload["fix_actions"] = _redact_text_list(report.fix_actions)
+    payload["fix_errors"] = _redact_text_list(report.fix_errors)
+    payload["fsck_output"] = _redact_text_list(report.fsck_output)
+    return payload
+
+
+def build_fix_preflight_summary(config: GuardRunConfig, repos: list[Path]) -> list[str]:
+    if not config.fix:
+        return []
+
+    lines = [
+        "[PREVIEW] Fix mode preflight summary",
+        f"[PREVIEW] repositories targeted: {len(repos)}",
+        f"[PREVIEW] dry_run={config.dry_run} push={config.push}",
+        f"[PREVIEW] confirm_each_repo_fix={config.confirm_each_repo_fix}",
+        "[PREVIEW] potential destructive actions: history rewrite, file untracking, force push",
+    ]
+
+    if config.allowed_remote_owners:
+        owners = ", ".join(sorted(set(config.allowed_remote_owners)))
+        lines.append(f"[PREVIEW] allowed remote owners: {owners}")
+    elif not config.allow_non_owner_push and config.push:
+        lines.append("[PREVIEW] push owner check active with no explicit allowlist")
+
+    return lines
+
+
 def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     score = 0
     highlights: list[str] = []
@@ -1134,13 +1357,13 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
         highlights.append("Required .gitignore baseline is incomplete")
 
     if score >= 90:
-        return "ALTA", score, highlights
+        return "HIGH", score, highlights
     if score >= 60:
-        return "MEDIA", score, highlights
+        return "MEDIUM", score, highlights
     if report.status == "FAIL":
         if not highlights:
             highlights.append("Non-critical policy failures found")
-        return "BAJA", score, highlights
+        return "LOW", score, highlights
     return "OK", score, highlights
 
 
@@ -1169,13 +1392,13 @@ def render_html_report(
         repo_severity_data.append((rep, sev_label, sev_score, highlights))
     repo_severity_data.sort(key=lambda item: (-item[2], item[0].name.lower()))
 
-    high_risk_repos = [item for item in repo_severity_data if item[1] == "ALTA"]
+    high_risk_repos = [item for item in repo_severity_data if item[1] == "HIGH"]
 
     def render_lines(items: list[str], limit: int = 8) -> str:
         if not items:
             return '<div class="empty">No findings in this category.</div>'
         trimmed = items[:limit]
-        content = "".join(f"<li><code>{esc(line)}</code></li>" for line in trimmed)
+        content = "".join(f"<li><code>{esc(redact_sensitive_text(line))}</code></li>" for line in trimmed)
         suffix = ""
         if len(items) > limit:
             suffix = f'<div class="more">Showing {limit} of {len(items)} entries.</div>'
@@ -1189,7 +1412,7 @@ def render_html_report(
         reason_rows = '<tr><td class="empty" colspan="2">No failure reasons recorded.</td></tr>'
 
     settings_rows = "".join(
-        f"<tr><td>{esc(key)}</td><td><code>{esc(value)}</code></td></tr>"
+        f"<tr><td>{esc(key)}</td><td><code>{esc(redact_sensitive_text(value))}</code></td></tr>"
         for key, value in sorted(run_settings.items(), key=lambda item: item[0])
     )
 
@@ -1204,7 +1427,7 @@ def render_html_report(
             "</article>"
         )
     if not high_cards:
-        high_cards = '<div class="empty">No ALTA severity repositories in this run.</div>'
+        high_cards = '<div class="empty">No HIGH severity repositories in this run.</div>'
 
     repo_rows = ""
     repo_details = ""
@@ -1233,7 +1456,7 @@ def render_html_report(
 
         details_metrics = (
             "<table class=\"metrics\">"
-            "<tr><th>Metric</th><th>Value</th></tr>"
+            "<tr><th>Metric</th><th class=\"num\">Value</th></tr>"
             f"<tr><td>unexpected_emails</td><td class=\"num\">{len(rep.unexpected_emails)}</td></tr>"
             f"<tr><td>tracked_secret_matches</td><td class=\"num\">{len(rep.tracked_secret_matches)}</td></tr>"
             f"<tr><td>history_secret_matches</td><td class=\"num\">{len(rep.history_secret_matches)}</td></tr>"
@@ -1272,9 +1495,14 @@ def render_html_report(
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
-            "<section><h5>Path/email leaks in history (sample)</h5>"
-            f"{render_lines(rep.history_path_matches + rep.history_email_matches)}"
+            "<section><h5>Path leaks in history (sample)</h5>"
+            f"{render_lines(rep.history_path_matches)}"
             "</section>"
+            "<section><h5>Email leaks in history (sample)</h5>"
+            f"{render_lines(rep.history_email_matches)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
             "<section><h5>Ignore and history filename issues</h5>"
             f"{render_lines(rep.gitignore_missing_patterns + rep.history_sensitive_added + rep.history_sensitive_deleted)}"
             "</section>"
@@ -1286,7 +1514,7 @@ def render_html_report(
         repo_details += (
             "<details class=\"repo-detail\">"
             f"<summary>{esc(rep.name)} | severity {esc(sev_label)} | status {esc(rep.status)}</summary>"
-            f"<p class=\"meta\">path: <code>{esc(rep.path)}</code></p>"
+            f"<p class=\"meta\">path: <code>{esc(redact_sensitive_text(rep.path))}</code></p>"
             f"<p class=\"meta\">origin: <code>{esc(rep.origin_url or '-')}</code></p>"
             f"<p class=\"meta\">upstream: <code>{esc(rep.upstream_url or '-')}</code></p>"
             f"{detail_sections}"
@@ -1349,9 +1577,9 @@ def render_html_report(
     th {{ background: #eef3fb; font-weight: 700; }}
     .num {{ text-align: right; font-variant-numeric: tabular-nums; }}
     .sev-pill {{ display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }}
-    .sev-alta {{ background: #ffe4e8; color: var(--high); }}
-    .sev-media {{ background: #fff1de; color: var(--med); }}
-    .sev-baja {{ background: #fff8df; color: var(--low); }}
+    .sev-high {{ background: #ffe4e8; color: var(--high); }}
+    .sev-medium {{ background: #fff1de; color: var(--med); }}
+    .sev-low {{ background: #fff8df; color: var(--low); }}
     .sev-ok {{ background: #dff6e9; color: var(--ok); }}
     .high-card {{ border: 1px solid #f3b7bf; background: #fff0f3; border-radius: 10px; padding: 12px; margin-bottom: 10px; }}
     .repo-detail {{ border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; background: var(--surface); box-shadow: var(--shadow); }}
@@ -1375,16 +1603,16 @@ def render_html_report(
       <h1>Repository Privacy Audit Report</h1>
       <p><strong>Run ID:</strong> {esc(artifacts.run_id)}</p>
       <p><strong>Started:</strong> {esc(artifacts.started_at.strftime('%Y-%m-%d %H:%M:%S'))} | <strong>Finished:</strong> {esc(finished_at.strftime('%Y-%m-%d %H:%M:%S'))} | <strong>Duration:</strong> {duration_seconds:.2f}s</p>
-      <p><strong>Root:</strong> <code>{esc(str(root_path))}</code></p>
-      <p><strong>Policy:</strong> <code>{esc(str(policy_path))}</code></p>
-      <p><strong>Artifacts:</strong> <code>{esc(str(artifacts.run_dir))}</code></p>
+            <p><strong>Root:</strong> <code>{esc(redact_sensitive_text(str(root_path)))}</code></p>
+            <p><strong>Policy:</strong> <code>{esc(redact_sensitive_text(str(policy_path)))}</code></p>
+            <p><strong>Artifacts:</strong> <code>{esc(redact_sensitive_text(str(artifacts.run_dir)))}</code></p>
     </header>
 
     <section class=\"grid\">
       <article class=\"card\"><h3>Total repositories</h3><p class=\"metric\">{total}</p></article>
       <article class=\"card\"><h3>PASS</h3><p class=\"metric pass\">{passed}</p></article>
       <article class=\"card\"><h3>FAIL</h3><p class=\"metric fail\">{failed}</p></article>
-      <article class=\"card\"><h3>ALTA severity repos</h3><p class=\"metric fail\">{len(high_risk_repos)}</p></article>
+            <article class=\"card\"><h3>HIGH severity repos</h3><p class=\"metric fail\">{len(high_risk_repos)}</p></article>
     </section>
 
     <section class=\"panel\">
@@ -1396,7 +1624,7 @@ def render_html_report(
     </section>
 
     <section class=\"panel\">
-      <h2>High severity focus (ALTA)</h2>
+            <h2>High severity focus</h2>
       {high_cards}
     </section>
 
@@ -1445,7 +1673,7 @@ def persist_run_outputs(
     optional_json_export: str | None = None,
 ) -> None:
     finished_at = datetime.now()
-    payload = [rep.__dict__ for rep in reports]
+    payload = [sanitize_report_for_export(rep) for rep in reports]
     artifacts.json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     logger(f"[INFO] JSON report written to {artifacts.json_path}")
 
@@ -1480,6 +1708,9 @@ def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, s
         "purge_all_detected_secret_files": str(config.purge_all_detected_secret_files),
         "redact_third_party_emails": str(config.redact_third_party_emails),
         "max_matches": str(config.max_matches),
+        "confirm_each_repo_fix": str(config.confirm_each_repo_fix),
+        "allow_non_owner_push": str(config.allow_non_owner_push),
+        "allowed_remote_owners": ",".join(config.allowed_remote_owners),
         "results_dir": str(results_dir),
         "report_json": str(config.report_json or ""),
     }
@@ -1492,6 +1723,7 @@ def execute_guard_pipeline(
     results_dir: Path,
     require_confirmation: bool = False,
     confirm_callback: Callable[[], bool] | None = None,
+    confirm_repo_fix_callback: Callable[[Path, int, int], bool] | None = None,
 ) -> int:
     run_settings = build_run_settings(config, results_dir)
     reports: list[RepoReport] = []
@@ -1510,6 +1742,8 @@ def execute_guard_pipeline(
         push=config.push,
         dry_run=config.dry_run,
         max_matches=config.max_matches,
+        allow_non_owner_push=config.allow_non_owner_push,
+        allowed_remote_owners=config.allowed_remote_owners,
         logger=logger,
     )
 
@@ -1524,6 +1758,10 @@ def execute_guard_pipeline(
             logger("[INFO] No repositories matched. Nothing to do.")
             logger("\n[SUMMARY] PASS 0/0")
         else:
+            if config.fix:
+                for line in build_fix_preflight_summary(config, repos):
+                    logger(line)
+
             if config.fix and config.push and require_confirmation:
                 confirmed = confirm_callback() if confirm_callback else False
                 if not confirmed:
@@ -1532,18 +1770,25 @@ def execute_guard_pipeline(
                     exit_code = 1
                     repos = []
 
-            for repo in repos:
+            for index, repo in enumerate(repos, start=1):
                 logger(f"[AUDIT] {repo.name}")
                 report = guard.audit_repo(repo)
 
                 if config.fix:
-                    logger(f"[FIX] {repo.name}")
-                    fixed = guard.apply_fixes(repo, report)
-                    logger(f"[RE-AUDIT] {repo.name}")
-                    report = guard.audit_repo(repo)
-                    report.backups_created = fixed.backups_created
-                    report.fix_actions = fixed.fix_actions
-                    report.fix_errors = fixed.fix_errors
+                    run_fix = True
+                    if config.confirm_each_repo_fix and confirm_repo_fix_callback:
+                        run_fix = bool(confirm_repo_fix_callback(repo, index, len(repos)))
+
+                    if run_fix:
+                        logger(f"[FIX] {repo.name}")
+                        fixed = guard.apply_fixes(repo, report)
+                        logger(f"[RE-AUDIT] {repo.name}")
+                        report = guard.audit_repo(repo)
+                        report.backups_created = fixed.backups_created
+                        report.fix_actions = fixed.fix_actions
+                        report.fix_errors = fixed.fix_errors
+                    else:
+                        report.fix_actions.append("fix skipped by per-repository confirmation gate")
 
                 reports.append(report)
                 print_report(report, logger)
@@ -1741,6 +1986,10 @@ def resolve_identity_repo_path(root: Path, selected_repo_names: list[str]) -> tu
         return root, None
 
     return None, "Select one repository first (or set Root to a git repository)."
+
+
+def normalize_repo_filters(repo_names: list[str]) -> list[str] | None:
+    return repo_names if repo_names else None
 
 
 class GuiApp:  # pragma: no cover
@@ -2357,9 +2606,14 @@ class GuiApp:  # pragma: no cover
 
     def run_clicked(self) -> None:
         selected = self._selected_repo_names()
-        if not selected:
-            self.messagebox.showwarning("No repositories", "Select at least one repository.")
-            return
+        repos_to_run = normalize_repo_filters(selected)
+        if repos_to_run is None:
+            run_all = self.messagebox.askyesno(
+                "Run all repositories",
+                "No repositories selected. Run audit for all repositories under Root?",
+            )
+            if not run_all:
+                return
 
         try:
             max_matches = parse_positive_int(self.max_matches_var.get().strip())
@@ -2376,10 +2630,10 @@ class GuiApp:  # pragma: no cover
         ):
             return
 
-        thread = threading.Thread(target=self._run_worker, args=(selected, max_matches), daemon=True)
+        thread = threading.Thread(target=self._run_worker, args=(repos_to_run, max_matches), daemon=True)
         thread.start()
 
-    def _run_worker(self, selected: list[str], max_matches: int) -> None:
+    def _run_worker(self, selected: list[str] | None, max_matches: int) -> None:
         root = Path(self.root_var.get())
         policy = Path(self.policy_var.get())
         owner_emails = [item.strip() for item in self.owner_emails_var.get().split(",") if item.strip()]
@@ -2421,6 +2675,9 @@ class GuiApp:  # pragma: no cover
             noreply_email=self.noreply_var.get().strip(),
             placeholder_email=self.placeholder_var.get().strip(),
             max_matches=max_matches,
+            confirm_each_repo_fix=False,
+            allow_non_owner_push=False,
+            allowed_remote_owners=[],
             report_json=report_json,
         )
         execute_guard_pipeline(
@@ -2489,14 +2746,35 @@ def make_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument("--yes", action="store_true", help="Skip destructive action confirmation prompt")
+    parser.add_argument(
+        "--no-confirm-each-repo",
+        action="store_true",
+        help="Disable per-repository fix confirmation prompts in CLI mode",
+    )
+    parser.add_argument(
+        "--allow-non-owner-push",
+        action="store_true",
+        help="Bypass remote owner verification before force push (unsafe)",
+    )
+    parser.add_argument(
+        "--allow-remote-owner",
+        action="append",
+        default=[],
+        help="Allow force-push only when origin owner matches this value (can repeat)",
+    )
     parser.add_argument("--gui", action="store_true", help="Launch GUI")
     return parser
+
 
 def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
     root = Path(args.root)
     policy = Path(args.policy)
 
     owner_emails = list(dict.fromkeys(args.owner_email))
+    allowed_remote_owners = list(dict.fromkeys(args.allow_remote_owner))
+    inferred_owner = infer_github_username_from_noreply(args.noreply_email)
+    if inferred_owner and inferred_owner not in allowed_remote_owners:
+        allowed_remote_owners.append(inferred_owner)
 
     enforced_results_dir, forced = enforce_results_dir(Path(args.report_dir))
     artifacts = create_run_artifacts(enforced_results_dir)
@@ -2524,12 +2802,21 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         noreply_email=args.noreply_email,
         placeholder_email=args.placeholder_email,
         max_matches=args.max_matches,
+        confirm_each_repo_fix=not args.no_confirm_each_repo,
+        allow_non_owner_push=args.allow_non_owner_push,
+        allowed_remote_owners=allowed_remote_owners,
         report_json=args.report_json,
     )
 
     def confirm_force_push() -> bool:
         print("WARNING: --fix with --push rewrites history and force-pushes.")
         answer = input("Continue? [y/N]: ").strip().lower()
+        return answer in {"y", "yes"}
+
+    def confirm_repo_fix(repo: Path, index: int, total: int) -> bool:
+        print(f"[CONFIRM] Repository {index}/{total}: {repo.name}")
+        print("Applying fixes may modify tracked files and rewrite history.")
+        answer = input("Apply fixes for this repository? [y/N]: ").strip().lower()
         return answer in {"y", "yes"}
 
     return execute_guard_pipeline(
@@ -2539,14 +2826,22 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         results_dir=enforced_results_dir,
         require_confirmation=not args.yes,
         confirm_callback=confirm_force_push,
+        confirm_repo_fix_callback=(
+            confirm_repo_fix if config.fix and config.confirm_each_repo_fix and not args.yes else None
+        ),
     )
+
+
+def should_launch_gui(args: argparse.Namespace, argv: list[str]) -> bool:
+    # UX default: opening the script without flags launches the desktop GUI.
+    return args.gui or len(argv) <= 1
 
 
 def main() -> int:  # pragma: no cover
     parser = make_parser()
     args = parser.parse_args()
 
-    if args.gui:
+    if should_launch_gui(args, sys.argv):
         app = GuiApp()
         app.run()
         return 0

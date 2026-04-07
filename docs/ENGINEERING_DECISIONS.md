@@ -53,6 +53,7 @@ This file captures key design decisions and their rationale.
 | Secret purge flags | Yes | Yes | Minor (different warning text path) |
 | Report artifacts JSON/LOG/HTML | Yes | Yes | No |
 | `public_only` default | False | True | Yes |
+| Repo scope when filters are omitted | All repos under root | Required explicit selection | Yes |
 | `max_matches` configurability | Yes (`--max-matches`) | No (fixed at 50) | Yes |
 | Extra JSON export | Yes (`--report-json`) | No | Yes |
 | Report output directory selection | Yes (`--report-dir`) | No | Yes |
@@ -67,6 +68,7 @@ This file captures key design decisions and their rationale.
 | Secret purge flags | Yes | Yes | No |
 | Report artifacts JSON/LOG/HTML | Yes | Yes | No |
 | `public_only` default | False | False | No |
+| Repo scope when filters are omitted | All repos under root | All repos under root (with explicit confirmation) | No |
 | `max_matches` configurability | Yes | Yes | No |
 | Extra JSON export | Yes | Yes | No |
 | Report output directory selection | Yes | Yes | No |
@@ -82,6 +84,7 @@ This file captures key design decisions and their rationale.
   - optional extra JSON export path
   - max matches
 - Aligned GUI `public_only` default with CLI default.
+- Aligned GUI repository scope behavior with CLI: if no repository filter is provided, run all repositories under root after explicit confirmation.
 - Added parity regression tests for argument validation, defaults, confirmation gate, fix/re-audit flow, and runtime error handling.
 
 ### Residual risk and follow-up
