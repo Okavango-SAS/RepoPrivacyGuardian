@@ -3,34 +3,51 @@
 ## Current limitations
 
 1. Content scans may flag test fixtures and documentation examples.
-- Impact: medium.
-- Workaround: verify context before applying destructive fixes.
 
-2. Safe secret auto-purge is intentionally conservative.
-- Impact: medium.
-- Workaround: use `--purge-all-detected-secret-files` only after manual review.
+Impact: medium.
+Workaround: verify context before applying destructive fixes.
 
-3. Large repositories can take significant time during history patch scanning.
-- Impact: medium.
-- Workaround: audit specific repos first with `--repos` and use staged execution.
+1. Exfil indicator heuristic is keyword-based and can over-report in backend/service repos.
 
-4. History rewrite changes commit SHAs and requires force push.
-- Impact: high.
-- Workaround: always create bundle backups and coordinate with collaborators.
+Impact: medium.
+Workaround: treat exfil hits as triage signals; validate by code intent before remediation.
 
-5. GUI does not include pause/resume or cancellation controls.
-- Impact: low.
-- Workaround: run long operations from CLI for better control.
+1. Safe secret auto-purge is intentionally conservative.
 
-6. No built-in integration with provider APIs for secret rotation.
-- Impact: medium.
-- Workaround: treat rotation as an external mandatory post-remediation step.
+Impact: medium.
+Workaround: use `--purge-all-detected-secret-files` only after manual review.
+
+1. Large repositories can take significant time during history patch scanning.
+
+Impact: medium.
+Workaround: audit specific repos first with `--repos` and use staged execution.
+
+1. History rewrite changes commit SHAs and requires force push.
+
+Impact: high.
+Workaround: always create bundle backups and coordinate with collaborators.
+
+1. GUI does not include pause/resume or cancellation controls.
+
+Impact: low.
+Workaround: run long operations from CLI for better control.
+
+1. No built-in integration with provider APIs for secret rotation.
+
+Impact: medium.
+Workaround: treat rotation as an external mandatory post-remediation step.
+
+1. Commit metadata checks are email-format driven and may ignore malformed non-email identity tokens.
+
+Impact: low.
+Workaround: add manual `git log --all --pretty=format:%an\ <%ae\>` review for strict identity hygiene.
 
 ## Known false-positive patterns
 
 - Email-like tokens in code comments that are not personal data.
 - Local paths in synthetic test fixtures.
 - Security examples intentionally containing placeholder token shapes.
+- Generic terms such as "webhook" or "telemetry" used in legitimate service code.
 
 ## Tracking policy
 

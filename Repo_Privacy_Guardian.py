@@ -183,7 +183,8 @@ class RunLogger:
         self.log_path.write_text("", encoding="utf-8")
 
     def __call__(self, msg: str) -> None:
-        text = str(msg)
+        # Keep persisted artifacts privacy-safe by redacting common sensitive tokens.
+        text = redact_sensitive_text(str(msg))
         if self.sink:
             self.sink(text)
         stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -655,7 +656,8 @@ class RepoPublicationGuard:  # pragma: no cover
         out = self._git(repo, "log", "--all", f"--pretty=format:{field}")
         if out.returncode != 0:
             return []
-        emails = sorted({line.strip() for line in out.stdout.splitlines() if line.strip()})
+        candidates = {line.strip() for line in out.stdout.splitlines() if line.strip()}
+        emails = sorted({value for value in candidates if SIMPLE_EMAIL_RE.match(value)})
         return emails
 
     def _is_allowed_email(self, email: str) -> bool:
@@ -1015,15 +1017,15 @@ class RepoPublicationGuard:  # pragma: no cover
         self._git_checked(repo, "bundle", "create", str(bundle), "--all")
         return bundle
 
-    def _commit_if_needed(self, repo: Path, message: str) -> bool:
+    def _commit_if_needed(self, repo: Path, message: str) -> str:
         porcelain = self._git(repo, "status", "--porcelain").stdout.strip()
         if not porcelain:
-            return False
+            return "none"
         if self.dry_run:
-            return True
+            return "preview"
         self._git_checked(repo, "add", "-A")
         self._git_checked(repo, "commit", "-m", message)
-        return True
+        return "committed"
 
     def _set_local_identity(self, repo: Path) -> None:
         if self.dry_run:
@@ -1098,11 +1100,13 @@ class RepoPublicationGuard:  # pragma: no cover
             if removed:
                 report.fix_actions.append(f"untracked ignored files: {len(removed)}")
 
-            committed = self._commit_if_needed(
+            commit_state = self._commit_if_needed(
                 repo,
                 "chore(security): align ignore rules and untrack sensitive/local artifacts",
             )
-            if committed:
+            if commit_state == "preview":
+                report.fix_actions.append("[dry-run] would commit ignore-hygiene changes")
+            elif commit_state == "committed":
                 report.fix_actions.append("committed ignore-hygiene changes")
 
             self.log(f"[FIX] {repo.name}: rewriting history (emails + sensitive artifacts)")
@@ -1260,6 +1264,9 @@ def is_relevant_email_candidate(email: str) -> bool:
 def redact_sensitive_text(value: str) -> str:
     text = str(value)
     text = SECRET_CONTENT_RE.sub(REDACTED_SECRET, text)
+    # Handle escaped Windows paths often seen inside JSON string literals.
+    text = re.sub(r"C:\\\\Users\\\\[^\\\s]+", r"C:\\\\Users\\\\<redacted>", text, flags=re.IGNORECASE)
+    text = re.sub(r"AppData\\\\[^\\\s]+", r"AppData\\\\<redacted>", text, flags=re.IGNORECASE)
     text = re.sub(r"C:\\Users\\[^\\\s]+", r"C:\\Users\\<redacted>", text, flags=re.IGNORECASE)
     text = re.sub(r"/Users/[^/\s]+", "/Users/<redacted>", text)
     text = re.sub(r"/home/[^/\s]+", "/home/<redacted>", text)

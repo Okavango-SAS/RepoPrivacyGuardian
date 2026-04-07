@@ -1,12 +1,13 @@
 # Repo Privacy Guardian 🛡️
 
-[![Policy](https://img.shields.io/badge/policy-publication%20gate-blue)](#policy)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20PowerShell-lightgrey)](#quick-start)
-[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)](#quick-start)
+![Policy](https://img.shields.io/badge/policy-publication%20gate-blue)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20PowerShell-lightgrey)
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 
 A practical toolkit to audit and harden repositories before public release.
 
 It helps you detect and remediate:
+
 - leaked identity metadata in git history 👤
 - exposed secrets/tokens/keys 🔐
 - local machine path leaks 🧭
@@ -18,6 +19,7 @@ It helps you detect and remediate:
 Public repositories are permanent records. One bad push can expose personal data or credentials, even if files are deleted later.
 
 Repo Privacy Guardian gives you:
+
 - repeatable audit checklist
 - policy-driven decisions (PASS/FAIL)
 - optional automated remediation flow
@@ -59,6 +61,7 @@ py Repo_Privacy_Guardian.py --gui
 The repository includes a generic governance baseline in docs/POLICY.md.
 
 Recommended workflow:
+
 1. Audit first.
 2. Review findings.
 3. Run dry-run fix.
@@ -71,10 +74,12 @@ Recommended workflow:
 - Always create backup bundles before rewriting history.
 - If secrets were leaked, rotate them even after cleanup.
 - Use force push only with clear team communication.
+- Generated JSON/HTML/LOG artifacts are redacted by default, but still should be treated as sensitive operational outputs.
 
 ## Status criteria ✅
 
 A repository is considered safe-to-publish only when all required checks pass:
+
 - metadata identity hygiene
 - no sensitive leak indicators
 - no tracked-but-ignored artifacts
@@ -85,6 +90,7 @@ A repository is considered safe-to-publish only when all required checks pass:
 Ideas and improvements are welcome.
 
 When proposing changes:
+
 - keep checks deterministic
 - avoid project-specific hardcoding
 - prefer secure defaults

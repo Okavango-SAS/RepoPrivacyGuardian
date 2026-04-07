@@ -3,38 +3,53 @@
 ## Operational lessons
 
 1. `.gitignore` is preventive, not curative.
-- If a file was committed once, history rewrite is still required.
 
-2. Dry-run must be the default behavior in sensitive environments.
-- Preview first, execute second.
+If a file was committed once, history rewrite is still required.
 
-3. Backup bundles are non-negotiable before rewrite.
-- Recovery needs to be immediate and offline.
+1. Dry-run must be the default behavior in sensitive environments.
 
-4. Identity leaks are not only in code.
-- Commit metadata, logs, reports, and docs can all contain private data.
+Preview first, execute second.
 
-5. A clean report location matters.
-- Audit outputs can themselves contain sensitive references and must stay local and ignored.
+1. Backup bundles are non-negotiable before rewrite.
+
+Recovery needs to be immediate and offline.
+
+1. Identity leaks are not only in code.
+
+Commit metadata, logs, reports, and docs can all contain private data.
+
+1. A clean report location matters.
+
+Audit outputs can themselves contain sensitive references and must stay local and ignored.
 
 ## Engineering lessons
 
 1. Safe auto-remediation should be conservative.
-- Ambiguous files should remain manual-review candidates.
 
-2. Explicit operator intent reduces risk.
-- Dangerous actions should require dedicated flags.
+Ambiguous files should remain manual-review candidates.
 
-3. Reports should include action guidance, not only findings.
-- Operators need concrete next steps and command-level hints.
+1. Explicit operator intent reduces risk.
 
-4. Generic defaults improve public readiness.
-- Remove personal paths, names, and private emails from defaults.
+Dangerous actions should require dedicated flags.
+
+1. Reports should include action guidance, not only findings.
+
+Operators need concrete next steps and command-level hints.
+
+1. Generic defaults improve public readiness.
+
+Remove personal paths, names, and private emails from defaults.
+
+1. Redaction must handle escaped and unescaped path variants.
+
+JSON-style escaped paths (for example `C:\\Users\\...`) and plain paths must both be sanitized in artifacts.
 
 ## Documentation lessons
 
 1. Governance docs are part of the product.
-- Policy, checklist, known issues, and decisions must evolve with code.
 
-2. Keep rationale close to implementation.
-- Decision logs avoid re-discussing already settled tradeoffs.
+Policy, checklist, known issues, and decisions must evolve with code.
+
+1. Keep rationale close to implementation.
+
+Decision logs avoid re-discussing already settled tradeoffs.
