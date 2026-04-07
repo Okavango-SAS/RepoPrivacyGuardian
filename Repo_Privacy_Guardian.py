@@ -112,6 +112,22 @@ PERSONAL_PATH_RE = re.compile(r"C:\\Users\\|/Users/|/home/|AppData\\|Documents\\
 EMAIL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 SIMPLE_EMAIL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
+EMAIL_LOW_CONFIDENCE_PATH_RE = re.compile(
+    r"(^|/)(test|tests|docs|doc|example|examples|fixture|fixtures|mock|mocks|"
+    r"sample|samples|demo|benchmarks?|spec)(/|$)",
+    re.IGNORECASE,
+)
+EMAIL_LOW_CONFIDENCE_FILE_RE = re.compile(
+    r"readme|changelog|contributing|copilot|instructions|policy|roadmap|"
+    r"checklist|known_issues|lessons",
+    re.IGNORECASE,
+)
+EMAIL_LOW_CONFIDENCE_SNIPPET_RE = re.compile(
+    r"\b(example|mock|fixture|dummy|sample|placeholder|test|assert|expect|pytest|unittest)\b|"
+    r"vi\.spyon|mockresolvedvalue|auth\.login\(|next_public_support_email",
+    re.IGNORECASE,
+)
+
 EXFIL_CODE_RE = re.compile(
     r"Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|HttpClient|WebClient|"
     r"requests\.|httpx|aiohttp|urllib|urlopen|websockets|socket\.|"
@@ -164,6 +180,7 @@ class GuardRunConfig:
     redact_third_party_emails: bool
     purge_detected_secret_files: bool
     purge_all_detected_secret_files: bool
+    low_confidence_email_mode: str
     owner_name: str
     owner_emails: list[str]
     noreply_email: str
@@ -209,15 +226,24 @@ class RepoReport:
     author_emails: list[str] = field(default_factory=list)
     committer_emails: list[str] = field(default_factory=list)
     unexpected_emails: list[str] = field(default_factory=list)
+    unexpected_emails_owned_repo: list[str] = field(default_factory=list)
+    unexpected_emails_third_party_repo: list[str] = field(default_factory=list)
+    email_ownership_evaluated: bool = False
 
     tracked_secret_matches: list[str] = field(default_factory=list)
     tracked_path_matches: list[str] = field(default_factory=list)
     tracked_email_matches: list[str] = field(default_factory=list)
+    tracked_email_high_confidence: list[str] = field(default_factory=list)
+    tracked_email_low_confidence: list[str] = field(default_factory=list)
     tracked_secret_files: list[str] = field(default_factory=list)
 
     history_secret_matches: list[str] = field(default_factory=list)
     history_path_matches: list[str] = field(default_factory=list)
     history_email_matches: list[str] = field(default_factory=list)
+    history_email_high_confidence: list[str] = field(default_factory=list)
+    history_email_low_confidence: list[str] = field(default_factory=list)
+    email_confidence_evaluated: bool = False
+    low_confidence_email_mode: str = "informational"
     history_secret_files: list[str] = field(default_factory=list)
 
     history_sensitive_added: list[str] = field(default_factory=list)
@@ -240,14 +266,34 @@ class RepoReport:
     failures: list[str] = field(default_factory=list)
 
     def finalize(self) -> None:
+        owned_unexpected = (
+            self.unexpected_emails_owned_repo
+            if self.email_ownership_evaluated
+            else self.unexpected_emails
+        )
+        history_email_high_confidence = (
+            self.history_email_high_confidence
+            if self.email_confidence_evaluated
+            else self.history_email_matches
+        )
+        low_confidence_emails = self.tracked_email_low_confidence + self.history_email_low_confidence
+        low_confidence_blocking = self.low_confidence_email_mode == "blocking"
+
         checks = [
             (not self.fsck_ok, "git fsck failed"),
-            (bool(self.unexpected_emails), "unexpected commit metadata emails"),
+            (bool(owned_unexpected), "unexpected commit metadata emails in owned repository"),
             (bool(self.tracked_secret_matches), "secret-like patterns in tracked files"),
             (bool(self.tracked_path_matches), "personal path patterns in tracked files"),
             (bool(self.history_secret_matches), "secret-like patterns in history patches"),
             (bool(self.history_path_matches), "personal path patterns in history patches"),
-            (bool(self.history_email_matches), "email addresses in history patches"),
+            (
+                bool(history_email_high_confidence),
+                "high-confidence email addresses in history patches",
+            ),
+            (
+                bool(low_confidence_blocking and low_confidence_emails),
+                "low-confidence email matches configured as blocking",
+            ),
             (bool(self.history_sensitive_added), "sensitive filenames added in history"),
             (bool(self.history_sensitive_deleted), "sensitive filenames deleted in history"),
             (bool(self.tracked_but_ignored), "tracked files that should be ignored"),
@@ -269,6 +315,7 @@ class RepoPublicationGuard:  # pragma: no cover
         redact_third_party: bool,
         purge_detected_secret_files: bool,
         purge_all_detected_secret_files: bool,
+        low_confidence_email_mode: str,
         push: bool,
         dry_run: bool,
         max_matches: int,
@@ -285,6 +332,11 @@ class RepoPublicationGuard:  # pragma: no cover
         self.redact_third_party = redact_third_party
         self.purge_detected_secret_files = purge_detected_secret_files
         self.purge_all_detected_secret_files = purge_all_detected_secret_files
+        self.low_confidence_email_mode = (
+            low_confidence_email_mode
+            if low_confidence_email_mode in {"informational", "blocking"}
+            else "informational"
+        )
         self.push = push
         self.dry_run = dry_run
         self.max_matches = max_matches
@@ -675,6 +727,7 @@ class RepoPublicationGuard:  # pragma: no cover
 
     def audit_repo(self, repo: Path) -> RepoReport:
         report = RepoReport(name=repo.name, path=str(repo))
+        report.low_confidence_email_mode = self.low_confidence_email_mode
 
         report.origin_url = self._git(repo, "remote", "get-url", "origin").stdout.strip() or None
         report.upstream_url = self._git(repo, "remote", "get-url", "upstream").stdout.strip() or None
@@ -694,16 +747,34 @@ class RepoPublicationGuard:  # pragma: no cover
 
         all_emails = sorted(set(report.author_emails + report.committer_emails))
         report.unexpected_emails = [email for email in all_emails if not self._is_allowed_email(email)]
+        (
+            report.unexpected_emails_owned_repo,
+            report.unexpected_emails_third_party_repo,
+        ) = split_unexpected_emails_by_origin_ownership(
+            report.unexpected_emails,
+            report.origin_url,
+            self.allowed_remote_owners,
+        )
+        report.email_ownership_evaluated = True
 
         report.tracked_secret_matches = self._scan_tracked_content(repo, SECRET_CONTENT_RE)
         report.tracked_secret_files = self._extract_file_paths_from_match_lines(report.tracked_secret_matches)
         report.tracked_path_matches = self._scan_tracked_content(repo, PERSONAL_PATH_RE)
         report.tracked_email_matches = self._scan_tracked_non_allowed_emails(repo)
+        (
+            report.tracked_email_high_confidence,
+            report.tracked_email_low_confidence,
+        ) = split_email_matches_by_confidence(report.tracked_email_matches)
 
         report.history_secret_matches = self._scan_history_patch(repo, SECRET_CONTENT_RE)
         report.history_secret_files = self._scan_history_secret_files(repo)
         report.history_path_matches = self._scan_history_patch(repo, PERSONAL_PATH_RE)
         report.history_email_matches = self._scan_history_non_allowed_emails(repo)
+        (
+            report.history_email_high_confidence,
+            report.history_email_low_confidence,
+        ) = split_email_matches_by_confidence(report.history_email_matches)
+        report.email_confidence_evaluated = True
 
         self._build_secret_remediation_plan(report)
 
@@ -1128,6 +1199,7 @@ class RepoPublicationGuard:  # pragma: no cover
 
 
 def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # pragma: no cover
+    decision_status, decision_message = email_remediation_decision(report)
     logger(f"\n=== {report.name} ===")
     logger(f"path: {report.path}")
     logger(f"origin: {report.origin_url or '-'}")
@@ -1139,15 +1211,24 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
         for item in report.failures:
             logger(f"  - {item}")
 
+    logger(f"low_confidence_email_mode: {report.low_confidence_email_mode}")
+    logger(f"email_remediation_decision: {decision_status} - {decision_message}")
+
     logger(f"unexpected_emails: {len(report.unexpected_emails)}")
+    logger(f"unexpected_emails_owned_repo: {len(report.unexpected_emails_owned_repo)}")
+    logger(f"unexpected_emails_third_party_repo: {len(report.unexpected_emails_third_party_repo)}")
     logger(f"tracked_secret_matches: {len(report.tracked_secret_matches)}")
     logger(f"tracked_secret_files: {len(report.tracked_secret_files)}")
     logger(f"tracked_path_matches: {len(report.tracked_path_matches)}")
     logger(f"tracked_email_matches: {len(report.tracked_email_matches)}")
+    logger(f"tracked_email_high_confidence: {len(report.tracked_email_high_confidence)}")
+    logger(f"tracked_email_low_confidence: {len(report.tracked_email_low_confidence)}")
     logger(f"history_secret_matches: {len(report.history_secret_matches)}")
     logger(f"history_secret_files: {len(report.history_secret_files)}")
     logger(f"history_path_matches: {len(report.history_path_matches)}")
     logger(f"history_email_matches: {len(report.history_email_matches)}")
+    logger(f"history_email_high_confidence: {len(report.history_email_high_confidence)}")
+    logger(f"history_email_low_confidence: {len(report.history_email_low_confidence)}")
     logger(f"history_sensitive_added: {len(report.history_sensitive_added)}")
     logger(f"history_sensitive_deleted: {len(report.history_sensitive_deleted)}")
     logger(f"secret_file_candidates: {len(report.secret_file_candidates)}")
@@ -1261,6 +1342,74 @@ def is_relevant_email_candidate(email: str) -> bool:
     return True
 
 
+def extract_email_match_context(match_line: str) -> tuple[str | None, str]:
+    if not match_line:
+        return None, ""
+
+    if match_line.startswith("L"):
+        parts = match_line.split(":", 2)
+        snippet = parts[2] if len(parts) == 3 else match_line
+        return None, snippet
+
+    parts = match_line.split(":", 3)
+    if len(parts) >= 4:
+        return parts[0], parts[3]
+    if len(parts) >= 2:
+        return parts[0], parts[-1]
+    return None, match_line
+
+
+def is_low_confidence_email_context(rel_path: str | None, snippet: str) -> bool:
+    normalized_path = (rel_path or "").replace("\\", "/").strip().lower()
+    normalized_snippet = (snippet or "").strip().lower()
+
+    if normalized_path:
+        if EMAIL_LOW_CONFIDENCE_PATH_RE.search(normalized_path):
+            return True
+        file_name = Path(normalized_path).name
+        if EMAIL_LOW_CONFIDENCE_FILE_RE.search(file_name):
+            return True
+
+    if EMAIL_LOW_CONFIDENCE_SNIPPET_RE.search(normalized_snippet):
+        return True
+
+    return False
+
+
+def split_email_matches_by_confidence(matches: list[str]) -> tuple[list[str], list[str]]:
+    high_confidence: list[str] = []
+    low_confidence: list[str] = []
+
+    for item in matches:
+        rel_path, snippet = extract_email_match_context(item)
+        if is_low_confidence_email_context(rel_path, snippet):
+            low_confidence.append(item)
+        else:
+            high_confidence.append(item)
+
+    return high_confidence, low_confidence
+
+
+def split_unexpected_emails_by_origin_ownership(
+    unexpected_emails: list[str],
+    origin_url: str | None,
+    allowed_remote_owners: set[str] | list[str],
+) -> tuple[list[str], list[str]]:
+    if not unexpected_emails:
+        return [], []
+
+    normalized_owners = {
+        owner.strip().lower()
+        for owner in allowed_remote_owners
+        if owner and owner.strip()
+    }
+    origin_owner = parse_github_remote_owner(origin_url or "")
+
+    if origin_owner and origin_owner.lower() in normalized_owners:
+        return list(unexpected_emails), []
+    return [], list(unexpected_emails)
+
+
 def redact_sensitive_text(value: str) -> str:
     text = str(value)
     text = SECRET_CONTENT_RE.sub(REDACTED_SECRET, text)
@@ -1292,13 +1441,21 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload["author_emails"] = _redact_email_list(report.author_emails)
     payload["committer_emails"] = _redact_email_list(report.committer_emails)
     payload["unexpected_emails"] = _redact_email_list(report.unexpected_emails)
+    payload["unexpected_emails_owned_repo"] = _redact_email_list(report.unexpected_emails_owned_repo)
+    payload["unexpected_emails_third_party_repo"] = _redact_email_list(
+        report.unexpected_emails_third_party_repo
+    )
     payload["tracked_secret_matches"] = _redact_text_list(report.tracked_secret_matches)
     payload["tracked_path_matches"] = _redact_text_list(report.tracked_path_matches)
     payload["tracked_email_matches"] = _redact_text_list(report.tracked_email_matches)
+    payload["tracked_email_high_confidence"] = _redact_text_list(report.tracked_email_high_confidence)
+    payload["tracked_email_low_confidence"] = _redact_text_list(report.tracked_email_low_confidence)
     payload["tracked_secret_files"] = _redact_text_list(report.tracked_secret_files)
     payload["history_secret_matches"] = _redact_text_list(report.history_secret_matches)
     payload["history_path_matches"] = _redact_text_list(report.history_path_matches)
     payload["history_email_matches"] = _redact_text_list(report.history_email_matches)
+    payload["history_email_high_confidence"] = _redact_text_list(report.history_email_high_confidence)
+    payload["history_email_low_confidence"] = _redact_text_list(report.history_email_low_confidence)
     payload["history_secret_files"] = _redact_text_list(report.history_secret_files)
     payload["history_sensitive_added"] = _redact_text_list(report.history_sensitive_added)
     payload["history_sensitive_deleted"] = _redact_text_list(report.history_sensitive_deleted)
@@ -1324,6 +1481,7 @@ def build_fix_preflight_summary(config: GuardRunConfig, repos: list[Path]) -> li
         "[PREVIEW] Fix mode preflight summary",
         f"[PREVIEW] repositories targeted: {len(repos)}",
         f"[PREVIEW] dry_run={config.dry_run} push={config.push}",
+        f"[PREVIEW] low-confidence email mode: {config.low_confidence_email_mode}",
         f"[PREVIEW] confirm_each_repo_fix={config.confirm_each_repo_fix}",
         "[PREVIEW] potential destructive actions: history rewrite, file untracking, force push",
     ]
@@ -1337,9 +1495,53 @@ def build_fix_preflight_summary(config: GuardRunConfig, repos: list[Path]) -> li
     return lines
 
 
+def email_decision_context(report: RepoReport) -> tuple[int, int, int, int]:
+    owned_unexpected = len(
+        report.unexpected_emails_owned_repo
+        if report.email_ownership_evaluated
+        else report.unexpected_emails
+    )
+    third_party_unexpected = len(report.unexpected_emails_third_party_repo)
+    high_conf = len(
+        report.tracked_email_high_confidence + report.history_email_high_confidence
+        if report.email_confidence_evaluated
+        else report.tracked_email_matches + report.history_email_matches
+    )
+    low_conf = len(report.tracked_email_low_confidence + report.history_email_low_confidence)
+    return owned_unexpected, third_party_unexpected, high_conf, low_conf
+
+
+def email_remediation_decision(report: RepoReport) -> tuple[str, str]:
+    owned_unexpected, third_party_unexpected, high_conf, low_conf = email_decision_context(report)
+    low_blocking = report.low_confidence_email_mode == "blocking"
+
+    if owned_unexpected or high_conf or (low_blocking and low_conf):
+        if low_blocking and low_conf and not (owned_unexpected or high_conf):
+            return (
+                "RECOMMENDED",
+                "Blocking mode active: low-confidence email findings require explicit review/remediation.",
+            )
+        return (
+            "RECOMMENDED",
+            "Authorize email remediation for high-confidence/owned-repo findings first.",
+        )
+
+    if low_conf or third_party_unexpected:
+        return (
+            "REVIEW",
+            "Informational email findings only; review samples before authorizing broad remediation.",
+        )
+
+    return ("SKIP", "No email remediation action needed for this repository.")
+
+
 def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     score = 0
     highlights: list[str] = []
+    owned_unexpected_count, third_party_unexpected_count, high_conf_email_count, low_conf_email_count = (
+        email_decision_context(report)
+    )
+    low_confidence_blocking = report.low_confidence_email_mode == "blocking"
 
     if report.tracked_secret_matches or report.history_secret_matches:
         score = max(score, 100)
@@ -1350,9 +1552,19 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     if report.history_sensitive_added or report.history_sensitive_deleted:
         score = max(score, 90)
         highlights.append("Sensitive filenames found in git history")
-    if report.unexpected_emails:
+    if owned_unexpected_count:
         score = max(score, 75)
-        highlights.append("Unexpected commit metadata emails")
+        highlights.append("Unexpected commit metadata emails in owned repository")
+    if high_conf_email_count:
+        score = max(score, 62)
+        highlights.append("High-confidence non-owner email addresses found")
+    if low_confidence_blocking and low_conf_email_count:
+        score = max(score, 60)
+        highlights.append("Low-confidence email findings are configured as blocking")
+    if (not low_confidence_blocking) and low_conf_email_count:
+        highlights.append("Low-confidence email findings are informational")
+    if third_party_unexpected_count:
+        highlights.append("Unexpected commit metadata emails in third-party repositories (informational)")
     if report.tracked_path_matches or report.history_path_matches:
         score = max(score, 70)
         highlights.append("Personal/local path leakage detected")
@@ -1439,6 +1651,32 @@ def render_html_report(
     repo_rows = ""
     repo_details = ""
     for rep, sev_label, _sev_score, highlights in repo_severity_data:
+        decision_status, decision_message = email_remediation_decision(rep)
+        owned_unexpected = (
+            rep.unexpected_emails_owned_repo
+            if rep.email_ownership_evaluated
+            else rep.unexpected_emails
+        )
+        third_party_unexpected = (
+            rep.unexpected_emails_third_party_repo if rep.email_ownership_evaluated else []
+        )
+        tracked_email_high_confidence = (
+            rep.tracked_email_high_confidence
+            if rep.email_confidence_evaluated
+            else rep.tracked_email_matches
+        )
+        tracked_email_low_confidence = (
+            rep.tracked_email_low_confidence if rep.email_confidence_evaluated else []
+        )
+        history_email_high_confidence = (
+            rep.history_email_high_confidence
+            if rep.email_confidence_evaluated
+            else rep.history_email_matches
+        )
+        history_email_low_confidence = (
+            rep.history_email_low_confidence if rep.email_confidence_evaluated else []
+        )
+
         sev_class = f"sev-{sev_label.lower()}"
         repo_rows += (
             "<tr>"
@@ -1448,7 +1686,7 @@ def render_html_report(
             f"<td class=\"num\">{len(rep.failures)}</td>"
             f"<td class=\"num\">{len(rep.tracked_secret_matches) + len(rep.history_secret_matches)}</td>"
             f"<td class=\"num\">{len(rep.secret_file_candidates)}</td>"
-            f"<td class=\"num\">{len(rep.unexpected_emails)}</td>"
+            f"<td class=\"num\">{len(owned_unexpected)}</td>"
             f"<td class=\"num\">{len(rep.gitignore_missing_patterns)}</td>"
             "</tr>"
         )
@@ -1464,13 +1702,21 @@ def render_html_report(
         details_metrics = (
             "<table class=\"metrics\">"
             "<tr><th>Metric</th><th class=\"num\">Value</th></tr>"
-            f"<tr><td>unexpected_emails</td><td class=\"num\">{len(rep.unexpected_emails)}</td></tr>"
+            f"<tr><td>low_confidence_email_mode</td><td>{esc(rep.low_confidence_email_mode)}</td></tr>"
+            f"<tr><td>unexpected_emails_total</td><td class=\"num\">{len(rep.unexpected_emails)}</td></tr>"
+            f"<tr><td>unexpected_emails_owned_repo</td><td class=\"num\">{len(owned_unexpected)}</td></tr>"
+            f"<tr><td>unexpected_emails_third_party_repo</td><td class=\"num\">{len(third_party_unexpected)}</td></tr>"
             f"<tr><td>tracked_secret_matches</td><td class=\"num\">{len(rep.tracked_secret_matches)}</td></tr>"
             f"<tr><td>history_secret_matches</td><td class=\"num\">{len(rep.history_secret_matches)}</td></tr>"
             f"<tr><td>secret_file_candidates</td><td class=\"num\">{len(rep.secret_file_candidates)}</td></tr>"
             f"<tr><td>tracked_path_matches</td><td class=\"num\">{len(rep.tracked_path_matches)}</td></tr>"
             f"<tr><td>history_path_matches</td><td class=\"num\">{len(rep.history_path_matches)}</td></tr>"
+            f"<tr><td>tracked_email_matches</td><td class=\"num\">{len(rep.tracked_email_matches)}</td></tr>"
+            f"<tr><td>tracked_email_high_confidence</td><td class=\"num\">{len(tracked_email_high_confidence)}</td></tr>"
+            f"<tr><td>tracked_email_low_confidence</td><td class=\"num\">{len(tracked_email_low_confidence)}</td></tr>"
             f"<tr><td>history_email_matches</td><td class=\"num\">{len(rep.history_email_matches)}</td></tr>"
+            f"<tr><td>history_email_high_confidence</td><td class=\"num\">{len(history_email_high_confidence)}</td></tr>"
+            f"<tr><td>history_email_low_confidence</td><td class=\"num\">{len(history_email_low_confidence)}</td></tr>"
             f"<tr><td>history_sensitive_added</td><td class=\"num\">{len(rep.history_sensitive_added)}</td></tr>"
             f"<tr><td>history_sensitive_deleted</td><td class=\"num\">{len(rep.history_sensitive_deleted)}</td></tr>"
             f"<tr><td>tracked_but_ignored</td><td class=\"num\">{len(rep.tracked_but_ignored)}</td></tr>"
@@ -1479,6 +1725,11 @@ def render_html_report(
         )
 
         detail_sections = (
+            "<div class=\"detail-grid\">"
+            "<section><h5>Email remediation decision</h5>"
+            f"<p><strong>{esc(decision_status)}</strong> - {esc(decision_message)}</p>"
+            "</section>"
+            "</div>"
             "<div class=\"detail-grid\">"
             "<section><h5>Failure reasons</h5>"
             f"<ul>{failures_html}</ul></section>"
@@ -1497,16 +1748,32 @@ def render_html_report(
             "<section><h5>Secret file candidates</h5>"
             f"{render_lines(rep.secret_file_candidates)}"
             "</section>"
-            "<section><h5>Unexpected commit emails</h5>"
-            f"{render_lines(rep.unexpected_emails)}"
+            "<section><h5>Unexpected commit emails (owned repositories)</h5>"
+            f"{render_lines(owned_unexpected)}"
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
+            "<section><h5>Unexpected commit emails (third-party repositories)</h5>"
+            f"{render_lines(third_party_unexpected)}"
+            "</section>"
             "<section><h5>Path leaks in history (sample)</h5>"
             f"{render_lines(rep.history_path_matches)}"
             "</section>"
-            "<section><h5>Email leaks in history (sample)</h5>"
-            f"{render_lines(rep.history_email_matches)}"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>Email matches in tracked files (high confidence)</h5>"
+            f"{render_lines(tracked_email_high_confidence)}"
+            "</section>"
+            "<section><h5>Email matches in tracked files (low confidence)</h5>"
+            f"{render_lines(tracked_email_low_confidence)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>Email leaks in history (high confidence)</h5>"
+            f"{render_lines(history_email_high_confidence)}"
+            "</section>"
+            "<section><h5>Email leaks in history (low confidence)</h5>"
+            f"{render_lines(history_email_low_confidence)}"
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
@@ -1653,7 +1920,7 @@ def render_html_report(
           <th class=\"num\">Failures</th>
           <th class=\"num\">Secret matches</th>
           <th class=\"num\">Secret file candidates</th>
-          <th class=\"num\">Unexpected emails</th>
+                    <th class="num">Unexpected emails (owned repo)</th>
           <th class=\"num\">Missing .gitignore rules</th>
         </tr>
         {repo_rows}
@@ -1713,6 +1980,7 @@ def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, s
         "dry_run": str(config.dry_run),
         "purge_detected_secret_files": str(config.purge_detected_secret_files),
         "purge_all_detected_secret_files": str(config.purge_all_detected_secret_files),
+        "low_confidence_email_mode": config.low_confidence_email_mode,
         "redact_third_party_emails": str(config.redact_third_party_emails),
         "max_matches": str(config.max_matches),
         "confirm_each_repo_fix": str(config.confirm_each_repo_fix),
@@ -1746,6 +2014,7 @@ def execute_guard_pipeline(
         redact_third_party=config.redact_third_party_emails,
         purge_detected_secret_files=config.purge_detected_secret_files,
         purge_all_detected_secret_files=config.purge_all_detected_secret_files,
+        low_confidence_email_mode=config.low_confidence_email_mode,
         push=config.push,
         dry_run=config.dry_run,
         max_matches=config.max_matches,
@@ -1753,6 +2022,11 @@ def execute_guard_pipeline(
         allowed_remote_owners=config.allowed_remote_owners,
         logger=logger,
     )
+
+    if config.low_confidence_email_mode == "blocking":
+        logger("[INFO] Email policy: low-confidence findings are blocking.")
+    else:
+        logger("[INFO] Email policy: low-confidence findings are informational.")
 
     if config.purge_all_detected_secret_files and not config.purge_detected_secret_files:
         logger("[WARN] --purge-all-detected-secret-files implies --purge-detected-secret-files")
@@ -2042,6 +2316,7 @@ class GuiApp:  # pragma: no cover
         self.purge_detected_secret_files_var = tk.BooleanVar(value=False)
         self.purge_all_detected_secret_files_var = tk.BooleanVar(value=False)
         self.dry_run_var = tk.BooleanVar(value=False)
+        self.low_confidence_blocking_var = tk.BooleanVar(value=False)
 
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -2373,6 +2648,7 @@ class GuiApp:  # pragma: no cover
             ("Apply fix", self.fix_var),
             ("Force push", self.push_var),
             ("Redact third-party emails", self.redact_var),
+            ("Low-confidence emails are blocking", self.low_confidence_blocking_var),
             ("Purge detected secret files (safe)", self.purge_detected_secret_files_var),
             ("Purge all detected secret files (risky)", self.purge_all_detected_secret_files_var),
             ("Dry run", self.dry_run_var),
@@ -2677,6 +2953,9 @@ class GuiApp:  # pragma: no cover
             redact_third_party_emails=self.redact_var.get(),
             purge_detected_secret_files=self.purge_detected_secret_files_var.get(),
             purge_all_detected_secret_files=self.purge_all_detected_secret_files_var.get(),
+            low_confidence_email_mode=(
+                "blocking" if self.low_confidence_blocking_var.get() else "informational"
+            ),
             owner_name=self.owner_name_var.get().strip() or "Owner",
             owner_emails=owner_emails,
             noreply_email=self.noreply_var.get().strip(),
@@ -2726,6 +3005,12 @@ def make_parser() -> argparse.ArgumentParser:
         "--purge-all-detected-secret-files",
         action="store_true",
         help="When fixing, purge all detected secret files including risky/manual-review candidates",
+    )
+    parser.add_argument(
+        "--low-confidence-email-mode",
+        choices=["informational", "blocking"],
+        default="informational",
+        help="Treat low-confidence email findings as informational (default) or blocking",
     )
 
     parser.add_argument("--owner-name", default="Owner", help="Owner display name for rewritten commits")
@@ -2804,6 +3089,7 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         redact_third_party_emails=args.redact_third_party_emails,
         purge_detected_secret_files=args.purge_detected_secret_files,
         purge_all_detected_secret_files=args.purge_all_detected_secret_files,
+        low_confidence_email_mode=args.low_confidence_email_mode,
         owner_name=args.owner_name,
         owner_emails=owner_emails,
         noreply_email=args.noreply_email,
