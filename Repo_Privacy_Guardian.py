@@ -38,6 +38,7 @@ DEFAULT_POLICY = Path(__file__).resolve().parent / "docs" / "POLICY.md"
 DEFAULT_NOREPLY = "noreply@github.com"
 DEFAULT_PLACEHOLDER = "redacted-contributor@example.invalid"
 DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "Audit_Results"
+GUI_DEFAULT_PUBLIC_ONLY = False
 
 DEFAULT_IGNORE_BASELINE = [
     ".venv/",
@@ -123,6 +124,27 @@ class RunArtifacts:
     log_path: Path
     html_path: Path
     started_at: datetime
+
+
+@dataclass
+class GuardRunConfig:
+    mode: str
+    root: Path
+    policy: Path
+    repos: list[str] | None
+    public_only: bool
+    fix: bool
+    push: bool
+    dry_run: bool
+    redact_third_party_emails: bool
+    purge_detected_secret_files: bool
+    purge_all_detected_secret_files: bool
+    owner_name: str
+    owner_emails: list[str]
+    noreply_email: str
+    placeholder_email: str
+    max_matches: int
+    report_json: str | None = None
 
 
 class RunLogger:
@@ -1436,6 +1458,120 @@ def persist_run_outputs(
         logger(f"[INFO] Extra JSON export written to {export_path}")
 
 
+def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, str]:
+    return {
+        "mode": config.mode,
+        "root": str(config.root),
+        "policy": str(config.policy),
+        "public_only": str(config.public_only),
+        "fix": str(config.fix),
+        "push": str(config.push),
+        "dry_run": str(config.dry_run),
+        "purge_detected_secret_files": str(config.purge_detected_secret_files),
+        "purge_all_detected_secret_files": str(config.purge_all_detected_secret_files),
+        "redact_third_party_emails": str(config.redact_third_party_emails),
+        "max_matches": str(config.max_matches),
+        "results_dir": str(results_dir),
+        "report_json": str(config.report_json or ""),
+    }
+
+
+def execute_guard_pipeline(
+    config: GuardRunConfig,
+    artifacts: RunArtifacts,
+    logger: Callable[[str], None],
+    results_dir: Path,
+    require_confirmation: bool = False,
+    confirm_callback: Callable[[], bool] | None = None,
+) -> int:
+    run_settings = build_run_settings(config, results_dir)
+    reports: list[RepoReport] = []
+    exit_code = 0
+
+    guard = RepoPublicationGuard(
+        root=config.root,
+        policy_path=config.policy,
+        noreply_email=config.noreply_email,
+        placeholder_email=config.placeholder_email,
+        owner_name=config.owner_name,
+        owner_emails=config.owner_emails,
+        redact_third_party=config.redact_third_party_emails,
+        purge_detected_secret_files=config.purge_detected_secret_files,
+        purge_all_detected_secret_files=config.purge_all_detected_secret_files,
+        push=config.push,
+        dry_run=config.dry_run,
+        max_matches=config.max_matches,
+        logger=logger,
+    )
+
+    if config.purge_all_detected_secret_files and not config.purge_detected_secret_files:
+        logger("[WARN] --purge-all-detected-secret-files implies --purge-detected-secret-files")
+        guard.purge_detected_secret_files = True
+        run_settings["purge_detected_secret_files"] = "True"
+
+    try:
+        repos = guard.discover_repositories(config.repos, public_only=config.public_only)
+        if not repos:
+            logger("[INFO] No repositories matched. Nothing to do.")
+            logger("\n[SUMMARY] PASS 0/0")
+        else:
+            if config.fix and config.push and require_confirmation:
+                confirmed = confirm_callback() if confirm_callback else False
+                if not confirmed:
+                    logger("[INFO] Run aborted by user confirmation gate.")
+                    logger("\n[SUMMARY] PASS 0/0")
+                    exit_code = 1
+                    repos = []
+
+            for repo in repos:
+                logger(f"[AUDIT] {repo.name}")
+                report = guard.audit_repo(repo)
+
+                if config.fix:
+                    logger(f"[FIX] {repo.name}")
+                    fixed = guard.apply_fixes(repo, report)
+                    logger(f"[RE-AUDIT] {repo.name}")
+                    report = guard.audit_repo(repo)
+                    report.backups_created = fixed.backups_created
+                    report.fix_actions = fixed.fix_actions
+                    report.fix_errors = fixed.fix_errors
+
+                reports.append(report)
+                print_report(report, logger)
+
+            if repos:
+                passed = sum(1 for rep in reports if rep.status == "PASS")
+                logger(f"\n[SUMMARY] PASS {passed}/{len(reports)}")
+                if exit_code == 0 and reports:
+                    exit_code = 0 if passed == len(reports) else 2
+    except Exception as exc:
+        logger(f"[ERROR] Unhandled runtime error: {exc}")
+        logger(traceback.format_exc())
+        exit_code = 3
+    finally:
+        persist_run_outputs(
+            reports=reports,
+            artifacts=artifacts,
+            root_path=config.root,
+            policy_path=config.policy,
+            run_settings=run_settings,
+            logger=logger,
+            optional_json_export=config.report_json,
+        )
+
+    return exit_code
+
+
+def parse_positive_int(raw_value: str) -> int:
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 class GuiApp:  # pragma: no cover
     def __init__(self) -> None:
         import tkinter as tk
@@ -1453,8 +1589,11 @@ class GuiApp:  # pragma: no cover
         self.placeholder_var = tk.StringVar(value=DEFAULT_PLACEHOLDER)
         self.owner_name_var = tk.StringVar(value="Owner")
         self.owner_emails_var = tk.StringVar(value="")
+        self.report_dir_var = tk.StringVar(value=str(DEFAULT_RESULTS_DIR))
+        self.report_json_var = tk.StringVar(value="")
+        self.max_matches_var = tk.StringVar(value="50")
 
-        self.public_only_var = tk.BooleanVar(value=True)
+        self.public_only_var = tk.BooleanVar(value=GUI_DEFAULT_PUBLIC_ONLY)
         self.fix_var = tk.BooleanVar(value=False)
         self.push_var = tk.BooleanVar(value=False)
         self.redact_var = tk.BooleanVar(value=False)
@@ -1473,6 +1612,18 @@ class GuiApp:  # pragma: no cover
         row += 1
         ttk.Label(frm, text="Policy").grid(row=row, column=0, sticky="w")
         ttk.Entry(frm, textvariable=self.policy_var, width=95).grid(row=row, column=1, sticky="we", padx=4)
+
+        row += 1
+        ttk.Label(frm, text="Results dir").grid(row=row, column=0, sticky="w")
+        ttk.Entry(frm, textvariable=self.report_dir_var, width=95).grid(row=row, column=1, sticky="we", padx=4)
+
+        row += 1
+        ttk.Label(frm, text="Extra JSON export (optional)").grid(row=row, column=0, sticky="w")
+        ttk.Entry(frm, textvariable=self.report_json_var, width=95).grid(row=row, column=1, sticky="we", padx=4)
+
+        row += 1
+        ttk.Label(frm, text="Max matches per check").grid(row=row, column=0, sticky="w")
+        ttk.Entry(frm, textvariable=self.max_matches_var, width=12).grid(row=row, column=1, sticky="w", padx=4)
 
         row += 1
         ttk.Label(frm, text="Noreply email").grid(row=row, column=0, sticky="w")
@@ -1555,96 +1706,70 @@ class GuiApp:  # pragma: no cover
             self.messagebox.showwarning("No repositories", "Select at least one repository.")
             return
 
+        try:
+            max_matches = parse_positive_int(self.max_matches_var.get().strip())
+        except argparse.ArgumentTypeError:
+            self.messagebox.showwarning(
+                "Invalid max matches",
+                "Max matches must be a positive integer.",
+            )
+            return
+
         if self.fix_var.get() and self.push_var.get() and not self.messagebox.askyesno(
             "Confirm force push",
             "Apply fix + force push rewrites history. Continue?",
         ):
             return
 
-        thread = threading.Thread(target=self._run_worker, args=(selected,), daemon=True)
+        thread = threading.Thread(target=self._run_worker, args=(selected, max_matches), daemon=True)
         thread.start()
 
-    def _run_worker(self, selected: list[str]) -> None:
+    def _run_worker(self, selected: list[str], max_matches: int) -> None:
         root = Path(self.root_var.get())
         policy = Path(self.policy_var.get())
         owner_emails = [item.strip() for item in self.owner_emails_var.get().split(",") if item.strip()]
+        requested_report_dir = self.report_dir_var.get().strip() or str(DEFAULT_RESULTS_DIR)
+        enforced_results_dir, forced = enforce_results_dir(Path(requested_report_dir))
+        report_json = self.report_json_var.get().strip() or None
 
-        artifacts = create_run_artifacts(DEFAULT_RESULTS_DIR)
+        artifacts = create_run_artifacts(enforced_results_dir)
         gui_logger = RunLogger(
             artifacts.log_path,
             sink=lambda m: self.root.after(0, self.log, m),
         )
+        if forced:
+            gui_logger(
+                f"[WARN] report-dir was forced to {DEFAULT_RESULTS_DIR} to comply with mandatory Audit_Results policy"
+            )
         gui_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
 
-        run_settings = {
-            "mode": "gui",
-            "root": str(root),
-            "policy": str(policy),
-            "public_only": str(self.public_only_var.get()),
-            "fix": str(self.fix_var.get()),
-            "push": str(self.push_var.get()),
-            "dry_run": str(self.dry_run_var.get()),
-            "redact_third_party_emails": str(self.redact_var.get()),
-            "purge_detected_secret_files": str(self.purge_detected_secret_files_var.get()),
-            "purge_all_detected_secret_files": str(self.purge_all_detected_secret_files_var.get()),
-        }
-
-        reports: list[RepoReport] = []
-        try:
-            guard = RepoPublicationGuard(
-                root=root,
-                policy_path=policy,
-                noreply_email=self.noreply_var.get().strip(),
-                placeholder_email=self.placeholder_var.get().strip(),
-                owner_name=self.owner_name_var.get().strip() or "Owner",
-                owner_emails=owner_emails,
-                redact_third_party=self.redact_var.get(),
-                purge_detected_secret_files=self.purge_detected_secret_files_var.get(),
-                purge_all_detected_secret_files=self.purge_all_detected_secret_files_var.get(),
-                push=self.push_var.get(),
-                dry_run=self.dry_run_var.get(),
-                max_matches=50,
-                logger=gui_logger,
-            )
-
-            if self.purge_all_detected_secret_files_var.get() and not self.purge_detected_secret_files_var.get():
-                gui_logger("[WARN] Purge-all implies purge-detected-secret-files")
-                guard.purge_detected_secret_files = True
-                run_settings["purge_detected_secret_files"] = "True"
-
-            repos = guard.discover_repositories(selected, public_only=self.public_only_var.get())
-            if not repos:
-                gui_logger("[INFO] No repositories matched.")
-                gui_logger("\n[SUMMARY] PASS 0/0")
-            else:
-                for repo in repos:
-                    gui_logger(f"[AUDIT] {repo.name}")
-                    rep = guard.audit_repo(repo)
-                    if self.fix_var.get():
-                        gui_logger(f"[FIX] {repo.name}")
-                        fixed = guard.apply_fixes(repo, rep)
-                        rep = guard.audit_repo(repo)
-                        rep.backups_created = fixed.backups_created
-                        rep.fix_actions = fixed.fix_actions
-                        rep.fix_errors = fixed.fix_errors
-                    reports.append(rep)
-                    print_report(rep, gui_logger)
-
-            passed = sum(1 for r in reports if r.status == "PASS")
-            gui_logger(f"\n[SUMMARY] PASS {passed}/{len(reports)}")
-        except Exception as exc:
-            gui_logger(f"[ERROR] Unhandled runtime error: {exc}")
-            gui_logger(traceback.format_exc())
-        finally:
-            persist_run_outputs(
-                reports=reports,
-                artifacts=artifacts,
-                root_path=root,
-                policy_path=policy,
-                run_settings=run_settings,
-                logger=gui_logger,
-                optional_json_export=None,
-            )
+        config = GuardRunConfig(
+            mode="gui",
+            root=root,
+            policy=policy,
+            repos=selected,
+            public_only=self.public_only_var.get(),
+            fix=self.fix_var.get(),
+            push=self.push_var.get(),
+            dry_run=self.dry_run_var.get(),
+            redact_third_party_emails=self.redact_var.get(),
+            purge_detected_secret_files=self.purge_detected_secret_files_var.get(),
+            purge_all_detected_secret_files=self.purge_all_detected_secret_files_var.get(),
+            owner_name=self.owner_name_var.get().strip() or "Owner",
+            owner_emails=owner_emails,
+            noreply_email=self.noreply_var.get().strip(),
+            placeholder_email=self.placeholder_var.get().strip(),
+            max_matches=max_matches,
+            report_json=report_json,
+        )
+        execute_guard_pipeline(
+            config=config,
+            artifacts=artifacts,
+            logger=gui_logger,
+            results_dir=enforced_results_dir,
+            require_confirmation=False,
+            confirm_callback=None,
+        )
 
     def run(self) -> None:
         self.root.mainloop()
@@ -1691,7 +1816,7 @@ def make_parser() -> argparse.ArgumentParser:
         default=DEFAULT_PLACEHOLDER,
         help="Placeholder email for redacted contributors",
     )
-    parser.add_argument("--max-matches", type=int, default=50, help="Max findings per check")
+    parser.add_argument("--max-matches", type=parse_positive_int, default=50, help="Max findings per check")
     parser.add_argument(
         "--report-json",
         help="Optional extra JSON export path. Main JSON/LOG/HTML artifacts are always written to a timestamped run folder",
@@ -1721,95 +1846,39 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         )
     cli_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
 
-    run_settings = {
-        "mode": "cli",
-        "root": str(root),
-        "policy": str(policy),
-        "public_only": str(args.public_only),
-        "fix": str(args.fix),
-        "push": str(args.push),
-        "dry_run": str(args.dry_run),
-        "purge_detected_secret_files": str(args.purge_detected_secret_files),
-        "purge_all_detected_secret_files": str(args.purge_all_detected_secret_files),
-        "redact_third_party_emails": str(args.redact_third_party_emails),
-        "max_matches": str(args.max_matches),
-        "results_dir": str(enforced_results_dir),
-    }
-
-    guard = RepoPublicationGuard(
+    config = GuardRunConfig(
+        mode="cli",
         root=root,
-        policy_path=policy,
-        noreply_email=args.noreply_email,
-        placeholder_email=args.placeholder_email,
-        owner_name=args.owner_name,
-        owner_emails=owner_emails,
-        redact_third_party=args.redact_third_party_emails,
-        purge_detected_secret_files=args.purge_detected_secret_files,
-        purge_all_detected_secret_files=args.purge_all_detected_secret_files,
+        policy=policy,
+        repos=args.repos,
+        public_only=args.public_only,
+        fix=args.fix,
         push=args.push,
         dry_run=args.dry_run,
+        redact_third_party_emails=args.redact_third_party_emails,
+        purge_detected_secret_files=args.purge_detected_secret_files,
+        purge_all_detected_secret_files=args.purge_all_detected_secret_files,
+        owner_name=args.owner_name,
+        owner_emails=owner_emails,
+        noreply_email=args.noreply_email,
+        placeholder_email=args.placeholder_email,
         max_matches=args.max_matches,
-        logger=cli_logger,
+        report_json=args.report_json,
     )
 
-    if args.purge_all_detected_secret_files and not args.purge_detected_secret_files:
-        cli_logger("[WARN] --purge-all-detected-secret-files implies --purge-detected-secret-files")
-        guard.purge_detected_secret_files = True
-        run_settings["purge_detected_secret_files"] = "True"
+    def confirm_force_push() -> bool:
+        print("WARNING: --fix with --push rewrites history and force-pushes.")
+        answer = input("Continue? [y/N]: ").strip().lower()
+        return answer in {"y", "yes"}
 
-    repos = guard.discover_repositories(args.repos, public_only=args.public_only)
-    reports: list[RepoReport] = []
-    exit_code = 0
-
-    try:
-        if not repos:
-            cli_logger("[INFO] No repositories matched. Nothing to do.")
-            cli_logger("\n[SUMMARY] PASS 0/0")
-        else:
-            if args.fix and args.push and not args.yes:
-                print("WARNING: --fix with --push rewrites history and force-pushes.")
-                answer = input("Continue? [y/N]: ").strip().lower()
-                if answer not in {"y", "yes"}:
-                    cli_logger("[INFO] Run aborted by user confirmation gate.")
-                    exit_code = 1
-                    repos = []
-
-            for repo in repos:
-                cli_logger(f"[AUDIT] {repo.name}")
-                report = guard.audit_repo(repo)
-
-                if args.fix:
-                    cli_logger(f"[FIX] {repo.name}")
-                    fixed = guard.apply_fixes(repo, report)
-                    cli_logger(f"[RE-AUDIT] {repo.name}")
-                    report = guard.audit_repo(repo)
-                    report.backups_created = fixed.backups_created
-                    report.fix_actions = fixed.fix_actions
-                    report.fix_errors = fixed.fix_errors
-
-                reports.append(report)
-                print_report(report, cli_logger)
-
-            passed = sum(1 for rep in reports if rep.status == "PASS")
-            cli_logger(f"\n[SUMMARY] PASS {passed}/{len(reports)}")
-            if exit_code == 0 and reports:
-                exit_code = 0 if passed == len(reports) else 2
-    except Exception as exc:
-        cli_logger(f"[ERROR] Unhandled runtime error: {exc}")
-        cli_logger(traceback.format_exc())
-        exit_code = 3
-    finally:
-        persist_run_outputs(
-            reports=reports,
-            artifacts=artifacts,
-            root_path=root,
-            policy_path=policy,
-            run_settings=run_settings,
-            logger=cli_logger,
-            optional_json_export=args.report_json,
-        )
-
-    return exit_code
+    return execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=cli_logger,
+        results_dir=enforced_results_dir,
+        require_confirmation=not args.yes,
+        confirm_callback=confirm_force_push,
+    )
 
 
 def main() -> int:  # pragma: no cover

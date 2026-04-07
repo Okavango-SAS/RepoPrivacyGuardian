@@ -38,8 +38,59 @@ This file captures key design decisions and their rationale.
 - Decision: create bundle backup before any rewrite/fix operation.
 - Rationale: guarantees rollback option even in disconnected scenarios.
 
+## DEC-007 - GUI/CLI parity through a shared execution pipeline
+
+- Status: accepted
+- Decision: move GUI and CLI runtime to a single shared pipeline function and keep run settings symmetric across interfaces.
+- Rationale: removes duplicated flow logic and prevents future feature drift.
+
+### Parity matrix (before)
+
+| Capability | CLI | GUI | Gap |
+| --- | --- | --- | --- |
+| Audit/fix flow and re-audit | Yes | Yes | No |
+| Dry-run behavior | Yes | Yes | No |
+| Secret purge flags | Yes | Yes | Minor (different warning text path) |
+| Report artifacts JSON/LOG/HTML | Yes | Yes | No |
+| `public_only` default | False | True | Yes |
+| `max_matches` configurability | Yes (`--max-matches`) | No (fixed at 50) | Yes |
+| Extra JSON export | Yes (`--report-json`) | No | Yes |
+| Report output directory selection | Yes (`--report-dir`) | No | Yes |
+| Runtime pipeline implementation | Dedicated CLI code path | Dedicated GUI code path | Yes |
+
+### Parity matrix (after)
+
+| Capability | CLI | GUI | Gap |
+| --- | --- | --- | --- |
+| Audit/fix flow and re-audit | Yes | Yes | No |
+| Dry-run behavior | Yes | Yes | No |
+| Secret purge flags | Yes | Yes | No |
+| Report artifacts JSON/LOG/HTML | Yes | Yes | No |
+| `public_only` default | False | False | No |
+| `max_matches` configurability | Yes | Yes | No |
+| Extra JSON export | Yes | Yes | No |
+| Report output directory selection | Yes | Yes | No |
+| Runtime pipeline implementation | Shared | Shared | No |
+
+### Implementation summary
+
+- Added `GuardRunConfig` and `execute_guard_pipeline()` as the canonical execution path for both interfaces.
+- Added `build_run_settings()` to normalize persisted run metadata.
+- Added `parse_positive_int()` so GUI and CLI validate `max_matches` with the same rule.
+- Extended GUI inputs with:
+  - results directory
+  - optional extra JSON export path
+  - max matches
+- Aligned GUI `public_only` default with CLI default.
+- Added parity regression tests for argument validation, defaults, confirmation gate, fix/re-audit flow, and runtime error handling.
+
+### Residual risk and follow-up
+
+- GUI still depends on Tkinter widgets and thread scheduling; functional behavior is aligned but direct widget-level tests remain out of scope.
+- Keep parity tests mandatory on every change touching parser flags or execution flow.
+
 ## Future candidates
 
-- DEC-007: scoped allowlists to reduce false positives.
-- DEC-008: optional HTML report renderer.
-- DEC-009: policy profiles by organization.
+- DEC-008: scoped allowlists to reduce false positives.
+- DEC-009: optional HTML report renderer.
+- DEC-010: policy profiles by organization.
