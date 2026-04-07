@@ -1746,20 +1746,26 @@ def resolve_identity_repo_path(root: Path, selected_repo_names: list[str]) -> tu
 class GuiApp:  # pragma: no cover
     def __init__(self) -> None:
         import tkinter as tk
-        from tkinter import messagebox, scrolledtext, ttk
+        from tkinter import messagebox
+
+        try:
+            import customtkinter as ctk
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "CustomTkinter is required for GUI mode. Install it with: "
+                f"{sys.executable} -m pip install customtkinter"
+            ) from exc
+
+        ctk.set_appearance_mode("light")
+        ctk.set_default_color_theme("blue")
 
         self.tk = tk
+        self.ctk = ctk
         self.messagebox = messagebox
-        self.root = tk.Tk()
-        self.root.title("Repos Publication Guard")
-        self.root.geometry("1280x900")
-        self.root.minsize(1120, 760)
-        self.root.option_add("*Font", "{Segoe UI} 10")
-
-        self.style = ttk.Style()
-        if "clam" in self.style.theme_names():
-            self.style.theme_use("clam")
-        self._configure_styles()
+        self.root = ctk.CTk()
+        self.root.title("Repo Publication Guard")
+        self.root.geometry("1320x920")
+        self.root.minsize(1160, 780)
 
         self.root_var = tk.StringVar(value=str(DEFAULT_ROOT))
         self.policy_var = tk.StringVar(value=str(DEFAULT_POLICY))
@@ -1781,162 +1787,330 @@ class GuiApp:  # pragma: no cover
         self.purge_all_detected_secret_files_var = tk.BooleanVar(value=False)
         self.dry_run_var = tk.BooleanVar(value=False)
 
-        container = ttk.Frame(self.root, style="App.TFrame", padding=(16, 14))
-        container.pack(fill="both", expand=True)
-        container.columnconfigure(0, weight=1)
-        container.rowconfigure(5, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
 
-        header = ttk.Frame(container, style="Header.TFrame", padding=(16, 14))
-        header.grid(row=0, column=0, sticky="we", pady=(0, 10))
-        header.columnconfigure(0, weight=1)
-        ttk.Label(header, text="Repo Publication Guard", style="HeaderTitle.TLabel").grid(
-            row=0,
-            column=0,
-            sticky="w",
-        )
-        ttk.Label(
+        app = ctk.CTkFrame(self.root, fg_color="#E8EEF6", corner_radius=0)
+        app.grid(row=0, column=0, sticky="nsew")
+        app.grid_rowconfigure(5, weight=1)
+        app.grid_columnconfigure(0, weight=1)
+
+        header = ctk.CTkFrame(app, fg_color="#0B4F7A", corner_radius=14)
+        header.grid(row=0, column=0, sticky="we", padx=16, pady=(14, 10))
+        header.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
             header,
-            text="Secure repository audit and privacy-safe Git identity setup.",
-            style="HeaderSubtitle.TLabel",
-        ).grid(row=1, column=0, sticky="w", pady=(2, 0))
+            text="Repo Publication Guard",
+            font=("Segoe UI Semibold", 24),
+            text_color="#F8FAFC",
+        ).grid(row=0, column=0, sticky="w", padx=18, pady=(14, 0))
+        ctk.CTkLabel(
+            header,
+            text="Audit pipelines and Git identity privacy in one focused workspace.",
+            font=("Segoe UI", 13),
+            text_color="#D8E8F7",
+        ).grid(row=1, column=0, sticky="w", padx=18, pady=(4, 14))
 
-        top_row = ttk.Frame(container, style="App.TFrame")
-        top_row.grid(row=1, column=0, sticky="we")
-        top_row.columnconfigure(0, weight=2)
-        top_row.columnconfigure(1, weight=1)
+        top_row = ctk.CTkFrame(app, fg_color="transparent")
+        top_row.grid(row=1, column=0, sticky="we", padx=16)
+        top_row.grid_columnconfigure(0, weight=2)
+        top_row.grid_columnconfigure(1, weight=1)
 
-        settings_frame = ttk.LabelFrame(top_row, text="Run Configuration", style="Card.TLabelframe", padding=(12, 10))
-        settings_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        settings_frame.columnconfigure(1, weight=1)
+        settings_card = ctk.CTkFrame(
+            top_row,
+            fg_color="#F8FBFF",
+            corner_radius=12,
+            border_width=1,
+            border_color="#D1DDEA",
+        )
+        settings_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        settings_card.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(
+            settings_card,
+            text="Run Configuration",
+            font=("Segoe UI Semibold", 16),
+            text_color="#113150",
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
 
-        row = 0
-        ttk.Label(settings_frame, text="Root").grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
-        ttk.Entry(settings_frame, textvariable=self.root_var).grid(row=row, column=1, sticky="we", pady=4)
-        ttk.Button(
-            settings_frame,
-            text="Refresh Repositories",
-            style="Secondary.TButton",
-            command=self.refresh_repos,
-        ).grid(row=row, column=2, sticky="e", padx=(8, 0), pady=4)
-
-        row += 1
-        ttk.Label(settings_frame, text="Policy").grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
-        ttk.Entry(settings_frame, textvariable=self.policy_var).grid(row=row, column=1, columnspan=2, sticky="we", pady=4)
-
-        row += 1
-        ttk.Label(settings_frame, text="Results dir").grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
-        ttk.Entry(settings_frame, textvariable=self.report_dir_var).grid(row=row, column=1, columnspan=2, sticky="we", pady=4)
-
-        row += 1
-        ttk.Label(settings_frame, text="Extra JSON export (optional)").grid(
+        row = 1
+        ctk.CTkLabel(settings_card, text="Root", font=("Segoe UI", 12), text_color="#1E293B").grid(
             row=row,
             column=0,
             sticky="w",
-            padx=(0, 8),
+            padx=(14, 8),
             pady=4,
         )
-        ttk.Entry(settings_frame, textvariable=self.report_json_var).grid(
+        ctk.CTkEntry(settings_card, textvariable=self.root_var, height=32, corner_radius=8).grid(
+            row=row,
+            column=1,
+            sticky="we",
+            pady=4,
+        )
+        ctk.CTkButton(
+            settings_card,
+            text="Refresh Repositories",
+            height=32,
+            corner_radius=8,
+            command=self.refresh_repos,
+            fg_color="#355C7D",
+            hover_color="#274760",
+        ).grid(row=row, column=2, sticky="e", padx=(8, 14), pady=4)
+
+        row += 1
+        ctk.CTkLabel(settings_card, text="Policy", font=("Segoe UI", 12), text_color="#1E293B").grid(
+            row=row,
+            column=0,
+            sticky="w",
+            padx=(14, 8),
+            pady=4,
+        )
+        ctk.CTkEntry(settings_card, textvariable=self.policy_var, height=32, corner_radius=8).grid(
             row=row,
             column=1,
             columnspan=2,
             sticky="we",
+            padx=(0, 14),
             pady=4,
         )
 
         row += 1
-        ttk.Label(settings_frame, text="Max matches per check").grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
-        ttk.Entry(settings_frame, textvariable=self.max_matches_var, width=10).grid(row=row, column=1, sticky="w", pady=4)
-
-        profile_frame = ttk.LabelFrame(top_row, text="Owner Profile", style="Card.TLabelframe", padding=(12, 10))
-        profile_frame.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        profile_frame.columnconfigure(1, weight=1)
-
-        row = 0
-        ttk.Label(profile_frame, text="Noreply email").grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
-        ttk.Entry(profile_frame, textvariable=self.noreply_var).grid(row=row, column=1, sticky="we", pady=4)
-
-        row += 1
-        ttk.Label(profile_frame, text="Placeholder email").grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
-        ttk.Entry(profile_frame, textvariable=self.placeholder_var).grid(row=row, column=1, sticky="we", pady=4)
-
-        row += 1
-        ttk.Label(profile_frame, text="Owner name").grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
-        ttk.Entry(profile_frame, textvariable=self.owner_name_var).grid(row=row, column=1, sticky="we", pady=4)
-
-        row += 1
-        ttk.Label(profile_frame, text="Owner private emails (comma)").grid(
+        ctk.CTkLabel(settings_card, text="Results dir", font=("Segoe UI", 12), text_color="#1E293B").grid(
             row=row,
             column=0,
             sticky="w",
-            padx=(0, 8),
+            padx=(14, 8),
             pady=4,
         )
-        ttk.Entry(profile_frame, textvariable=self.owner_emails_var).grid(row=row, column=1, sticky="we", pady=4)
-
-        identity_frame = ttk.LabelFrame(
-            container,
-            text="Git Identity & GitHub Email Privacy",
-            style="Card.TLabelframe",
-            padding=(12, 10),
+        ctk.CTkEntry(settings_card, textvariable=self.report_dir_var, height=32, corner_radius=8).grid(
+            row=row,
+            column=1,
+            columnspan=2,
+            sticky="we",
+            padx=(0, 14),
+            pady=4,
         )
-        identity_frame.grid(row=2, column=0, sticky="we", pady=(10, 6))
-        identity_frame.columnconfigure(1, weight=1)
 
-        ttk.Label(identity_frame, text="git user.name").grid(row=0, column=0, sticky="w", padx=6, pady=4)
-        ttk.Entry(identity_frame, textvariable=self.git_user_name_var, width=48).grid(
-            row=0,
+        row += 1
+        ctk.CTkLabel(
+            settings_card,
+            text="Extra JSON export (optional)",
+            font=("Segoe UI", 12),
+            text_color="#1E293B",
+        ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=4)
+        ctk.CTkEntry(settings_card, textvariable=self.report_json_var, height=32, corner_radius=8).grid(
+            row=row,
+            column=1,
+            columnspan=2,
+            sticky="we",
+            padx=(0, 14),
+            pady=4,
+        )
+
+        row += 1
+        ctk.CTkLabel(
+            settings_card,
+            text="Max matches per check",
+            font=("Segoe UI", 12),
+            text_color="#1E293B",
+        ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
+        ctk.CTkEntry(
+            settings_card,
+            textvariable=self.max_matches_var,
+            width=100,
+            height=32,
+            corner_radius=8,
+        ).grid(row=row, column=1, sticky="w", pady=(4, 12))
+
+        profile_card = ctk.CTkFrame(
+            top_row,
+            fg_color="#F8FBFF",
+            corner_radius=12,
+            border_width=1,
+            border_color="#D1DDEA",
+        )
+        profile_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        profile_card.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(
+            profile_card,
+            text="Owner Profile",
+            font=("Segoe UI Semibold", 16),
+            text_color="#113150",
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
+
+        row = 1
+        ctk.CTkLabel(profile_card, text="Noreply email", font=("Segoe UI", 12), text_color="#1E293B").grid(
+            row=row,
+            column=0,
+            sticky="w",
+            padx=(14, 8),
+            pady=4,
+        )
+        ctk.CTkEntry(profile_card, textvariable=self.noreply_var, height=32, corner_radius=8).grid(
+            row=row,
             column=1,
             sticky="we",
-            padx=6,
+            padx=(0, 14),
             pady=4,
         )
 
-        ttk.Label(identity_frame, text="git user.email (noreply)").grid(row=1, column=0, sticky="w", padx=6, pady=4)
-        ttk.Entry(identity_frame, textvariable=self.git_user_email_var, width=48).grid(
+        row += 1
+        ctk.CTkLabel(profile_card, text="Placeholder email", font=("Segoe UI", 12), text_color="#1E293B").grid(
+            row=row,
+            column=0,
+            sticky="w",
+            padx=(14, 8),
+            pady=4,
+        )
+        ctk.CTkEntry(profile_card, textvariable=self.placeholder_var, height=32, corner_radius=8).grid(
+            row=row,
+            column=1,
+            sticky="we",
+            padx=(0, 14),
+            pady=4,
+        )
+
+        row += 1
+        ctk.CTkLabel(profile_card, text="Owner name", font=("Segoe UI", 12), text_color="#1E293B").grid(
+            row=row,
+            column=0,
+            sticky="w",
+            padx=(14, 8),
+            pady=4,
+        )
+        ctk.CTkEntry(profile_card, textvariable=self.owner_name_var, height=32, corner_radius=8).grid(
+            row=row,
+            column=1,
+            sticky="we",
+            padx=(0, 14),
+            pady=4,
+        )
+
+        row += 1
+        ctk.CTkLabel(
+            profile_card,
+            text="Owner private emails (comma)",
+            font=("Segoe UI", 12),
+            text_color="#1E293B",
+        ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
+        ctk.CTkEntry(profile_card, textvariable=self.owner_emails_var, height=32, corner_radius=8).grid(
+            row=row,
+            column=1,
+            sticky="we",
+            padx=(0, 14),
+            pady=(4, 12),
+        )
+
+        identity_card = ctk.CTkFrame(
+            app,
+            fg_color="#F8FBFF",
+            corner_radius=12,
+            border_width=1,
+            border_color="#D1DDEA",
+        )
+        identity_card.grid(row=2, column=0, sticky="we", padx=16, pady=(10, 6))
+        identity_card.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(
+            identity_card,
+            text="Git Identity & GitHub Email Privacy",
+            font=("Segoe UI Semibold", 16),
+            text_color="#113150",
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
+
+        ctk.CTkLabel(identity_card, text="git user.name", font=("Segoe UI", 12), text_color="#1E293B").grid(
+            row=1,
+            column=0,
+            sticky="w",
+            padx=(14, 8),
+            pady=4,
+        )
+        ctk.CTkEntry(identity_card, textvariable=self.git_user_name_var, height=32, corner_radius=8).grid(
             row=1,
             column=1,
             sticky="we",
-            padx=6,
+            padx=(0, 14),
             pady=4,
         )
 
-        identity_buttons = ttk.Frame(identity_frame)
-        identity_buttons.grid(row=2, column=0, columnspan=2, sticky="w", padx=6, pady=(6, 4))
-        ttk.Button(
-            identity_buttons,
-            text="Apply GLOBAL git config",
-            style="Secondary.TButton",
-            command=self.apply_git_identity_global_clicked,
-        ).pack(side="left", padx=3)
-        ttk.Button(
-            identity_buttons,
-            text="Apply LOCAL git config",
-            style="Secondary.TButton",
-            command=self.apply_git_identity_local_clicked,
-        ).pack(side="left", padx=3)
-        ttk.Button(
-            identity_buttons,
-            text="Read Current Git Identity",
-            style="Secondary.TButton",
-            command=self.read_git_identity_clicked,
-        ).pack(side="left", padx=3)
-        ttk.Button(
-            identity_buttons,
-            text="Open GitHub Email Settings",
-            style="Secondary.TButton",
-            command=self.open_github_email_settings_clicked,
-        ).pack(side="left", padx=3)
+        ctk.CTkLabel(
+            identity_card,
+            text="git user.email (noreply)",
+            font=("Segoe UI", 12),
+            text_color="#1E293B",
+        ).grid(row=2, column=0, sticky="w", padx=(14, 8), pady=4)
+        ctk.CTkEntry(identity_card, textvariable=self.git_user_email_var, height=32, corner_radius=8).grid(
+            row=2,
+            column=1,
+            sticky="we",
+            padx=(0, 14),
+            pady=4,
+        )
 
-        ttk.Label(
-            identity_frame,
+        identity_actions = ctk.CTkFrame(identity_card, fg_color="transparent")
+        identity_actions.grid(row=3, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 4))
+        identity_actions.grid_columnconfigure((0, 1), weight=1)
+        ctk.CTkButton(
+            identity_actions,
+            text="Apply GLOBAL git config",
+            command=self.apply_git_identity_global_clicked,
+            height=32,
+            corner_radius=8,
+            fg_color="#355C7D",
+            hover_color="#274760",
+        ).grid(row=0, column=0, sticky="we", padx=(0, 6), pady=3)
+        ctk.CTkButton(
+            identity_actions,
+            text="Apply LOCAL git config",
+            command=self.apply_git_identity_local_clicked,
+            height=32,
+            corner_radius=8,
+            fg_color="#355C7D",
+            hover_color="#274760",
+        ).grid(row=0, column=1, sticky="we", padx=(6, 0), pady=3)
+        ctk.CTkButton(
+            identity_actions,
+            text="Read Current Git Identity",
+            command=self.read_git_identity_clicked,
+            height=32,
+            corner_radius=8,
+            fg_color="#8A9AAF",
+            hover_color="#72839A",
+        ).grid(row=1, column=0, sticky="we", padx=(0, 6), pady=3)
+        ctk.CTkButton(
+            identity_actions,
+            text="Open GitHub Email Settings",
+            command=self.open_github_email_settings_clicked,
+            height=32,
+            corner_radius=8,
+            fg_color="#8A9AAF",
+            hover_color="#72839A",
+        ).grid(row=1, column=1, sticky="we", padx=(6, 0), pady=3)
+
+        ctk.CTkLabel(
+            identity_card,
             text=GITHUB_EMAIL_PRIVACY_HELP,
             justify="left",
-            wraplength=1080,
-            style="Hint.TLabel",
-        ).grid(row=3, column=0, columnspan=2, sticky="we", padx=6, pady=(6, 2))
+            anchor="w",
+            wraplength=1200,
+            font=("Segoe UI", 12),
+            text_color="#334155",
+        ).grid(row=4, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 12))
 
-        options_frame = ttk.LabelFrame(container, text="Audit Options", style="Card.TLabelframe", padding=(12, 8))
-        options_frame.grid(row=3, column=0, sticky="we", pady=6)
+        options_card = ctk.CTkFrame(
+            app,
+            fg_color="#F8FBFF",
+            corner_radius=12,
+            border_width=1,
+            border_color="#D1DDEA",
+        )
+        options_card.grid(row=3, column=0, sticky="we", padx=16, pady=6)
+        for col in range(3):
+            options_card.grid_columnconfigure(col, weight=1)
+        ctk.CTkLabel(
+            options_card,
+            text="Audit Options",
+            font=("Segoe UI Semibold", 16),
+            text_color="#113150",
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
 
         option_items = [
             ("Public remotes only", self.public_only_var),
@@ -1947,131 +2121,122 @@ class GuiApp:  # pragma: no cover
             ("Purge all detected secret files (risky)", self.purge_all_detected_secret_files_var),
             ("Dry run", self.dry_run_var),
         ]
-        for col in range(3):
-            options_frame.columnconfigure(col, weight=1)
         for idx, (label, var) in enumerate(option_items):
-            ttk.Checkbutton(options_frame, text=label, variable=var).grid(
-                row=idx // 3,
-                column=idx % 3,
-                sticky="w",
-                padx=6,
-                pady=4,
-            )
+            ctk.CTkCheckBox(
+                options_card,
+                text=label,
+                variable=var,
+                font=("Segoe UI", 12),
+                text_color="#1E293B",
+            ).grid(row=1 + idx // 3, column=idx % 3, sticky="w", padx=14, pady=4)
 
-        repos_frame = ttk.LabelFrame(container, text="Repositories", style="Card.TLabelframe", padding=(12, 10))
-        repos_frame.grid(row=4, column=0, sticky="nsew", pady=(6, 6))
-        repos_frame.columnconfigure(0, weight=1)
-        repos_frame.rowconfigure(0, weight=1)
+        repos_card = ctk.CTkFrame(
+            app,
+            fg_color="#F8FBFF",
+            corner_radius=12,
+            border_width=1,
+            border_color="#D1DDEA",
+        )
+        repos_card.grid(row=4, column=0, sticky="nsew", padx=16, pady=(6, 6))
+        repos_card.grid_columnconfigure(0, weight=1)
+        repos_card.grid_rowconfigure(1, weight=1)
+        ctk.CTkLabel(
+            repos_card,
+            text="Repositories",
+            font=("Segoe UI Semibold", 16),
+            text_color="#113150",
+        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
+
+        list_shell = ctk.CTkFrame(
+            repos_card,
+            fg_color="#FFFFFF",
+            corner_radius=10,
+            border_width=1,
+            border_color="#D1DDEA",
+        )
+        list_shell.grid(row=1, column=0, sticky="nsew", padx=14, pady=(0, 8))
+        list_shell.grid_columnconfigure(0, weight=1)
+        list_shell.grid_rowconfigure(0, weight=1)
 
         self.repo_list = tk.Listbox(
-            repos_frame,
-            selectmode="extended",
-            height=10,
+            list_shell,
+            selectmode=tk.EXTENDED,
             relief="flat",
             borderwidth=0,
-            highlightthickness=1,
-            highlightbackground="#CBD5E1",
-            highlightcolor="#3B82F6",
-            background="#F8FAFC",
-            foreground="#0F172A",
-            selectbackground="#2563EB",
-            selectforeground="#F8FAFC",
+            highlightthickness=0,
             activestyle="none",
+            background="#FFFFFF",
+            foreground="#0F172A",
+            selectbackground="#0B5E8E",
+            selectforeground="#F8FAFC",
+            font=("Segoe UI", 11),
         )
-        self.repo_list.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
-        repo_scroll = ttk.Scrollbar(repos_frame, orient="vertical", command=self.repo_list.yview)
-        repo_scroll.grid(row=0, column=1, sticky="ns")
+        self.repo_list.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=10)
+        repo_scroll = ctk.CTkScrollbar(list_shell, orientation="vertical", command=self.repo_list.yview)
+        repo_scroll.grid(row=0, column=1, sticky="ns", padx=(8, 10), pady=10)
         self.repo_list.configure(yscrollcommand=repo_scroll.set)
 
-        run_controls = ttk.Frame(repos_frame, style="App.TFrame")
-        run_controls.grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
-        ttk.Button(run_controls, text="Run Audit", style="Primary.TButton", command=self.run_clicked).pack(
-            side="left",
-            padx=(0, 6),
-        )
-        ttk.Button(run_controls, text="Select all", style="Secondary.TButton", command=self.select_all).pack(
-            side="left",
-            padx=6,
-        )
-        ttk.Button(run_controls, text="Clear log", style="Secondary.TButton", command=self.clear_output).pack(
-            side="left",
-            padx=6,
-        )
+        run_controls = ctk.CTkFrame(repos_card, fg_color="transparent")
+        run_controls.grid(row=2, column=0, sticky="w", padx=14, pady=(4, 12))
+        ctk.CTkButton(
+            run_controls,
+            text="Run Audit",
+            command=self.run_clicked,
+            width=140,
+            height=34,
+            corner_radius=8,
+            fg_color="#0E6BA8",
+            hover_color="#0A5585",
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            run_controls,
+            text="Select all",
+            command=self.select_all,
+            width=120,
+            height=34,
+            corner_radius=8,
+            fg_color="#8A9AAF",
+            hover_color="#72839A",
+        ).pack(side="left", padx=8)
+        ctk.CTkButton(
+            run_controls,
+            text="Clear log",
+            command=self.clear_output,
+            width=120,
+            height=34,
+            corner_radius=8,
+            fg_color="#8A9AAF",
+            hover_color="#72839A",
+        ).pack(side="left", padx=8)
 
-        output_frame = ttk.LabelFrame(container, text="Execution Log", style="Card.TLabelframe", padding=(8, 8))
-        output_frame.grid(row=5, column=0, sticky="nsew")
-        output_frame.columnconfigure(0, weight=1)
-        output_frame.rowconfigure(0, weight=1)
-        self.output = scrolledtext.ScrolledText(
-            output_frame,
-            height=12,
-            relief="flat",
-            borderwidth=0,
-            background="#0F172A",
-            foreground="#E2E8F0",
-            insertbackground="#E2E8F0",
+        output_card = ctk.CTkFrame(
+            app,
+            fg_color="#F8FBFF",
+            corner_radius=12,
+            border_width=1,
+            border_color="#D1DDEA",
+        )
+        output_card.grid(row=5, column=0, sticky="nsew", padx=16, pady=(0, 14))
+        output_card.grid_columnconfigure(0, weight=1)
+        output_card.grid_rowconfigure(1, weight=1)
+        ctk.CTkLabel(
+            output_card,
+            text="Execution Log",
+            font=("Segoe UI Semibold", 16),
+            text_color="#113150",
+        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
+        self.output = ctk.CTkTextbox(
+            output_card,
+            fg_color="#0D1B2A",
+            text_color="#E2ECF6",
+            corner_radius=10,
+            border_width=0,
+            wrap="word",
             font=("Cascadia Mono", 10),
         )
-        self.output.grid(row=0, column=0, sticky="nsew")
+        self.output.grid(row=1, column=0, sticky="nsew", padx=14, pady=(0, 12))
 
         self.refresh_repos()
-
-    def _configure_styles(self) -> None:
-        self.root.configure(background="#E2E8F0")
-        self.style.configure("App.TFrame", background="#E2E8F0")
-        self.style.configure("Header.TFrame", background="#0E4D7A")
-        self.style.configure(
-            "HeaderTitle.TLabel",
-            background="#0E4D7A",
-            foreground="#F8FAFC",
-            font=("Segoe UI Semibold", 17),
-        )
-        self.style.configure(
-            "HeaderSubtitle.TLabel",
-            background="#0E4D7A",
-            foreground="#DCEBFA",
-            font=("Segoe UI", 10),
-        )
-        self.style.configure("TLabel", background="#E2E8F0", foreground="#1E293B")
-        self.style.configure(
-            "Card.TLabelframe",
-            background="#F8FAFC",
-            borderwidth=1,
-            relief="solid",
-        )
-        self.style.configure(
-            "Card.TLabelframe.Label",
-            background="#F8FAFC",
-            foreground="#0F172A",
-            font=("Segoe UI Semibold", 10),
-        )
-        self.style.configure("Hint.TLabel", background="#F8FAFC", foreground="#334155")
-        self.style.configure("TEntry", fieldbackground="#FFFFFF", padding=5)
-        self.style.configure(
-            "Primary.TButton",
-            background="#2563EB",
-            foreground="#FFFFFF",
-            borderwidth=0,
-            padding=(12, 7),
-            font=("Segoe UI Semibold", 10),
-        )
-        self.style.map(
-            "Primary.TButton",
-            background=[("active", "#1D4ED8"), ("pressed", "#1E40AF")],
-            foreground=[("disabled", "#94A3B8")],
-        )
-        self.style.configure(
-            "Secondary.TButton",
-            background="#E2E8F0",
-            foreground="#0F172A",
-            borderwidth=0,
-            padding=(10, 6),
-        )
-        self.style.map(
-            "Secondary.TButton",
-            background=[("active", "#CBD5E1"), ("pressed", "#94A3B8")],
-            foreground=[("disabled", "#94A3B8")],
-        )
 
     def log(self, msg: str) -> None:
         self.output.insert("end", msg + "\n")
