@@ -1200,6 +1200,7 @@ class RepoPublicationGuard:  # pragma: no cover
 
 def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # pragma: no cover
     decision_status, decision_message = email_remediation_decision(report)
+    guidance_level, guidance_risk, guidance_consequence, guidance_suggestion = repo_user_guidance(report)
     logger(f"\n=== {report.name} ===")
     logger(f"path: {report.path}")
     logger(f"origin: {report.origin_url or '-'}")
@@ -1213,6 +1214,10 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
 
     logger(f"low_confidence_email_mode: {report.low_confidence_email_mode}")
     logger(f"email_remediation_decision: {decision_status} - {decision_message}")
+    logger(f"user_guidance: {guidance_level}")
+    logger(f"risk: {guidance_risk}")
+    logger(f"possible_consequence: {guidance_consequence}")
+    logger(f"suggestion: {guidance_suggestion}")
 
     logger(f"unexpected_emails: {len(report.unexpected_emails)}")
     logger(f"unexpected_emails_owned_repo: {len(report.unexpected_emails_owned_repo)}")
@@ -1535,6 +1540,61 @@ def email_remediation_decision(report: RepoReport) -> tuple[str, str]:
     return ("SKIP", "No email remediation action needed for this repository.")
 
 
+def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
+    email_status, email_message = email_remediation_decision(report)
+    owned_unexpected, _third_party_unexpected, high_conf, low_conf = email_decision_context(report)
+    low_blocking = report.low_confidence_email_mode == "blocking"
+
+    has_secret_risk = bool(
+        report.tracked_secret_matches
+        or report.history_secret_matches
+        or report.secret_file_candidates
+        or report.history_sensitive_added
+        or report.history_sensitive_deleted
+    )
+    has_path_risk = bool(report.tracked_path_matches or report.history_path_matches)
+    has_email_risk = bool(owned_unexpected or high_conf or (low_blocking and low_conf))
+
+    if has_secret_risk:
+        return (
+            "IMMEDIATE",
+            "High risk: secret indicators were detected.",
+            "Possible consequence: credential leakage and unauthorized access if history is published.",
+            "Suggestion: run fix in dry-run, review preview, then authorize secret purge/history rewrite.",
+        )
+
+    if has_email_risk:
+        return (
+            "PRIORITY",
+            "Medium-high risk: non-owner emails are likely exposed in owned repository history/content.",
+            "Possible consequence: personal identity exposure and compliance/privacy issues.",
+            f"Suggestion: {email_message}",
+        )
+
+    if has_path_risk:
+        return (
+            "PRIORITY",
+            "Medium risk: local/personal paths were detected.",
+            "Possible consequence: host/user structure disclosure and unnecessary attack-surface context.",
+            "Suggestion: review samples and authorize path-focused cleanup if repository will be public.",
+        )
+
+    if email_status == "REVIEW":
+        return (
+            "REVIEW",
+            "Low risk: email findings look informational/noisy.",
+            "Possible consequence: alert fatigue if remediated blindly.",
+            f"Suggestion: {email_message}",
+        )
+
+    return (
+        "SKIP",
+        "No relevant privacy risk requiring remediation was detected.",
+        "Possible consequence: none expected for this category.",
+        "Suggestion: no remediation action required.",
+    )
+
+
 def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     score = 0
     highlights: list[str] = []
@@ -1652,6 +1712,7 @@ def render_html_report(
     repo_details = ""
     for rep, sev_label, _sev_score, highlights in repo_severity_data:
         decision_status, decision_message = email_remediation_decision(rep)
+        guidance_level, guidance_risk, guidance_consequence, guidance_suggestion = repo_user_guidance(rep)
         owned_unexpected = (
             rep.unexpected_emails_owned_repo
             if rep.email_ownership_evaluated
@@ -1726,6 +1787,11 @@ def render_html_report(
 
         detail_sections = (
             "<div class=\"detail-grid\">"
+            "<section><h5>User guidance</h5>"
+            f"<p><strong>{esc(guidance_level)}</strong> - {esc(guidance_risk)}</p>"
+            f"<p><strong>Possible consequence:</strong> {esc(guidance_consequence)}</p>"
+            f"<p><strong>Suggestion:</strong> {esc(guidance_suggestion)}</p>"
+            "</section>"
             "<section><h5>Email remediation decision</h5>"
             f"<p><strong>{esc(decision_status)}</strong> - {esc(decision_message)}</p>"
             "</section>"
