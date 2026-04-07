@@ -27,6 +27,7 @@ import sys
 import tempfile
 import threading
 import traceback
+import webbrowser
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -39,6 +40,13 @@ DEFAULT_NOREPLY = "noreply@github.com"
 DEFAULT_PLACEHOLDER = "redacted-contributor@example.invalid"
 DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "Audit_Results"
 GUI_DEFAULT_PUBLIC_ONLY = False
+GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
+GITHUB_EMAIL_PRIVACY_HELP = (
+    "GitHub privacy checklist:\n"
+    '1. Enable "Keep my email addresses private"\n'
+    '2. Enable "Block command line pushes that expose my email"\n'
+    "From the same page, you can also obtain your noreply email address."
+)
 
 DEFAULT_IGNORE_BASELINE = [
     ".venv/",
@@ -88,6 +96,7 @@ SECRET_REMEDIATE_FILENAME_RE = re.compile(
 
 PERSONAL_PATH_RE = re.compile(r"C:\\Users\\|/Users/|/home/|AppData\\|Documents\\")
 EMAIL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+SIMPLE_EMAIL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
 EXFIL_CODE_RE = re.compile(
     r"Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|HttpClient|WebClient|"
@@ -1572,6 +1581,168 @@ def parse_positive_int(raw_value: str) -> int:
     return parsed
 
 
+def is_github_noreply_email(email: str) -> bool:
+    lowered = email.strip().lower()
+    if not lowered:
+        return False
+    return lowered == DEFAULT_NOREPLY or lowered.endswith("@users.noreply.github.com")
+
+
+def validate_git_identity_inputs(user_name: str, user_email: str) -> list[str]:
+    errors: list[str] = []
+    normalized_name = user_name.strip()
+    normalized_email = user_email.strip()
+
+    if not normalized_name:
+        errors.append("git user.name is required.")
+
+    if not normalized_email:
+        errors.append("git user.email is required.")
+    elif not SIMPLE_EMAIL_RE.match(normalized_email):
+        errors.append("git user.email must be a valid email address.")
+    elif not is_github_noreply_email(normalized_email):
+        errors.append(
+            "git user.email should be a GitHub noreply address "
+            "(for example: <id+username>@users.noreply.github.com)."
+        )
+
+    return errors
+
+
+def run_git_command(args: list[str], cwd: Path | None = None) -> CommandResult:
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=str(cwd) if cwd else None,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return CommandResult(proc.returncode, proc.stdout.strip(), proc.stderr.strip())
+
+
+def apply_git_identity_config(
+    scope: str,
+    user_name: str,
+    user_email: str,
+    repo_path: Path | None = None,
+    git_runner: Callable[[list[str], Path | None], CommandResult] | None = None,
+) -> tuple[bool, str]:
+    validation_errors = validate_git_identity_inputs(user_name, user_email)
+    if validation_errors:
+        return False, " ".join(validation_errors)
+
+    normalized_scope = scope.strip().lower()
+    if normalized_scope not in {"global", "local"}:
+        return False, "Unsupported git config scope. Use 'global' or 'local'."
+
+    if normalized_scope == "local" and repo_path is None:
+        return False, "Local git config requires a target repository path."
+
+    runner = git_runner or run_git_command
+    scope_flag = "--global" if normalized_scope == "global" else "--local"
+    target_cwd = repo_path if normalized_scope == "local" else None
+
+    for key, value in (("user.name", user_name.strip()), ("user.email", user_email.strip())):
+        result = runner(["config", scope_flag, key, value], target_cwd)
+        if result.returncode != 0:
+            detail = result.stderr or result.stdout or "Unknown git error."
+            return False, f"Failed to set {key} ({normalized_scope}): {detail}"
+
+    target = str(repo_path) if repo_path else "global git configuration"
+    return True, f"Applied {normalized_scope.upper()} git identity on {target}."
+
+
+def _read_git_config_value(
+    key: str,
+    scope_args: list[str],
+    repo_path: Path | None,
+    git_runner: Callable[[list[str], Path | None], CommandResult],
+) -> str:
+    result = git_runner(["config", *scope_args, "--get", key], repo_path)
+    if result.returncode == 0:
+        value = result.stdout.strip()
+        return value if value else "(not set)"
+
+    detail = (result.stderr or result.stdout).strip()
+    if detail:
+        return f"(error: {detail})"
+    return "(not set)"
+
+
+def read_git_identity_config(
+    repo_path: Path | None = None,
+    git_runner: Callable[[list[str], Path | None], CommandResult] | None = None,
+) -> dict[str, str]:
+    runner = git_runner or run_git_command
+
+    values = {
+        "global.user.name": _read_git_config_value("user.name", ["--global"], None, runner),
+        "global.user.email": _read_git_config_value("user.email", ["--global"], None, runner),
+    }
+
+    if repo_path is None:
+        values["local.user.name"] = "(n/a - select one repository)"
+        values["local.user.email"] = "(n/a - select one repository)"
+        values["effective.user.name"] = "(n/a - select one repository)"
+        values["effective.user.email"] = "(n/a - select one repository)"
+        return values
+
+    values["local.user.name"] = _read_git_config_value("user.name", ["--local"], repo_path, runner)
+    values["local.user.email"] = _read_git_config_value("user.email", ["--local"], repo_path, runner)
+    values["effective.user.name"] = _read_git_config_value("user.name", [], repo_path, runner)
+    values["effective.user.email"] = _read_git_config_value("user.email", [], repo_path, runner)
+    return values
+
+
+def format_git_identity_status(config_values: dict[str, str], repo_path: Path | None) -> str:
+    repo_label = str(repo_path) if repo_path else "n/a"
+    return "\n".join(
+        [
+            "Git identity status",
+            f"Repository context: {repo_label}",
+            "",
+            f"Global user.name: {config_values.get('global.user.name', '(unknown)')}",
+            f"Global user.email: {config_values.get('global.user.email', '(unknown)')}",
+            f"Local user.name: {config_values.get('local.user.name', '(unknown)')}",
+            f"Local user.email: {config_values.get('local.user.email', '(unknown)')}",
+            f"Effective user.name: {config_values.get('effective.user.name', '(unknown)')}",
+            f"Effective user.email: {config_values.get('effective.user.email', '(unknown)')}",
+        ]
+    )
+
+
+def open_github_email_settings(
+    opener: Callable[[str], bool] | None = None,
+) -> tuple[bool, str]:
+    open_url = opener or webbrowser.open
+    try:
+        opened = bool(open_url(GITHUB_EMAIL_SETTINGS_URL))
+    except Exception as exc:
+        return False, f"Unable to open {GITHUB_EMAIL_SETTINGS_URL}: {exc}"
+
+    if not opened:
+        return False, f"Browser could not open {GITHUB_EMAIL_SETTINGS_URL}. Open it manually."
+
+    return True, f"Opened {GITHUB_EMAIL_SETTINGS_URL}."
+
+
+def resolve_identity_repo_path(root: Path, selected_repo_names: list[str]) -> tuple[Path | None, str | None]:
+    if len(selected_repo_names) > 1:
+        return None, "Select exactly one repository to apply LOCAL git config."
+
+    if len(selected_repo_names) == 1:
+        candidate = root / selected_repo_names[0]
+        if (candidate / ".git").exists():
+            return candidate, None
+        return None, f"Selected path is not a git repository: {candidate}"
+
+    if (root / ".git").exists():
+        return root, None
+
+    return None, "Select one repository first (or set Root to a git repository)."
+
+
 class GuiApp:  # pragma: no cover
     def __init__(self) -> None:
         import tkinter as tk
@@ -1581,7 +1752,7 @@ class GuiApp:  # pragma: no cover
         self.messagebox = messagebox
         self.root = tk.Tk()
         self.root.title("Repos Publication Guard")
-        self.root.geometry("980x720")
+        self.root.geometry("1120x820")
 
         self.root_var = tk.StringVar(value=str(DEFAULT_ROOT))
         self.policy_var = tk.StringVar(value=str(DEFAULT_POLICY))
@@ -1589,6 +1760,8 @@ class GuiApp:  # pragma: no cover
         self.placeholder_var = tk.StringVar(value=DEFAULT_PLACEHOLDER)
         self.owner_name_var = tk.StringVar(value="Owner")
         self.owner_emails_var = tk.StringVar(value="")
+        self.git_user_name_var = tk.StringVar(value="Owner")
+        self.git_user_email_var = tk.StringVar(value=DEFAULT_NOREPLY)
         self.report_dir_var = tk.StringVar(value=str(DEFAULT_RESULTS_DIR))
         self.report_json_var = tk.StringVar(value="")
         self.max_matches_var = tk.StringVar(value="50")
@@ -1640,6 +1813,59 @@ class GuiApp:  # pragma: no cover
         row += 1
         ttk.Label(frm, text="Owner private emails (comma)").grid(row=row, column=0, sticky="w")
         ttk.Entry(frm, textvariable=self.owner_emails_var, width=70).grid(row=row, column=1, sticky="w", padx=4)
+
+        row += 1
+        identity_frame = ttk.LabelFrame(frm, text="Git Identity & GitHub Email Privacy")
+        identity_frame.grid(row=row, column=0, columnspan=3, sticky="we", padx=2, pady=8)
+        identity_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(identity_frame, text="git user.name").grid(row=0, column=0, sticky="w", padx=6, pady=3)
+        ttk.Entry(identity_frame, textvariable=self.git_user_name_var, width=48).grid(
+            row=0,
+            column=1,
+            sticky="we",
+            padx=6,
+            pady=3,
+        )
+
+        ttk.Label(identity_frame, text="git user.email (noreply)").grid(row=1, column=0, sticky="w", padx=6, pady=3)
+        ttk.Entry(identity_frame, textvariable=self.git_user_email_var, width=48).grid(
+            row=1,
+            column=1,
+            sticky="we",
+            padx=6,
+            pady=3,
+        )
+
+        identity_buttons = ttk.Frame(identity_frame)
+        identity_buttons.grid(row=2, column=0, columnspan=2, sticky="w", padx=6, pady=4)
+        ttk.Button(
+            identity_buttons,
+            text="Apply GLOBAL git config",
+            command=self.apply_git_identity_global_clicked,
+        ).pack(side="left", padx=3)
+        ttk.Button(
+            identity_buttons,
+            text="Apply LOCAL git config",
+            command=self.apply_git_identity_local_clicked,
+        ).pack(side="left", padx=3)
+        ttk.Button(
+            identity_buttons,
+            text="Read Current Git Identity",
+            command=self.read_git_identity_clicked,
+        ).pack(side="left", padx=3)
+        ttk.Button(
+            identity_buttons,
+            text="Open GitHub Email Settings",
+            command=self.open_github_email_settings_clicked,
+        ).pack(side="left", padx=3)
+
+        ttk.Label(
+            identity_frame,
+            text=GITHUB_EMAIL_PRIVACY_HELP,
+            justify="left",
+            wraplength=820,
+        ).grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=5)
 
         row += 1
         opts = ttk.Frame(frm)
@@ -1700,8 +1926,106 @@ class GuiApp:  # pragma: no cover
             if child.is_dir() and (child / ".git").exists():
                 self.repo_list.insert("end", child.name)
 
+    def _selected_repo_names(self) -> list[str]:
+        return [self.repo_list.get(i) for i in self.repo_list.curselection()]
+
+    def _read_identity_inputs(self) -> tuple[str, str]:
+        user_name = self.git_user_name_var.get().strip()
+        user_email = self.git_user_email_var.get().strip()
+        return user_name, user_email
+
+    def _handle_identity_validation(self, user_name: str, user_email: str) -> bool:
+        errors = validate_git_identity_inputs(user_name, user_email)
+        if not errors:
+            return True
+        self.messagebox.showerror("Invalid Git identity", "\n".join(errors))
+        return False
+
+    def _show_identity_result(self, title: str, success: bool, message: str) -> None:
+        if success:
+            self.log(f"[INFO] {message}")
+            self.messagebox.showinfo(title, message)
+            return
+        self.log(f"[ERROR] {message}")
+        self.messagebox.showerror(title, message)
+
+    def apply_git_identity_global_clicked(self) -> None:
+        user_name, user_email = self._read_identity_inputs()
+        if not self._handle_identity_validation(user_name, user_email):
+            return
+
+        confirmed = self.messagebox.askyesno(
+            "Confirm global git config",
+            "This updates git config --global for all repositories on this machine. Continue?",
+        )
+        if not confirmed:
+            return
+
+        ok, msg = apply_git_identity_config(
+            scope="global",
+            user_name=user_name,
+            user_email=user_email,
+            repo_path=None,
+        )
+        if ok:
+            self.owner_name_var.set(user_name)
+            self.noreply_var.set(user_email)
+        self._show_identity_result("Global Git config", ok, msg)
+
+    def apply_git_identity_local_clicked(self) -> None:
+        user_name, user_email = self._read_identity_inputs()
+        if not self._handle_identity_validation(user_name, user_email):
+            return
+
+        repo_path, error = resolve_identity_repo_path(Path(self.root_var.get()), self._selected_repo_names())
+        if error:
+            self.messagebox.showwarning("Local git config", error)
+            return
+
+        ok, msg = apply_git_identity_config(
+            scope="local",
+            user_name=user_name,
+            user_email=user_email,
+            repo_path=repo_path,
+        )
+        if ok:
+            self.owner_name_var.set(user_name)
+            self.noreply_var.set(user_email)
+        self._show_identity_result("Local Git config", ok, msg)
+
+    def read_git_identity_clicked(self) -> None:
+        selected_repos = self._selected_repo_names()
+        if len(selected_repos) > 1:
+            self.messagebox.showwarning(
+                "Read Git identity",
+                "Select zero or one repository to inspect local/effective git identity.",
+            )
+            return
+
+        repo_path: Path | None = None
+        root = Path(self.root_var.get())
+        if len(selected_repos) == 1:
+            candidate = root / selected_repos[0]
+            if not (candidate / ".git").exists():
+                self.messagebox.showwarning("Read Git identity", f"Not a git repository: {candidate}")
+                return
+            repo_path = candidate
+        elif (root / ".git").exists():
+            repo_path = root
+
+        config_values = read_git_identity_config(repo_path=repo_path)
+        self.messagebox.showinfo(
+            "Current Git identity",
+            format_git_identity_status(config_values, repo_path),
+        )
+        self.log("[INFO] Read current git identity configuration.")
+
+    def open_github_email_settings_clicked(self) -> None:
+        ok, msg = open_github_email_settings()
+        self._show_identity_result("GitHub Email Settings", ok, msg)
+
     def run_clicked(self) -> None:
-        selected = [self.repo_list.get(i) for i in self.repo_list.curselection()]
+        selected = self._selected_repo_names()
         if not selected:
             self.messagebox.showwarning("No repositories", "Select at least one repository.")
             return
