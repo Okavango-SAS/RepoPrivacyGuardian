@@ -108,7 +108,29 @@ SECRET_REMEDIATE_FILENAME_RE = re.compile(
     re.IGNORECASE,
 )
 
-PERSONAL_PATH_RE = re.compile(r"C:\\Users\\|/Users/|/home/|AppData\\|Documents\\")
+PERSONAL_PATH_RE = re.compile(
+    r"(?i)"
+    r"[A-Za-z]:(?:\\\\|\\|/)(?:Users|home)(?:\\\\|\\|/)[A-Za-z0-9][A-Za-z0-9._-]*"
+    r"|/(?:Users|home)/[A-Za-z0-9][A-Za-z0-9._-]*"
+)
+PERSONAL_PATH_LITERAL_PATTERNS = (
+    re.compile(
+        r"(?i)[A-Za-z]:/(?:Users|home)/[A-Za-z0-9][A-Za-z0-9._-]*"
+        r"(?:/[^\s\"'`<>|]+){0,8}"
+    ),
+    re.compile(
+        r"(?i)[A-Za-z]:\\(?:Users|home)\\[A-Za-z0-9][A-Za-z0-9._-]*"
+        r"(?:\\[^\s\"'`<>|]+){0,8}"
+    ),
+    re.compile(
+        r"(?i)[A-Za-z]:\\\\(?:Users|home)\\\\[A-Za-z0-9][A-Za-z0-9._-]*"
+        r"(?:\\\\[^\s\"'`<>|]+){0,8}"
+    ),
+    re.compile(
+        r"(?i)/(?:Users|home)/[A-Za-z0-9][A-Za-z0-9._-]*"
+        r"(?:/[^\s\"'`<>|]+){0,8}"
+    ),
+)
 EMAIL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 SIMPLE_EMAIL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
@@ -882,6 +904,10 @@ class RepoPublicationGuard:  # pragma: no cover
                 elif self.redact_third_party:
                     replacement_map[email] = self.placeholder_email
 
+        for line in report.tracked_path_matches + report.history_path_matches:
+            for path_literal in extract_personal_path_literals(line):
+                replacement_map[path_literal] = REDACTED_PATH
+
         if not replacement_map:
             return None
 
@@ -1393,6 +1419,29 @@ def split_email_matches_by_confidence(matches: list[str]) -> tuple[list[str], li
             high_confidence.append(item)
 
     return high_confidence, low_confidence
+
+
+def extract_personal_path_literals(text: str) -> list[str]:
+    if not text:
+        return []
+
+    findings: list[str] = []
+    seen: set[str] = set()
+    for pattern in PERSONAL_PATH_LITERAL_PATTERNS:
+        for match in pattern.finditer(text):
+            candidate = match.group(0).strip().strip("`\"'()[]{}")
+            candidate = candidate.rstrip(".,;:")
+            if not candidate or candidate in seen:
+                continue
+            if any(existing.endswith(candidate) for existing in seen):
+                continue
+            nested = [existing for existing in seen if candidate.endswith(existing)]
+            for existing in nested:
+                seen.remove(existing)
+                findings.remove(existing)
+            seen.add(candidate)
+            findings.append(candidate)
+    return findings
 
 
 def split_unexpected_emails_by_origin_ownership(
@@ -2394,13 +2443,14 @@ class GuiApp:  # pragma: no cover
         self.max_matches_var = tk.StringVar(value="50")
 
         self.public_only_var = tk.BooleanVar(value=GUI_DEFAULT_PUBLIC_ONLY)
-        self.fix_var = tk.BooleanVar(value=False)
         self.push_var = tk.BooleanVar(value=False)
         self.redact_var = tk.BooleanVar(value=False)
         self.purge_detected_secret_files_var = tk.BooleanVar(value=False)
         self.purge_all_detected_secret_files_var = tk.BooleanVar(value=False)
         self.dry_run_var = tk.BooleanVar(value=False)
         self.low_confidence_blocking_var = tk.BooleanVar(value=False)
+        self._purge_safe_checkbox = None
+        self._purge_risky_checkbox = None
 
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -2746,6 +2796,7 @@ class GuiApp:  # pragma: no cover
         )
         safe_options.grid(row=1, column=0, sticky="nsew", padx=(14, 7), pady=(0, 12))
         safe_options.grid_columnconfigure(0, weight=1)
+        safe_options.grid_columnconfigure(1, weight=0)
         self._safe_options_card = safe_options
         ctk.CTkLabel(
             safe_options,
@@ -2753,6 +2804,10 @@ class GuiApp:  # pragma: no cover
             font=("Segoe UI Semibold", 13),
             text_color="#12405E",
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
+        self._make_info_badge(
+            safe_options,
+            "Advisory options only. They do not rewrite history by themselves.",
+        ).grid(row=0, column=1, sticky="e", padx=(0, 12), pady=(10, 2))
 
         safe_items = [
             ("Public remotes only", self.public_only_var),
@@ -2778,6 +2833,7 @@ class GuiApp:  # pragma: no cover
         )
         destructive_options.grid(row=1, column=1, sticky="nsew", padx=(7, 14), pady=(0, 12))
         destructive_options.grid_columnconfigure(0, weight=1)
+        destructive_options.grid_columnconfigure(1, weight=0)
         self._destructive_options_card = destructive_options
         self._compact_options_layout = False
         ctk.CTkLabel(
@@ -2786,27 +2842,64 @@ class GuiApp:  # pragma: no cover
             font=("Segoe UI Semibold", 13),
             text_color="#7B1E1E",
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
+        self._make_info_badge(
+            destructive_options,
+            "These options are only applied when you click Reparar.",
+        ).grid(row=0, column=1, sticky="e", padx=(0, 12), pady=(10, 2))
         ctk.CTkLabel(
             destructive_options,
             text="Enable only after reviewing risk and consequence.",
             font=("Segoe UI", 11),
             text_color="#8F3A3A",
         ).grid(row=1, column=0, sticky="w", padx=12, pady=(0, 4))
+        ctk.CTkLabel(
+            destructive_options,
+            text="Reparar se ejecuta con el boton Reparar (no con un toggle).",
+            font=("Segoe UI", 11),
+            text_color="#8F3A3A",
+        ).grid(row=2, column=0, sticky="w", padx=12, pady=(0, 4))
 
-        destructive_items = [
-            ("Apply fix", self.fix_var),
-            ("Force push", self.push_var),
-            ("Purge detected secret files (safe)", self.purge_detected_secret_files_var),
-            ("Purge all detected secret files (risky)", self.purge_all_detected_secret_files_var),
-        ]
-        for idx, (label, var) in enumerate(destructive_items, start=2):
-            ctk.CTkCheckBox(
-                destructive_options,
-                text=label,
-                variable=var,
-                font=("Segoe UI", 12),
-                text_color="#1E293B",
-            ).grid(row=idx, column=0, sticky="w", padx=12, pady=4)
+        self._push_checkbox = ctk.CTkCheckBox(
+            destructive_options,
+            text="Force push",
+            variable=self.push_var,
+            font=("Segoe UI", 12),
+            text_color="#1E293B",
+        )
+        self._push_checkbox.grid(row=3, column=0, sticky="w", padx=12, pady=4)
+        self._make_info_badge(
+            destructive_options,
+            "Only used by Reparar. Pushes rewritten history with force-with-lease.",
+        ).grid(row=3, column=1, sticky="e", padx=(0, 12), pady=4)
+
+        self._purge_safe_checkbox = ctk.CTkCheckBox(
+            destructive_options,
+            text="Purge detected secret files (safe)",
+            variable=self.purge_detected_secret_files_var,
+            command=self._on_purge_safe_toggled,
+            font=("Segoe UI", 12),
+            text_color="#1E293B",
+        )
+        self._purge_safe_checkbox.grid(row=4, column=0, sticky="w", padx=12, pady=4)
+        self._make_info_badge(
+            destructive_options,
+            "Conservative mode: purges only auto-safe secret-file candidates.",
+        ).grid(row=4, column=1, sticky="e", padx=(0, 12), pady=4)
+
+        self._purge_risky_checkbox = ctk.CTkCheckBox(
+            destructive_options,
+            text="Purge all detected secret files (risky)",
+            variable=self.purge_all_detected_secret_files_var,
+            command=self._on_purge_risky_toggled,
+            font=("Segoe UI", 12),
+            text_color="#1E293B",
+        )
+        self._purge_risky_checkbox.grid(row=5, column=0, sticky="w", padx=12, pady=4)
+        self._make_info_badge(
+            destructive_options,
+            "Aggressive mode: also purges manual-review candidates. Use with caution.",
+        ).grid(row=5, column=1, sticky="e", padx=(0, 12), pady=4)
+        self._sync_purge_mode_controls()
 
         repos_card = ctk.CTkFrame(
             app,
@@ -2856,16 +2949,39 @@ class GuiApp:  # pragma: no cover
 
         run_controls = ctk.CTkFrame(repos_card, fg_color="transparent")
         run_controls.grid(row=2, column=0, sticky="w", padx=14, pady=(4, 12))
+        audit_controls = ctk.CTkFrame(run_controls, fg_color="transparent")
+        audit_controls.pack(side="left", padx=(0, 8))
         ctk.CTkButton(
-            run_controls,
-            text="Run Audit",
-            command=self.run_clicked,
+            audit_controls,
+            text="Auditar",
+            command=lambda: self.run_clicked(run_fix=False),
             width=140,
             height=34,
             corner_radius=8,
             fg_color="#0E6BA8",
             hover_color="#0A5585",
-        ).pack(side="left", padx=(0, 8))
+        ).pack(side="left")
+        self._make_info_badge(
+            audit_controls,
+            "Runs checks only. It does not apply fixes or rewrite history.",
+        ).pack(side="left", padx=(6, 0), pady=8)
+
+        repair_controls = ctk.CTkFrame(run_controls, fg_color="transparent")
+        repair_controls.pack(side="left", padx=8)
+        ctk.CTkButton(
+            repair_controls,
+            text="Reparar",
+            command=lambda: self.run_clicked(run_fix=True),
+            width=140,
+            height=34,
+            corner_radius=8,
+            fg_color="#B45309",
+            hover_color="#92400E",
+        ).pack(side="left")
+        self._make_info_badge(
+            repair_controls,
+            "Runs audit + applies selected write actions. May rewrite history.",
+        ).pack(side="left", padx=(6, 0), pady=8)
         ctk.CTkButton(
             run_controls,
             text="Select all",
@@ -2986,6 +3102,86 @@ class GuiApp:  # pragma: no cover
             sticky="nsew",
         )
 
+    def _make_info_badge(self, parent, message: str):
+        badge = self.ctk.CTkLabel(
+            parent,
+            text="i",
+            width=18,
+            height=18,
+            corner_radius=9,
+            fg_color="#DDEAF7",
+            text_color="#16436E",
+            font=("Segoe UI Semibold", 11),
+        )
+        self._bind_tooltip(badge, message)
+        return badge
+
+    def _bind_tooltip(self, widget, message: str) -> None:
+        state = {"tip": None}
+
+        def _show(_event) -> None:
+            if state["tip"] is not None:
+                return
+
+            tip = self.tk.Toplevel(self.root)
+            tip.wm_overrideredirect(True)
+            try:
+                tip.attributes("-topmost", True)
+            except Exception:
+                pass
+
+            frame = self.ctk.CTkFrame(
+                tip,
+                fg_color="#0F172A",
+                border_color="#1F4D79",
+                border_width=1,
+                corner_radius=8,
+            )
+            frame.pack(fill="both", expand=True)
+            self.ctk.CTkLabel(
+                frame,
+                text=message,
+                justify="left",
+                anchor="w",
+                wraplength=360,
+                font=("Segoe UI", 11),
+                text_color="#E2ECF6",
+            ).pack(padx=10, pady=8)
+
+            x = widget.winfo_rootx() + widget.winfo_width() + 8
+            y = widget.winfo_rooty() - 2
+            tip.geometry(f"+{x}+{y}")
+            state["tip"] = tip
+
+        def _hide(_event) -> None:
+            tip = state["tip"]
+            if tip is not None:
+                tip.destroy()
+                state["tip"] = None
+
+        widget.bind("<Enter>", _show, add="+")
+        widget.bind("<Leave>", _hide, add="+")
+        widget.bind("<ButtonPress-1>", _hide, add="+")
+
+    def _sync_purge_mode_controls(self) -> None:
+        safe_selected = self.purge_detected_secret_files_var.get()
+        risky_selected = self.purge_all_detected_secret_files_var.get()
+
+        if self._purge_safe_checkbox is not None:
+            self._purge_safe_checkbox.configure(state="disabled" if risky_selected else "normal")
+        if self._purge_risky_checkbox is not None:
+            self._purge_risky_checkbox.configure(state="disabled" if safe_selected else "normal")
+
+    def _on_purge_safe_toggled(self) -> None:
+        if self.purge_detected_secret_files_var.get():
+            self.purge_all_detected_secret_files_var.set(False)
+        self._sync_purge_mode_controls()
+
+    def _on_purge_risky_toggled(self) -> None:
+        if self.purge_all_detected_secret_files_var.get():
+            self.purge_detected_secret_files_var.set(False)
+        self._sync_purge_mode_controls()
+
     def log(self, msg: str) -> None:
         self.output.insert("end", msg + "\n")
         self.output.see("end")
@@ -3103,13 +3299,14 @@ class GuiApp:  # pragma: no cover
         ok, msg = open_github_email_settings()
         self._show_identity_result("GitHub Email Settings", ok, msg)
 
-    def run_clicked(self) -> None:
+    def run_clicked(self, run_fix: bool) -> None:
         selected = self._selected_repo_names()
         repos_to_run = normalize_repo_filters(selected)
         if repos_to_run is None:
+            action_name = "repair" if run_fix else "audit"
             run_all = self.messagebox.askyesno(
                 "Run all repositories",
-                "No repositories selected. Run audit for all repositories under Root?",
+                f"No repositories selected. Run {action_name} for all repositories under Root?",
             )
             if not run_all:
                 return
@@ -3123,16 +3320,20 @@ class GuiApp:  # pragma: no cover
             )
             return
 
-        if self.fix_var.get() and self.push_var.get() and not self.messagebox.askyesno(
+        if run_fix and self.push_var.get() and not self.messagebox.askyesno(
             "Confirm force push",
             "Apply fix + force push rewrites history. Continue?",
         ):
             return
 
-        thread = threading.Thread(target=self._run_worker, args=(repos_to_run, max_matches), daemon=True)
+        thread = threading.Thread(
+            target=self._run_worker,
+            args=(repos_to_run, max_matches, run_fix),
+            daemon=True,
+        )
         thread.start()
 
-    def _run_worker(self, selected: list[str] | None, max_matches: int) -> None:
+    def _run_worker(self, selected: list[str] | None, max_matches: int, run_fix: bool) -> None:
         root = Path(self.root_var.get())
         policy = Path(self.policy_var.get())
         owner_emails = [item.strip() for item in self.owner_emails_var.get().split(",") if item.strip()]
@@ -3156,6 +3357,7 @@ class GuiApp:  # pragma: no cover
                 f"[WARN] report-dir was forced to {DEFAULT_RESULTS_DIR} to comply with mandatory Audit_Results policy"
             )
         gui_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
+        gui_logger(f"[INFO] GUI action: {'repair' if run_fix else 'audit'}")
 
         config = GuardRunConfig(
             mode="gui",
@@ -3163,12 +3365,12 @@ class GuiApp:  # pragma: no cover
             policy=policy,
             repos=selected,
             public_only=self.public_only_var.get(),
-            fix=self.fix_var.get(),
-            push=self.push_var.get(),
+            fix=run_fix,
+            push=(run_fix and self.push_var.get()),
             dry_run=self.dry_run_var.get(),
             redact_third_party_emails=self.redact_var.get(),
-            purge_detected_secret_files=self.purge_detected_secret_files_var.get(),
-            purge_all_detected_secret_files=self.purge_all_detected_secret_files_var.get(),
+            purge_detected_secret_files=(run_fix and self.purge_detected_secret_files_var.get()),
+            purge_all_detected_secret_files=(run_fix and self.purge_all_detected_secret_files_var.get()),
             low_confidence_email_mode=(
                 "blocking" if self.low_confidence_blocking_var.get() else "informational"
             ),
