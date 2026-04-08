@@ -21,7 +21,7 @@ This document defines how coding agents should use Repo Privacy Guardian from CL
 Use one of these command styles:
 
 - `py Repo_Privacy_Guardian.py ...`
-- `<redacted-path> Repo_Privacy_Guardian.py ...`
+- `.venv/Scripts/python.exe Repo_Privacy_Guardian.py ...`
 
 Minimal safe audit for one repository:
 

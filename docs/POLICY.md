@@ -11,6 +11,7 @@
 ## Goal
 
 Prevent exposure of:
+
 - personal identity metadata
 - secrets and credentials
 - local machine paths
@@ -22,6 +23,7 @@ Final decision must be: PASS or FAIL.
 ## 1) Git identity policy (mandatory)
 
 Rules:
+
 - Public commits must use a GitHub noreply email.
 - Personal/private emails must not appear in commit metadata.
 
@@ -116,16 +118,19 @@ rg -n --hidden -S "Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|HttpCl
 ```
 
 Action:
+
 - Keep only justified network calls.
 - Default to opt-in for outbound operations whenever possible.
 
 ### E) .gitignore policy and effectiveness
 
 Critical notes:
+
 - .gitignore does not clean git history.
 - .gitignore does not stop tracking files already committed.
 
 Minimum baseline:
+
 - .venv/
 - __pycache__/
 - .pytest_cache/
@@ -194,25 +199,25 @@ Preferred tool: git-filter-repo.
 git bundle create ..\<repo>-pre-redaction.bundle --all
 ```
 
-2. Install if missing:
+1. Install if missing:
 
 ```powershell
 python -m pip install git-filter-repo
 ```
 
-3. Rewrite private emails in metadata (example):
+1. Rewrite private emails in metadata (example):
 
 ```powershell
 git filter-repo --email-callback "return b'<NOREPLY_EMAIL>' if email == b'<PRIVATE_EMAIL>' else email"
 ```
 
-4. Remove sensitive files from all history (example):
+1. Remove sensitive files from all history (example):
 
 ```powershell
 git filter-repo --path .env --path-glob "*.pem" --path-glob "*.key" --invert-paths
 ```
 
-5. Replace leaked values in historical file content using a mapping file:
+1. Replace leaked values in historical file content using a mapping file:
 
 ```powershell
 # replacements.txt format:
@@ -220,30 +225,32 @@ git filter-repo --path .env --path-glob "*.pem" --path-glob "*.key" --invert-pat
 git filter-repo --replace-text replacements.txt
 ```
 
-6. Push safely:
+1. Push safely:
 
 ```powershell
 git push --force-with-lease origin main
 ```
 
-7. Re-audit after rewrite:
+1. Re-audit after rewrite:
 
 ```powershell
 git shortlog -sne --all
 ```
 
-8. Rotate real secrets even after rewrite.
+1. Rotate real secrets even after rewrite.
 
 ## 4) Default licensing policy
 
 Recommended default for public repositories: Apache License 2.0.
 
 Why:
+
 - permissive usage and redistribution
 - clear attribution requirements
 - stronger patent framework than minimal permissive licenses
 
 Recommended implementation:
+
 - include LICENSE (Apache-2.0 official text)
 - include NOTICE (attribution)
 - use SPDX metadata where applicable (Apache-2.0)
@@ -251,6 +258,7 @@ Recommended implementation:
 ## 5) Non-negotiable operational rule
 
 No repository can be published publicly without:
+
 1. history audit
 2. secrets/path audit
 3. exfiltration review
@@ -259,5 +267,6 @@ No repository can be published publicly without:
 
 If a sensitive file was ever committed and later ignored/deleted,
 status remains FAIL until:
+
 - history rewrite is completed
 - impacted secrets are rotated

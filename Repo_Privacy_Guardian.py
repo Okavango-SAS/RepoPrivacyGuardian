@@ -27,6 +27,8 @@ import sys
 import tempfile
 import threading
 import traceback
+import urllib.error
+import urllib.request
 import webbrowser
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -41,6 +43,7 @@ DEFAULT_PLACEHOLDER = "redacted-contributor@example.invalid"
 DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "Audit_Results"
 GUI_DEFAULT_PUBLIC_ONLY = False
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
+GITHUB_REPO_API_URL = "https://api.github.com/repos/{owner}/{repo}"
 REDACTED_EMAIL = "<redacted-email>"
 REDACTED_SECRET = "<redacted-secret>"
 REDACTED_PATH = "<redacted-path>"
@@ -67,6 +70,7 @@ DEFAULT_IGNORE_BASELINE = [
     ".env",
     ".env.*",
     "wsa-config.local.yaml",
+    "Audit_Results/",
     "sessions/*",
     "artifacts/",
     "exports/",
@@ -145,7 +149,7 @@ EMAIL_LOW_CONFIDENCE_FILE_RE = re.compile(
     re.IGNORECASE,
 )
 EMAIL_LOW_CONFIDENCE_SNIPPET_RE = re.compile(
-    r"\b(example|mock|fixture|dummy|sample|placeholder|test|assert|expect|pytest|unittest)\b|"
+    r"\b(mock|fixture|dummy|sample|placeholder|test|assert|expect|pytest|unittest)\b|"
     r"vi\.spyon|mockresolvedvalue|auth\.login\(|next_public_support_email",
     re.IGNORECASE,
 )
@@ -208,6 +212,8 @@ class GuardRunConfig:
     noreply_email: str
     placeholder_email: str
     max_matches: int
+    rewrite_personal_paths: bool = False
+    open_report: bool = True
     confirm_each_repo_fix: bool = True
     allow_non_owner_push: bool = False
     allowed_remote_owners: list[str] = field(default_factory=list)
@@ -368,6 +374,7 @@ class RepoPublicationGuard:  # pragma: no cover
             for owner in allowed_remote_owners
             if owner.strip()
         }
+        self.rewrite_personal_paths = False
         self.log = logger
 
         inferred_owner = infer_github_username_from_noreply(self.noreply_email)
@@ -452,10 +459,39 @@ class RepoPublicationGuard:  # pragma: no cover
 
         if public_only:
             filtered: list[Path] = []
+            visibility_cache: dict[str, tuple[bool | None, str]] = {}
             for repo in repos:
                 origin = self._git(repo, "remote", "get-url", "origin")
-                if origin.returncode == 0 and "github.com" in origin.stdout.strip().lower():
+                if origin.returncode != 0:
+                    self.log(f"[WARN] {repo.name}: origin remote unavailable; excluded by public-only filter")
+                    continue
+
+                remote_url = origin.stdout.strip()
+                if not remote_url:
+                    self.log(f"[WARN] {repo.name}: empty origin remote; excluded by public-only filter")
+                    continue
+
+                if remote_url not in visibility_cache:
+                    visibility_cache[remote_url] = is_public_github_remote(remote_url)
+
+                is_public, reason = visibility_cache[remote_url]
+                if is_public:
                     filtered.append(repo)
+                    continue
+
+                if reason == "not_github":
+                    self.log(
+                        f"[INFO] {repo.name}: origin is not a GitHub remote; excluded by public-only filter"
+                    )
+                elif reason in {"private", "private_or_not_found"}:
+                    self.log(
+                        f"[INFO] {repo.name}: origin appears private (or not publicly accessible); excluded"
+                    )
+                else:
+                    self.log(
+                        f"[WARN] {repo.name}: unable to verify public visibility ({reason}); excluded"
+                    )
+
             repos = filtered
 
         return repos
@@ -904,9 +940,14 @@ class RepoPublicationGuard:  # pragma: no cover
                 elif self.redact_third_party:
                     replacement_map[email] = self.placeholder_email
 
-        for line in report.tracked_path_matches + report.history_path_matches:
-            for path_literal in extract_personal_path_literals(line):
-                replacement_map[path_literal] = REDACTED_PATH
+        if getattr(self, "rewrite_personal_paths", False):
+            for line in report.tracked_path_matches + report.history_path_matches:
+                for path_literal in extract_personal_path_literals(line):
+                    replacement_map[path_literal] = REDACTED_PATH
+        elif report.tracked_path_matches or report.history_path_matches:
+            report.fix_actions.append(
+                "path remediation skipped: explicit opt-in required (--rewrite-personal-paths)"
+            )
 
         if not replacement_map:
             return None
@@ -1269,6 +1310,22 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"gitignore_missing_patterns: {len(report.gitignore_missing_patterns)}")
     logger(f"exfil_code_indicators: {len(report.exfil_code_indicators)}")
 
+    detected_preview = build_detected_findings_preview(report)
+    logger(f"detected_findings_preview: {len(detected_preview)}")
+    if detected_preview:
+        logger("detected_findings_preview_items:")
+        for item in detected_preview[:12]:
+            logger(f"  - {item}")
+        if len(detected_preview) > 12:
+            logger(f"  - ... and {len(detected_preview) - 12} more")
+
+    planned_removals = build_planned_removals_preview(report)
+    logger(f"planned_deletions_preview: {len(planned_removals)}")
+    if planned_removals:
+        logger("planned_deletions_preview_items:")
+        for item in planned_removals:
+            logger(f"  - {item}")
+
     if report.fix_actions:
         logger("fix_actions:")
         for action in report.fix_actions:
@@ -1342,16 +1399,74 @@ def infer_github_username_from_noreply(email: str) -> str | None:
 def parse_github_remote_owner(remote_url: str) -> str | None:
     if not remote_url:
         return None
+    normalized = remote_url.strip()
+
+    match = GITHUB_REMOTE_RE.search(normalized)
+    if not match:
+        # Accept redacted scp-like remotes where host is anonymized (e.g. *.invalid)
+        # while keeping https non-GitHub remotes excluded.
+        redacted_scp = re.match(
+            r"^[^@\s]+@([^:\s]+):([^/]+)/([^/.]+)(?:\.git)?$",
+            normalized,
+            flags=re.IGNORECASE,
+        )
+        if redacted_scp and redacted_scp.group(1).lower().endswith(".invalid"):
+            return redacted_scp.group(2)
+        return None
+    return match.group(1)
+
+
+def parse_github_remote_slug(remote_url: str) -> tuple[str, str] | None:
+    if not remote_url:
+        return None
     match = GITHUB_REMOTE_RE.search(remote_url.strip())
     if not match:
         return None
-    return match.group(1)
+    return match.group(1), match.group(2)
+
+
+def is_public_github_remote(remote_url: str) -> tuple[bool | None, str]:
+    slug = parse_github_remote_slug(remote_url)
+    if not slug:
+        return None, "not_github"
+
+    owner, repo = slug
+    url = GITHUB_REPO_API_URL.format(owner=owner, repo=repo)
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "Repo-Privacy-Guardian",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8", errors="replace"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            # 404 is returned for private repos without auth and also missing repos.
+            return False, "private_or_not_found"
+        if exc.code == 403:
+            return None, "forbidden_or_rate_limited"
+        return None, f"http_error_{exc.code}"
+    except (TimeoutError, OSError, json.JSONDecodeError):
+        return None, "request_failed"
+
+    private = payload.get("private")
+    if isinstance(private, bool):
+        return (not private), "public" if not private else "private"
+
+    return None, "unknown_visibility"
 
 
 def is_relevant_email_candidate(email: str) -> bool:
     lowered = email.strip().lower()
     if not lowered or "@" not in lowered:
         return False
+
+    if lowered == DEFAULT_PLACEHOLDER.lower():
+        return True
 
     local, domain = lowered.rsplit("@", 1)
     if not local or not domain:
@@ -1535,6 +1650,7 @@ def build_fix_preflight_summary(config: GuardRunConfig, repos: list[Path]) -> li
         "[PREVIEW] Fix mode preflight summary",
         f"[PREVIEW] repositories targeted: {len(repos)}",
         f"[PREVIEW] dry_run={config.dry_run} push={config.push}",
+        f"[PREVIEW] rewrite_personal_paths={config.rewrite_personal_paths}",
         f"[PREVIEW] low-confidence email mode: {config.low_confidence_email_mode}",
         f"[PREVIEW] confirm_each_repo_fix={config.confirm_each_repo_fix}",
         "[PREVIEW] potential destructive actions: history rewrite, file untracking, force push",
@@ -1695,6 +1811,67 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     return "OK", score, highlights
 
 
+def build_detected_findings_preview(report: RepoReport) -> list[str]:
+    findings: list[str] = []
+
+    def add(label: str, items: list[str], limit: int = 4) -> None:
+        if not items:
+            return
+        for item in items[:limit]:
+            findings.append(f"{label}: {item}")
+        if len(items) > limit:
+            findings.append(f"{label}: ... and {len(items) - limit} more")
+
+    add("tracked secret", report.tracked_secret_matches)
+    add("history secret", report.history_secret_matches)
+    add("secret file candidate", report.secret_file_candidates)
+    add("tracked path", report.tracked_path_matches)
+    add("history path", report.history_path_matches)
+    add("tracked email", report.tracked_email_high_confidence)
+    add("history email", report.history_email_high_confidence)
+    add("tracked but ignored", report.tracked_but_ignored)
+    add("history sensitive add", report.history_sensitive_added)
+    add("history sensitive delete", report.history_sensitive_deleted)
+    return findings
+
+
+def build_planned_removals_preview(report: RepoReport) -> list[str]:
+    planned: list[str] = []
+
+    if report.secret_history_purge_paths:
+        for path in report.secret_history_purge_paths[:8]:
+            planned.append(f"history delete path: {path}")
+        if len(report.secret_history_purge_paths) > 8:
+            planned.append(
+                f"history delete path: ... and {len(report.secret_history_purge_paths) - 8} more"
+            )
+
+    if report.tracked_but_ignored:
+        for path in report.tracked_but_ignored[:8]:
+            planned.append(f"stop tracking path: {path}")
+        if len(report.tracked_but_ignored) > 8:
+            planned.append(f"stop tracking path: ... and {len(report.tracked_but_ignored) - 8} more")
+
+    if report.history_sensitive_added or report.history_sensitive_deleted:
+        planned.append(
+            "history delete by sensitive filename regex is eligible (.env, keys, id_rsa, pycache/pyc)"
+        )
+
+    return planned
+
+
+def report_contains_sensitive_findings(report: RepoReport) -> bool:
+    return bool(
+        report.tracked_secret_matches
+        or report.history_secret_matches
+        or report.secret_file_candidates
+        or report.tracked_email_matches
+        or report.history_email_matches
+        or report.tracked_path_matches
+        or report.history_path_matches
+    )
+
+
 def render_html_report(
     reports: list[RepoReport],
     artifacts: RunArtifacts,
@@ -1809,6 +1986,13 @@ def render_html_report(
         if not failures_html:
             failures_html = "<li>No failures.</li>"
 
+        detected_preview = build_detected_findings_preview(rep)
+        planned_removals_preview = build_planned_removals_preview(rep)
+        if not planned_removals_preview:
+            planned_removals_preview = [
+                "No deletion/untracking action is planned for current run settings."
+            ]
+
         details_metrics = (
             "<table class=\"metrics\">"
             "<tr><th>Metric</th><th class=\"num\">Value</th></tr>"
@@ -1843,6 +2027,14 @@ def render_html_report(
             "</section>"
             "<section><h5>Email remediation decision</h5>"
             f"<p><strong>{esc(decision_status)}</strong> - {esc(decision_message)}</p>"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>Detected findings (explicit preview)</h5>"
+            f"{render_lines(detected_preview, limit=12)}"
+            "</section>"
+            "<section><h5>Planned deletions/untracking (explicit preview)</h5>"
+            f"{render_lines(planned_removals_preview, limit=12)}"
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
@@ -2092,6 +2284,31 @@ def persist_run_outputs(
         export_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         logger(f"[INFO] Extra JSON export written to {export_path}")
 
+    if any(report_contains_sensitive_findings(rep) for rep in reports):
+        logger(
+            "[WARN] Sensitive findings were detected in this run. "
+            "After review, consider deleting the run folder in Audit_Results/ to avoid retaining recovered context."
+        )
+
+
+def open_html_report_in_browser(
+    html_path: Path,
+    logger: Callable[[str], None],
+) -> None:
+    if not html_path.exists():
+        return
+
+    try:
+        opened = bool(webbrowser.open(html_path.resolve().as_uri()))
+    except Exception as exc:
+        logger(f"[WARN] Could not open HTML report automatically: {exc}")
+        return
+
+    if opened:
+        logger(f"[INFO] Opened HTML report in browser: {html_path}")
+    else:
+        logger(f"[WARN] Browser did not open automatically. Open report manually: {html_path}")
+
 
 def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, str]:
     return {
@@ -2104,6 +2321,8 @@ def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, s
         "dry_run": str(config.dry_run),
         "purge_detected_secret_files": str(config.purge_detected_secret_files),
         "purge_all_detected_secret_files": str(config.purge_all_detected_secret_files),
+        "rewrite_personal_paths": str(config.rewrite_personal_paths),
+        "open_report": str(config.open_report),
         "low_confidence_email_mode": config.low_confidence_email_mode,
         "redact_third_party_emails": str(config.redact_third_party_emails),
         "max_matches": str(config.max_matches),
@@ -2146,6 +2365,7 @@ def execute_guard_pipeline(
         allowed_remote_owners=config.allowed_remote_owners,
         logger=logger,
     )
+    guard.rewrite_personal_paths = config.rewrite_personal_paths
 
     if config.low_confidence_email_mode == "blocking":
         logger("[INFO] Email policy: low-confidence findings are blocking.")
@@ -2217,6 +2437,8 @@ def execute_guard_pipeline(
             logger=logger,
             optional_json_export=config.report_json,
         )
+        if config.open_report:
+            open_html_report_in_browser(artifacts.html_path, logger)
 
     return exit_code
 
@@ -2424,7 +2646,7 @@ class GuiApp:  # pragma: no cover
         window_h = min(max(int(screen_h * 0.9), 760), 980)
         window_x = max((screen_w - window_w) // 2, 0)
         window_y = max((screen_h - window_h) // 2, 0)
-        self._top_stack_width_threshold = 1320
+        self._top_stack_width_threshold = 1500
         self._options_stack_width_threshold = 1220
         self.root.geometry(f"{window_w}x{window_h}+{window_x}+{window_y}")
         self.root.minsize(min(1120, screen_w), min(700, screen_h))
@@ -2445,12 +2667,23 @@ class GuiApp:  # pragma: no cover
         self.public_only_var = tk.BooleanVar(value=GUI_DEFAULT_PUBLIC_ONLY)
         self.push_var = tk.BooleanVar(value=False)
         self.redact_var = tk.BooleanVar(value=False)
+        self.rewrite_personal_paths_var = tk.BooleanVar(value=False)
         self.purge_detected_secret_files_var = tk.BooleanVar(value=False)
         self.purge_all_detected_secret_files_var = tk.BooleanVar(value=False)
         self.dry_run_var = tk.BooleanVar(value=False)
         self.low_confidence_blocking_var = tk.BooleanVar(value=False)
         self._purge_safe_checkbox = None
         self._purge_risky_checkbox = None
+        self._audit_button = None
+        self._repair_button = None
+        self._run_in_progress = False
+        self._repair_ready = False
+        self._repair_button_text = "Reparar (auditar primero)"
+        self._repair_cooldown_seconds = 10
+        self._repair_cooldown_remaining = 0
+        self._repair_cooldown_after_id = None
+        self._last_audit_reports_payload: list[dict[str, object]] = []
+        self._last_audit_selection_signature: tuple[str, ...] | None = None
 
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -2514,18 +2747,11 @@ class GuiApp:  # pragma: no cover
         ctk.CTkEntry(settings_card, textvariable=self.root_var, height=32, corner_radius=8).grid(
             row=row,
             column=1,
+            columnspan=2,
             sticky="we",
+            padx=(0, 14),
             pady=4,
         )
-        ctk.CTkButton(
-            settings_card,
-            text="Refresh Repositories",
-            height=32,
-            corner_radius=8,
-            command=self.refresh_repos,
-            fg_color="#355C7D",
-            hover_color="#274760",
-        ).grid(row=row, column=2, sticky="e", padx=(8, 14), pady=4)
 
         row += 1
         ctk.CTkLabel(settings_card, text="Policy", font=("Segoe UI", 12), text_color="#1E293B").grid(
@@ -2859,46 +3085,59 @@ class GuiApp:  # pragma: no cover
             text_color="#8F3A3A",
         ).grid(row=2, column=0, sticky="w", padx=12, pady=(0, 4))
 
+        self._rewrite_paths_checkbox = ctk.CTkCheckBox(
+            destructive_options,
+            text="Rewrite personal paths (opt-in, usa replace-text en historial)",
+            variable=self.rewrite_personal_paths_var,
+            font=("Segoe UI", 12),
+            text_color="#1E293B",
+        )
+        self._rewrite_paths_checkbox.grid(row=3, column=0, sticky="w", padx=12, pady=4)
+        self._make_info_badge(
+            destructive_options,
+            "Reemplaza rutas personales detectadas en historial/contenido mediante git-filter-repo --replace-text.",
+        ).grid(row=3, column=1, sticky="e", padx=(0, 12), pady=4)
+
         self._push_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Force push",
+            text="Force push remoto (--force-with-lease)",
             variable=self.push_var,
             font=("Segoe UI", 12),
             text_color="#1E293B",
         )
-        self._push_checkbox.grid(row=3, column=0, sticky="w", padx=12, pady=4)
+        self._push_checkbox.grid(row=4, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
-            "Only used by Reparar. Pushes rewritten history with force-with-lease.",
-        ).grid(row=3, column=1, sticky="e", padx=(0, 12), pady=4)
+            "Publica el historial reescrito en origin/main con --force-with-lease.",
+        ).grid(row=4, column=1, sticky="e", padx=(0, 12), pady=4)
 
         self._purge_safe_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Purge detected secret files (safe)",
+            text="Purge SAFE (gitignore + untrack + purge candidatos seguros)",
             variable=self.purge_detected_secret_files_var,
             command=self._on_purge_safe_toggled,
             font=("Segoe UI", 12),
             text_color="#1E293B",
         )
-        self._purge_safe_checkbox.grid(row=4, column=0, sticky="w", padx=12, pady=4)
+        self._purge_safe_checkbox.grid(row=5, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
-            "Conservative mode: purges only auto-safe secret-file candidates.",
-        ).grid(row=4, column=1, sticky="e", padx=(0, 12), pady=4)
+            "Solo purga candidatos automáticos de bajo riesgo y deja manual-review sin tocar.",
+        ).grid(row=5, column=1, sticky="e", padx=(0, 12), pady=4)
 
         self._purge_risky_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Purge all detected secret files (risky)",
+            text="Purge RISKY (incluye candidatos manual-review)",
             variable=self.purge_all_detected_secret_files_var,
             command=self._on_purge_risky_toggled,
             font=("Segoe UI", 12),
             text_color="#1E293B",
         )
-        self._purge_risky_checkbox.grid(row=5, column=0, sticky="w", padx=12, pady=4)
+        self._purge_risky_checkbox.grid(row=6, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
-            "Aggressive mode: also purges manual-review candidates. Use with caution.",
-        ).grid(row=5, column=1, sticky="e", padx=(0, 12), pady=4)
+            "Modo agresivo: también purga candidatos que requieren revisión manual.",
+        ).grid(row=6, column=1, sticky="e", padx=(0, 12), pady=4)
         self._sync_purge_mode_controls()
 
         repos_card = ctk.CTkFrame(
@@ -2910,6 +3149,7 @@ class GuiApp:  # pragma: no cover
         )
         repos_card.grid(row=4, column=0, sticky="nsew", padx=16, pady=(6, 6))
         repos_card.grid_columnconfigure(0, weight=1)
+        repos_card.grid_columnconfigure(1, weight=0)
         repos_card.grid_rowconfigure(1, weight=1)
         ctk.CTkLabel(
             repos_card,
@@ -2917,6 +3157,16 @@ class GuiApp:  # pragma: no cover
             font=("Segoe UI Semibold", 16),
             text_color="#113150",
         ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
+        ctk.CTkButton(
+            repos_card,
+            text="Refresh Repositories",
+            height=32,
+            width=190,
+            corner_radius=8,
+            command=self.refresh_repos,
+            fg_color="#355C7D",
+            hover_color="#274760",
+        ).grid(row=0, column=1, sticky="e", padx=14, pady=(12, 8))
 
         list_shell = ctk.CTkFrame(
             repos_card,
@@ -2951,7 +3201,7 @@ class GuiApp:  # pragma: no cover
         run_controls.grid(row=2, column=0, sticky="w", padx=14, pady=(4, 12))
         audit_controls = ctk.CTkFrame(run_controls, fg_color="transparent")
         audit_controls.pack(side="left", padx=(0, 8))
-        ctk.CTkButton(
+        self._audit_button = ctk.CTkButton(
             audit_controls,
             text="Auditar",
             command=lambda: self.run_clicked(run_fix=False),
@@ -2960,7 +3210,8 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             fg_color="#0E6BA8",
             hover_color="#0A5585",
-        ).pack(side="left")
+        )
+        self._audit_button.pack(side="left")
         self._make_info_badge(
             audit_controls,
             "Runs checks only. It does not apply fixes or rewrite history.",
@@ -2968,19 +3219,20 @@ class GuiApp:  # pragma: no cover
 
         repair_controls = ctk.CTkFrame(run_controls, fg_color="transparent")
         repair_controls.pack(side="left", padx=8)
-        ctk.CTkButton(
+        self._repair_button = ctk.CTkButton(
             repair_controls,
-            text="Reparar",
+            text=self._repair_button_text,
             command=lambda: self.run_clicked(run_fix=True),
-            width=140,
+            width=230,
             height=34,
             corner_radius=8,
             fg_color="#B45309",
             hover_color="#92400E",
-        ).pack(side="left")
+        )
+        self._repair_button.pack(side="left")
         self._make_info_badge(
             repair_controls,
-            "Runs audit + applies selected write actions. May rewrite history.",
+            "Se habilita solo tras auditar. Muestra plan explícito y pide aceptación antes de ejecutar.",
         ).pack(side="left", padx=(6, 0), pady=8)
         ctk.CTkButton(
             run_controls,
@@ -3033,6 +3285,7 @@ class GuiApp:  # pragma: no cover
         self.refresh_repos()
         self.root.bind("<Configure>", self._on_root_resize)
         self.root.after(0, self._apply_responsive_layout)
+        self._lock_repair_until_next_audit("Reparar (auditar primero)")
 
     def _get_logical_window_width(self) -> int:
         geometry = self.root.wm_geometry().split("+", maxsplit=1)[0]
@@ -3182,6 +3435,208 @@ class GuiApp:  # pragma: no cover
             self.purge_detected_secret_files_var.set(False)
         self._sync_purge_mode_controls()
 
+    def _selection_signature(self, selected: list[str] | None) -> tuple[str, ...] | None:
+        if selected is None:
+            return None
+        return tuple(sorted(selected))
+
+    def _cancel_repair_cooldown(self) -> None:
+        if self._repair_cooldown_after_id is None:
+            return
+        try:
+            self.root.after_cancel(self._repair_cooldown_after_id)
+        except Exception:
+            pass
+        self._repair_cooldown_after_id = None
+
+    def _update_run_buttons_state(self) -> None:
+        if self._audit_button is not None:
+            self._audit_button.configure(state="disabled" if self._run_in_progress else "normal")
+
+        if self._repair_button is None:
+            return
+
+        state = "normal" if (self._repair_ready and not self._run_in_progress) else "disabled"
+        self._repair_button.configure(state=state, text=self._repair_button_text)
+
+    def _lock_repair_until_next_audit(self, reason: str = "Reparar (auditar primero)") -> None:
+        self._cancel_repair_cooldown()
+        self._repair_ready = False
+        self._repair_cooldown_remaining = 0
+        self._repair_button_text = reason
+        self._update_run_buttons_state()
+
+    def _start_repair_cooldown(
+        self,
+        reports_payload: list[dict[str, object]],
+        selection_signature: tuple[str, ...] | None,
+    ) -> None:
+        self._last_audit_reports_payload = reports_payload
+        self._last_audit_selection_signature = selection_signature
+
+        if not reports_payload:
+            self._lock_repair_until_next_audit("Reparar (sin resultados auditados)")
+            return
+
+        self._cancel_repair_cooldown()
+        self._repair_ready = False
+        self._repair_cooldown_remaining = self._repair_cooldown_seconds
+        self._repair_button_text = f"Reparar (espera {self._repair_cooldown_remaining}s)"
+        self._update_run_buttons_state()
+        self.log(
+            "[INFO] Reparar se habilitara en 10 segundos para forzar una revision minima de resultados."
+        )
+        self._repair_cooldown_after_id = self.root.after(1000, self._tick_repair_cooldown)
+
+    def _tick_repair_cooldown(self) -> None:
+        self._repair_cooldown_after_id = None
+        if self._repair_cooldown_remaining <= 1:
+            self._repair_ready = True
+            self._repair_cooldown_remaining = 0
+            self._repair_button_text = "Reparar"
+            self._update_run_buttons_state()
+            self.log("[INFO] Reparar habilitado.")
+            return
+
+        self._repair_cooldown_remaining -= 1
+        self._repair_button_text = f"Reparar (espera {self._repair_cooldown_remaining}s)"
+        self._update_run_buttons_state()
+        self._repair_cooldown_after_id = self.root.after(1000, self._tick_repair_cooldown)
+
+    def _is_risky_repair_selected(self) -> bool:
+        return bool(self.push_var.get() or self.purge_all_detected_secret_files_var.get())
+
+    def _report_list(self, payload: dict[str, object], key: str) -> list[str]:
+        value = payload.get(key)
+        if not isinstance(value, list):
+            return []
+        return [str(item) for item in value if isinstance(item, str)]
+
+    def _build_repair_confirmation_text(self, selected_signature: tuple[str, ...] | None) -> str:
+        risky_mode = self._is_risky_repair_selected()
+
+        lines = [
+            "Se va a ejecutar Reparar con el siguiente plan:",
+            "",
+            "Opciones activas:",
+            f"- Rewrite personal paths: {'SI' if self.rewrite_personal_paths_var.get() else 'NO'}",
+            f"- Purge SAFE: {'SI' if self.purge_detected_secret_files_var.get() else 'NO'}",
+            f"- Purge RISKY: {'SI' if self.purge_all_detected_secret_files_var.get() else 'NO'}",
+            f"- Force push remoto: {'SI' if self.push_var.get() else 'NO'}",
+            "",
+            "Cambios base de Reparar:",
+            "- Puede agregar patrones faltantes en .gitignore",
+            "- Puede hacer git rm --cached de archivos tracked-but-ignored",
+            "- Puede reescribir historial con git-filter-repo segun opciones",
+        ]
+
+        if risky_mode:
+            lines.extend(
+                [
+                    "",
+                    "ATENCION: seleccionaste opciones RISKY (purge all y/o force push).",
+                    "Esto puede eliminar contenido historico de forma irreversible y publicar cambios por force push.",
+                ]
+            )
+
+        lines.append("")
+        lines.append("Resumen explicito de detecciones auditadas:")
+
+        for rep in self._last_audit_reports_payload:
+            name = str(rep.get("name", "(repo)"))
+            status = str(rep.get("status", "UNKNOWN"))
+            lines.append(f"- {name} [{status}]")
+
+            tracked_ignored = self._report_list(rep, "tracked_but_ignored")
+            if tracked_ignored:
+                lines.append(f"  * Untrack previsto (tracked-but-ignored): {len(tracked_ignored)}")
+
+            if self.rewrite_personal_paths_var.get():
+                path_findings = self._report_list(rep, "tracked_path_matches") + self._report_list(
+                    rep,
+                    "history_path_matches",
+                )
+                lines.append(f"  * Reescritura de paths personales prevista: {len(path_findings)} hallazgos")
+            else:
+                lines.append("  * Paths personales: no se reescriben (opt-in desactivado)")
+
+            if self.purge_all_detected_secret_files_var.get():
+                purge_targets = self._report_list(rep, "secret_file_candidates")
+                lines.append(f"  * Purge RISKY previsto: {len(purge_targets)} candidatos")
+                for item in purge_targets[:4]:
+                    lines.append(f"    - {item}")
+                if len(purge_targets) > 4:
+                    lines.append(f"    - ... y {len(purge_targets) - 4} mas")
+            elif self.purge_detected_secret_files_var.get():
+                purge_targets = self._report_list(rep, "secret_file_autopurge_candidates")
+                lines.append(f"  * Purge SAFE previsto: {len(purge_targets)} candidatos")
+                for item in purge_targets[:4]:
+                    lines.append(f"    - {item}")
+                if len(purge_targets) > 4:
+                    lines.append(f"    - ... y {len(purge_targets) - 4} mas")
+            else:
+                lines.append("  * Purge de secret files: desactivado")
+
+        lines.extend(
+            [
+                "",
+                "Continuar?",
+                "(Si cambiaste seleccion de repos/opciones, re-audita primero).",
+            ]
+        )
+        return "\n".join(lines)
+
+    def _confirm_repair_run(self, selected_signature: tuple[str, ...] | None) -> bool:
+        if not self._repair_ready:
+            self.messagebox.showwarning(
+                "Reparar bloqueado",
+                "Reparar solo se habilita despues de terminar una auditoria y esperar 10 segundos.",
+            )
+            return False
+
+        if not self._last_audit_reports_payload:
+            self.messagebox.showwarning(
+                "Reparar bloqueado",
+                "No hay resultados de auditoria en esta sesion. Ejecuta Auditar primero.",
+            )
+            return False
+
+        if selected_signature != self._last_audit_selection_signature:
+            self.messagebox.showwarning(
+                "Requiere nueva auditoria",
+                "La seleccion de repos no coincide con la ultima auditoria. Audita de nuevo antes de reparar.",
+            )
+            return False
+
+        plan_message = self._build_repair_confirmation_text(selected_signature)
+        confirmed = self.messagebox.askyesno("Confirmar plan de reparacion", plan_message)
+        if not confirmed:
+            return False
+
+        if self._is_risky_repair_selected():
+            accepted = self.messagebox.askyesno(
+                "Aceptacion de riesgo requerida",
+                "Seleccionaste opciones RISKY (purge all y/o force push).\n"
+                "Confirma que aceptas continuar BAJO TU PROPIO RIESGO.",
+            )
+            if not accepted:
+                return False
+
+        return True
+
+    def _on_gui_run_finished(
+        self,
+        run_fix: bool,
+        selection_signature: tuple[str, ...] | None,
+        reports_payload: list[dict[str, object]],
+    ) -> None:
+        self._run_in_progress = False
+        if run_fix:
+            self._lock_repair_until_next_audit("Reparar (auditar nuevamente)")
+            return
+
+        self._start_repair_cooldown(reports_payload, selection_signature)
+
     def log(self, msg: str) -> None:
         self.output.insert("end", msg + "\n")
         self.output.see("end")
@@ -3300,8 +3755,16 @@ class GuiApp:  # pragma: no cover
         self._show_identity_result("GitHub Email Settings", ok, msg)
 
     def run_clicked(self, run_fix: bool) -> None:
+        if self._run_in_progress:
+            self.messagebox.showinfo(
+                "Run in progress",
+                "There is already an execution in progress. Wait until it finishes.",
+            )
+            return
+
         selected = self._selected_repo_names()
         repos_to_run = normalize_repo_filters(selected)
+        selection_signature = self._selection_signature(repos_to_run)
         if repos_to_run is None:
             action_name = "repair" if run_fix else "audit"
             run_all = self.messagebox.askyesno(
@@ -3310,6 +3773,10 @@ class GuiApp:  # pragma: no cover
             )
             if not run_all:
                 return
+            selection_signature = None
+
+        if run_fix and not self._confirm_repair_run(selection_signature):
+            return
 
         try:
             max_matches = parse_positive_int(self.max_matches_var.get().strip())
@@ -3320,78 +3787,112 @@ class GuiApp:  # pragma: no cover
             )
             return
 
-        if run_fix and self.push_var.get() and not self.messagebox.askyesno(
-            "Confirm force push",
-            "Apply fix + force push rewrites history. Continue?",
-        ):
-            return
+        if not run_fix:
+            self._lock_repair_until_next_audit("Reparar (auditoria en curso)")
+
+        self._run_in_progress = True
+        self._update_run_buttons_state()
 
         thread = threading.Thread(
             target=self._run_worker,
-            args=(repos_to_run, max_matches, run_fix),
+            args=(repos_to_run, max_matches, run_fix, selection_signature),
             daemon=True,
         )
         thread.start()
 
-    def _run_worker(self, selected: list[str] | None, max_matches: int, run_fix: bool) -> None:
-        root = Path(self.root_var.get())
-        policy = Path(self.policy_var.get())
-        owner_emails = [item.strip() for item in self.owner_emails_var.get().split(",") if item.strip()]
-        requested_report_dir = self.report_dir_var.get().strip() or str(DEFAULT_RESULTS_DIR)
-        enforced_results_dir, forced = enforce_results_dir(Path(requested_report_dir))
-        report_json = self.report_json_var.get().strip() or None
+    def _run_worker(
+        self,
+        selected: list[str] | None,
+        max_matches: int,
+        run_fix: bool,
+        selection_signature: tuple[str, ...] | None,
+    ) -> None:
+        try:
+            root = Path(self.root_var.get())
+            policy = Path(self.policy_var.get())
+            owner_emails = [item.strip() for item in self.owner_emails_var.get().split(",") if item.strip()]
+            requested_report_dir = self.report_dir_var.get().strip() or str(DEFAULT_RESULTS_DIR)
+            enforced_results_dir, forced = enforce_results_dir(Path(requested_report_dir))
+            report_json = self.report_json_var.get().strip() or None
 
-        def _ui_sink(message: str) -> None:
-            def _emit() -> None:
-                self.log(message)
+            def _ui_sink(message: str) -> None:
+                def _emit() -> None:
+                    self.log(message)
 
-            self.root.after(0, _emit)
+                self.root.after(0, _emit)
 
-        artifacts = create_run_artifacts(enforced_results_dir)
-        gui_logger = RunLogger(
-            artifacts.log_path,
-            sink=_ui_sink,
-        )
-        if forced:
-            gui_logger(
-                f"[WARN] report-dir was forced to {DEFAULT_RESULTS_DIR} to comply with mandatory Audit_Results policy"
+            artifacts = create_run_artifacts(enforced_results_dir)
+            gui_logger = RunLogger(
+                artifacts.log_path,
+                sink=_ui_sink,
             )
-        gui_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
-        gui_logger(f"[INFO] GUI action: {'repair' if run_fix else 'audit'}")
+            if forced:
+                gui_logger(
+                    f"[WARN] report-dir was forced to {DEFAULT_RESULTS_DIR} to comply with mandatory Audit_Results policy"
+                )
+            gui_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
+            gui_logger(f"[INFO] GUI action: {'repair' if run_fix else 'audit'}")
 
-        config = GuardRunConfig(
-            mode="gui",
-            root=root,
-            policy=policy,
-            repos=selected,
-            public_only=self.public_only_var.get(),
-            fix=run_fix,
-            push=(run_fix and self.push_var.get()),
-            dry_run=self.dry_run_var.get(),
-            redact_third_party_emails=self.redact_var.get(),
-            purge_detected_secret_files=(run_fix and self.purge_detected_secret_files_var.get()),
-            purge_all_detected_secret_files=(run_fix and self.purge_all_detected_secret_files_var.get()),
-            low_confidence_email_mode=(
-                "blocking" if self.low_confidence_blocking_var.get() else "informational"
-            ),
-            owner_name=self.owner_name_var.get().strip() or "Owner",
-            owner_emails=owner_emails,
-            noreply_email=self.noreply_var.get().strip(),
-            placeholder_email=self.placeholder_var.get().strip(),
-            max_matches=max_matches,
-            confirm_each_repo_fix=False,
-            allow_non_owner_push=False,
-            allowed_remote_owners=[],
-            report_json=report_json,
-        )
-        execute_guard_pipeline(
-            config=config,
-            artifacts=artifacts,
-            logger=gui_logger,
-            results_dir=enforced_results_dir,
-            require_confirmation=False,
-            confirm_callback=None,
-        )
+            config = GuardRunConfig(
+                mode="gui",
+                root=root,
+                policy=policy,
+                repos=selected,
+                public_only=self.public_only_var.get(),
+                fix=run_fix,
+                push=(run_fix and self.push_var.get()),
+                dry_run=self.dry_run_var.get(),
+                redact_third_party_emails=self.redact_var.get(),
+                purge_detected_secret_files=(run_fix and self.purge_detected_secret_files_var.get()),
+                purge_all_detected_secret_files=(run_fix and self.purge_all_detected_secret_files_var.get()),
+                rewrite_personal_paths=(run_fix and self.rewrite_personal_paths_var.get()),
+                low_confidence_email_mode=(
+                    "blocking" if self.low_confidence_blocking_var.get() else "informational"
+                ),
+                owner_name=self.owner_name_var.get().strip() or "Owner",
+                owner_emails=owner_emails,
+                noreply_email=self.noreply_var.get().strip(),
+                placeholder_email=self.placeholder_var.get().strip(),
+                max_matches=max_matches,
+                confirm_each_repo_fix=False,
+                open_report=True,
+                allow_non_owner_push=False,
+                allowed_remote_owners=[],
+                report_json=report_json,
+            )
+            exit_code = execute_guard_pipeline(
+                config=config,
+                artifacts=artifacts,
+                logger=gui_logger,
+                results_dir=enforced_results_dir,
+                require_confirmation=False,
+                confirm_callback=None,
+            )
+
+            reports_payload: list[dict[str, object]] = []
+            if not run_fix:
+                try:
+                    loaded = json.loads(artifacts.json_path.read_text(encoding="utf-8"))
+                    if isinstance(loaded, list):
+                        reports_payload = [item for item in loaded if isinstance(item, dict)]
+                except Exception:
+                    reports_payload = []
+
+            def _finish_ui() -> None:
+                self._on_gui_run_finished(run_fix, selection_signature, reports_payload)
+                if exit_code != 0:
+                    self.log(f"[INFO] Run finished with exit code: {exit_code}")
+
+            self.root.after(0, _finish_ui)
+        except Exception:
+            error_trace = traceback.format_exc().strip()
+
+            def _finish_ui_error() -> None:
+                self.log("[ERROR] GUI worker failed unexpectedly.")
+                self.log(error_trace)
+                self._on_gui_run_finished(run_fix, selection_signature, [])
+
+            self.root.after(0, _finish_ui_error)
 
     def run(self) -> None:
         self.root.mainloop()
@@ -3404,7 +3905,11 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--root", default=str(DEFAULT_ROOT), help="Root folder containing repositories")
     parser.add_argument("--policy", default=str(DEFAULT_POLICY), help="Policy markdown path")
     parser.add_argument("--repos", nargs="*", help="Repo folder names or absolute paths")
-    parser.add_argument("--public-only", action="store_true", help="Only include repos with GitHub origin")
+    parser.add_argument(
+        "--public-only",
+        action="store_true",
+        help="Only include repositories with publicly accessible GitHub origin",
+    )
 
     parser.add_argument("--fix", action="store_true", help="Apply automated fixes")
     parser.add_argument("--push", action="store_true", help="Force-push rewritten history to origin")
@@ -3423,6 +3928,11 @@ def make_parser() -> argparse.ArgumentParser:
         "--purge-all-detected-secret-files",
         action="store_true",
         help="When fixing, purge all detected secret files including risky/manual-review candidates",
+    )
+    parser.add_argument(
+        "--rewrite-personal-paths",
+        action="store_true",
+        help="When fixing, rewrite detected personal absolute paths in tracked content/history",
     )
     parser.add_argument(
         "--low-confidence-email-mode",
@@ -3456,6 +3966,11 @@ def make_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument("--yes", action="store_true", help="Skip destructive action confirmation prompt")
+    parser.add_argument(
+        "--no-open-report",
+        action="store_true",
+        help="Do not open the generated HTML report automatically after each run",
+    )
     parser.add_argument(
         "--no-confirm-each-repo",
         action="store_true",
@@ -3507,12 +4022,14 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         redact_third_party_emails=args.redact_third_party_emails,
         purge_detected_secret_files=args.purge_detected_secret_files,
         purge_all_detected_secret_files=args.purge_all_detected_secret_files,
+        rewrite_personal_paths=args.rewrite_personal_paths,
         low_confidence_email_mode=args.low_confidence_email_mode,
         owner_name=args.owner_name,
         owner_emails=owner_emails,
         noreply_email=args.noreply_email,
         placeholder_email=args.placeholder_email,
         max_matches=args.max_matches,
+        open_report=not args.no_open_report,
         confirm_each_repo_fix=not args.no_confirm_each_repo,
         allow_non_owner_push=args.allow_non_owner_push,
         allowed_remote_owners=allowed_remote_owners,
