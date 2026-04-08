@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Repository Publication Guard
 
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import inspect
 import json
 import os
 import re
@@ -44,6 +45,7 @@ DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "Audit_Results"
 GUI_DEFAULT_PUBLIC_ONLY = False
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
 GITHUB_REPO_API_URL = "https://api.github.com/repos/{owner}/{repo}"
+LITELLM_INCIDENT_ID = "litellm-2026-03"
 REDACTED_EMAIL = "<redacted-email>"
 REDACTED_SECRET = "<redacted-secret>"
 REDACTED_PATH = "<redacted-path>"
@@ -160,6 +162,36 @@ EXFIL_CODE_RE = re.compile(
     r"\bupload\b|\bwebhook\b|\btelemetry\b|\banalytics\b"
 )
 
+LITELLM_REFERENCE_RE = re.compile(r"(?i)\blitellm\b")
+LITELLM_COMPROMISED_VERSION_RE = re.compile(r"(?i)\blitellm\b[^\n]{0,64}\b1\.82\.(?:7|8)\b")
+LITELLM_INSTALL_COMMAND_RE = re.compile(
+    r"(?i)(pip\s+install\s+litellm|uv\s+add\s+litellm|poetry\s+add\s+litellm)"
+)
+LITELLM_IOC_RE = re.compile(r"(?i)litellm_init\.pth|models\.litellm\.cloud|checkmarx\.zone")
+LITELLM_COMPROMISED_1828_RE = re.compile(r"(?i)\b1\.82\.8\b")
+LITELLM_COMPROMISED_1827_RE = re.compile(r"(?i)\b1\.82\.7\b")
+
+SUPPLY_CHAIN_CANDIDATE_FILENAMES = {
+    "requirements.txt",
+    "requirements-dev.txt",
+    "constraints.txt",
+    "pyproject.toml",
+    "poetry.lock",
+    "uv.lock",
+    "pipfile",
+    "pipfile.lock",
+    "setup.py",
+    "setup.cfg",
+    "environment.yml",
+    "dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    ".gitlab-ci.yml",
+    "jenkinsfile",
+    "azure-pipelines.yml",
+    "azure-pipelines.yaml",
+}
+
 GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)(?:\.git)?$", re.IGNORECASE)
 
 CODE_EXTENSIONS = {
@@ -212,6 +244,7 @@ class GuardRunConfig:
     noreply_email: str
     placeholder_email: str
     max_matches: int
+    audit_litellm_incident: bool = False
     rewrite_personal_paths: bool = False
     open_report: bool = True
     confirm_each_repo_fix: bool = True
@@ -286,6 +319,12 @@ class RepoReport:
     gitignore_missing_patterns: list[str] = field(default_factory=list)
     exfil_code_indicators: list[str] = field(default_factory=list)
 
+    litellm_reference_hits: list[str] = field(default_factory=list)
+    litellm_compromised_reference_hits: list[str] = field(default_factory=list)
+    litellm_install_command_hits: list[str] = field(default_factory=list)
+    litellm_ioc_hits: list[str] = field(default_factory=list)
+    litellm_incident_severity: str = "NONE"
+
     backups_created: list[str] = field(default_factory=list)
     fix_actions: list[str] = field(default_factory=list)
     fix_errors: list[str] = field(default_factory=list)
@@ -326,6 +365,10 @@ class RepoReport:
             (bool(self.history_sensitive_deleted), "sensitive filenames deleted in history"),
             (bool(self.tracked_but_ignored), "tracked files that should be ignored"),
             (bool(self.gitignore_missing_patterns), "missing required .gitignore patterns"),
+            (
+                bool(self.litellm_incident_severity in {"CRITICAL", "HIGH"}),
+                "LiteLLM supply-chain incident indicators detected",
+            ),
         ]
         self.failures = [reason for bad, reason in checks if bad]
         self.status = "FAIL" if self.failures else "PASS"
@@ -347,6 +390,7 @@ class RepoPublicationGuard:  # pragma: no cover
         push: bool,
         dry_run: bool,
         max_matches: int,
+        audit_litellm_incident: bool,
         allow_non_owner_push: bool,
         allowed_remote_owners: list[str],
         logger: Callable[[str], None],
@@ -368,6 +412,7 @@ class RepoPublicationGuard:  # pragma: no cover
         self.push = push
         self.dry_run = dry_run
         self.max_matches = max_matches
+        self.audit_litellm_incident = audit_litellm_incident
         self.allow_non_owner_push = allow_non_owner_push
         self.allowed_remote_owners = {
             owner.strip().lower()
@@ -512,10 +557,13 @@ class RepoPublicationGuard:  # pragma: no cover
         repo: Path,
         regex: re.Pattern[str],
         only_code_files: bool = False,
+        path_filter: Callable[[str], bool] | None = None,
     ) -> list[str]:
         matches: list[str] = []
         for file_path in self._iter_tracked_files(repo):
             rel = file_path.relative_to(repo).as_posix()
+            if path_filter and not path_filter(rel):
+                continue
             if only_code_files and file_path.suffix.lower() not in CODE_EXTENSIONS:
                 continue
             try:
@@ -531,6 +579,73 @@ class RepoPublicationGuard:  # pragma: no cover
                     if len(matches) >= self.max_matches:
                         return matches
         return matches
+
+    def _is_supply_chain_candidate_path(self, rel_path: str) -> bool:
+        normalized = rel_path.replace("\\", "/").strip().lower()
+        file_name = Path(normalized).name
+
+        if file_name in SUPPLY_CHAIN_CANDIDATE_FILENAMES:
+            return True
+        if normalized.startswith(".github/workflows/"):
+            return True
+        if normalized.startswith(".gitlab/") and file_name.endswith((".yml", ".yaml")):
+            return True
+        if normalized.startswith("ci/") or normalized.startswith("scripts/"):
+            return file_name.endswith((".py", ".sh", ".ps1", ".yml", ".yaml", ".toml", ".txt"))
+
+        return False
+
+    def _scan_litellm_incident(self, repo: Path, report: RepoReport) -> None:
+        report.litellm_reference_hits = self._scan_tracked_content(
+            repo,
+            LITELLM_REFERENCE_RE,
+            path_filter=self._is_supply_chain_candidate_path,
+        )
+        report.litellm_compromised_reference_hits = self._scan_tracked_content(
+            repo,
+            LITELLM_COMPROMISED_VERSION_RE,
+            path_filter=self._is_supply_chain_candidate_path,
+        )
+        report.litellm_install_command_hits = self._scan_tracked_content(
+            repo,
+            LITELLM_INSTALL_COMMAND_RE,
+            path_filter=self._is_supply_chain_candidate_path,
+        )
+        report.litellm_ioc_hits = self._scan_tracked_content(
+            repo,
+            LITELLM_IOC_RE,
+            path_filter=self._is_supply_chain_candidate_path,
+        )
+        report.litellm_incident_severity = classify_litellm_incident_severity(report)
+
+    def _finalize_git_stream_process(self, proc: subprocess.Popen[str], timeout: int = 10) -> None:
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            self._terminate_process_if_running(proc)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+        finally:
+            if proc.stdout is not None:
+                try:
+                    proc.stdout.close()
+                except Exception:
+                    pass
+            if proc.stderr is not None:
+                try:
+                    proc.stderr.close()
+                except Exception:
+                    pass
+
+    def _terminate_process_if_running(self, proc: subprocess.Popen[str]) -> None:
+        if proc.poll() is not None:
+            return
+        try:
+            proc.kill()
+        except Exception:
+            pass
 
     def _scan_history_patch(self, repo: Path, regex: re.Pattern[str]) -> list[str]:
         cmd = [
@@ -552,17 +667,16 @@ class RepoPublicationGuard:  # pragma: no cover
             errors="replace",
         )
         matches: list[str] = []
-        assert proc.stdout is not None
-        for idx, line in enumerate(proc.stdout, start=1):
-            if regex.search(line):
-                matches.append(f"L{idx}:{line.strip()[:240]}")
-                if len(matches) >= self.max_matches:
-                    proc.kill()
-                    break
         try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+            assert proc.stdout is not None
+            for idx, line in enumerate(proc.stdout, start=1):
+                if regex.search(line):
+                    matches.append(f"L{idx}:{line.strip()[:240]}")
+                    if len(matches) >= self.max_matches:
+                        self._terminate_process_if_running(proc)
+                        break
+        finally:
+            self._finalize_git_stream_process(proc)
         return matches
 
     def _scan_history_non_allowed_emails(self, repo: Path) -> list[str]:
@@ -585,24 +699,23 @@ class RepoPublicationGuard:  # pragma: no cover
             errors="replace",
         )
         matches: list[str] = []
-        assert proc.stdout is not None
-        for idx, line in enumerate(proc.stdout, start=1):
-            emails = [
-                email
-                for email in EMAIL_RE.findall(line)
-                if is_relevant_email_candidate(email)
-            ]
-            leaked = [email for email in emails if not self._is_allowed_email(email)]
-            if leaked:
-                uniq = ", ".join(sorted(set(leaked)))
-                matches.append(f"L{idx}:{uniq}:{line.strip()[:200]}")
-                if len(matches) >= self.max_matches:
-                    proc.kill()
-                    break
         try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+            assert proc.stdout is not None
+            for idx, line in enumerate(proc.stdout, start=1):
+                emails = [
+                    email
+                    for email in EMAIL_RE.findall(line)
+                    if is_relevant_email_candidate(email)
+                ]
+                leaked = [email for email in emails if not self._is_allowed_email(email)]
+                if leaked:
+                    uniq = ", ".join(sorted(set(leaked)))
+                    matches.append(f"L{idx}:{uniq}:{line.strip()[:200]}")
+                    if len(matches) >= self.max_matches:
+                        self._terminate_process_if_running(proc)
+                        break
+        finally:
+            self._finalize_git_stream_process(proc)
         return matches
 
     def _scan_tracked_non_allowed_emails(self, repo: Path) -> list[str]:
@@ -655,36 +768,34 @@ class RepoPublicationGuard:  # pragma: no cover
         seen: set[str] = set()
         current_file: str | None = None
 
-        assert proc.stdout is not None
-        for line in proc.stdout:
-            if line.startswith("diff --git "):
-                match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
-                if match:
-                    current_file = match.group(2)
-                else:
-                    current_file = None
-                continue
-
-            if not current_file:
-                continue
-
-            if line.startswith("+++") or line.startswith("---"):
-                continue
-
-            if not (line.startswith("+") or line.startswith("-")):
-                continue
-
-            if SECRET_CONTENT_RE.search(line) and current_file not in seen:
-                seen.add(current_file)
-                files.append(current_file)
-                if len(files) >= self.max_matches:
-                    proc.kill()
-                    break
-
         try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                if line.startswith("diff --git "):
+                    match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
+                    if match:
+                        current_file = match.group(2)
+                    else:
+                        current_file = None
+                    continue
+
+                if not current_file:
+                    continue
+
+                if line.startswith("+++") or line.startswith("---"):
+                    continue
+
+                if not (line.startswith("+") or line.startswith("-")):
+                    continue
+
+                if SECRET_CONTENT_RE.search(line) and current_file not in seen:
+                    seen.add(current_file)
+                    files.append(current_file)
+                    if len(files) >= self.max_matches:
+                        self._terminate_process_if_running(proc)
+                        break
+        finally:
+            self._finalize_git_stream_process(proc)
 
         return files
 
@@ -850,6 +961,9 @@ class RepoPublicationGuard:  # pragma: no cover
             EXFIL_CODE_RE,
             only_code_files=True,
         )
+
+        if self.audit_litellm_incident:
+            self._scan_litellm_incident(repo, report)
 
         gitignore = repo / ".gitignore"
         if gitignore.exists():
@@ -1309,6 +1423,20 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"tracked_but_ignored: {len(report.tracked_but_ignored)}")
     logger(f"gitignore_missing_patterns: {len(report.gitignore_missing_patterns)}")
     logger(f"exfil_code_indicators: {len(report.exfil_code_indicators)}")
+    logger(f"litellm_incident_severity: {report.litellm_incident_severity}")
+    logger(f"litellm_reference_hits: {len(report.litellm_reference_hits)}")
+    logger(f"litellm_compromised_reference_hits: {len(report.litellm_compromised_reference_hits)}")
+    logger(f"litellm_install_command_hits: {len(report.litellm_install_command_hits)}")
+    logger(f"litellm_ioc_hits: {len(report.litellm_ioc_hits)}")
+
+    if report.litellm_compromised_reference_hits:
+        logger("litellm_compromised_reference_samples:")
+        for item in report.litellm_compromised_reference_hits[:8]:
+            logger(f"  - {item}")
+    if report.litellm_ioc_hits:
+        logger("litellm_ioc_samples:")
+        for item in report.litellm_ioc_hits[:8]:
+            logger(f"  - {item}")
 
     detected_preview = build_detected_findings_preview(report)
     logger(f"detected_findings_preview: {len(detected_preview)}")
@@ -1650,6 +1778,7 @@ def build_fix_preflight_summary(config: GuardRunConfig, repos: list[Path]) -> li
         "[PREVIEW] Fix mode preflight summary",
         f"[PREVIEW] repositories targeted: {len(repos)}",
         f"[PREVIEW] dry_run={config.dry_run} push={config.push}",
+        f"[PREVIEW] audit_litellm_incident={config.audit_litellm_incident}",
         f"[PREVIEW] rewrite_personal_paths={config.rewrite_personal_paths}",
         f"[PREVIEW] low-confidence email mode: {config.low_confidence_email_mode}",
         f"[PREVIEW] confirm_each_repo_fix={config.confirm_each_repo_fix}",
@@ -1709,6 +1838,23 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
     email_status, email_message = email_remediation_decision(report)
     owned_unexpected, _third_party_unexpected, high_conf, low_conf = email_decision_context(report)
     low_blocking = report.low_confidence_email_mode == "blocking"
+    litellm_severity = classify_litellm_incident_severity(report)
+
+    if litellm_severity in {"CRITICAL", "HIGH"}:
+        return (
+            "IMMEDIATE",
+            "Critical supply-chain risk: LiteLLM compromise indicators were detected.",
+            "Possible consequence: malicious package initialization or compromised dependencies in runtime/CI workflows.",
+            "Suggestion: isolate affected environments, remove compromised versions, rotate secrets, and verify package provenance before redeploy.",
+        )
+
+    if litellm_severity == "MEDIUM":
+        return (
+            "PRIORITY",
+            "Medium supply-chain risk: LiteLLM references were detected without direct compromise evidence.",
+            "Possible consequence: potential exposure if vulnerable versions were installed temporarily in local or CI environments.",
+            "Suggestion: verify resolved versions in lockfiles/environments and run targeted incident checks for IoCs.",
+        )
 
     has_secret_risk = bool(
         report.tracked_secret_matches
@@ -1767,6 +1913,17 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
         email_decision_context(report)
     )
     low_confidence_blocking = report.low_confidence_email_mode == "blocking"
+    litellm_severity = classify_litellm_incident_severity(report)
+
+    if litellm_severity == "CRITICAL":
+        score = max(score, 100)
+        highlights.append("LiteLLM incident critical indicators detected (IoC or 1.82.8 evidence)")
+    elif litellm_severity == "HIGH":
+        score = max(score, 85)
+        highlights.append("LiteLLM incident high-risk evidence detected (1.82.7)")
+    elif litellm_severity == "MEDIUM":
+        score = max(score, 50)
+        highlights.append("LiteLLM references found; verify installed versions and provenance")
 
     if report.tracked_secret_matches or report.history_secret_matches:
         score = max(score, 100)
@@ -1811,6 +1968,20 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     return "OK", score, highlights
 
 
+def classify_litellm_incident_severity(report: RepoReport) -> str:
+    if report.litellm_incident_severity and report.litellm_incident_severity != "NONE":
+        return report.litellm_incident_severity
+
+    compromised_lines = report.litellm_compromised_reference_hits
+    if report.litellm_ioc_hits or any(LITELLM_COMPROMISED_1828_RE.search(line) for line in compromised_lines):
+        return "CRITICAL"
+    if any(LITELLM_COMPROMISED_1827_RE.search(line) for line in compromised_lines):
+        return "HIGH"
+    if report.litellm_reference_hits or report.litellm_install_command_hits:
+        return "MEDIUM"
+    return "NONE"
+
+
 def build_detected_findings_preview(report: RepoReport) -> list[str]:
     findings: list[str] = []
 
@@ -1832,6 +2003,9 @@ def build_detected_findings_preview(report: RepoReport) -> list[str]:
     add("tracked but ignored", report.tracked_but_ignored)
     add("history sensitive add", report.history_sensitive_added)
     add("history sensitive delete", report.history_sensitive_deleted)
+    add("litellm reference", report.litellm_reference_hits)
+    add("litellm compromised", report.litellm_compromised_reference_hits)
+    add("litellm ioc", report.litellm_ioc_hits)
     return findings
 
 
@@ -1879,6 +2053,7 @@ def render_html_report(
     policy_path: Path,
     run_settings: dict[str, str],
     finished_at: datetime,
+    optional_supply_chain_payload: dict[str, object] | None = None,
 ) -> str:
     esc = html.escape
     total = len(reports)
@@ -1934,6 +2109,68 @@ def render_html_report(
     if not high_cards:
         high_cards = '<div class="empty">No HIGH severity repositories in this run.</div>'
 
+    supply_chain_panel = ""
+    if optional_supply_chain_payload:
+        global_severity = str(optional_supply_chain_payload.get("severity", "NONE")).upper()
+        global_severity_css = {
+            "CRITICAL": "sev-high",
+            "HIGH": "sev-high",
+            "MEDIUM": "sev-medium",
+            "LOW": "sev-low",
+            "NONE": "sev-ok",
+        }.get(global_severity, "sev-low")
+        critical_evidence = [
+            str(item) for item in optional_supply_chain_payload.get("critical_evidence", []) if str(item)
+        ]
+        high_evidence = [
+            str(item) for item in optional_supply_chain_payload.get("high_evidence", []) if str(item)
+        ]
+        medium_evidence = [
+            str(item) for item in optional_supply_chain_payload.get("medium_evidence", []) if str(item)
+        ]
+        python_probes = optional_supply_chain_payload.get("python_probes", [])
+        probe_rows = ""
+        if isinstance(python_probes, list):
+            for probe in python_probes:
+                if not isinstance(probe, dict):
+                    continue
+                probe_rows += (
+                    "<tr>"
+                    f"<td><code>{esc(redact_sensitive_text(str(probe.get('python', '-'))))}</code></td>"
+                    f"<td>{esc(str(probe.get('installed', False)))}</td>"
+                    f"<td>{esc(str(probe.get('version', '-')))}</td>"
+                    f"<td><code>{esc(redact_sensitive_text(str(probe.get('location', '-'))))}</code></td>"
+                    "</tr>"
+                )
+        if not probe_rows:
+            probe_rows = '<tr><td class="empty" colspan="4">No python environment probes recorded.</td></tr>'
+
+        supply_chain_panel = (
+            '<section class="panel">'
+            '<h2>Supply-chain incident audit (LiteLLM)</h2>'
+            f'<p><strong>Global severity:</strong> <span class="sev-pill {global_severity_css}">{esc(global_severity)}</span></p>'
+            '<div class="detail-grid">'
+            '<section><h5>Critical evidence</h5>'
+            f'{render_lines(critical_evidence, limit=12)}'
+            '</section>'
+            '<section><h5>High evidence</h5>'
+            f'{render_lines(high_evidence, limit=12)}'
+            '</section>'
+            '</div>'
+            '<div class="detail-grid">'
+            '<section><h5>Medium evidence</h5>'
+            f'{render_lines(medium_evidence, limit=12)}'
+            '</section>'
+            '<section><h5>Python environment probes</h5>'
+            '<div class="table-wrap"><table>'
+            '<tr><th>Python</th><th>LiteLLM installed</th><th>Version</th><th>Location</th></tr>'
+            f'{probe_rows}'
+            '</table></div>'
+            '</section>'
+            '</div>'
+            '</section>'
+        )
+
     repo_rows = ""
     repo_details = ""
     for rep, sev_label, _sev_score, highlights in repo_severity_data:
@@ -1970,10 +2207,12 @@ def render_html_report(
             f"<td>{esc(rep.name)}</td>"
             f"<td><span class=\"sev-pill {sev_class}\">{esc(sev_label)}</span></td>"
             f"<td>{esc(rep.status)}</td>"
+            f"<td>{esc(classify_litellm_incident_severity(rep))}</td>"
             f"<td class=\"num\">{len(rep.failures)}</td>"
             f"<td class=\"num\">{len(rep.tracked_secret_matches) + len(rep.history_secret_matches)}</td>"
             f"<td class=\"num\">{len(rep.secret_file_candidates)}</td>"
             f"<td class=\"num\">{len(owned_unexpected)}</td>"
+            f"<td class=\"num\">{len(rep.litellm_ioc_hits)}</td>"
             f"<td class=\"num\">{len(rep.gitignore_missing_patterns)}</td>"
             "</tr>"
         )
@@ -2015,6 +2254,11 @@ def render_html_report(
             f"<tr><td>history_sensitive_deleted</td><td class=\"num\">{len(rep.history_sensitive_deleted)}</td></tr>"
             f"<tr><td>tracked_but_ignored</td><td class=\"num\">{len(rep.tracked_but_ignored)}</td></tr>"
             f"<tr><td>gitignore_missing_patterns</td><td class=\"num\">{len(rep.gitignore_missing_patterns)}</td></tr>"
+            f"<tr><td>litellm_incident_severity</td><td>{esc(classify_litellm_incident_severity(rep))}</td></tr>"
+            f"<tr><td>litellm_reference_hits</td><td class=\"num\">{len(rep.litellm_reference_hits)}</td></tr>"
+            f"<tr><td>litellm_compromised_reference_hits</td><td class=\"num\">{len(rep.litellm_compromised_reference_hits)}</td></tr>"
+            f"<tr><td>litellm_install_command_hits</td><td class=\"num\">{len(rep.litellm_install_command_hits)}</td></tr>"
+            f"<tr><td>litellm_ioc_hits</td><td class=\"num\">{len(rep.litellm_ioc_hits)}</td></tr>"
             "</table>"
         )
 
@@ -2035,6 +2279,14 @@ def render_html_report(
             "</section>"
             "<section><h5>Planned deletions/untracking (explicit preview)</h5>"
             f"{render_lines(planned_removals_preview, limit=12)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>LiteLLM references (sample)</h5>"
+            f"{render_lines(rep.litellm_reference_hits)}"
+            "</section>"
+            "<section><h5>LiteLLM IoCs (sample)</h5>"
+            f"{render_lines(rep.litellm_ioc_hits)}"
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
@@ -2214,6 +2466,8 @@ def render_html_report(
       {high_cards}
     </section>
 
+        {supply_chain_panel}
+
     <section class=\"panel\">
       <h2>Failure reason frequency</h2>
       <div class=\"table-wrap\">
@@ -2232,10 +2486,12 @@ def render_html_report(
             <th>Repository</th>
             <th>Severity</th>
             <th>Status</th>
+                        <th>LiteLLM Incident</th>
             <th class=\"num\">Failures</th>
             <th class=\"num\">Secret matches</th>
             <th class=\"num\">Secret file candidates</th>
             <th class=\"num\">Unexpected emails (owned repo)</th>
+                        <th class=\"num\">LiteLLM IoCs</th>
             <th class=\"num\">Missing .gitignore rules</th>
           </tr>
           {repo_rows}
@@ -2261,6 +2517,7 @@ def persist_run_outputs(
     run_settings: dict[str, str],
     logger: Callable[[str], None],
     optional_json_export: str | None = None,
+    optional_supply_chain_payload: dict[str, object] | None = None,
 ) -> None:
     finished_at = datetime.now()
     payload = [sanitize_report_for_export(rep) for rep in reports]
@@ -2274,6 +2531,7 @@ def persist_run_outputs(
         policy_path=policy_path,
         run_settings=run_settings,
         finished_at=finished_at,
+        optional_supply_chain_payload=optional_supply_chain_payload,
     )
     artifacts.html_path.write_text(html_report, encoding="utf-8")
     logger(f"[INFO] HTML report written to {artifacts.html_path}")
@@ -2321,6 +2579,7 @@ def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, s
         "dry_run": str(config.dry_run),
         "purge_detected_secret_files": str(config.purge_detected_secret_files),
         "purge_all_detected_secret_files": str(config.purge_all_detected_secret_files),
+        "audit_litellm_incident": str(config.audit_litellm_incident),
         "rewrite_personal_paths": str(config.rewrite_personal_paths),
         "open_report": str(config.open_report),
         "low_confidence_email_mode": config.low_confidence_email_mode,
@@ -2345,26 +2604,33 @@ def execute_guard_pipeline(
 ) -> int:
     run_settings = build_run_settings(config, results_dir)
     reports: list[RepoReport] = []
+    supply_chain_payload: dict[str, object] | None = None
     exit_code = 0
 
-    guard = RepoPublicationGuard(
-        root=config.root,
-        policy_path=config.policy,
-        noreply_email=config.noreply_email,
-        placeholder_email=config.placeholder_email,
-        owner_name=config.owner_name,
-        owner_emails=config.owner_emails,
-        redact_third_party=config.redact_third_party_emails,
-        purge_detected_secret_files=config.purge_detected_secret_files,
-        purge_all_detected_secret_files=config.purge_all_detected_secret_files,
-        low_confidence_email_mode=config.low_confidence_email_mode,
-        push=config.push,
-        dry_run=config.dry_run,
-        max_matches=config.max_matches,
-        allow_non_owner_push=config.allow_non_owner_push,
-        allowed_remote_owners=config.allowed_remote_owners,
-        logger=logger,
-    )
+    guard_kwargs: dict[str, object] = {
+        "root": config.root,
+        "policy_path": config.policy,
+        "noreply_email": config.noreply_email,
+        "placeholder_email": config.placeholder_email,
+        "owner_name": config.owner_name,
+        "owner_emails": config.owner_emails,
+        "redact_third_party": config.redact_third_party_emails,
+        "purge_detected_secret_files": config.purge_detected_secret_files,
+        "purge_all_detected_secret_files": config.purge_all_detected_secret_files,
+        "low_confidence_email_mode": config.low_confidence_email_mode,
+        "push": config.push,
+        "dry_run": config.dry_run,
+        "max_matches": config.max_matches,
+        "audit_litellm_incident": config.audit_litellm_incident,
+        "allow_non_owner_push": config.allow_non_owner_push,
+        "allowed_remote_owners": config.allowed_remote_owners,
+        "logger": logger,
+    }
+
+    guard_init_params = inspect.signature(RepoPublicationGuard.__init__).parameters
+    if "audit_litellm_incident" not in guard_init_params:
+        guard_kwargs.pop("audit_litellm_incident", None)
+    guard = RepoPublicationGuard(**guard_kwargs)
     guard.rewrite_personal_paths = config.rewrite_personal_paths
 
     if config.low_confidence_email_mode == "blocking":
@@ -2423,20 +2689,47 @@ def execute_guard_pipeline(
                 logger(f"\n[SUMMARY] PASS {passed}/{len(reports)}")
                 if exit_code == 0 and reports:
                     exit_code = 0 if passed == len(reports) else 2
+
+        if config.audit_litellm_incident:
+            supply_chain_payload = run_litellm_global_supply_chain_scan(
+                root=config.root,
+                repo_filters=config.repos,
+                max_matches=config.max_matches,
+                logger=logger,
+            )
+            global_severity = str(supply_chain_payload.get("severity", "NONE")).upper()
+            if global_severity in {"CRITICAL", "HIGH"} and exit_code == 0:
+                logger(
+                    "[SUPPLY-CHAIN] Global incident severity is HIGH/CRITICAL. "
+                    "Run marked as FAIL-equivalent for operator action."
+                )
+                exit_code = 2
     except Exception as exc:
         logger(f"[ERROR] Unhandled runtime error: {exc}")
         logger(traceback.format_exc())
         exit_code = 3
     finally:
-        persist_run_outputs(
-            reports=reports,
-            artifacts=artifacts,
-            root_path=config.root,
-            policy_path=config.policy,
-            run_settings=run_settings,
-            logger=logger,
-            optional_json_export=config.report_json,
-        )
+        persist_kwargs: dict[str, object] = {
+            "reports": reports,
+            "artifacts": artifacts,
+            "root_path": config.root,
+            "policy_path": config.policy,
+            "run_settings": run_settings,
+            "logger": logger,
+            "optional_json_export": config.report_json,
+            "optional_supply_chain_payload": supply_chain_payload,
+        }
+
+        persist_params = inspect.signature(persist_run_outputs).parameters
+        if "optional_supply_chain_payload" not in persist_params:
+            persist_kwargs.pop("optional_supply_chain_payload", None)
+        persist_run_outputs(**persist_kwargs)
+        if config.audit_litellm_incident and supply_chain_payload is not None:
+            persist_litellm_supply_chain_output(
+                artifacts=artifacts,
+                payload=supply_chain_payload,
+                logger=logger,
+            )
         if config.open_report:
             open_html_report_in_browser(artifacts.html_path, logger)
 
@@ -2619,6 +2912,279 @@ def normalize_repo_filters(repo_names: list[str]) -> list[str] | None:
     return repo_names if repo_names else None
 
 
+def normalize_csv_values(raw_value: str) -> list[str]:
+    if not raw_value:
+        return []
+    return list(dict.fromkeys(item.strip() for item in raw_value.split(",") if item.strip()))
+
+
+def normalize_text_values(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(value.strip() for value in values if value and value.strip()))
+
+
+def build_guard_run_config(
+    *,
+    mode: str,
+    root: Path,
+    policy: Path,
+    repos: list[str] | None,
+    public_only: bool,
+    fix: bool,
+    push: bool,
+    dry_run: bool,
+    redact_third_party_emails: bool,
+    purge_detected_secret_files: bool,
+    purge_all_detected_secret_files: bool,
+    rewrite_personal_paths: bool,
+    low_confidence_email_mode: str,
+    owner_name: str,
+    owner_emails: list[str],
+    noreply_email: str,
+    placeholder_email: str,
+    max_matches: int,
+    open_report: bool,
+    confirm_each_repo_fix: bool,
+    allow_non_owner_push: bool,
+    allowed_remote_owners: list[str],
+    report_json: str | None,
+    audit_litellm_incident: bool = False,
+) -> GuardRunConfig:
+    normalized_owner_emails = normalize_text_values(owner_emails)
+    normalized_allowed_remote_owners = normalize_text_values(allowed_remote_owners)
+    inferred_owner = infer_github_username_from_noreply(noreply_email)
+    if inferred_owner and inferred_owner not in normalized_allowed_remote_owners:
+        normalized_allowed_remote_owners.append(inferred_owner)
+
+    return GuardRunConfig(
+        mode=mode,
+        root=root,
+        policy=policy,
+        repos=repos,
+        public_only=public_only,
+        fix=fix,
+        push=push,
+        dry_run=dry_run,
+        redact_third_party_emails=redact_third_party_emails,
+        purge_detected_secret_files=purge_detected_secret_files,
+        purge_all_detected_secret_files=purge_all_detected_secret_files,
+        rewrite_personal_paths=rewrite_personal_paths,
+        low_confidence_email_mode=low_confidence_email_mode,
+        owner_name=owner_name,
+        owner_emails=normalized_owner_emails,
+        noreply_email=noreply_email,
+        placeholder_email=placeholder_email,
+        max_matches=max_matches,
+        audit_litellm_incident=audit_litellm_incident,
+        open_report=open_report,
+        confirm_each_repo_fix=confirm_each_repo_fix,
+        allow_non_owner_push=allow_non_owner_push,
+        allowed_remote_owners=normalized_allowed_remote_owners,
+        report_json=report_json,
+    )
+
+
+def discover_python_executables_for_supply_chain(
+    root: Path,
+    repo_filters: list[str] | None,
+) -> list[Path]:
+    candidates: list[Path] = [Path(sys.executable)]
+
+    repo_paths: list[Path] = []
+    if repo_filters:
+        for item in repo_filters:
+            path = Path(item)
+            if not path.is_absolute():
+                path = root / path
+            repo_paths.append(path)
+    else:
+        if root.exists():
+            for child in root.iterdir():
+                if child.is_dir() and (child / ".git").exists():
+                    repo_paths.append(child)
+
+    search_roots = [root, *repo_paths]
+    env_names = [".venv", "venv", "env"]
+    for base in search_roots:
+        if not base.exists():
+            continue
+        for env_name in env_names:
+            env_dir = base / env_name
+            if not env_dir.exists():
+                continue
+            for python_candidate in [
+                env_dir / "Scripts" / "python.exe",
+                env_dir / "bin" / "python",
+            ]:
+                if python_candidate.exists():
+                    candidates.append(python_candidate)
+
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        resolved = str(candidate.resolve()) if candidate.exists() else str(candidate)
+        normalized = resolved.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(Path(resolved))
+    return unique
+
+
+def probe_litellm_installation(python_executable: Path) -> dict[str, object]:
+    probe_script = (
+        "import hashlib, importlib.metadata as m, json;"
+        "from pathlib import Path;"
+        "payload={'installed': False};"
+        "\ntry: dist = m.distribution('litellm')"
+        "\nexcept m.PackageNotFoundError: pass"
+        "\nelse:"
+        "\n site_root = Path(dist.locate_file(''));"
+        "\n pth = site_root / 'litellm_init.pth';"
+        "\n proxy = site_root / 'litellm' / 'proxy' / 'proxy_server.py';"
+        "\n proxy_sha = hashlib.sha256(proxy.read_bytes()).hexdigest() if proxy.exists() else '';"
+        "\n payload.update({'installed': True, 'version': str(dist.version), 'location': str(site_root), "
+        "'litellm_init_pth': str(pth) if pth.exists() else '', 'proxy_server': str(proxy) if proxy.exists() else '',"
+        "'proxy_server_sha256': proxy_sha});"
+        "\nprint(json.dumps(payload))"
+    )
+
+    try:
+        result = subprocess.run(
+            [str(python_executable), "-c", probe_script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=12,
+        )
+    except Exception as exc:
+        return {
+            "python": str(python_executable),
+            "error": f"probe_failed: {exc}",
+            "installed": False,
+        }
+
+    if result.returncode != 0:
+        return {
+            "python": str(python_executable),
+            "error": f"probe_exit_{result.returncode}: {result.stderr.strip()[:240]}",
+            "installed": False,
+        }
+
+    try:
+        payload = json.loads(result.stdout.strip() or "{}")
+    except json.JSONDecodeError:
+        payload = {
+            "installed": False,
+            "error": "probe_invalid_json",
+        }
+
+    payload["python"] = str(python_executable)
+    return payload
+
+
+def probe_litellm_pip_cache_hits(python_executable: Path, max_matches: int) -> list[str]:
+    try:
+        out = subprocess.run(
+            [str(python_executable), "-m", "pip", "cache", "list", "litellm"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=12,
+        )
+    except Exception:
+        return []
+
+    if out.returncode != 0:
+        return []
+
+    hits = [line.strip() for line in out.stdout.splitlines() if "litellm" in line.lower()]
+    return hits[:max_matches]
+
+
+def run_litellm_global_supply_chain_scan(
+    root: Path,
+    repo_filters: list[str] | None,
+    max_matches: int,
+    logger: Callable[[str], None],
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "incident": LITELLM_INCIDENT_ID,
+        "python_probes": [],
+        "pip_cache_hits": [],
+        "severity": "NONE",
+        "critical_evidence": [],
+        "high_evidence": [],
+        "medium_evidence": [],
+    }
+
+    interpreters = discover_python_executables_for_supply_chain(root, repo_filters)
+    for python_executable in interpreters:
+        probe = probe_litellm_installation(python_executable)
+        payload["python_probes"].append(probe)
+
+        if probe.get("installed"):
+            version = str(probe.get("version", ""))
+            descriptor = f"{probe.get('python')} :: {version} :: {probe.get('location', '-')}"
+            if LITELLM_COMPROMISED_1828_RE.search(version):
+                payload["critical_evidence"].append(f"installed compromised version (1.82.8): {descriptor}")
+            elif LITELLM_COMPROMISED_1827_RE.search(version):
+                payload["high_evidence"].append(f"installed compromised version (1.82.7): {descriptor}")
+            else:
+                payload["medium_evidence"].append(f"litellm installed (non-compromised version): {descriptor}")
+
+            litellm_init_pth = str(probe.get("litellm_init_pth", "")).strip()
+            if litellm_init_pth:
+                payload["critical_evidence"].append(f"IoC file present: {litellm_init_pth}")
+
+    if interpreters:
+        cache_hits = probe_litellm_pip_cache_hits(interpreters[0], max_matches=max_matches)
+        payload["pip_cache_hits"] = cache_hits
+        for hit in cache_hits:
+            if LITELLM_COMPROMISED_1828_RE.search(hit):
+                payload["critical_evidence"].append(f"pip cache evidence: {hit}")
+            elif LITELLM_COMPROMISED_1827_RE.search(hit):
+                payload["high_evidence"].append(f"pip cache evidence: {hit}")
+            else:
+                payload["medium_evidence"].append(f"pip cache reference: {hit}")
+
+    severity = "NONE"
+    if payload["critical_evidence"]:
+        severity = "CRITICAL"
+    elif payload["high_evidence"]:
+        severity = "HIGH"
+    elif payload["medium_evidence"]:
+        severity = "MEDIUM"
+    payload["severity"] = severity
+
+    logger(f"[SUPPLY-CHAIN] Incident profile: {LITELLM_INCIDENT_ID}")
+    logger(f"[SUPPLY-CHAIN] Global severity: {severity}")
+    logger(f"[SUPPLY-CHAIN] Python environments probed: {len(interpreters)}")
+    logger(f"[SUPPLY-CHAIN] Critical evidence: {len(payload['critical_evidence'])}")
+    logger(f"[SUPPLY-CHAIN] High evidence: {len(payload['high_evidence'])}")
+    logger(f"[SUPPLY-CHAIN] Medium evidence: {len(payload['medium_evidence'])}")
+
+    for item in payload["critical_evidence"][:8]:
+        logger(f"[SUPPLY-CHAIN][CRITICAL] {item}")
+    for item in payload["high_evidence"][:8]:
+        logger(f"[SUPPLY-CHAIN][HIGH] {item}")
+
+    return payload
+
+
+def persist_litellm_supply_chain_output(
+    artifacts: RunArtifacts,
+    payload: dict[str, object],
+    logger: Callable[[str], None],
+) -> None:
+    if not payload:
+        return
+    out_path = artifacts.run_dir / "supply_chain_litellm.json"
+    out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    logger(f"[INFO] Supply-chain report written to {out_path}")
+
+
 class GuiApp:  # pragma: no cover
     def __init__(self) -> None:
         import tkinter as tk
@@ -2658,6 +3224,7 @@ class GuiApp:  # pragma: no cover
         self.placeholder_var = tk.StringVar(value=DEFAULT_PLACEHOLDER)
         self.owner_name_var = tk.StringVar(value="Owner")
         self.owner_emails_var = tk.StringVar(value="")
+        self.allowed_remote_owners_var = tk.StringVar(value="")
         self.git_user_name_var = tk.StringVar(value="Owner")
         self.git_user_email_var = tk.StringVar(value=DEFAULT_NOREPLY)
         self.report_dir_var = tk.StringVar(value=str(DEFAULT_RESULTS_DIR))
@@ -2672,8 +3239,13 @@ class GuiApp:  # pragma: no cover
         self.purge_all_detected_secret_files_var = tk.BooleanVar(value=False)
         self.dry_run_var = tk.BooleanVar(value=False)
         self.low_confidence_blocking_var = tk.BooleanVar(value=False)
+        self.audit_litellm_incident_var = tk.BooleanVar(value=False)
+        self.open_report_var = tk.BooleanVar(value=True)
+        self.confirm_each_repo_fix_var = tk.BooleanVar(value=True)
+        self.allow_non_owner_push_var = tk.BooleanVar(value=False)
         self._purge_safe_checkbox = None
         self._purge_risky_checkbox = None
+        self._allowed_remote_owner_entry = None
         self._audit_button = None
         self._repair_button = None
         self._run_in_progress = False
@@ -2684,6 +3256,11 @@ class GuiApp:  # pragma: no cover
         self._repair_cooldown_after_id = None
         self._last_audit_reports_payload: list[dict[str, object]] = []
         self._last_audit_selection_signature: tuple[str, ...] | None = None
+        self._flow_tabs = None
+        self._audit_tab_name = "Auditar"
+        self._repair_tab_name = "Reparar"
+        self._repair_tab_block_overlay = None
+        self._repair_tab_block_label = None
 
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -2713,8 +3290,27 @@ class GuiApp:  # pragma: no cover
             text_color="#D8E8F7",
         ).grid(row=1, column=0, sticky="w", padx=18, pady=(4, 14))
 
-        top_row = ctk.CTkFrame(app, fg_color="transparent")
-        top_row.grid(row=1, column=0, sticky="we", padx=16)
+        flow_tabs = ctk.CTkTabview(
+            app,
+            fg_color="#F2F6FC",
+            segmented_button_fg_color="#D6E3F2",
+            segmented_button_selected_color="#0E6BA8",
+            segmented_button_selected_hover_color="#0A5585",
+            segmented_button_unselected_color="#D6E3F2",
+            segmented_button_unselected_hover_color="#C5D8EB",
+        )
+        flow_tabs.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 6))
+        flow_tabs.add(self._audit_tab_name)
+        flow_tabs.add(self._repair_tab_name)
+        self._flow_tabs = flow_tabs
+
+        audit_tab = flow_tabs.tab(self._audit_tab_name)
+        repair_tab = flow_tabs.tab(self._repair_tab_name)
+        audit_tab.grid_columnconfigure(0, weight=1)
+        repair_tab.grid_columnconfigure(0, weight=1)
+
+        top_row = ctk.CTkFrame(audit_tab, fg_color="transparent")
+        top_row.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 0))
         top_row.grid_columnconfigure(0, weight=2)
         top_row.grid_columnconfigure(1, weight=1)
         self._top_row = top_row
@@ -2901,13 +3497,13 @@ class GuiApp:  # pragma: no cover
         )
 
         identity_card = ctk.CTkFrame(
-            app,
+            audit_tab,
             fg_color="#F8FBFF",
             corner_radius=12,
             border_width=1,
             border_color="#D1DDEA",
         )
-        identity_card.grid(row=2, column=0, sticky="we", padx=16, pady=(10, 6))
+        identity_card.grid(row=1, column=0, sticky="we", padx=10, pady=(10, 8))
         identity_card.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(
             identity_card,
@@ -2995,14 +3591,46 @@ class GuiApp:  # pragma: no cover
             text_color="#334155",
         ).grid(row=4, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 12))
 
-        options_card = ctk.CTkFrame(
-            app,
+        audit_actions_card = ctk.CTkFrame(
+            audit_tab,
             fg_color="#F8FBFF",
             corner_radius=12,
             border_width=1,
             border_color="#D1DDEA",
         )
-        options_card.grid(row=3, column=0, sticky="we", padx=16, pady=6)
+        audit_actions_card.grid(row=2, column=0, sticky="we", padx=10, pady=(0, 8))
+        ctk.CTkLabel(
+            audit_actions_card,
+            text="Audit Flow",
+            font=("Segoe UI Semibold", 14),
+            text_color="#113150",
+        ).pack(anchor="w", padx=14, pady=(10, 4))
+        audit_controls = ctk.CTkFrame(audit_actions_card, fg_color="transparent")
+        audit_controls.pack(fill="x", padx=14, pady=(0, 10))
+        self._audit_button = ctk.CTkButton(
+            audit_controls,
+            text="Auditar",
+            command=lambda: self.run_clicked(run_fix=False),
+            width=150,
+            height=34,
+            corner_radius=8,
+            fg_color="#0E6BA8",
+            hover_color="#0A5585",
+        )
+        self._audit_button.pack(side="left")
+        self._make_info_badge(
+            audit_controls,
+            "Ejecuta solo auditoria. No aplica fixes ni reescribe historial.",
+        ).pack(side="left", padx=(6, 0), pady=8)
+
+        options_card = ctk.CTkFrame(
+            repair_tab,
+            fg_color="#F8FBFF",
+            corner_radius=12,
+            border_width=1,
+            border_color="#D1DDEA",
+        )
+        options_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
         options_card.grid_columnconfigure(0, weight=1)
         options_card.grid_columnconfigure(1, weight=1)
         self._options_card = options_card
@@ -3040,6 +3668,9 @@ class GuiApp:  # pragma: no cover
             ("Redact third-party emails", self.redact_var),
             ("Low-confidence emails are blocking", self.low_confidence_blocking_var),
             ("Dry run", self.dry_run_var),
+            ("Audit LiteLLM incident (Mar-2026)", self.audit_litellm_incident_var),
+            ("Open HTML report automatically", self.open_report_var),
+            ("Confirm each repository during repair", self.confirm_each_repo_fix_var),
         ]
         for idx, (label, var) in enumerate(safe_items, start=1):
             ctk.CTkCheckBox(
@@ -3111,6 +3742,41 @@ class GuiApp:  # pragma: no cover
             "Publica el historial reescrito en origin/main con --force-with-lease.",
         ).grid(row=4, column=1, sticky="e", padx=(0, 12), pady=4)
 
+        self._allow_non_owner_push_checkbox = ctk.CTkCheckBox(
+            destructive_options,
+            text="Bypass owner guardrail (--allow-non-owner-push)",
+            variable=self.allow_non_owner_push_var,
+            command=self._on_allow_non_owner_push_toggled,
+            font=("Segoe UI", 12),
+            text_color="#1E293B",
+        )
+        self._allow_non_owner_push_checkbox.grid(row=5, column=0, sticky="w", padx=12, pady=4)
+        self._make_info_badge(
+            destructive_options,
+            "Permite push aunque origin owner no coincida con allowlist. Riesgoso.",
+        ).grid(row=5, column=1, sticky="e", padx=(0, 12), pady=4)
+
+        ctk.CTkLabel(
+            destructive_options,
+            text="Allowed push owner(s) comma (--allow-remote-owner)",
+            font=("Segoe UI", 12),
+            text_color="#1E293B",
+        ).grid(row=6, column=0, sticky="w", padx=12, pady=(4, 0))
+        self._allowed_remote_owner_entry = ctk.CTkEntry(
+            destructive_options,
+            textvariable=self.allowed_remote_owners_var,
+            height=32,
+            corner_radius=8,
+        )
+        self._allowed_remote_owner_entry.grid(
+            row=7,
+            column=0,
+            columnspan=2,
+            sticky="we",
+            padx=12,
+            pady=(2, 4),
+        )
+
         self._purge_safe_checkbox = ctk.CTkCheckBox(
             destructive_options,
             text="Purge SAFE (gitignore + untrack + purge candidatos seguros)",
@@ -3119,11 +3785,11 @@ class GuiApp:  # pragma: no cover
             font=("Segoe UI", 12),
             text_color="#1E293B",
         )
-        self._purge_safe_checkbox.grid(row=5, column=0, sticky="w", padx=12, pady=4)
+        self._purge_safe_checkbox.grid(row=8, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
             "Solo purga candidatos automáticos de bajo riesgo y deja manual-review sin tocar.",
-        ).grid(row=5, column=1, sticky="e", padx=(0, 12), pady=4)
+        ).grid(row=8, column=1, sticky="e", padx=(0, 12), pady=4)
 
         self._purge_risky_checkbox = ctk.CTkCheckBox(
             destructive_options,
@@ -3133,12 +3799,75 @@ class GuiApp:  # pragma: no cover
             font=("Segoe UI", 12),
             text_color="#1E293B",
         )
-        self._purge_risky_checkbox.grid(row=6, column=0, sticky="w", padx=12, pady=4)
+        self._purge_risky_checkbox.grid(row=9, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
             "Modo agresivo: también purga candidatos que requieren revisión manual.",
-        ).grid(row=6, column=1, sticky="e", padx=(0, 12), pady=4)
+        ).grid(row=9, column=1, sticky="e", padx=(0, 12), pady=4)
         self._sync_purge_mode_controls()
+        self._sync_push_guardrail_controls()
+
+        repair_actions_card = ctk.CTkFrame(
+            repair_tab,
+            fg_color="#F8FBFF",
+            corner_radius=12,
+            border_width=1,
+            border_color="#D1DDEA",
+        )
+        repair_actions_card.grid(row=1, column=0, sticky="we", padx=10, pady=(0, 8))
+        ctk.CTkLabel(
+            repair_actions_card,
+            text="Repair Flow",
+            font=("Segoe UI Semibold", 14),
+            text_color="#7B1E1E",
+        ).pack(anchor="w", padx=14, pady=(10, 4))
+        repair_controls = ctk.CTkFrame(repair_actions_card, fg_color="transparent")
+        repair_controls.pack(fill="x", padx=14, pady=(0, 10))
+        self._repair_button = ctk.CTkButton(
+            repair_controls,
+            text=self._repair_button_text,
+            command=lambda: self.run_clicked(run_fix=True),
+            width=250,
+            height=34,
+            corner_radius=8,
+            fg_color="#B45309",
+            hover_color="#92400E",
+        )
+        self._repair_button.pack(side="left")
+        self._make_info_badge(
+            repair_controls,
+            "Se habilita solo tras auditar. Muestra plan explicito y pide aceptacion antes de ejecutar.",
+        ).pack(side="left", padx=(6, 0), pady=8)
+
+        blocker_overlay = ctk.CTkFrame(
+            repair_tab,
+            fg_color="#EEF4FB",
+            corner_radius=10,
+            border_width=1,
+            border_color="#C5D8EB",
+        )
+        blocker_overlay.grid_columnconfigure(0, weight=1)
+        self._repair_tab_block_overlay = blocker_overlay
+
+        self._repair_tab_block_label = ctk.CTkLabel(
+            blocker_overlay,
+            text="",
+            justify="center",
+            font=("Segoe UI Semibold", 14),
+            text_color="#1E3A5F",
+            wraplength=760,
+        )
+        self._repair_tab_block_label.grid(row=0, column=0, padx=24, pady=(26, 10), sticky="ew")
+        ctk.CTkButton(
+            blocker_overlay,
+            text="Ir a Auditar",
+            command=lambda: self._set_active_flow_tab(self._audit_tab_name),
+            width=170,
+            height=34,
+            corner_radius=8,
+            fg_color="#0E6BA8",
+            hover_color="#0A5585",
+        ).grid(row=1, column=0, pady=(0, 20))
 
         repos_card = ctk.CTkFrame(
             app,
@@ -3147,7 +3876,7 @@ class GuiApp:  # pragma: no cover
             border_width=1,
             border_color="#D1DDEA",
         )
-        repos_card.grid(row=4, column=0, sticky="nsew", padx=16, pady=(6, 6))
+        repos_card.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 6))
         repos_card.grid_columnconfigure(0, weight=1)
         repos_card.grid_columnconfigure(1, weight=0)
         repos_card.grid_rowconfigure(1, weight=1)
@@ -3199,41 +3928,6 @@ class GuiApp:  # pragma: no cover
 
         run_controls = ctk.CTkFrame(repos_card, fg_color="transparent")
         run_controls.grid(row=2, column=0, sticky="w", padx=14, pady=(4, 12))
-        audit_controls = ctk.CTkFrame(run_controls, fg_color="transparent")
-        audit_controls.pack(side="left", padx=(0, 8))
-        self._audit_button = ctk.CTkButton(
-            audit_controls,
-            text="Auditar",
-            command=lambda: self.run_clicked(run_fix=False),
-            width=140,
-            height=34,
-            corner_radius=8,
-            fg_color="#0E6BA8",
-            hover_color="#0A5585",
-        )
-        self._audit_button.pack(side="left")
-        self._make_info_badge(
-            audit_controls,
-            "Runs checks only. It does not apply fixes or rewrite history.",
-        ).pack(side="left", padx=(6, 0), pady=8)
-
-        repair_controls = ctk.CTkFrame(run_controls, fg_color="transparent")
-        repair_controls.pack(side="left", padx=8)
-        self._repair_button = ctk.CTkButton(
-            repair_controls,
-            text=self._repair_button_text,
-            command=lambda: self.run_clicked(run_fix=True),
-            width=230,
-            height=34,
-            corner_radius=8,
-            fg_color="#B45309",
-            hover_color="#92400E",
-        )
-        self._repair_button.pack(side="left")
-        self._make_info_badge(
-            repair_controls,
-            "Se habilita solo tras auditar. Muestra plan explícito y pide aceptación antes de ejecutar.",
-        ).pack(side="left", padx=(6, 0), pady=8)
         ctk.CTkButton(
             run_controls,
             text="Select all",
@@ -3262,7 +3956,7 @@ class GuiApp:  # pragma: no cover
             border_width=1,
             border_color="#D1DDEA",
         )
-        output_card.grid(row=5, column=0, sticky="nsew", padx=16, pady=(0, 14))
+        output_card.grid(row=3, column=0, sticky="nsew", padx=16, pady=(0, 14))
         output_card.grid_columnconfigure(0, weight=1)
         output_card.grid_rowconfigure(1, weight=1)
         ctk.CTkLabel(
@@ -3286,6 +3980,7 @@ class GuiApp:  # pragma: no cover
         self.root.bind("<Configure>", self._on_root_resize)
         self.root.after(0, self._apply_responsive_layout)
         self._lock_repair_until_next_audit("Reparar (auditar primero)")
+        self._set_active_flow_tab(self._audit_tab_name)
 
     def _get_logical_window_width(self) -> int:
         geometry = self.root.wm_geometry().split("+", maxsplit=1)[0]
@@ -3354,6 +4049,35 @@ class GuiApp:  # pragma: no cover
             pady=(0, 12),
             sticky="nsew",
         )
+
+    def _set_active_flow_tab(self, tab_name: str) -> None:
+        if self._flow_tabs is None:
+            return
+        try:
+            self._flow_tabs.set(tab_name)
+        except Exception:
+            pass
+
+    def _set_repair_tab_visual_lock(self, locked: bool, reason: str | None = None) -> None:
+        if self._repair_tab_block_overlay is None:
+            return
+
+        if not locked:
+            self._repair_tab_block_overlay.place_forget()
+            return
+
+        if self._repair_tab_block_label is not None:
+            lock_reason = reason or "Reparar bloqueado hasta completar una auditoria valida."
+            self._repair_tab_block_label.configure(
+                text=(
+                    "Hoja Reparar bloqueada\n\n"
+                    f"{lock_reason}\n\n"
+                    "Ejecuta Auditar, revisa resultados y luego vuelve para reparar."
+                )
+            )
+
+        self._repair_tab_block_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self._repair_tab_block_overlay.lift()
 
     def _make_info_badge(self, parent, message: str):
         badge = self.ctk.CTkLabel(
@@ -3435,6 +4159,15 @@ class GuiApp:  # pragma: no cover
             self.purge_detected_secret_files_var.set(False)
         self._sync_purge_mode_controls()
 
+    def _sync_push_guardrail_controls(self) -> None:
+        if self._allowed_remote_owner_entry is None:
+            return
+        state = "disabled" if self.allow_non_owner_push_var.get() else "normal"
+        self._allowed_remote_owner_entry.configure(state=state)
+
+    def _on_allow_non_owner_push_toggled(self) -> None:
+        self._sync_push_guardrail_controls()
+
     def _selection_signature(self, selected: list[str] | None) -> tuple[str, ...] | None:
         if selected is None:
             return None
@@ -3464,6 +4197,7 @@ class GuiApp:  # pragma: no cover
         self._repair_ready = False
         self._repair_cooldown_remaining = 0
         self._repair_button_text = reason
+        self._set_repair_tab_visual_lock(True, reason)
         self._update_run_buttons_state()
 
     def _start_repair_cooldown(
@@ -3482,6 +4216,7 @@ class GuiApp:  # pragma: no cover
         self._repair_ready = False
         self._repair_cooldown_remaining = self._repair_cooldown_seconds
         self._repair_button_text = f"Reparar (espera {self._repair_cooldown_remaining}s)"
+        self._set_repair_tab_visual_lock(False)
         self._update_run_buttons_state()
         self.log(
             "[INFO] Reparar se habilitara en 10 segundos para forzar una revision minima de resultados."
@@ -3504,7 +4239,11 @@ class GuiApp:  # pragma: no cover
         self._repair_cooldown_after_id = self.root.after(1000, self._tick_repair_cooldown)
 
     def _is_risky_repair_selected(self) -> bool:
-        return bool(self.push_var.get() or self.purge_all_detected_secret_files_var.get())
+        return bool(
+            self.push_var.get()
+            or self.purge_all_detected_secret_files_var.get()
+            or self.allow_non_owner_push_var.get()
+        )
 
     def _report_list(self, payload: dict[str, object], key: str) -> list[str]:
         value = payload.get(key)
@@ -3514,6 +4253,8 @@ class GuiApp:  # pragma: no cover
 
     def _build_repair_confirmation_text(self, selected_signature: tuple[str, ...] | None) -> str:
         risky_mode = self._is_risky_repair_selected()
+        allowed_owners = normalize_csv_values(self.allowed_remote_owners_var.get())
+        owners_text = ", ".join(allowed_owners) if allowed_owners else "(auto from noreply if available)"
 
         lines = [
             "Se va a ejecutar Reparar con el siguiente plan:",
@@ -3523,6 +4264,10 @@ class GuiApp:  # pragma: no cover
             f"- Purge SAFE: {'SI' if self.purge_detected_secret_files_var.get() else 'NO'}",
             f"- Purge RISKY: {'SI' if self.purge_all_detected_secret_files_var.get() else 'NO'}",
             f"- Force push remoto: {'SI' if self.push_var.get() else 'NO'}",
+            f"- Open HTML report automatically: {'SI' if self.open_report_var.get() else 'NO'}",
+            f"- Confirm each repo fix: {'SI' if self.confirm_each_repo_fix_var.get() else 'NO'}",
+            f"- Allow non-owner push bypass: {'SI' if self.allow_non_owner_push_var.get() else 'NO'}",
+            f"- Allowed push owner(s): {owners_text}",
             "",
             "Cambios base de Reparar:",
             "- Puede agregar patrones faltantes en .gitignore",
@@ -3534,8 +4279,8 @@ class GuiApp:  # pragma: no cover
             lines.extend(
                 [
                     "",
-                    "ATENCION: seleccionaste opciones RISKY (purge all y/o force push).",
-                    "Esto puede eliminar contenido historico de forma irreversible y publicar cambios por force push.",
+                    "ATENCION: seleccionaste opciones RISKY (purge all, force push o bypass guardrail).",
+                    "Esto puede eliminar contenido historico de forma irreversible y/o saltar protecciones de owner remoto.",
                 ]
             )
 
@@ -3616,7 +4361,7 @@ class GuiApp:  # pragma: no cover
         if self._is_risky_repair_selected():
             accepted = self.messagebox.askyesno(
                 "Aceptacion de riesgo requerida",
-                "Seleccionaste opciones RISKY (purge all y/o force push).\n"
+                "Seleccionaste opciones RISKY (purge all, force push o bypass guardrail).\n"
                 "Confirma que aceptas continuar BAJO TU PROPIO RIESGO.",
             )
             if not accepted:
@@ -3633,9 +4378,12 @@ class GuiApp:  # pragma: no cover
         self._run_in_progress = False
         if run_fix:
             self._lock_repair_until_next_audit("Reparar (auditar nuevamente)")
+            self._set_active_flow_tab(self._repair_tab_name)
             return
 
         self._start_repair_cooldown(reports_payload, selection_signature)
+        self._set_active_flow_tab(self._repair_tab_name)
+        self.log("[INFO] Flujo: auditoria finalizada. Revisa y ejecuta Reparar desde la pestana Reparar.")
 
     def log(self, msg: str) -> None:
         self.output.insert("end", msg + "\n")
@@ -3762,6 +4510,8 @@ class GuiApp:  # pragma: no cover
             )
             return
 
+        self._set_active_flow_tab(self._repair_tab_name if run_fix else self._audit_tab_name)
+
         selected = self._selected_repo_names()
         repos_to_run = normalize_repo_filters(selected)
         selection_signature = self._selection_signature(repos_to_run)
@@ -3810,7 +4560,8 @@ class GuiApp:  # pragma: no cover
         try:
             root = Path(self.root_var.get())
             policy = Path(self.policy_var.get())
-            owner_emails = [item.strip() for item in self.owner_emails_var.get().split(",") if item.strip()]
+            owner_emails = normalize_csv_values(self.owner_emails_var.get())
+            allowed_remote_owners = normalize_csv_values(self.allowed_remote_owners_var.get())
             requested_report_dir = self.report_dir_var.get().strip() or str(DEFAULT_RESULTS_DIR)
             enforced_results_dir, forced = enforce_results_dir(Path(requested_report_dir))
             report_json = self.report_json_var.get().strip() or None
@@ -3833,7 +4584,7 @@ class GuiApp:  # pragma: no cover
             gui_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
             gui_logger(f"[INFO] GUI action: {'repair' if run_fix else 'audit'}")
 
-            config = GuardRunConfig(
+            config = build_guard_run_config(
                 mode="gui",
                 root=root,
                 policy=policy,
@@ -3854,12 +4605,35 @@ class GuiApp:  # pragma: no cover
                 noreply_email=self.noreply_var.get().strip(),
                 placeholder_email=self.placeholder_var.get().strip(),
                 max_matches=max_matches,
-                confirm_each_repo_fix=False,
-                open_report=True,
-                allow_non_owner_push=False,
-                allowed_remote_owners=[],
+                confirm_each_repo_fix=self.confirm_each_repo_fix_var.get(),
+                open_report=self.open_report_var.get(),
+                allow_non_owner_push=(run_fix and self.allow_non_owner_push_var.get()),
+                allowed_remote_owners=allowed_remote_owners,
                 report_json=report_json,
+                audit_litellm_incident=self.audit_litellm_incident_var.get(),
             )
+
+            def _confirm_repo_fix(repo: Path, index: int, total: int) -> bool:
+                result: dict[str, bool] = {"value": False}
+                done = threading.Event()
+
+                def _ask() -> None:
+                    try:
+                        result["value"] = bool(
+                            self.messagebox.askyesno(
+                                "Confirmar reparacion por repositorio",
+                                f"Repositorio {index}/{total}: {repo.name}\n\n"
+                                "Aplicar Reparar en este repositorio?\n"
+                                "Puedes responder No para omitir solo este repositorio.",
+                            )
+                        )
+                    finally:
+                        done.set()
+
+                self.root.after(0, _ask)
+                done.wait()
+                return bool(result["value"])
+
             exit_code = execute_guard_pipeline(
                 config=config,
                 artifacts=artifacts,
@@ -3867,6 +4641,9 @@ class GuiApp:  # pragma: no cover
                 results_dir=enforced_results_dir,
                 require_confirmation=False,
                 confirm_callback=None,
+                confirm_repo_fix_callback=(
+                    _confirm_repo_fix if run_fix and config.confirm_each_repo_fix else None
+                ),
             )
 
             reports_payload: list[dict[str, object]] = []
@@ -3940,6 +4717,11 @@ def make_parser() -> argparse.ArgumentParser:
         default="informational",
         help="Treat low-confidence email findings as informational (default) or blocking",
     )
+    parser.add_argument(
+        "--audit-litellm-incident",
+        action="store_true",
+        help="Enable supply-chain incident audit checks for LiteLLM March-2026 indicators",
+    )
 
     parser.add_argument("--owner-name", default="Owner", help="Owner display name for rewritten commits")
     parser.add_argument(
@@ -3995,12 +4777,6 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
     root = Path(args.root)
     policy = Path(args.policy)
 
-    owner_emails = list(dict.fromkeys(args.owner_email))
-    allowed_remote_owners = list(dict.fromkeys(args.allow_remote_owner))
-    inferred_owner = infer_github_username_from_noreply(args.noreply_email)
-    if inferred_owner and inferred_owner not in allowed_remote_owners:
-        allowed_remote_owners.append(inferred_owner)
-
     enforced_results_dir, forced = enforce_results_dir(Path(args.report_dir))
     artifacts = create_run_artifacts(enforced_results_dir)
     cli_logger = RunLogger(artifacts.log_path, sink=print)
@@ -4010,7 +4786,7 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         )
     cli_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
 
-    config = GuardRunConfig(
+    config = build_guard_run_config(
         mode="cli",
         root=root,
         policy=policy,
@@ -4025,15 +4801,16 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         rewrite_personal_paths=args.rewrite_personal_paths,
         low_confidence_email_mode=args.low_confidence_email_mode,
         owner_name=args.owner_name,
-        owner_emails=owner_emails,
+        owner_emails=args.owner_email,
         noreply_email=args.noreply_email,
         placeholder_email=args.placeholder_email,
         max_matches=args.max_matches,
         open_report=not args.no_open_report,
         confirm_each_repo_fix=not args.no_confirm_each_repo,
         allow_non_owner_push=args.allow_non_owner_push,
-        allowed_remote_owners=allowed_remote_owners,
+        allowed_remote_owners=args.allow_remote_owner,
         report_json=args.report_json,
+        audit_litellm_incident=args.audit_litellm_incident,
     )
 
     def confirm_force_push() -> bool:

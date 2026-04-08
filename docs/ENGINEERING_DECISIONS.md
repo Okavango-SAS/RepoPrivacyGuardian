@@ -79,10 +79,19 @@ This file captures key design decisions and their rationale.
 - Added `GuardRunConfig` and `execute_guard_pipeline()` as the canonical execution path for both interfaces.
 - Added `build_run_settings()` to normalize persisted run metadata.
 - Added `parse_positive_int()` so GUI and CLI validate `max_matches` with the same rule.
+- Added shared `build_guard_run_config()` so CLI and GUI normalize/infer run options through one path.
 - Extended GUI inputs with:
   - results directory
   - optional extra JSON export path
   - max matches
+- Extended GUI parity controls with:
+  - open report toggle (`open_report` parity with CLI `--no-open-report`)
+  - per-repository repair confirmation toggle (`confirm_each_repo_fix` parity)
+  - push owner guardrail options (`allow_non_owner_push` and `allowed_remote_owners` parity)
+- Updated GUI interaction model with:
+  - tabbed workflow (`Auditar` and `Reparar`) to reduce single-page overload
+  - action separation (audit button in `Auditar`, repair button in `Reparar`)
+  - visual repair-tab lock overlay until a valid audit has produced actionable context
 - Aligned GUI `public_only` default with CLI default.
 - Aligned GUI repository scope behavior with CLI: if no repository filter is provided, run all repositories under root after explicit confirmation.
 - Added parity regression tests for argument validation, defaults, confirmation gate, fix/re-audit flow, and runtime error handling.
