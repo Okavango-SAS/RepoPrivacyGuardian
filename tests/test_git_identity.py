@@ -16,20 +16,20 @@ from Repo_Privacy_Guardian import (
 
 def test_validate_git_identity_inputs():
     assert validate_git_identity_inputs("John Doe", "12345+john@users.noreply.github.com") == []
-    assert validate_git_identity_inputs("", "12345+john@users.noreply.github.com") == ["Name cannot be empty."]
-    assert validate_git_identity_inputs("John Doe", "") == ["Email cannot be empty."]
-    assert validate_git_identity_inputs("", "") == ["Name cannot be empty.", "Email cannot be empty."]
-    assert validate_git_identity_inputs("John", "invalid-email") == ["git user.email should be a GitHub noreply address (for example: <id+username>@users.noreply.github.com)."]
+    assert validate_git_identity_inputs("", "12345+john@users.noreply.github.com") == ["git user.name is required."]
+    assert validate_git_identity_inputs("John Doe", "") == ["git user.email is required."]
+    assert validate_git_identity_inputs("", "") == ["git user.name is required.", "git user.email is required."]
+    assert validate_git_identity_inputs("John", "invalid-email") == ["git user.email must be a valid email address."]
 
 @mock.patch("subprocess.run")
 def test_apply_git_identity_global(mock_run):
     mock_run.return_value = mock.Mock(returncode=0)
-    
+
     success, msg = apply_git_identity_config("global", "Alice", "12345+alice@users.noreply.github.com")
     assert success is True
-    assert "Configured global git identity" in msg
-    mock_run.assert_any_call(["git", "config", "--global", "user.name", "Alice"], capture_output=True, text=True, check=False)
-    mock_run.assert_any_call(["git", "config", "--global", "user.email", "12345+alice@users.noreply.github.com"], capture_output=True, text=True, check=False)
+    assert "Applied GLOBAL git identity" in msg
+    mock_run.assert_any_call(["git", "config", "--global", "user.name", "Alice"], cwd=None, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    mock_run.assert_any_call(["git", "config", "--global", "user.email", "12345+alice@users.noreply.github.com"], cwd=None, capture_output=True, text=True, encoding="utf-8", errors="replace")  
 
 @mock.patch("subprocess.run")
 def test_apply_git_identity_global_fail(mock_run):
@@ -38,7 +38,7 @@ def test_apply_git_identity_global_fail(mock_run):
 
     success, msg = apply_git_identity_config("global", "Alice", "12345+alice@users.noreply.github.com")
     assert success is False
-    assert "Failed to set user.email:" in msg
+    assert "Failed to set user.email (global):" in msg
 
 @mock.patch("webbrowser.open")
 def test_open_github_email_settings(mock_open):

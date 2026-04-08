@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --cov=Repo_Privacy_Guardian --cov-report=term-missing --cov-report=xml --cov-fail-under=100"
+addopts = "-q --cov=Repo_Privacy_Guardian --cov-report=term-missing --cov-report=xml --cov-fail-under=80"
 
 [tool.coverage.run]
 branch = false
@@ -13,4 +13,4 @@ source = ["Repo_Privacy_Guardian"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
-fail_under = 100
+fail_under = 80

@@ -2377,6 +2377,21 @@ def render_html_report(
       --accent: #005bbb;
       --shadow: 0 10px 28px rgba(23, 35, 58, 0.08);
     }}
+    @media (prefers-color-scheme: dark) {{
+      :root {{
+        --bg: #0f172a;
+        --surface: #1e293b;
+        --text: #e2ecf6;
+        --muted: #94a3b8;
+        --line: #334155;
+        --ok: #34d399;
+        --low: #fbbf24;
+        --med: #fb923c;
+        --high: #f87171;
+        --accent: #38bdf8;
+        --shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+      }}
+    }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
@@ -2384,6 +2399,11 @@ def render_html_report(
       background: radial-gradient(circle at top right, #dde8ff 0%, var(--bg) 42%);
       color: var(--text);
       line-height: 1.45;
+    }}
+    @media (prefers-color-scheme: dark) {{
+      body {{
+        background: radial-gradient(circle at top right, #1e293b 0%, var(--bg) 42%);
+      }}
     }}
     .container {{ max-width: 1280px; margin: 0 auto; padding: 22px; }}
     .hero {{
@@ -2425,6 +2445,15 @@ def render_html_report(
     .finding-list code {{ white-space: pre-wrap; word-break: break-word; }}
     code {{ background: #f1f5ff; color: #1b2f55; border-radius: 4px; padding: 1px 4px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }}
     .more, .empty {{ margin-top: 8px; color: var(--muted); font-style: italic; }}
+    @media (prefers-color-scheme: dark) {{
+      th {{ background: #0f172a; border-bottom-color: #334155; }}
+      code {{ background: #0f172a; color: #bae6fd; }}
+      .sev-high {{ background: #450a0a; color: var(--high); }}
+      .sev-medium {{ background: #431407; color: var(--med); }}
+      .sev-low {{ background: #422006; color: var(--low); }}
+      .sev-ok {{ background: #064e3b; color: var(--ok); }}
+      .high-card {{ border-color: #7f1d1d; background: #450a0a; }}
+    }}
     @media (max-width: 760px) {{
       .container {{ padding: 12px; }}
       .hero {{ padding: 16px; }}
