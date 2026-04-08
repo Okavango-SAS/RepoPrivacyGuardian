@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Repository Publication Guard
 
@@ -1912,7 +1912,9 @@ def render_html_report(
     h2 {{ margin: 0 0 10px; font-size: 1.18rem; }}
     h4 {{ margin: 0 0 8px; }}
     .panel {{ background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: var(--shadow); }}
-    table {{ width: 100%; border-collapse: collapse; }}
+    .table-wrap {{ width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+    .table-wrap table {{ width: 100%; border-collapse: collapse; min-width: 520px; }}
+    .table-wrap.matrix table {{ min-width: 980px; }}
     th, td {{ padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }}
     th {{ background: #eef3fb; font-weight: 700; }}
     .num {{ text-align: right; font-variant-numeric: tabular-nums; }}
@@ -1928,12 +1930,13 @@ def render_html_report(
     .detail-grid {{ display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-top: 10px; }}
     .finding-list {{ margin: 0; padding-left: 18px; }}
     .finding-list code {{ white-space: pre-wrap; word-break: break-word; }}
-    code {{ background: #f1f5ff; color: #1b2f55; border-radius: 4px; padding: 1px 4px; }}
+    code {{ background: #f1f5ff; color: #1b2f55; border-radius: 4px; padding: 1px 4px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }}
     .more, .empty {{ margin-top: 8px; color: var(--muted); font-style: italic; }}
     @media (max-width: 760px) {{
       .container {{ padding: 12px; }}
       .hero {{ padding: 16px; }}
       th, td {{ padding: 8px; }}
+            .table-wrap.matrix table {{ min-width: 820px; }}
     }}
   </style>
 </head>
@@ -1957,10 +1960,12 @@ def render_html_report(
 
     <section class=\"panel\">
       <h2>Execution settings</h2>
-      <table>
-        <tr><th>Setting</th><th>Value</th></tr>
-        {settings_rows}
-      </table>
+      <div class=\"table-wrap\">
+        <table>
+          <tr><th>Setting</th><th>Value</th></tr>
+          {settings_rows}
+        </table>
+      </div>
     </section>
 
     <section class=\"panel\">
@@ -1970,27 +1975,31 @@ def render_html_report(
 
     <section class=\"panel\">
       <h2>Failure reason frequency</h2>
-      <table>
-        <tr><th>Reason</th><th class=\"num\">Repos</th></tr>
-        {reason_rows}
-      </table>
+      <div class=\"table-wrap\">
+        <table>
+          <tr><th>Reason</th><th class=\"num\">Repos</th></tr>
+          {reason_rows}
+        </table>
+      </div>
     </section>
 
     <section class=\"panel\">
       <h2>Repository matrix</h2>
-      <table>
-        <tr>
-          <th>Repository</th>
-          <th>Severity</th>
-          <th>Status</th>
-          <th class=\"num\">Failures</th>
-          <th class=\"num\">Secret matches</th>
-          <th class=\"num\">Secret file candidates</th>
-                    <th class="num">Unexpected emails (owned repo)</th>
-          <th class=\"num\">Missing .gitignore rules</th>
-        </tr>
-        {repo_rows}
-      </table>
+      <div class=\"table-wrap matrix\">
+        <table>
+          <tr>
+            <th>Repository</th>
+            <th>Severity</th>
+            <th>Status</th>
+            <th class=\"num\">Failures</th>
+            <th class=\"num\">Secret matches</th>
+            <th class=\"num\">Secret file candidates</th>
+            <th class=\"num\">Unexpected emails (owned repo)</th>
+            <th class=\"num\">Missing .gitignore rules</th>
+          </tr>
+          {repo_rows}
+        </table>
+      </div>
     </section>
 
     <section>
@@ -3351,3 +3360,7 @@ def main() -> int:  # pragma: no cover
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
+
+
+
+

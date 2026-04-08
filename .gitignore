@@ -43,3 +43,6 @@ pytest-report.xml
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# MCP servers and local tools
+.playwright-mcp/
