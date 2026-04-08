@@ -8,6 +8,8 @@ It has two execution surfaces:
 - CLI entrypoint for scripted and repeatable runs.
 - Simple GUI wrapper for interactive operation.
 
+GUI interaction is phase-based: operators run `Auditar` first, and `Reparar` is visually locked until audit state is valid and actionable.
+
 ## Main components
 
 1. Repository discovery
@@ -34,13 +36,18 @@ It has two execution surfaces:
 - Prints human-readable summary.
 - Persists machine-readable JSON report.
 
+6. GUI interaction layer
+- Separates audit and remediation actions into `Auditar` and `Reparar` tabs.
+- Applies a visual lock overlay in `Reparar` until audit context allows safe remediation actions.
+
 ## Data flow
 
 1. Input arguments (CLI/GUI) define scope and behavior.
-2. Auditor builds `RepoReport` objects.
-3. Optional fixer mutates repository state based on explicit flags.
-4. Re-audit confirms resulting state.
-5. JSON output is written for traceability.
+2. In GUI mode, `Auditar` establishes audit context before remediation is available.
+3. Auditor builds `RepoReport` objects.
+4. Optional fixer mutates repository state based on explicit flags.
+5. Re-audit confirms resulting state.
+6. JSON output is written for traceability.
 
 ## Safety model
 

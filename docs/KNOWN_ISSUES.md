@@ -49,6 +49,11 @@ Workaround: add manual `git log --all --pretty=format:%an\ <%ae\>` review for st
 - Security examples intentionally containing placeholder token shapes.
 - Generic terms such as "webhook" or "telemetry" used in legitimate service code.
 
+## Intentional behavior (not a bug)
+
+- GUI uses a staged flow: run `Auditar` first, then `Reparar`.
+- `Reparar` is intentionally visually locked until a valid audit produces actionable remediation context.
+
 ## Tracking policy
 
 - Keep this file updated when a recurring issue appears in two or more repositories.

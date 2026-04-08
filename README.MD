@@ -56,6 +56,11 @@ py Repo_Privacy_Guardian.py --root C:/path/to/repos --repos MyRepo --fix --dry-r
 py Repo_Privacy_Guardian.py --gui
 ```
 
+The GUI uses a two-tab flow:
+
+- `Auditar` tab to configure scope and run audit
+- `Reparar` tab to run remediations (visually locked until a valid audit provides actionable context)
+
 ## CLI/GUI parity for agentic workflows
 
 GUI and CLI use the same execution pipeline and policy logic.
@@ -63,6 +68,7 @@ GUI and CLI use the same execution pipeline and policy logic.
 - same checks and severity model
 - same remediation decisions and safety guardrails
 - same JSON/HTML/LOG artifacts
+- same staged GUI interaction contract (`Auditar` first, then `Reparar` once unlocked)
 
 This parity lets you choose UX style without changing audit behavior:
 
