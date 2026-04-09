@@ -60,6 +60,14 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def _fixture_secret() -> str:
+    return "ghp_" + ("A" * 36)
+
+
+def _fixture_win_user_path(*parts: str, user: str = "alice") -> str:
+    return "\\".join(["C:", "Users", user, *parts])
+
+
 def _commit_all(repo: Path, message: str) -> None:
     _git(repo, "add", "-A")
     _git(repo, "commit", "-m", message)
@@ -251,9 +259,9 @@ def test_exfil_indicators_remain_advisory_by_default(tmp_path: Path) -> None:
 def test_persisted_artifacts_redact_sensitive_values(tmp_path: Path) -> None:
     artifacts = rpg.create_run_artifacts(tmp_path / "Audit_Results")
     logger = rpg.RunLogger(artifacts.log_path)
-    secret = "redacted-fixture-token-not-real"
+    secret = _fixture_secret()
     email = "owner.real@privacy.dev"
-    win_path = r"<redacted-path>"
+    win_path = _fixture_win_user_path("Secrets")
 
     report = rpg.RepoReport(name="redaction-demo", path=win_path)
     report.clean_status = f"## main\n M README.md {email} {secret} {win_path}"

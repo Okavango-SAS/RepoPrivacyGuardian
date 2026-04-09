@@ -9,6 +9,45 @@ import pytest
 import Repo_Privacy_Guardian as rpg
 
 
+def _fixture_secret() -> str:
+    return "ghp_" + ("A" * 36)
+
+
+def _fixture_aws_key() -> str:
+    return "AKIA" + ("A" * 16)
+
+
+def _fixture_win_user_path(*parts: str, user: str = "alice") -> str:
+    return "\\".join(["C:", "Users", user, *parts])
+
+
+def _fixture_escaped_win_user_path(*parts: str, user: str = "alice") -> str:
+    return _fixture_win_user_path(*parts, user=user).replace("\\", "\\\\")
+
+
+def _fixture_win_user_path_slash(*parts: str, user: str = "alice") -> str:
+    return "C:/" + "/".join(["Users", user, *parts])
+
+
+def _fixture_unix_user_path(root: str, user: str, *parts: str) -> str:
+    return "/" + "/".join([root, user, *parts])
+
+
+def _fixture_repo_cli_path(user: str = "tester") -> str:
+    return "c:/" + "/".join(
+        [
+            "Users",
+            user,
+            "Documents",
+            "Repositorios",
+            "RepoPrivacyGuardian",
+            ".venv",
+            "Scripts",
+            "python.exe",
+        ]
+    )
+
+
 def _make_report(name: str) -> rpg.RepoReport:
     report = rpg.RepoReport(name=name, path=f"C:/repos/{name}")
     report.origin_url = f"https://github.com/example/{name}.git"
@@ -72,12 +111,15 @@ def test_run_logger_without_sink(tmp_path: Path) -> None:
 def test_run_logger_redacts_sensitive_content(tmp_path: Path) -> None:
     seen: list[str] = []
     logger = rpg.RunLogger(tmp_path / "run.log", sink=seen.append)
+    secret = _fixture_secret()
+    win_path = _fixture_win_user_path("repo")
+    escaped_win_path = _fixture_escaped_win_user_path("repo")
 
     logger(
-        "token redacted-fixture-token-not-real "
+        f"token {secret} "
         "email dev@example.com "
-        "path <redacted-path> "
-        "json_path C:\\\\Users\\\\alice\\\\repo"
+        f"path {win_path} "
+        f"json_path {escaped_win_path}"
     )
 
     content = (tmp_path / "run.log").read_text(encoding="utf-8")
@@ -93,7 +135,7 @@ def test_run_logger_redacts_sensitive_content(tmp_path: Path) -> None:
 def test_repo_report_finalize_builds_failures() -> None:
     report = _make_report("repo-a")
     report.unexpected_emails = ["private@example.com"]
-    report.tracked_secret_matches = ["secret.txt:1:AKIA..."]
+    report.tracked_secret_matches = [f"secret.txt:1:{_fixture_aws_key()}"]
 
     report.finalize()
 
@@ -312,14 +354,19 @@ def test_email_match_context_edge_cases_and_empty_ownership_split() -> None:
 
 
 def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
+    secret = _fixture_secret()
+    win_path = _fixture_win_user_path("Documents", "repo")
+    escaped_win_path = _fixture_escaped_win_user_path("Documents", "repo")
+    unix_user_path = _fixture_unix_user_path("Users", "bob", "repo")
+    unix_home_path = _fixture_unix_user_path("home", "carol", ".ssh")
     sample = (
-        "token redacted-fixture-token-not-real "
+        f"token {secret} "
         "email dev@example.com "
-        "path <redacted-path> "
-        "json_path C:\\\\Users\\\\alice\\\\Documents\\\\repo "
+        f"path {win_path} "
+        f"json_path {escaped_win_path} "
         "profile AppData\\Roaming\\Code "
         "json_profile AppData\\\\Roaming\\\\Code "
-        "unix <redacted-path> <redacted-path>"
+        f"unix {unix_user_path} {unix_home_path}"
     )
     redacted = rpg.redact_sensitive_text(sample)
 
@@ -333,15 +380,15 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     assert "/home/<redacted>" in redacted
 
     report = _make_report("repo-a")
-    report.path = "<redacted-path>"
+    report.path = _fixture_win_user_path_slash("repo-a")
     report.clean_status = "author dev@example.com"
     report.author_emails = ["dev@example.com"]
     report.committer_emails = ["ops@example.com"]
     report.unexpected_emails = ["redacted-contributor@example.invalid"]
     report.unexpected_emails_owned_repo = ["redacted-contributor@example.invalid"]
     report.unexpected_emails_third_party_repo = ["redacted-contributor@example.invalid"]
-    report.tracked_secret_matches = ["secret.txt:1:redacted-fixture-token-not-real"]
-    report.tracked_path_matches = ["file.txt:1:<redacted-path>"]
+    report.tracked_secret_matches = [f"secret.txt:1:{secret}"]
+    report.tracked_path_matches = [f"file.txt:1:{_fixture_win_user_path_slash('Documents')}"]
     report.tracked_email_matches = ["file.txt:2:dev@example.com"]
     report.tracked_email_high_confidence = ["src/main.py:2:dev@example.com"]
     report.tracked_email_low_confidence = ["tests/test_main.py:2:dev@example.com"]
@@ -372,16 +419,14 @@ def test_extract_personal_path_literals_filters_regex_scaffolding() -> None:
     )
     assert rpg.extract_personal_path_literals(regex_snippet) == []
 
-    concrete = (
-        "AGENTS.MD:24:- <redacted-path>"
-    )
-    assert rpg.extract_personal_path_literals(concrete) == [
-        "<redacted-path>"
-    ]
+    repo_cli_path = _fixture_repo_cli_path()
+    concrete = f"AGENTS.MD:24:- {repo_cli_path}"
+    assert rpg.extract_personal_path_literals(concrete) == [repo_cli_path]
 
-    escaped = 'path="C:\\\\Users\\\\alice\\\\AppData\\\\Roaming\\\\Code"'
+    escaped_path = _fixture_escaped_win_user_path("AppData", "Roaming", "Code")
+    escaped = f'path="{escaped_path}"'
     assert rpg.extract_personal_path_literals(escaped) == [
-        "C:\\\\Users\\\\alice\\\\AppData\\\\Roaming\\\\Code"
+        escaped_path
     ]
 
 
@@ -448,16 +493,15 @@ def test_write_replace_text_file_includes_personal_paths(
     monkeypatch.setattr(rpg.tempfile, "mkdtemp", lambda prefix: str(tmp_path))
 
     report = _make_report("repo-paths")
-    report.tracked_path_matches = [
-        "AGENTS.MD:24:- <redacted-path>"
-    ]
+    repo_cli_path = _fixture_repo_cli_path()
+    report.tracked_path_matches = [f"AGENTS.MD:24:- {repo_cli_path}"]
 
     replace_file = guard._write_replace_text_file(report)
 
     assert replace_file == tmp_path / "replace-text.txt"
     contents = replace_file.read_text(encoding="utf-8")
     assert (
-        "literal:<redacted-path>==>"
+        f"literal:{repo_cli_path}==>"
         f"{rpg.REDACTED_PATH}"
     ) in contents
 
@@ -477,9 +521,7 @@ def test_write_replace_text_file_skips_personal_paths_when_disabled(
     monkeypatch.setattr(rpg.tempfile, "mkdtemp", lambda prefix: str(tmp_path))
 
     report = _make_report("repo-paths")
-    report.tracked_path_matches = [
-        "AGENTS.MD:24:- <redacted-path>"
-    ]
+    report.tracked_path_matches = [f"AGENTS.MD:24:- {_fixture_repo_cli_path()}"]
 
     replace_file = guard._write_replace_text_file(report)
 
@@ -499,7 +541,7 @@ def test_classify_repo_severity_all_levels() -> None:
     assert rpg.classify_repo_severity(medium)[0] == "MEDIUM"
 
     medium_paths = _make_report("medium-paths")
-    medium_paths.tracked_path_matches = ["README.md:1:<redacted-path>"]
+    medium_paths.tracked_path_matches = [f"README.md:1:{_fixture_win_user_path_slash(user='example')}"]
     medium_paths.tracked_but_ignored = [".env"]
     medium_paths.finalize()
     sev, _, highlights = rpg.classify_repo_severity(medium_paths)
@@ -561,7 +603,7 @@ def test_email_remediation_decision_variants() -> None:
 
 def test_repo_user_guidance_variants() -> None:
     secret_risk = _make_report("secret-risk")
-    secret_risk.tracked_secret_matches = ["secret.txt:1:AKIA..."]
+    secret_risk.tracked_secret_matches = [f"secret.txt:1:{_fixture_aws_key()}"]
     level, risk, consequence, suggestion = rpg.repo_user_guidance(secret_risk)
     assert level == "IMMEDIATE"
     assert "secret indicators" in risk.lower()
@@ -578,7 +620,7 @@ def test_repo_user_guidance_variants() -> None:
     assert "authorize email remediation" in suggestion.lower()
 
     path_risk = _make_report("path-risk")
-    path_risk.tracked_path_matches = ["README.md:1:<redacted-path>"]
+    path_risk.tracked_path_matches = [f"README.md:1:{_fixture_win_user_path_slash(user='dev')}"]
     level, risk, consequence, suggestion = rpg.repo_user_guidance(path_risk)
     assert level == "PRIORITY"
     assert "local/personal paths" in risk.lower()
