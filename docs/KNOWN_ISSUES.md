@@ -10,7 +10,7 @@ Workaround: verify context before applying destructive fixes.
 1. Exfil indicator heuristic is keyword-based and can over-report in backend/service repos.
 
 Impact: medium.
-Workaround: treat exfil hits as triage signals; validate by code intent before remediation.
+Workaround: treat exfil hits as advisory/manual-review signals; validate by code intent before remediation. They do not change PASS/FAIL by default.
 
 1. Safe secret auto-purge is intentionally conservative.
 
@@ -53,6 +53,8 @@ Workaround: add manual `git log --all --pretty=format:%an\ <%ae\>` review for st
 
 - GUI uses a staged flow: run `Auditar` first, then `Reparar`.
 - `Reparar` is intentionally visually locked until a valid audit produces actionable remediation context.
+- `exfil_code_indicators` is advisory by default. It elevates review guidance, but it does not automatically fail a repository.
+- `pytest` release validation intentionally ignores untracked/local-only `tests/test_*.py` files so the release signal matches a clean clone.
 
 ## Tracking policy
 

@@ -1,122 +1,167 @@
-# Repo Privacy Guardian 🛡️
+# Repo Privacy Guardian
 
 ![Policy](https://img.shields.io/badge/policy-publication%20gate-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20PowerShell-lightgrey)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 
-A practical toolkit to audit and harden repositories before public release.
+Repo Privacy Guardian is a local-first publication gate for Git repositories before public release.
 
-It helps you detect and remediate:
+It audits and optionally remediates:
 
-- leaked identity metadata in git history 👤
-- exposed secrets/tokens/keys 🔐
-- local machine path leaks 🧭
-- risky tracked artifacts and ignore drift 🧹
-- suspicious outbound/exfil patterns in code 🌐
+- leaked Git identity metadata
+- secrets in tracked content and history
+- personal/local absolute paths
+- sensitive filenames in history
+- tracked-but-ignored files and `.gitignore` drift
+- advisory outbound/exfil code indicators
+- LiteLLM March 2026 supply-chain indicators
 
-## Why this project exists ✨
+## Product contract
 
-Public repositories are permanent records. One bad push can expose personal data or credentials, even if files are deleted later.
+Blocking checks that can change `PASS` to `FAIL`:
 
-Repo Privacy Guardian gives you:
+- dirty working tree
+- Git fsck failures
+- private/unexpected commit metadata emails
+- tracked or historical secret indicators
+- tracked or historical personal path leaks
+- blocking email findings when configured
+- sensitive filenames in history
+- tracked-but-ignored files
+- missing required `.gitignore` rules
+- LiteLLM `HIGH` or `CRITICAL` incident evidence
+- any remediation execution error during `--fix`
 
-- repeatable audit checklist
-- policy-driven decisions (PASS/FAIL)
-- optional automated remediation flow
+Advisory checks that do not change `PASS`/`FAIL` by default:
 
-## Repository layout 📁
+- `exfil_code_indicators`
 
-- Repo_Privacy_Guardian.py: main CLI + GUI auditor/fixer
-- docs/POLICY.md: generic rector publication policy template
-- docs/ROADMAP.md: short-term and medium-term product plan
-- docs/KNOWN_ISSUES.md: current limitations and safe workarounds
-- docs/LEARNED_LESSONS.md: lessons captured from audits and remediations
-- docs/ENGINEERING_DECISIONS.md: rationale behind core architecture choices
-- docs/RELEASE_CHECKLIST.md: pre-release operational gate
-- .gitignore: baseline local/sensitive ignore rules
+`exfil_code_indicators` is intentionally manual-review only by default. It is reported in CLI, JSON, HTML and severity highlights, but it does not fail the repository unless a future strict mode is introduced.
 
-## Quick start ⚡
+## Interfaces
 
-### 1) Run audit (CLI)
+- CLI for automation, reproducibility and agentic workflows.
+- GUI for guided/manual operation with the same execution pipeline.
+
+GUI and CLI share:
+
+- the same audit logic
+- the same remediation logic
+- the same JSON/HTML/LOG artifacts
+- the same guardrails
+
+The GUI keeps the staged contract:
+
+1. `Auditar`
+2. review results
+3. `Reparar` only after the audit context unlocks it
+
+## Installation
+
+Base package plus test extras:
+
+```powershell
+py -m pip install -e .[test]
+```
+
+GUI support:
+
+```powershell
+py -m pip install -e .[gui]
+```
+
+Optional history rewrite support:
+
+```powershell
+py -m pip install -e .[rewrite]
+```
+
+Compatibility convenience files:
+
+- `requirements.txt`: GUI + optional rewrite support
+- `requirements-dev.txt`: local dev/test dependencies
+
+## Quick start
+
+CLI help:
 
 ```powershell
 py Repo_Privacy_Guardian.py --help
-py Repo_Privacy_Guardian.py --root C:/path/to/repos --repos MyRepo
+repo-privacy-guardian --help
 ```
 
-### 2) Run guided fix preview (safe)
+Safe audit:
+
+```powershell
+py Repo_Privacy_Guardian.py --root C:/path/to/repos --repos MyRepo --dry-run --yes
+```
+
+Safe fix preview:
 
 ```powershell
 py Repo_Privacy_Guardian.py --root C:/path/to/repos --repos MyRepo --fix --dry-run --yes
 ```
 
-### 3) Run GUI mode
+GUI:
 
 ```powershell
 py Repo_Privacy_Guardian.py --gui
 ```
 
-The GUI uses a two-tab flow:
+## Artifacts
 
-- `Auditar` tab to configure scope and run audit
-- `Reparar` tab to run remediations (visually locked until a valid audit provides actionable context)
+Each run writes local artifacts under `Audit_Results/<run_id>/`:
 
-## CLI/GUI parity for agentic workflows
+- `report.json`
+- `report.html`
+- `run.log`
 
-GUI and CLI use the same execution pipeline and policy logic.
+Artifacts are redacted, but they still contain operational security context and should be treated as sensitive local outputs.
 
-- same checks and severity model
-- same remediation decisions and safety guardrails
-- same JSON/HTML/LOG artifacts
-- same staged GUI interaction contract (`Auditar` first, then `Reparar` once unlocked)
+## What `--fix` does
 
-This parity lets you choose UX style without changing audit behavior:
+When applicable and explicitly requested, the fix flow can:
 
-- GUI for guided/manual operation
-- CLI for automation with code agents and agentic IDEs (Codex, Cursor, Antigravity, VS Code with GitHub Copilot, etc.)
+- create a backup bundle first
+- append missing `.gitignore` rules
+- stop tracking ignored files
+- generate `mailmap` and `replace-text` inputs
+- rewrite history with `git-filter-repo`
+- run post-rewrite cleanup
+- optionally push with owner guardrails
 
-Recommended for agent-based execution:
+It does not:
 
-1. Run CLI in dry-run first.
-2. Review the guidance (risk, possible consequence, suggestion).
-3. Authorize only the remediations you intend.
-4. Re-run until policy status is PASS.
+- rotate leaked credentials for you
+- make outbound review decisions automatically
+- bypass destructive safeguards by default
 
-## Policy 📜
+## Clean-clone validation
 
-The repository includes a generic governance baseline in docs/POLICY.md.
+Release validation is designed to be reproducible from a clean clone:
 
-Recommended workflow:
+```powershell
+py -m pip install -e .[test]
+py -m pytest
+repo-privacy-guardian --help
+```
 
-1. Audit first.
-2. Review findings.
-3. Run dry-run fix.
-4. Apply real fix only when validated.
-5. Re-audit until PASS.
+Pytest collection is restricted to tracked test files so local ignored test files do not change the release signal.
 
-## Safety notes 🚨
+## Repository layout
 
-- History rewrites are destructive for commit hashes.
-- Always create backup bundles before rewriting history.
-- If secrets were leaked, rotate them even after cleanup.
-- Use force push only with clear team communication.
-- Generated JSON/HTML/LOG artifacts are redacted by default, but still should be treated as sensitive operational outputs.
+- `Repo_Privacy_Guardian.py`: main CLI + GUI implementation
+- `docs/`: policy, release docs and engineering rationale
+- `tests/`: tracked regression and smoke coverage
+- `.github/workflows/ci.yml`: minimal Windows CI
 
-## Status criteria ✅
+## Safety notes
 
-A repository is considered safe-to-publish only when all required checks pass:
+- history rewrites are destructive for commit SHAs
+- backup bundles are mandatory before rewrite
+- leaked secrets still require rotation after cleanup
+- `--push` should only be used after a reviewed dry-run
 
-- metadata identity hygiene
-- no sensitive leak indicators
-- no tracked-but-ignored artifacts
-- policy-aligned ignore coverage
+## License
 
-## Contributing 🤝
-
-Ideas and improvements are welcome.
-
-When proposing changes:
-
-- keep checks deterministic
-- avoid project-specific hardcoding
-- prefer secure defaults
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

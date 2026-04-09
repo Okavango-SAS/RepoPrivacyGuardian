@@ -17,6 +17,11 @@ This document defines how coding agents should use Repo Privacy Guardian from CL
 4. Authorize only the remediations that were reviewed.
 5. Re-run audit until policy status is PASS.
 
+Notes:
+
+- Treat `exfil_code_indicators` as advisory/manual-review by default. Review them, but do not expect them to flip PASS/FAIL on their own.
+- Release validation should come from tracked tests only so a clean clone reproduces the same `pytest` signal.
+
 ## Recommended Commands
 
 Use one of these command styles:

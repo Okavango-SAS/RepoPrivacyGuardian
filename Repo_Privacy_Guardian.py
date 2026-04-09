@@ -46,6 +46,7 @@ GUI_DEFAULT_PUBLIC_ONLY = False
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
 GITHUB_REPO_API_URL = "https://api.github.com/repos/{owner}/{repo}"
 LITELLM_INCIDENT_ID = "litellm-2026-03"
+EXFIL_INDICATOR_MODE = "advisory"
 REDACTED_EMAIL = "<redacted-email>"
 REDACTED_SECRET = "<redacted-secret>"
 REDACTED_PATH = "<redacted-path>"
@@ -153,6 +154,11 @@ EMAIL_LOW_CONFIDENCE_FILE_RE = re.compile(
 EMAIL_LOW_CONFIDENCE_SNIPPET_RE = re.compile(
     r"\b(mock|fixture|dummy|sample|placeholder|test|assert|expect|pytest|unittest)\b|"
     r"vi\.spyon|mockresolvedvalue|auth\.login\(|next_public_support_email",
+    re.IGNORECASE,
+)
+POLICY_MINIMUM_BASELINE_RE = re.compile(r"^(minimum baseline|minimo recomendado)\b", re.IGNORECASE)
+POLICY_MINIMUM_BASELINE_END_RE = re.compile(
+    r"^(check currently ignored sensitive paths|comprobar ignored)\b",
     re.IGNORECASE,
 )
 
@@ -345,8 +351,10 @@ class RepoReport:
         )
         low_confidence_emails = self.tracked_email_low_confidence + self.history_email_low_confidence
         low_confidence_blocking = self.low_confidence_email_mode == "blocking"
+        worktree_dirty = len((self.clean_status or "").splitlines()) > 1
 
         checks = [
+            (worktree_dirty, "working tree is not clean"),
             (not self.fsck_ok, "git fsck failed"),
             (bool(owned_unexpected), "unexpected commit metadata emails in owned repository"),
             (bool(self.tracked_secret_matches), "secret-like patterns in tracked files"),
@@ -369,6 +377,7 @@ class RepoReport:
                 bool(self.litellm_incident_severity in {"CRITICAL", "HIGH"}),
                 "LiteLLM supply-chain incident indicators detected",
             ),
+            (bool(self.fix_errors), "fix execution errors occurred"),
         ]
         self.failures = [reason for bad, reason in checks if bad]
         self.status = "FAIL" if self.failures else "PASS"
@@ -467,10 +476,10 @@ class RepoPublicationGuard:  # pragma: no cover
         extracted: list[str] = []
         for line in raw.splitlines():
             stripped = line.strip()
-            if stripped.lower().startswith("minimo recomendado"):
+            if POLICY_MINIMUM_BASELINE_RE.match(stripped):
                 in_block = True
                 continue
-            if in_block and stripped.startswith("Comprobar ignored"):
+            if in_block and POLICY_MINIMUM_BASELINE_END_RE.match(stripped):
                 break
             if in_block and stripped.startswith("- "):
                 candidate = stripped[2:].strip()
@@ -699,9 +708,14 @@ class RepoPublicationGuard:  # pragma: no cover
             errors="replace",
         )
         matches: list[str] = []
+        current_file: str | None = None
         try:
             assert proc.stdout is not None
             for idx, line in enumerate(proc.stdout, start=1):
+                if line.startswith("diff --git "):
+                    match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
+                    current_file = match.group(2) if match else None
+                    continue
                 emails = [
                     email
                     for email in EMAIL_RE.findall(line)
@@ -710,7 +724,8 @@ class RepoPublicationGuard:  # pragma: no cover
                 leaked = [email for email in emails if not self._is_allowed_email(email)]
                 if leaked:
                     uniq = ", ".join(sorted(set(leaked)))
-                    matches.append(f"L{idx}:{uniq}:{line.strip()[:200]}")
+                    rel_path = current_file or "-"
+                    matches.append(f"L{idx}:{rel_path}:{uniq}:{line.strip()[:200]}")
                     if len(matches) >= self.max_matches:
                         self._terminate_process_if_running(proc)
                         break
@@ -881,6 +896,18 @@ class RepoPublicationGuard:  # pragma: no cover
         emails = sorted({value for value in candidates if SIMPLE_EMAIL_RE.match(value)})
         return emails
 
+    def _resolve_upstream_head(self, repo: Path) -> str | None:
+        upstream = self._git(
+            repo,
+            "rev-parse",
+            "--abbrev-ref",
+            "--symbolic-full-name",
+            "@{upstream}",
+        )
+        if upstream.returncode != 0 or not upstream.stdout.strip():
+            return None
+        return self._git(repo, "rev-parse", "--short", "@{upstream}").stdout.strip() or None
+
     def _is_allowed_email(self, email: str) -> bool:
         if not email:
             return True
@@ -902,7 +929,7 @@ class RepoPublicationGuard:  # pragma: no cover
         report.upstream_url = self._git(repo, "remote", "get-url", "upstream").stdout.strip() or None
         report.branch = self._git(repo, "branch", "--show-current").stdout.strip() or None
         report.head = self._git(repo, "rev-parse", "--short", "HEAD").stdout.strip() or None
-        report.origin_head = self._git(repo, "rev-parse", "--short", "origin/main").stdout.strip() or None
+        report.origin_head = self._resolve_upstream_head(repo)
         report.clean_status = self._git(repo, "status", "--short", "--branch").stdout.strip()
 
         fsck = self._git(repo, "fsck", "--full")
@@ -1386,7 +1413,7 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"path: {report.path}")
     logger(f"origin: {report.origin_url or '-'}")
     logger(f"upstream: {report.upstream_url or '-'}")
-    logger(f"branch/head/origin_main: {report.branch or '-'} / {report.head or '-'} / {report.origin_head or '-'}")
+    logger(f"branch/head/upstream_head: {report.branch or '-'} / {report.head or '-'} / {report.origin_head or '-'}")
     logger(f"status: {report.status}")
     if report.failures:
         logger("failures:")
@@ -1423,6 +1450,7 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"tracked_but_ignored: {len(report.tracked_but_ignored)}")
     logger(f"gitignore_missing_patterns: {len(report.gitignore_missing_patterns)}")
     logger(f"exfil_code_indicators: {len(report.exfil_code_indicators)}")
+    logger(f"exfil_indicator_mode: {EXFIL_INDICATOR_MODE}")
     logger(f"litellm_incident_severity: {report.litellm_incident_severity}")
     logger(f"litellm_reference_hits: {len(report.litellm_reference_hits)}")
     logger(f"litellm_compromised_reference_hits: {len(report.litellm_compromised_reference_hits)}")
@@ -1436,6 +1464,10 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     if report.litellm_ioc_hits:
         logger("litellm_ioc_samples:")
         for item in report.litellm_ioc_hits[:8]:
+            logger(f"  - {item}")
+    if report.exfil_code_indicators:
+        logger("exfil_code_indicator_samples:")
+        for item in report.exfil_code_indicators[:8]:
             logger(f"  - {item}")
 
     detected_preview = build_detected_findings_preview(report)
@@ -1621,6 +1653,9 @@ def extract_email_match_context(match_line: str) -> tuple[str | None, str]:
         return None, ""
 
     if match_line.startswith("L"):
+        parts = match_line.split(":", 3)
+        if len(parts) == 4:
+            return parts[1] if parts[1] != "-" else None, parts[3]
         parts = match_line.split(":", 2)
         snippet = parts[2] if len(parts) == 3 else match_line
         return None, snippet
@@ -1702,6 +1737,8 @@ def split_unexpected_emails_by_origin_ownership(
     }
     origin_owner = parse_github_remote_owner(origin_url or "")
 
+    if not origin_url or not origin_owner or not normalized_owners:
+        return list(unexpected_emails), []
     if origin_owner and origin_owner.lower() in normalized_owners:
         return list(unexpected_emails), []
     return [], list(unexpected_emails)
@@ -1839,6 +1876,15 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
     owned_unexpected, _third_party_unexpected, high_conf, low_conf = email_decision_context(report)
     low_blocking = report.low_confidence_email_mode == "blocking"
     litellm_severity = classify_litellm_incident_severity(report)
+    worktree_dirty = len((report.clean_status or "").splitlines()) > 1
+
+    if report.fix_errors:
+        return (
+            "IMMEDIATE",
+            "Requested remediation did not complete successfully.",
+            "Possible consequence: repository state may be only partially remediated, or push/rewrite steps may have failed.",
+            "Suggestion: review fix_errors, verify repository state manually, and re-run audit/fix after resolving the underlying issue.",
+        )
 
     if litellm_severity in {"CRITICAL", "HIGH"}:
         return (
@@ -1854,6 +1900,14 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
             "Medium supply-chain risk: LiteLLM references were detected without direct compromise evidence.",
             "Possible consequence: potential exposure if vulnerable versions were installed temporarily in local or CI environments.",
             "Suggestion: verify resolved versions in lockfiles/environments and run targeted incident checks for IoCs.",
+        )
+
+    if worktree_dirty:
+        return (
+            "PRIORITY",
+            "Medium risk: working tree is not clean.",
+            "Possible consequence: publication decisions may be made against uncommitted or unpublished content.",
+            "Suggestion: commit, stash, or discard local changes before relying on audit/fix results.",
         )
 
     has_secret_risk = bool(
@@ -1890,6 +1944,14 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
             "Suggestion: review samples and authorize path-focused cleanup if repository will be public.",
         )
 
+    if report.exfil_code_indicators:
+        return (
+            "REVIEW",
+            "Advisory review: outbound/exfil indicators were detected.",
+            "Possible consequence: unexpected outbound behavior could disclose repository data or operator context if published unchecked.",
+            "Suggestion: review each cited network-capable code path manually. This signal does not change PASS/FAIL by default.",
+        )
+
     if email_status == "REVIEW":
         return (
             "REVIEW",
@@ -1914,7 +1976,14 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     )
     low_confidence_blocking = report.low_confidence_email_mode == "blocking"
     litellm_severity = classify_litellm_incident_severity(report)
+    worktree_dirty = len((report.clean_status or "").splitlines()) > 1
 
+    if report.fix_errors:
+        score = max(score, 80)
+        highlights.append("Remediation execution failed")
+    if worktree_dirty:
+        score = max(score, 55)
+        highlights.append("Working tree contains uncommitted changes")
     if litellm_severity == "CRITICAL":
         score = max(score, 100)
         highlights.append("LiteLLM incident critical indicators detected (IoC or 1.82.8 evidence)")
@@ -1956,6 +2025,9 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     if report.gitignore_missing_patterns:
         score = max(score, 40)
         highlights.append("Required .gitignore baseline is incomplete")
+    if report.exfil_code_indicators:
+        score = max(score, 20)
+        highlights.append("Outbound/exfil heuristics require manual review (advisory)")
 
     if score >= 90:
         return "HIGH", score, highlights
@@ -2003,6 +2075,7 @@ def build_detected_findings_preview(report: RepoReport) -> list[str]:
     add("tracked but ignored", report.tracked_but_ignored)
     add("history sensitive add", report.history_sensitive_added)
     add("history sensitive delete", report.history_sensitive_deleted)
+    add("exfil advisory", report.exfil_code_indicators)
     add("litellm reference", report.litellm_reference_hits)
     add("litellm compromised", report.litellm_compromised_reference_hits)
     add("litellm ioc", report.litellm_ioc_hits)
@@ -2212,6 +2285,7 @@ def render_html_report(
             f"<td class=\"num\">{len(rep.tracked_secret_matches) + len(rep.history_secret_matches)}</td>"
             f"<td class=\"num\">{len(rep.secret_file_candidates)}</td>"
             f"<td class=\"num\">{len(owned_unexpected)}</td>"
+            f"<td class=\"num\">{len(rep.exfil_code_indicators)}</td>"
             f"<td class=\"num\">{len(rep.litellm_ioc_hits)}</td>"
             f"<td class=\"num\">{len(rep.gitignore_missing_patterns)}</td>"
             "</tr>"
@@ -2254,6 +2328,7 @@ def render_html_report(
             f"<tr><td>history_sensitive_deleted</td><td class=\"num\">{len(rep.history_sensitive_deleted)}</td></tr>"
             f"<tr><td>tracked_but_ignored</td><td class=\"num\">{len(rep.tracked_but_ignored)}</td></tr>"
             f"<tr><td>gitignore_missing_patterns</td><td class=\"num\">{len(rep.gitignore_missing_patterns)}</td></tr>"
+            f"<tr><td>exfil_code_indicators</td><td class=\"num\">{len(rep.exfil_code_indicators)}</td></tr>"
             f"<tr><td>litellm_incident_severity</td><td>{esc(classify_litellm_incident_severity(rep))}</td></tr>"
             f"<tr><td>litellm_reference_hits</td><td class=\"num\">{len(rep.litellm_reference_hits)}</td></tr>"
             f"<tr><td>litellm_compromised_reference_hits</td><td class=\"num\">{len(rep.litellm_compromised_reference_hits)}</td></tr>"
@@ -2315,8 +2390,16 @@ def render_html_report(
             "<section><h5>Unexpected commit emails (third-party repositories)</h5>"
             f"{render_lines(third_party_unexpected)}"
             "</section>"
+            "<section><h5>Exfil indicators (advisory sample)</h5>"
+            f"{render_lines(rep.exfil_code_indicators)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
             "<section><h5>Path leaks in history (sample)</h5>"
             f"{render_lines(rep.history_path_matches)}"
+            "</section>"
+            "<section><h5>Path leaks in tracked files (sample)</h5>"
+            f"{render_lines(rep.tracked_path_matches)}"
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
@@ -2520,7 +2603,8 @@ def render_html_report(
             <th class=\"num\">Secret matches</th>
             <th class=\"num\">Secret file candidates</th>
             <th class=\"num\">Unexpected emails (owned repo)</th>
-                        <th class=\"num\">LiteLLM IoCs</th>
+            <th class=\"num\">Exfil indicators</th>
+            <th class=\"num\">LiteLLM IoCs</th>
             <th class=\"num\">Missing .gitignore rules</th>
           </tr>
           {repo_rows}
@@ -2617,6 +2701,7 @@ def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, s
         "confirm_each_repo_fix": str(config.confirm_each_repo_fix),
         "allow_non_owner_push": str(config.allow_non_owner_push),
         "allowed_remote_owners": ",".join(config.allowed_remote_owners),
+        "exfil_indicator_mode": EXFIL_INDICATOR_MODE,
         "results_dir": str(results_dir),
         "report_json": str(config.report_json or ""),
     }
@@ -2707,6 +2792,7 @@ def execute_guard_pipeline(
                         report.backups_created = fixed.backups_created
                         report.fix_actions = fixed.fix_actions
                         report.fix_errors = fixed.fix_errors
+                        report.finalize()
                     else:
                         report.fix_actions.append("fix skipped by per-repository confirmation gate")
 
@@ -3768,7 +3854,7 @@ class GuiApp:  # pragma: no cover
         self._push_checkbox.grid(row=4, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
-            "Publica el historial reescrito en origin/main con --force-with-lease.",
+            "Publica el historial reescrito en origin/<branch> con --force-with-lease.",
         ).grid(row=4, column=1, sticky="e", padx=(0, 12), pady=4)
 
         self._allow_non_owner_push_checkbox = ctk.CTkCheckBox(
@@ -4706,7 +4792,10 @@ class GuiApp:  # pragma: no cover
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Audit/fix repository public-release safety based on docs/POLICY.md",
+        description=(
+            "Audit/fix repository public-release safety based on docs/POLICY.md. "
+            "Outbound/exfil indicators remain advisory/manual-review by default."
+        ),
     )
     parser.add_argument("--root", default=str(DEFAULT_ROOT), help="Root folder containing repositories")
     parser.add_argument("--policy", default=str(DEFAULT_POLICY), help="Policy markdown path")
@@ -4885,7 +4974,3 @@ def main() -> int:  # pragma: no cover
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
-
-
-
-

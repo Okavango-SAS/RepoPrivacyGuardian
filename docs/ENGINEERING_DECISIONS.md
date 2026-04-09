@@ -105,8 +105,28 @@ This file captures key design decisions and their rationale.
 - GUI still depends on Tkinter widgets and thread scheduling; functional behavior is aligned but direct widget-level tests remain out of scope.
 - Keep parity tests mandatory on every change touching parser flags or execution flow.
 
+## DEC-008 - Exfil indicators stay advisory by default
+
+- Status: accepted
+- Decision: `exfil_code_indicators` remains a manual-review advisory signal by default.
+- Rationale: outbound/exfil heuristics intentionally cast a wide net (`requests`, `urllib`, telemetry/webhook keywords, literal URLs). They are useful to raise operator attention but too broad to change PASS/FAIL safely without stricter semantics and narrower signal quality.
+- Implementation notes:
+  - report guidance and severity highlights must mention the advisory/manual-review contract;
+  - JSON, HTML, CLI and GUI views must surface the signal consistently;
+  - a future strict mode can promote the signal, but the default release contract does not.
+
+## DEC-009 - Pytest release signal must come only from tracked tests
+
+- Status: accepted
+- Decision: release validation must be reproducible from a clean clone, and `pytest` collection must ignore local-only/untracked test files.
+- Rationale: local ignored tests can make the workspace look healthier than `HEAD`, which breaks release trust and CI parity.
+- Implementation notes:
+  - meaningful coverage must live under tracked `tests/`;
+  - collection should not depend on editor scratch tests or ignored local files;
+  - minimal CI must execute the same tracked suite from a clean checkout.
+
 ## Future candidates
 
-- DEC-008: scoped allowlists to reduce false positives.
-- DEC-009: optional HTML report renderer.
-- DEC-010: policy profiles by organization.
+- DEC-010: scoped allowlists to reduce false positives.
+- DEC-011: optional HTML report renderer.
+- DEC-012: policy profiles by organization.

@@ -1,0 +1,1548 @@
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from pathlib import Path
+
+import pytest
+
+import Repo_Privacy_Guardian as rpg
+
+
+def _make_report(name: str) -> rpg.RepoReport:
+    report = rpg.RepoReport(name=name, path=f"C:/repos/{name}")
+    report.origin_url = f"https://github.com/example/{name}.git"
+    report.upstream_url = "-"
+    report.branch = "main"
+    report.head = "abc1234"
+    report.origin_head = "abc1234"
+    report.clean_status = "## main...origin/main"
+    return report
+
+
+def _make_run_config(**overrides) -> rpg.GuardRunConfig:
+    base = {
+        "mode": "cli",
+        "root": Path("C:/repos"),
+        "policy": Path("C:/repos/docs/POLICY.md"),
+        "repos": ["repo-a"],
+        "public_only": False,
+        "fix": False,
+        "push": False,
+        "dry_run": False,
+        "redact_third_party_emails": False,
+        "purge_detected_secret_files": False,
+        "purge_all_detected_secret_files": False,
+        "rewrite_personal_paths": False,
+        "low_confidence_email_mode": "informational",
+        "owner_name": "Owner",
+        "owner_emails": [],
+        "noreply_email": rpg.DEFAULT_NOREPLY,
+        "placeholder_email": rpg.DEFAULT_PLACEHOLDER,
+        "max_matches": 50,
+        "open_report": True,
+        "confirm_each_repo_fix": True,
+        "allow_non_owner_push": False,
+        "allowed_remote_owners": [],
+        "report_json": None,
+    }
+    base.update(overrides)
+    return rpg.GuardRunConfig(**base)
+
+
+def test_run_logger_writes_file_and_calls_sink(tmp_path: Path) -> None:
+    seen: list[str] = []
+    logger = rpg.RunLogger(tmp_path / "run.log", sink=seen.append)
+
+    logger("line one")
+    logger("line two")
+
+    contents = (tmp_path / "run.log").read_text(encoding="utf-8")
+    assert "line one" in contents
+    assert "line two" in contents
+    assert seen == ["line one", "line two"]
+
+
+def test_run_logger_without_sink(tmp_path: Path) -> None:
+    logger = rpg.RunLogger(tmp_path / "run.log")
+    logger("no sink")
+    assert "no sink" in (tmp_path / "run.log").read_text(encoding="utf-8")
+
+
+def test_run_logger_redacts_sensitive_content(tmp_path: Path) -> None:
+    seen: list[str] = []
+    logger = rpg.RunLogger(tmp_path / "run.log", sink=seen.append)
+
+    logger(
+        "token redacted-fixture-token-not-real "
+        "email dev@example.com "
+        "path <redacted-path> "
+        "json_path C:\\\\Users\\\\alice\\\\repo"
+    )
+
+    content = (tmp_path / "run.log").read_text(encoding="utf-8")
+    assert rpg.REDACTED_SECRET in content
+    assert rpg.REDACTED_EMAIL in content
+    assert "C:\\Users\\<redacted>" in content
+    assert "C:\\\\Users\\\\<redacted>" in content
+    assert "dev@example.com" not in content
+    assert "alice" not in content
+    assert all("dev@example.com" not in item for item in seen)
+
+
+def test_repo_report_finalize_builds_failures() -> None:
+    report = _make_report("repo-a")
+    report.unexpected_emails = ["private@example.com"]
+    report.tracked_secret_matches = ["secret.txt:1:AKIA..."]
+
+    report.finalize()
+
+    assert report.status == "FAIL"
+    assert "unexpected commit metadata emails in owned repository" in report.failures
+    assert "secret-like patterns in tracked files" in report.failures
+
+
+def test_repo_report_finalize_with_low_confidence_blocking() -> None:
+    report = _make_report("repo-blocking")
+    report.low_confidence_email_mode = "blocking"
+    report.tracked_email_low_confidence = ["tests/a.py:1:redacted-contributor@example.invalid:assert foo"]
+
+    report.finalize()
+    sev, _, highlights = rpg.classify_repo_severity(report)
+
+    assert report.status == "FAIL"
+    assert sev == "MEDIUM"
+    assert "low-confidence email matches configured as blocking" in report.failures
+    assert "Low-confidence email findings are configured as blocking" in highlights
+
+
+def test_classify_repo_severity_informational_low_confidence_highlight() -> None:
+    report = _make_report("repo-info")
+    report.low_confidence_email_mode = "informational"
+    report.email_confidence_evaluated = True
+    report.history_email_low_confidence = ["L1:redacted-contributor@example.invalid:+ assert foo('redacted-contributor@example.invalid')"]
+    report.email_ownership_evaluated = True
+    report.unexpected_emails_third_party_repo = ["third@example.com"]
+    report.finalize()
+
+    sev, _, highlights = rpg.classify_repo_severity(report)
+
+    assert sev == "OK"
+    assert "Low-confidence email findings are informational" in highlights
+    assert "Unexpected commit metadata emails in third-party repositories (informational)" in highlights
+
+
+def test_repo_report_finalize_pass_state() -> None:
+    report = _make_report("repo-pass")
+    report.finalize()
+    assert report.status == "PASS"
+    assert report.failures == []
+
+
+def test_create_run_artifacts_handles_collision(tmp_path: Path, monkeypatch) -> None:
+    class FixedDateTime:
+        @classmethod
+        def now(cls) -> datetime:
+            return datetime(2026, 4, 7, 12, 0, 0)
+
+    monkeypatch.setattr(rpg, "datetime", FixedDateTime)
+
+    base = tmp_path / "Audit_Results"
+    base.mkdir()
+    (base / "20260407-120000").mkdir()
+
+    artifacts = rpg.create_run_artifacts(base)
+
+    assert artifacts.run_dir.name == "20260407-120000-01"
+    assert artifacts.json_path.name == "report.json"
+    assert artifacts.log_path.name == "run.log"
+    assert artifacts.html_path.name == "report.html"
+
+
+def test_enforce_results_dir_variants(tmp_path: Path) -> None:
+    resolved, forced = rpg.enforce_results_dir(None)
+    assert resolved == rpg.DEFAULT_RESULTS_DIR.resolve()
+    assert forced is False
+
+    resolved, forced = rpg.enforce_results_dir(rpg.DEFAULT_RESULTS_DIR)
+    assert resolved == rpg.DEFAULT_RESULTS_DIR.resolve()
+    assert forced is False
+
+    inside = rpg.DEFAULT_RESULTS_DIR / "nested"
+    resolved, forced = rpg.enforce_results_dir(inside)
+    assert resolved == inside.resolve()
+    assert forced is False
+
+    outside = tmp_path / "outside"
+    resolved, forced = rpg.enforce_results_dir(outside)
+    assert resolved == rpg.DEFAULT_RESULTS_DIR.resolve()
+    assert forced is True
+
+
+def test_resolve_optional_json_export_path_variants(tmp_path: Path) -> None:
+    assert rpg.resolve_optional_json_export_path(None, "report.json") is None
+
+    as_dir = tmp_path / "as_dir"
+    path = rpg.resolve_optional_json_export_path(str(as_dir) + "/", "report.json")
+    assert path == as_dir / "report.json"
+
+    as_folder_name = tmp_path / "folder_name"
+    path = rpg.resolve_optional_json_export_path(str(as_folder_name), "report.json")
+    assert path == as_folder_name / "report.json"
+
+    as_file = tmp_path / "custom" / "report.json"
+    path = rpg.resolve_optional_json_export_path(str(as_file), "ignored.json")
+    assert path == as_file
+
+
+def test_identity_and_remote_owner_helpers() -> None:
+    assert rpg.infer_github_username_from_noreply("12345+octocat@users.noreply.github.com") == "octocat"
+    assert rpg.infer_github_username_from_noreply("noreply@github.com") is None
+
+    assert rpg.parse_github_remote_owner("") is None
+    assert rpg.parse_github_remote_owner("https://github.com/example/repo.git") == "example"
+    assert rpg.parse_github_remote_owner("redacted-contributor@example.invalid:example/repo.git") == "example"
+    assert rpg.parse_github_remote_owner("https://gitlab.com/example/repo.git") is None
+
+
+def test_parse_github_remote_slug_helper() -> None:
+    assert rpg.parse_github_remote_slug("https://github.com/example/repo.git") == ("example", "repo")
+    assert rpg.parse_github_remote_slug("git@github.com:example/repo.git") == ("example", "repo")
+    assert rpg.parse_github_remote_slug("https://gitlab.com/example/repo.git") is None
+
+
+def test_discover_repositories_public_only_filters_private_and_non_github(tmp_path: Path, monkeypatch) -> None:
+    public_repo = tmp_path / "repo-a-public"
+    private_repo = tmp_path / "repo-b-private"
+    non_gh_repo = tmp_path / "repo-c-non-github"
+    for repo in (public_repo, private_repo, non_gh_repo):
+        (repo / ".git").mkdir(parents=True)
+
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    guard.root = tmp_path
+    guard.log = lambda _msg: None
+
+    origin_map = {
+        public_repo.name: "https://github.com/example/public-repo.git",
+        private_repo.name: "https://github.com/example/private-repo.git",
+        non_gh_repo.name: "https://gitlab.com/example/other-repo.git",
+    }
+
+    def fake_git(repo: Path, *args: str) -> rpg.CommandResult:
+        assert args == ("remote", "get-url", "origin")
+        return rpg.CommandResult(0, origin_map[repo.name], "")
+
+    guard._git = fake_git
+
+    visibility_map = {
+        "https://github.com/example/public-repo.git": (True, "public"),
+        "https://github.com/example/private-repo.git": (False, "private"),
+        "https://gitlab.com/example/other-repo.git": (None, "not_github"),
+    }
+    monkeypatch.setattr(rpg, "is_public_github_remote", lambda remote: visibility_map[remote])
+
+    discovered = guard.discover_repositories(repo_filters=None, public_only=True)
+    assert [repo.name for repo in discovered] == ["repo-a-public"]
+
+
+def test_is_relevant_email_candidate_filters_noise_domains() -> None:
+    assert rpg.is_relevant_email_candidate("") is False
+    assert rpg.is_relevant_email_candidate("not-an-email") is False
+    assert rpg.is_relevant_email_candidate("@corp.com") is False
+    assert rpg.is_relevant_email_candidate("user@") is False
+    assert rpg.is_relevant_email_candidate("user@localhost") is False
+    assert rpg.is_relevant_email_candidate("user@intranet") is False
+    assert rpg.is_relevant_email_candidate("user@example.com") is False
+    assert rpg.is_relevant_email_candidate("user@corp.local") is False
+    assert rpg.is_relevant_email_candidate("user@corp.invalid") is False
+    assert rpg.is_relevant_email_candidate("user@corp.example") is False
+    assert rpg.is_relevant_email_candidate("user@10.0.0.1") is False
+    assert rpg.is_relevant_email_candidate("user@corp.c") is False
+    assert rpg.is_relevant_email_candidate("user@corp.c0") is False
+    assert rpg.is_relevant_email_candidate("redacted-contributor@example.invalid") is True
+
+
+def test_email_match_confidence_helpers_and_ownership_split() -> None:
+    tracked = [
+        "tests/auth/test_login.py:12:redacted-contributor@example.invalid:assert login('redacted-contributor@example.invalid')",
+        "src/auth/service.py:22:redacted-contributor@example.invalid:admin_email = 'redacted-contributor@example.invalid'",
+    ]
+    history = [
+        "L22:redacted-contributor@example.invalid:+ expect(user.email).toBe('redacted-contributor@example.invalid')",
+        "L48:redacted-contributor@example.invalid:+ SUPPORT_EMAIL = 'redacted-contributor@example.invalid'",
+    ]
+
+    tracked_high, tracked_low = rpg.split_email_matches_by_confidence(tracked)
+    history_high, history_low = rpg.split_email_matches_by_confidence(history)
+
+    assert tracked_high == [tracked[1]]
+    assert tracked_low == [tracked[0]]
+    assert history_high == [history[1]]
+    assert history_low == [history[0]]
+
+    owned, third_party = rpg.split_unexpected_emails_by_origin_ownership(
+        ["redacted-contributor@example.invalid"],
+        "https://github.com/example/repo.git",
+        {"example"},
+    )
+    assert owned == ["redacted-contributor@example.invalid"]
+    assert third_party == []
+
+    owned, third_party = rpg.split_unexpected_emails_by_origin_ownership(
+        ["redacted-contributor@example.invalid"],
+        "https://github.com/other/repo.git",
+        {"example"},
+    )
+    assert owned == []
+    assert third_party == ["redacted-contributor@example.invalid"]
+
+
+def test_email_match_context_edge_cases_and_empty_ownership_split() -> None:
+    assert rpg.extract_email_match_context("") == (None, "")
+    assert rpg.extract_email_match_context("src/module.py:12") == ("src/module.py", "12")
+    assert rpg.extract_email_match_context("no-colon") == (None, "no-colon")
+
+    assert rpg.is_low_confidence_email_context("README.md", "contact") is True
+    assert rpg.is_low_confidence_email_context(None, "assert user.email") is True
+    assert rpg.is_low_confidence_email_context("src/service.py", "prod_email = 'redacted-contributor@example.invalid'") is False
+
+    owned, third_party = rpg.split_unexpected_emails_by_origin_ownership([], None, {"example"})
+    assert owned == []
+    assert third_party == []
+
+
+def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
+    sample = (
+        "token redacted-fixture-token-not-real "
+        "email dev@example.com "
+        "path <redacted-path> "
+        "json_path C:\\\\Users\\\\alice\\\\Documents\\\\repo "
+        "profile AppData\\Roaming\\Code "
+        "json_profile AppData\\\\Roaming\\\\Code "
+        "unix <redacted-path> <redacted-path>"
+    )
+    redacted = rpg.redact_sensitive_text(sample)
+
+    assert rpg.REDACTED_SECRET in redacted
+    assert rpg.REDACTED_EMAIL in redacted
+    assert "C:\\Users\\<redacted>" in redacted
+    assert "C:\\\\Users\\\\<redacted>" in redacted
+    assert "AppData\\<redacted>" in redacted
+    assert "AppData\\\\<redacted>" in redacted
+    assert "/Users/<redacted>" in redacted
+    assert "/home/<redacted>" in redacted
+
+    report = _make_report("repo-a")
+    report.path = "<redacted-path>"
+    report.clean_status = "author dev@example.com"
+    report.author_emails = ["dev@example.com"]
+    report.committer_emails = ["ops@example.com"]
+    report.unexpected_emails = ["redacted-contributor@example.invalid"]
+    report.unexpected_emails_owned_repo = ["redacted-contributor@example.invalid"]
+    report.unexpected_emails_third_party_repo = ["redacted-contributor@example.invalid"]
+    report.tracked_secret_matches = ["secret.txt:1:redacted-fixture-token-not-real"]
+    report.tracked_path_matches = ["file.txt:1:<redacted-path>"]
+    report.tracked_email_matches = ["file.txt:2:dev@example.com"]
+    report.tracked_email_high_confidence = ["src/main.py:2:dev@example.com"]
+    report.tracked_email_low_confidence = ["tests/test_main.py:2:dev@example.com"]
+    report.history_email_matches = ["L1:dev@example.com:+ email = 'dev@example.com'"]
+    report.history_email_high_confidence = ["L1:dev@example.com:+ email = 'dev@example.com'"]
+    report.history_email_low_confidence = ["L2:dev@example.com:+ assert foo('dev@example.com')"]
+    report.fix_actions = ["replace dev@example.com"]
+    payload = rpg.sanitize_report_for_export(report)
+
+    assert payload["path"] == "C:/Users/<redacted>/repo-a"
+    assert payload["author_emails"] == [rpg.REDACTED_EMAIL]
+    assert payload["committer_emails"] == [rpg.REDACTED_EMAIL]
+    assert payload["unexpected_emails"] == [rpg.REDACTED_EMAIL]
+    assert payload["unexpected_emails_owned_repo"] == [rpg.REDACTED_EMAIL]
+    assert payload["unexpected_emails_third_party_repo"] == [rpg.REDACTED_EMAIL]
+    assert rpg.REDACTED_SECRET in payload["tracked_secret_matches"][0]
+    assert rpg.REDACTED_EMAIL in payload["tracked_email_matches"][0]
+    assert rpg.REDACTED_EMAIL in payload["tracked_email_high_confidence"][0]
+    assert rpg.REDACTED_EMAIL in payload["tracked_email_low_confidence"][0]
+    assert rpg.REDACTED_EMAIL in payload["history_email_high_confidence"][0]
+    assert rpg.REDACTED_EMAIL in payload["history_email_low_confidence"][0]
+    assert rpg.REDACTED_EMAIL in payload["fix_actions"][0]
+
+
+def test_extract_personal_path_literals_filters_regex_scaffolding() -> None:
+    regex_snippet = (
+        'PERSONAL_PATH_RE = re.compile(r"C:\\\\Users\\\\|/Users/|/home/|AppData\\\\|Documents\\\\")'
+    )
+    assert rpg.extract_personal_path_literals(regex_snippet) == []
+
+    concrete = (
+        "AGENTS.MD:24:- <redacted-path>"
+    )
+    assert rpg.extract_personal_path_literals(concrete) == [
+        "<redacted-path>"
+    ]
+
+    escaped = 'path="C:\\\\Users\\\\alice\\\\AppData\\\\Roaming\\\\Code"'
+    assert rpg.extract_personal_path_literals(escaped) == [
+        "C:\\\\Users\\\\alice\\\\AppData\\\\Roaming\\\\Code"
+    ]
+
+
+def test_build_fix_preflight_summary_branches() -> None:
+    assert rpg.build_fix_preflight_summary(_make_run_config(fix=False), [Path("C:/repos/repo-a")]) == []
+
+    config_no_allowlist = _make_run_config(fix=True, push=True, allow_non_owner_push=False)
+    lines_no_allowlist = rpg.build_fix_preflight_summary(config_no_allowlist, [Path("C:/repos/repo-a")])
+    assert any("push owner check active" in line for line in lines_no_allowlist)
+    assert any("low-confidence email mode: informational" in line for line in lines_no_allowlist)
+
+    config_with_allowlist = _make_run_config(
+        fix=True,
+        push=True,
+        low_confidence_email_mode="blocking",
+        allowed_remote_owners=["example", "example", "owner"],
+    )
+    lines_with_allowlist = rpg.build_fix_preflight_summary(
+        config_with_allowlist,
+        [Path("C:/repos/repo-a")],
+    )
+    assert any("allowed remote owners: example, owner" in line for line in lines_with_allowlist)
+    assert any("low-confidence email mode: blocking" in line for line in lines_with_allowlist)
+
+
+def test_commit_if_needed_state_values(tmp_path: Path) -> None:
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    calls: list[tuple[str, ...]] = []
+
+    def fake_git(_repo: Path, *_args: str) -> rpg.CommandResult:
+        return rpg.CommandResult(0, " M file.txt\n", "")
+
+    def fake_git_checked(_repo: Path, *args: str) -> rpg.CommandResult:
+        calls.append(args)
+        return rpg.CommandResult(0, "", "")
+
+    guard._git = fake_git
+    guard._git_checked = fake_git_checked
+
+    guard.dry_run = True
+    assert guard._commit_if_needed(tmp_path, "msg") == "preview"
+    assert calls == []
+
+    guard.dry_run = False
+    assert guard._commit_if_needed(tmp_path, "msg") == "committed"
+    assert calls == [("add", "-A"), ("commit", "-m", "msg")]
+
+    guard._git = lambda _repo, *_args: rpg.CommandResult(0, "", "")
+    assert guard._commit_if_needed(tmp_path, "msg") == "none"
+
+
+def test_write_replace_text_file_includes_personal_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    guard.owner_emails = set()
+    guard.noreply_email = rpg.DEFAULT_NOREPLY
+    guard.placeholder_email = rpg.DEFAULT_PLACEHOLDER
+    guard.redact_third_party = False
+    guard.rewrite_personal_paths = True
+    guard._is_allowed_email = lambda _email: False
+
+    monkeypatch.setattr(rpg.tempfile, "mkdtemp", lambda prefix: str(tmp_path))
+
+    report = _make_report("repo-paths")
+    report.tracked_path_matches = [
+        "AGENTS.MD:24:- <redacted-path>"
+    ]
+
+    replace_file = guard._write_replace_text_file(report)
+
+    assert replace_file == tmp_path / "replace-text.txt"
+    contents = replace_file.read_text(encoding="utf-8")
+    assert (
+        "literal:<redacted-path>==>"
+        f"{rpg.REDACTED_PATH}"
+    ) in contents
+
+
+def test_write_replace_text_file_skips_personal_paths_when_disabled(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    guard.owner_emails = set()
+    guard.noreply_email = rpg.DEFAULT_NOREPLY
+    guard.placeholder_email = rpg.DEFAULT_PLACEHOLDER
+    guard.redact_third_party = False
+    guard.rewrite_personal_paths = False
+    guard._is_allowed_email = lambda _email: False
+
+    monkeypatch.setattr(rpg.tempfile, "mkdtemp", lambda prefix: str(tmp_path))
+
+    report = _make_report("repo-paths")
+    report.tracked_path_matches = [
+        "AGENTS.MD:24:- <redacted-path>"
+    ]
+
+    replace_file = guard._write_replace_text_file(report)
+
+    assert replace_file is None
+    assert any("rewrite-personal-paths" in item for item in report.fix_actions)
+
+
+def test_classify_repo_severity_all_levels() -> None:
+    high = _make_report("high")
+    high.tracked_secret_matches = ["a"]
+    high.finalize()
+    assert rpg.classify_repo_severity(high)[0] == "HIGH"
+
+    medium = _make_report("medium")
+    medium.unexpected_emails = ["private@example.com"]
+    medium.finalize()
+    assert rpg.classify_repo_severity(medium)[0] == "MEDIUM"
+
+    medium_paths = _make_report("medium-paths")
+    medium_paths.tracked_path_matches = ["README.md:1:<redacted-path>"]
+    medium_paths.tracked_but_ignored = [".env"]
+    medium_paths.finalize()
+    sev, _, highlights = rpg.classify_repo_severity(medium_paths)
+    assert sev == "MEDIUM"
+    assert "Personal/local path leakage detected" in highlights
+    assert "Ignored files are still tracked" in highlights
+
+    low = _make_report("low")
+    low.status = "FAIL"
+    low.failures = ["custom failure"]
+    sev, _, highlights = rpg.classify_repo_severity(low)
+    assert sev == "LOW"
+    assert highlights
+
+    info = _make_report("info")
+    info.email_ownership_evaluated = True
+    info.unexpected_emails_third_party_repo = ["third@example.com"]
+    info.email_confidence_evaluated = True
+    info.history_email_high_confidence = ["L10:redacted-contributor@example.invalid:+ email = 'redacted-contributor@example.invalid'"]
+    info.finalize()
+    sev, _, highlights = rpg.classify_repo_severity(info)
+    assert sev == "MEDIUM"
+    assert "High-confidence non-owner email addresses found" in highlights
+    assert any("third-party repositories" in item for item in highlights)
+
+    ok = _make_report("ok")
+    ok.finalize()
+    assert rpg.classify_repo_severity(ok)[0] == "OK"
+
+
+def test_email_remediation_decision_variants() -> None:
+    skip = _make_report("skip")
+    status, message = rpg.email_remediation_decision(skip)
+    assert status == "SKIP"
+    assert "No email remediation action" in message
+
+    review = _make_report("review")
+    review.email_ownership_evaluated = True
+    review.unexpected_emails_third_party_repo = ["third@example.com"]
+    status, message = rpg.email_remediation_decision(review)
+    assert status == "REVIEW"
+    assert "Informational email findings" in message
+
+    recommended = _make_report("recommended")
+    recommended.email_confidence_evaluated = True
+    recommended.history_email_high_confidence = ["L1:redacted-contributor@example.invalid:+ email = 'redacted-contributor@example.invalid'"]
+    status, message = rpg.email_remediation_decision(recommended)
+    assert status == "RECOMMENDED"
+    assert "Authorize email remediation" in message
+
+    blocking_only = _make_report("blocking")
+    blocking_only.low_confidence_email_mode = "blocking"
+    blocking_only.email_confidence_evaluated = True
+    blocking_only.history_email_low_confidence = ["L1:redacted-contributor@example.invalid:+ assert foo('redacted-contributor@example.invalid')"]
+    status, message = rpg.email_remediation_decision(blocking_only)
+    assert status == "RECOMMENDED"
+    assert "Blocking mode active" in message
+
+
+def test_repo_user_guidance_variants() -> None:
+    secret_risk = _make_report("secret-risk")
+    secret_risk.tracked_secret_matches = ["secret.txt:1:AKIA..."]
+    level, risk, consequence, suggestion = rpg.repo_user_guidance(secret_risk)
+    assert level == "IMMEDIATE"
+    assert "secret indicators" in risk.lower()
+    assert "credential leakage" in consequence.lower()
+    assert "authorize secret purge" in suggestion.lower()
+
+    email_risk = _make_report("email-risk")
+    email_risk.email_ownership_evaluated = True
+    email_risk.unexpected_emails_owned_repo = ["redacted-contributor@example.invalid"]
+    level, risk, consequence, suggestion = rpg.repo_user_guidance(email_risk)
+    assert level == "PRIORITY"
+    assert "non-owner emails" in risk.lower()
+    assert "identity exposure" in consequence.lower()
+    assert "authorize email remediation" in suggestion.lower()
+
+    path_risk = _make_report("path-risk")
+    path_risk.tracked_path_matches = ["README.md:1:<redacted-path>"]
+    level, risk, consequence, suggestion = rpg.repo_user_guidance(path_risk)
+    assert level == "PRIORITY"
+    assert "local/personal paths" in risk.lower()
+    assert "host/user structure disclosure" in consequence.lower()
+
+    review_only = _make_report("review-only")
+    review_only.email_confidence_evaluated = True
+    review_only.history_email_low_confidence = ["L1:redacted-contributor@example.invalid:+ assert foo('redacted-contributor@example.invalid')"]
+    level, risk, consequence, suggestion = rpg.repo_user_guidance(review_only)
+    assert level == "REVIEW"
+    assert "informational/noisy" in risk.lower()
+    assert "alert fatigue" in consequence.lower()
+
+    skip = _make_report("skip")
+    level, risk, consequence, suggestion = rpg.repo_user_guidance(skip)
+    assert level == "SKIP"
+    assert "no relevant privacy risk" in risk.lower()
+    assert "none expected" in consequence.lower()
+    assert "no remediation action required" in suggestion.lower()
+
+
+def test_render_html_report_with_high_and_samples(tmp_path: Path) -> None:
+    artifacts = rpg.create_run_artifacts(tmp_path)
+
+    high = _make_report("critical-repo")
+    high.tracked_secret_matches = [f"secret{i}" for i in range(10)]
+    high.history_secret_matches = [f"hsecret{i}" for i in range(9)]
+    high.secret_file_candidates = [f"secret/path/{i}.env" for i in range(10)]
+    high.unexpected_emails = ["private@example.com"]
+    high.history_sensitive_added = [".env"]
+    high.gitignore_missing_patterns = ["sessions/*"]
+    high.finalize()
+
+    low = _make_report("minor-repo")
+    low.gitignore_missing_patterns = [".mypy_cache/"]
+    low.finalize()
+
+    html_doc = rpg.render_html_report(
+        reports=[high, low],
+        artifacts=artifacts,
+        root_path=Path("C:/repos"),
+        policy_path=Path("C:/repos/RepoPrivacyGuardian/docs/POLICY.md"),
+        run_settings={"mode": "cli", "dry_run": "False"},
+        finished_at=datetime(2026, 4, 7, 12, 5, 0),
+    )
+
+    assert "Repository Privacy Audit Report" in html_doc
+    assert "High severity focus" in html_doc
+    assert "critical-repo" in html_doc
+    assert "Showing 8 of" in html_doc
+    assert "sev-high" in html_doc
+    assert "Failure reason frequency" in html_doc
+    assert "Unexpected emails (owned repo)" in html_doc
+    assert "User guidance" in html_doc
+    assert "Possible consequence:" in html_doc
+
+
+def test_render_html_report_with_no_failures(tmp_path: Path) -> None:
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    passed = _make_report("clean-repo")
+    passed.finalize()
+
+    html_doc = rpg.render_html_report(
+        reports=[passed],
+        artifacts=artifacts,
+        root_path=Path("C:/repos"),
+        policy_path=Path("C:/repos/RepoPrivacyGuardian/docs/POLICY.md"),
+        run_settings={"mode": "cli"},
+        finished_at=datetime(2026, 4, 7, 12, 1, 0),
+    )
+
+    assert "No HIGH severity repositories in this run." in html_doc
+    assert "No failure reasons recorded." in html_doc
+
+
+def test_persist_run_outputs_writes_json_log_html_and_optional_export(tmp_path: Path) -> None:
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    logger = rpg.RunLogger(artifacts.log_path)
+
+    report = _make_report("demo")
+    report.gitignore_missing_patterns = ["sessions/*"]
+    report.finalize()
+
+    extra_dir = tmp_path / "extra_json"
+    rpg.persist_run_outputs(
+        reports=[report],
+        artifacts=artifacts,
+        root_path=Path("C:/repos"),
+        policy_path=Path("C:/repos/RepoPrivacyGuardian/docs/POLICY.md"),
+        run_settings={"mode": "cli", "fix": "False"},
+        logger=logger,
+        optional_json_export=str(extra_dir),
+    )
+
+    assert artifacts.json_path.exists()
+    assert artifacts.log_path.exists()
+    assert artifacts.html_path.exists()
+
+    data = json.loads(artifacts.json_path.read_text(encoding="utf-8"))
+    assert data[0]["name"] == "demo"
+
+    html_doc = artifacts.html_path.read_text(encoding="utf-8")
+    assert "Repository details" in html_doc
+    assert "demo" in html_doc
+
+    extra_export = extra_dir / artifacts.json_path.name
+    assert extra_export.exists()
+
+
+def test_make_parser_defaults_and_flags() -> None:
+    parser = rpg.make_parser()
+    args = parser.parse_args([])
+
+    assert Path(args.policy) == rpg.DEFAULT_POLICY
+    assert Path(args.report_dir) == rpg.DEFAULT_RESULTS_DIR
+    assert args.fix is False
+    assert args.rewrite_personal_paths is False
+    assert args.public_only == rpg.GUI_DEFAULT_PUBLIC_ONLY
+    assert args.low_confidence_email_mode == "informational"
+
+    args = parser.parse_args(["--fix", "--purge-all-detected-secret-files"])
+    assert args.fix is True
+    assert args.purge_all_detected_secret_files is True
+
+    args = parser.parse_args(["--rewrite-personal-paths"])
+    assert args.rewrite_personal_paths is True
+
+    args = parser.parse_args(["--low-confidence-email-mode", "blocking"])
+    assert args.low_confidence_email_mode == "blocking"
+
+
+def test_make_parser_rejects_non_positive_max_matches() -> None:
+    parser = rpg.make_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--max-matches", "0"])
+
+
+def test_should_launch_gui_default_and_cli_override() -> None:
+    parser = rpg.make_parser()
+
+    args_default = parser.parse_args([])
+    assert rpg.should_launch_gui(args_default, ["Repo_Privacy_Guardian.py"]) is True
+
+    args_gui = parser.parse_args(["--gui"])
+    assert rpg.should_launch_gui(args_gui, ["Repo_Privacy_Guardian.py", "--gui"]) is True
+
+    args_cli = parser.parse_args(["--dry-run"])
+    assert rpg.should_launch_gui(args_cli, ["Repo_Privacy_Guardian.py", "--dry-run"]) is False
+
+
+def test_parse_positive_int_validation() -> None:
+    assert rpg.parse_positive_int("5") == 5
+    with pytest.raises(Exception):
+        rpg.parse_positive_int("0")
+    with pytest.raises(Exception):
+        rpg.parse_positive_int("not-an-int")
+
+
+def test_build_run_settings_parity_keys() -> None:
+    cli = _make_run_config(mode="cli", report_json="C:/tmp/export.json")
+    gui = _make_run_config(mode="gui", report_json=None, low_confidence_email_mode="blocking")
+
+    cli_settings = rpg.build_run_settings(cli, Path("C:/repos/Audit_Results"))
+    gui_settings = rpg.build_run_settings(gui, Path("C:/repos/Audit_Results"))
+
+    assert set(cli_settings.keys()) == set(gui_settings.keys())
+    assert cli_settings["mode"] == "cli"
+    assert gui_settings["mode"] == "gui"
+    assert cli_settings["low_confidence_email_mode"] == "informational"
+    assert gui_settings["low_confidence_email_mode"] == "blocking"
+
+
+def test_normalize_repo_filters_matches_cli_default_behavior() -> None:
+    assert rpg.normalize_repo_filters(["repo-a"]) == ["repo-a"]
+    assert rpg.normalize_repo_filters([]) is None
+
+
+def test_normalize_csv_values_and_text_values_helpers() -> None:
+    assert rpg.normalize_csv_values("") == []
+    assert rpg.normalize_csv_values(" alice@example.com, bob@example.com , alice@example.com ,, ") == [
+        "alice@example.com",
+        "bob@example.com",
+    ]
+    assert rpg.normalize_text_values(["  one  ", "", "two", "one"]) == ["one", "two"]
+
+
+def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
+    config = rpg.build_guard_run_config(
+        mode="cli",
+        root=Path("C:/repos"),
+        policy=Path("C:/repos/docs/POLICY.md"),
+        repos=["repo-a"],
+        public_only=False,
+        fix=True,
+        push=True,
+        dry_run=True,
+        redact_third_party_emails=True,
+        purge_detected_secret_files=True,
+        purge_all_detected_secret_files=False,
+        rewrite_personal_paths=True,
+        low_confidence_email_mode="informational",
+        owner_name="Owner",
+        owner_emails=["dev@example.com", " dev@example.com "],
+        noreply_email="12345+octocat@users.noreply.github.com",
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        max_matches=50,
+        open_report=False,
+        confirm_each_repo_fix=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=["axeljackal", "axeljackal"],
+        report_json=None,
+    )
+
+    assert config.owner_emails == ["dev@example.com"]
+    assert config.allowed_remote_owners == ["axeljackal", "octocat"]
+    assert config.open_report is False
+    assert config.confirm_each_repo_fix is False
+
+
+def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
+    kwargs = dict(
+        root=Path("C:/repos"),
+        policy=Path("C:/repos/docs/POLICY.md"),
+        repos=["repo-a", "repo-b"],
+        public_only=True,
+        fix=True,
+        push=True,
+        dry_run=False,
+        redact_third_party_emails=True,
+        purge_detected_secret_files=True,
+        purge_all_detected_secret_files=False,
+        rewrite_personal_paths=True,
+        low_confidence_email_mode="blocking",
+        owner_name="Owner",
+        owner_emails=["dev@example.com"],
+        noreply_email="12345+octocat@users.noreply.github.com",
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        max_matches=75,
+        open_report=True,
+        confirm_each_repo_fix=True,
+        allow_non_owner_push=False,
+        allowed_remote_owners=["axeljackal"],
+        report_json="C:/repos/Audit_Results/export.json",
+    )
+    cli_config = rpg.build_guard_run_config(mode="cli", **kwargs)
+    gui_config = rpg.build_guard_run_config(mode="gui", **kwargs)
+
+    assert cli_config.mode == "cli"
+    assert gui_config.mode == "gui"
+
+    same_fields = [
+        "root",
+        "policy",
+        "repos",
+        "public_only",
+        "fix",
+        "push",
+        "dry_run",
+        "redact_third_party_emails",
+        "purge_detected_secret_files",
+        "purge_all_detected_secret_files",
+        "rewrite_personal_paths",
+        "low_confidence_email_mode",
+        "owner_name",
+        "owner_emails",
+        "noreply_email",
+        "placeholder_email",
+        "max_matches",
+        "open_report",
+        "confirm_each_repo_fix",
+        "allow_non_owner_push",
+        "allowed_remote_owners",
+        "report_json",
+    ]
+    for field in same_fields:
+        assert getattr(cli_config, field) == getattr(gui_config, field)
+
+
+def test_execute_guard_pipeline_purge_all_implies_detected(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    messages: list[str] = []
+
+    class DummyGuard:
+        def __init__(
+            self,
+            root: Path,
+            policy_path: Path,
+            noreply_email: str,
+            placeholder_email: str,
+            owner_name: str,
+            owner_emails: list[str],
+            redact_third_party: bool,
+            purge_detected_secret_files: bool,
+            purge_all_detected_secret_files: bool,
+            low_confidence_email_mode: str,
+            push: bool,
+            dry_run: bool,
+            max_matches: int,
+            allow_non_owner_push: bool,
+            allowed_remote_owners: list[str],
+            logger,
+        ) -> None:
+            self.purge_detected_secret_files = purge_detected_secret_files
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            return []
+
+    def fake_persist(
+        reports,
+        artifacts,
+        root_path,
+        policy_path,
+        run_settings,
+        logger,
+        optional_json_export=None,
+    ) -> None:
+        captured["reports"] = reports
+        captured["run_settings"] = run_settings
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", fake_persist)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config(
+        purge_all_detected_secret_files=True,
+        purge_detected_secret_files=False,
+    )
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == 0
+    assert any("implies --purge-detected-secret-files" in msg for msg in messages)
+    assert captured["run_settings"]["purge_detected_secret_files"] == "True"
+
+
+def test_execute_guard_pipeline_logs_blocking_email_policy(tmp_path: Path, monkeypatch) -> None:
+    messages: list[str] = []
+
+    class DummyGuard:
+        def __init__(
+            self,
+            root: Path,
+            policy_path: Path,
+            noreply_email: str,
+            placeholder_email: str,
+            owner_name: str,
+            owner_emails: list[str],
+            redact_third_party: bool,
+            purge_detected_secret_files: bool,
+            purge_all_detected_secret_files: bool,
+            low_confidence_email_mode: str,
+            push: bool,
+            dry_run: bool,
+            max_matches: int,
+            allow_non_owner_push: bool,
+            allowed_remote_owners: list[str],
+            logger,
+        ) -> None:
+            pass
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            return []
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config(low_confidence_email_mode="blocking")
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == 0
+    assert any("low-confidence findings are blocking" in msg for msg in messages)
+
+
+def test_execute_guard_pipeline_confirmation_abort(tmp_path: Path, monkeypatch) -> None:
+    messages: list[str] = []
+    instances: list[object] = []
+
+    class DummyGuard:
+        def __init__(
+            self,
+            root: Path,
+            policy_path: Path,
+            noreply_email: str,
+            placeholder_email: str,
+            owner_name: str,
+            owner_emails: list[str],
+            redact_third_party: bool,
+            purge_detected_secret_files: bool,
+            purge_all_detected_secret_files: bool,
+            low_confidence_email_mode: str,
+            push: bool,
+            dry_run: bool,
+            max_matches: int,
+            allow_non_owner_push: bool,
+            allowed_remote_owners: list[str],
+            logger,
+        ) -> None:
+            self.audit_calls = 0
+            instances.append(self)
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            return [Path("C:/repos/repo-a")]
+
+        def audit_repo(self, repo: Path):
+            self.audit_calls += 1
+            raise AssertionError("audit_repo should not run when confirmation is denied")
+
+        def apply_fixes(self, repo: Path, report):
+            raise AssertionError("apply_fixes should not run when confirmation is denied")
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config(fix=True, push=True)
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+        require_confirmation=True,
+        confirm_callback=lambda: False,
+    )
+
+    assert exit_code == 1
+    assert any("Run aborted by user confirmation gate." in msg for msg in messages)
+    assert instances[0].audit_calls == 0
+
+
+def test_execute_guard_pipeline_fix_reaudit_flow(tmp_path: Path, monkeypatch) -> None:
+    printed: list[rpg.RepoReport] = []
+    captured: dict[str, object] = {}
+    instances: list[object] = []
+
+    class DummyGuard:
+        def __init__(
+            self,
+            root: Path,
+            policy_path: Path,
+            noreply_email: str,
+            placeholder_email: str,
+            owner_name: str,
+            owner_emails: list[str],
+            redact_third_party: bool,
+            purge_detected_secret_files: bool,
+            purge_all_detected_secret_files: bool,
+            low_confidence_email_mode: str,
+            push: bool,
+            dry_run: bool,
+            max_matches: int,
+            allow_non_owner_push: bool,
+            allowed_remote_owners: list[str],
+            logger,
+        ) -> None:
+            self.audit_calls = 0
+            instances.append(self)
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            return [Path("C:/repos/repo-a")]
+
+        def audit_repo(self, repo: Path) -> rpg.RepoReport:
+            self.audit_calls += 1
+            report = _make_report("repo-a")
+            report.finalize()
+            return report
+
+        def apply_fixes(self, repo: Path, report: rpg.RepoReport) -> rpg.RepoReport:
+            fixed = _make_report("repo-a")
+            fixed.backups_created = ["backup.bundle"]
+            fixed.fix_actions = ["fixed"]
+            fixed.fix_errors = []
+            return fixed
+
+    def fake_persist(
+        reports,
+        artifacts,
+        root_path,
+        policy_path,
+        run_settings,
+        logger,
+        optional_json_export=None,
+    ) -> None:
+        captured["reports"] = reports
+        captured["run_settings"] = run_settings
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", fake_persist)
+    monkeypatch.setattr(rpg, "print_report", lambda report, logger: printed.append(report))
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config(fix=True, push=False)
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=lambda _msg: None,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == 0
+    assert instances[0].audit_calls == 2
+    assert len(printed) == 1
+    assert printed[0].fix_actions == ["fixed"]
+    assert captured["reports"][0].backups_created == ["backup.bundle"]
+
+
+def test_execute_guard_pipeline_per_repo_confirmation_skip(tmp_path: Path, monkeypatch) -> None:
+    printed: list[rpg.RepoReport] = []
+
+    class DummyGuard:
+        def __init__(
+            self,
+            root: Path,
+            policy_path: Path,
+            noreply_email: str,
+            placeholder_email: str,
+            owner_name: str,
+            owner_emails: list[str],
+            redact_third_party: bool,
+            purge_detected_secret_files: bool,
+            purge_all_detected_secret_files: bool,
+            low_confidence_email_mode: str,
+            push: bool,
+            dry_run: bool,
+            max_matches: int,
+            allow_non_owner_push: bool,
+            allowed_remote_owners: list[str],
+            logger,
+        ) -> None:
+            pass
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            return [Path("C:/repos/repo-a")]
+
+        def audit_repo(self, repo: Path) -> rpg.RepoReport:
+            report = _make_report("repo-a")
+            report.finalize()
+            return report
+
+        def apply_fixes(self, repo: Path, report: rpg.RepoReport) -> rpg.RepoReport:
+            raise AssertionError("apply_fixes should not run when per-repository confirmation is denied")
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(rpg, "print_report", lambda report, logger: printed.append(report))
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config(fix=True, push=False, confirm_each_repo_fix=True)
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=lambda _msg: None,
+        results_dir=tmp_path,
+        confirm_repo_fix_callback=lambda _repo, _index, _total: False,
+    )
+
+    assert exit_code == 0
+    assert len(printed) == 1
+    assert printed[0].fix_actions == ["fix skipped by per-repository confirmation gate"]
+
+
+def test_execute_guard_pipeline_handles_runtime_error(tmp_path: Path, monkeypatch) -> None:
+    messages: list[str] = []
+
+    class DummyGuard:
+        def __init__(
+            self,
+            root: Path,
+            policy_path: Path,
+            noreply_email: str,
+            placeholder_email: str,
+            owner_name: str,
+            owner_emails: list[str],
+            redact_third_party: bool,
+            purge_detected_secret_files: bool,
+            purge_all_detected_secret_files: bool,
+            low_confidence_email_mode: str,
+            push: bool,
+            dry_run: bool,
+            max_matches: int,
+            allow_non_owner_push: bool,
+            allowed_remote_owners: list[str],
+            logger,
+        ) -> None:
+            pass
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            return [Path("C:/repos/repo-a")]
+
+        def audit_repo(self, repo: Path):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config()
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == 3
+    assert any("Unhandled runtime error: boom" in msg for msg in messages)
+
+
+def test_is_github_noreply_email_variants() -> None:
+    assert rpg.is_github_noreply_email("noreply@github.com") is True
+    assert rpg.is_github_noreply_email("12345+user@users.noreply.github.com") is True
+    assert rpg.is_github_noreply_email("   ") is False
+    assert rpg.is_github_noreply_email("user@example.com") is False
+
+
+def test_run_git_command_mocked_subprocess(monkeypatch) -> None:
+    class DummyProc:
+        returncode = 0
+        stdout = "ok\n"
+        stderr = ""
+
+    calls: dict[str, object] = {}
+
+    def fake_run(*args, **kwargs):
+        calls["args"] = args
+        calls["kwargs"] = kwargs
+        return DummyProc()
+
+    monkeypatch.setattr(rpg.subprocess, "run", fake_run)
+
+    result = rpg.run_git_command(["config", "--global", "user.name", "Owner"], Path("C:/repos"))
+
+    assert result.returncode == 0
+    assert result.stdout == "ok"
+    assert calls["args"][0][:2] == ["git", "config"]
+    assert calls["kwargs"]["cwd"] == str(Path("C:/repos"))
+
+
+def test_validate_git_identity_inputs() -> None:
+    assert "git user.name is required." in rpg.validate_git_identity_inputs("", "")
+    assert "git user.email is required." in rpg.validate_git_identity_inputs("Owner", "")
+    assert (
+        "git user.email must be a valid email address."
+        in rpg.validate_git_identity_inputs("Owner", "invalid-email")
+    )
+    assert (
+        "git user.email should be a GitHub noreply address "
+        "(for example: <id+username>@users.noreply.github.com)."
+        in rpg.validate_git_identity_inputs("Owner", "owner@example.com")
+    )
+    assert rpg.validate_git_identity_inputs("Owner", "12345+owner@users.noreply.github.com") == []
+
+
+def test_apply_git_identity_config_global_success_mocked() -> None:
+    calls: list[tuple[list[str], Path | None]] = []
+
+    def fake_runner(args: list[str], cwd: Path | None) -> rpg.CommandResult:
+        calls.append((args, cwd))
+        return rpg.CommandResult(0, "", "")
+
+    ok, msg = rpg.apply_git_identity_config(
+        scope="global",
+        user_name="Owner",
+        user_email="123+owner@users.noreply.github.com",
+        git_runner=fake_runner,
+    )
+
+    assert ok is True
+    assert "Applied GLOBAL git identity" in msg
+    assert calls == [
+        (["config", "--global", "user.name", "Owner"], None),
+        (["config", "--global", "user.email", "123+owner@users.noreply.github.com"], None),
+    ]
+
+
+def test_apply_git_identity_config_local_errors() -> None:
+    ok, msg = rpg.apply_git_identity_config(
+        scope="global",
+        user_name="",
+        user_email="",
+    )
+    assert ok is False
+    assert "git user.name is required." in msg
+
+    ok, msg = rpg.apply_git_identity_config(
+        scope="local",
+        user_name="Owner",
+        user_email="123+owner@users.noreply.github.com",
+        repo_path=None,
+    )
+    assert ok is False
+    assert "requires a target repository path" in msg
+
+    ok, msg = rpg.apply_git_identity_config(
+        scope="workspace",
+        user_name="Owner",
+        user_email="123+owner@users.noreply.github.com",
+    )
+    assert ok is False
+    assert "Unsupported git config scope" in msg
+
+
+def test_apply_git_identity_config_command_failure() -> None:
+    repo = Path("C:/repos/repo-a")
+    calls: list[tuple[list[str], Path | None]] = []
+
+    def fake_runner(args: list[str], cwd: Path | None) -> rpg.CommandResult:
+        calls.append((args, cwd))
+        if args[2] == "user.email":
+            return rpg.CommandResult(1, "", "permission denied")
+        return rpg.CommandResult(0, "", "")
+
+    ok, msg = rpg.apply_git_identity_config(
+        scope="local",
+        user_name="Owner",
+        user_email="123+owner@users.noreply.github.com",
+        repo_path=repo,
+        git_runner=fake_runner,
+    )
+
+    assert ok is False
+    assert "Failed to set user.email (local): permission denied" in msg
+    assert calls[0] == (["config", "--local", "user.name", "Owner"], repo)
+    assert calls[1] == (
+        ["config", "--local", "user.email", "123+owner@users.noreply.github.com"],
+        repo,
+    )
+
+
+def test_read_git_identity_config_without_repo_mocked() -> None:
+    calls: list[tuple[list[str], Path | None]] = []
+
+    def fake_runner(args: list[str], cwd: Path | None) -> rpg.CommandResult:
+        calls.append((args, cwd))
+        if args[-1] == "user.name":
+            return rpg.CommandResult(0, "Owner", "")
+        return rpg.CommandResult(0, "123+owner@users.noreply.github.com", "")
+
+    values = rpg.read_git_identity_config(repo_path=None, git_runner=fake_runner)
+
+    assert values["global.user.name"] == "Owner"
+    assert values["global.user.email"] == "123+owner@users.noreply.github.com"
+    assert values["local.user.name"].startswith("(n/a")
+    assert len(calls) == 2
+
+
+def test_read_git_identity_config_with_repo_and_error_state() -> None:
+    repo = Path("C:/repos/repo-a")
+    calls: list[tuple[list[str], Path | None]] = []
+    responses = [
+        rpg.CommandResult(0, "Global Owner", ""),
+        rpg.CommandResult(0, "123+global@users.noreply.github.com", ""),
+        rpg.CommandResult(0, "Local Owner", ""),
+        rpg.CommandResult(1, "", "fatal: config error"),
+        rpg.CommandResult(0, "Effective Owner", ""),
+        rpg.CommandResult(0, "123+effective@users.noreply.github.com", ""),
+    ]
+
+    def fake_runner(args: list[str], cwd: Path | None) -> rpg.CommandResult:
+        calls.append((args, cwd))
+        return responses[len(calls) - 1]
+
+    values = rpg.read_git_identity_config(repo_path=repo, git_runner=fake_runner)
+
+    assert values["local.user.name"] == "Local Owner"
+    assert values["local.user.email"] == "(error: fatal: config error)"
+    assert values["effective.user.name"] == "Effective Owner"
+    assert values["effective.user.email"] == "123+effective@users.noreply.github.com"
+    assert calls[2][1] == repo
+    assert calls[3][1] == repo
+
+
+def test_read_git_config_value_without_detail_returns_not_set() -> None:
+    value = rpg._read_git_config_value(
+        key="user.name",
+        scope_args=["--local"],
+        repo_path=Path("C:/repos/repo-a"),
+        git_runner=lambda _args, _cwd: rpg.CommandResult(1, "", ""),
+    )
+    assert value == "(not set)"
+
+
+def test_format_git_identity_status_contains_all_sections() -> None:
+    values = {
+        "global.user.name": "A",
+        "global.user.email": "B",
+        "local.user.name": "C",
+        "local.user.email": "D",
+        "effective.user.name": "E",
+        "effective.user.email": "F",
+    }
+    text = rpg.format_git_identity_status(values, Path("C:/repos/repo-a"))
+
+    assert "Git identity status" in text
+    assert f"Repository context: {Path('C:/repos/repo-a')}" in text
+    assert "Global user.name: A" in text
+    assert "Effective user.email: F" in text
+
+
+def test_open_github_email_settings_mocked() -> None:
+    opened_urls: list[str] = []
+
+    def ok_opener(url: str) -> bool:
+        opened_urls.append(url)
+        return True
+
+    ok, msg = rpg.open_github_email_settings(opener=ok_opener)
+    assert ok is True
+    assert rpg.GITHUB_EMAIL_SETTINGS_URL in opened_urls
+    assert "Opened" in msg
+
+    ok, msg = rpg.open_github_email_settings(opener=lambda _url: False)
+    assert ok is False
+    assert "could not open" in msg
+
+    def bad_opener(_url: str) -> bool:
+        raise RuntimeError("browser unavailable")
+
+    ok, msg = rpg.open_github_email_settings(opener=bad_opener)
+    assert ok is False
+    assert "browser unavailable" in msg
+
+
+def test_resolve_identity_repo_path_variants(tmp_path: Path) -> None:
+    root_repo = tmp_path / "root-repo"
+    root_repo.mkdir()
+    (root_repo / ".git").mkdir()
+
+    nested = tmp_path / "workspace"
+    nested.mkdir()
+    child = nested / "repo-a"
+    child.mkdir()
+    (child / ".git").mkdir()
+
+    path, error = rpg.resolve_identity_repo_path(root_repo, [])
+    assert path == root_repo
+    assert error is None
+
+    path, error = rpg.resolve_identity_repo_path(nested, ["repo-a"])
+    assert path == child
+    assert error is None
+
+    path, error = rpg.resolve_identity_repo_path(nested, ["repo-a", "repo-b"])
+    assert path is None
+    assert "Select exactly one repository" in error
+
+    path, error = rpg.resolve_identity_repo_path(nested, ["missing-repo"])
+    assert path is None
+    assert "not a git repository" in error
+
+    empty_root = tmp_path / "empty"
+    empty_root.mkdir()
+    path, error = rpg.resolve_identity_repo_path(empty_root, [])
+    assert path is None
+    assert "Select one repository first" in error
+
+
+def test_execute_guard_pipeline_gui_mode_no_regression(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class DummyGuard:
+        def __init__(
+            self,
+            root: Path,
+            policy_path: Path,
+            noreply_email: str,
+            placeholder_email: str,
+            owner_name: str,
+            owner_emails: list[str],
+            redact_third_party: bool,
+            purge_detected_secret_files: bool,
+            purge_all_detected_secret_files: bool,
+            low_confidence_email_mode: str,
+            push: bool,
+            dry_run: bool,
+            max_matches: int,
+            allow_non_owner_push: bool,
+            allowed_remote_owners: list[str],
+            logger,
+        ) -> None:
+            pass
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            return []
+
+    def fake_persist(
+        reports,
+        artifacts,
+        root_path,
+        policy_path,
+        run_settings,
+        logger,
+        optional_json_export=None,
+    ) -> None:
+        captured["run_settings"] = run_settings
+        captured["reports"] = reports
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", fake_persist)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config(mode="gui", repos=["repo-a"], low_confidence_email_mode="blocking")
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=lambda _msg: None,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == 0
+    assert captured["run_settings"]["mode"] == "gui"
+    assert captured["run_settings"]["low_confidence_email_mode"] == "blocking"
+    assert captured["reports"] == []
+
+
+def test_execute_guard_pipeline_all_repos_when_filters_none(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class DummyGuard:
+        def __init__(
+            self,
+            root: Path,
+            policy_path: Path,
+            noreply_email: str,
+            placeholder_email: str,
+            owner_name: str,
+            owner_emails: list[str],
+            redact_third_party: bool,
+            purge_detected_secret_files: bool,
+            purge_all_detected_secret_files: bool,
+            low_confidence_email_mode: str,
+            push: bool,
+            dry_run: bool,
+            max_matches: int,
+            allow_non_owner_push: bool,
+            allowed_remote_owners: list[str],
+            logger,
+        ) -> None:
+            pass
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            captured["repo_filters"] = repo_filters
+            return []
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config(mode="gui", repos=None)
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=lambda _msg: None,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == 0
+    assert captured["repo_filters"] is None

@@ -2,6 +2,54 @@
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "repo-privacy-guardian"
+version = "0.1.0"
+description = "Local-first publication gate for auditing and hardening Git repositories before public release."
+readme = "README.MD"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Axel E. Sacca" },
+]
+keywords = ["git", "privacy", "security", "publication-gate", "release-engineering"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Win32 (MS Windows)",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Security",
+  "Topic :: Software Development :: Quality Assurance",
+  "Topic :: Software Development :: Version Control :: Git",
+]
+dependencies = []
+
+[project.optional-dependencies]
+gui = ["customtkinter>=5.2.2,<6"]
+rewrite = ["git-filter-repo>=2.45,<3"]
+test = [
+  "pytest>=8.0,<9",
+  "pytest-cov>=5.0,<6",
+]
+dev = [
+  "customtkinter>=5.2.2,<6",
+  "git-filter-repo>=2.45,<3",
+  "pytest>=8.0,<9",
+  "pytest-cov>=5.0,<6",
+]
+
+[project.scripts]
+repo-privacy-guardian = "Repo_Privacy_Guardian:main"
+
+[tool.setuptools]
+py-modules = ["Repo_Privacy_Guardian"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --cov=Repo_Privacy_Guardian --cov-report=term-missing --cov-report=xml --cov-fail-under=80"

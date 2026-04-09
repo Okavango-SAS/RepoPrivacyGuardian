@@ -1,0 +1,83 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package and test dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[test]
+
+      - name: Run pytest
+        shell: pwsh
+        run: |
+          python -m pytest
+
+      - name: Smoke CLI help
+        shell: pwsh
+        run: |
+          repo-privacy-guardian --help
+
+      - name: Smoke CLI clean repo
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "rpg-smoke"
+          $repo = Join-Path $root "smoke-repo"
+          $results = Join-Path $PWD "Audit_Results\\ci-smoke"
+
+          New-Item -ItemType Directory -Force -Path $repo | Out-Null
+          Remove-Item -LiteralPath $results -Recurse -Force -ErrorAction SilentlyContinue
+          git init -b main $repo
+          git -C $repo config user.name "Repo Owner"
+          git -C $repo config user.email "12345+repoowner@users.noreply.github.com"
+
+          @(
+            ".venv/",
+            "__pycache__/",
+            ".pytest_cache/",
+            ".mypy_cache/",
+            ".ruff_cache/",
+            ".env",
+            ".env.*",
+            "wsa-config.local.yaml",
+            "Audit_Results/",
+            "sessions/*",
+            "artifacts/",
+            "exports/",
+            "*.log",
+            "*.tmp",
+            "*.bak",
+            ".vscode/",
+            ".idea/",
+            ".DS_Store",
+            "Thumbs.db",
+            "desktop.ini"
+          ) | Set-Content -Path (Join-Path $repo ".gitignore") -Encoding utf8
+
+          "# smoke" | Set-Content -Path (Join-Path $repo "README.md") -Encoding utf8
+          git -C $repo add -A
+          git -C $repo commit -m "baseline"
+
+          repo-privacy-guardian --root $root --repos smoke-repo --report-dir $results --yes --no-open-report
+
+          $report = Get-ChildItem -Path $results -Directory | Sort-Object Name | Select-Object -Last 1
+          if (-not $report) {
+            throw "Smoke CLI run did not create a report directory."
+          }
+
+          python -c "import json, pathlib, sys; report_root = pathlib.Path(sys.argv[1]); payload = json.loads((report_root / 'report.json').read_text(encoding='utf-8'))[0]; status = payload['status']; raise SystemExit(f'Unexpected smoke status: {status}') if status != 'PASS' else None" $report.FullName

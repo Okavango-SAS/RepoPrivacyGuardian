@@ -13,6 +13,7 @@ Use this checklist before tagging a public release.
 - Run audit on target repositories.
 - Save JSON report artifact.
 - Review FAIL reasons by severity.
+- Review advisory/manual-review findings separately from blockers, including `exfil_code_indicators`.
 - If using GUI, confirm `Auditar` is the first executable step and `Reparar` is visually locked before audit context is available.
 
 ## 3. Remediation plan
@@ -41,10 +42,13 @@ Use this checklist before tagging a public release.
 - Update KNOWN_ISSUES if new recurring patterns are found.
 - Update LEARNED_LESSONS with reusable insights.
 - Add/update ENGINEERING_DECISIONS when behavior changes.
+- Confirm README, POLICY and CLI help still match real PASS/FAIL semantics.
 
 ## 7. Release criteria
 
 - Required checks pass.
+- Clean-clone validation passes: `py -m pip install -e .[test]`, `py -m pytest`, `repo-privacy-guardian --help`.
+- CI is green on the tracked test suite and Windows smoke CLI job.
 - Risk exceptions are documented and approved.
 - License and notice files are present and correct.
 - Final report artifacts are stored in the expected local path.

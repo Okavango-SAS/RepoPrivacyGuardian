@@ -121,6 +121,8 @@ Action:
 
 - Keep only justified network calls.
 - Default to opt-in for outbound operations whenever possible.
+- Treat heuristic exfil/outbound findings as mandatory manual review.
+- Repo Privacy Guardian reports these indicators as advisory by default; they do not change PASS/FAIL on their own.
 
 ### E) .gitignore policy and effectiveness
 
@@ -138,6 +140,8 @@ Minimum baseline:
 - .ruff_cache/
 - .env
 - .env.*
+- wsa-config.local.yaml
+- Audit_Results/
 - sessions/*
 - artifacts/
 - exports/
@@ -186,8 +190,11 @@ Run project validators/tests before publication:
 
 ```powershell
 # Examples, adapt to each project
+py -m pip install -e .[test]
 pytest
 ```
+
+Validation must be reproducible from a clean clone. Test collection must not depend on ignored or local-only test files outside the tracked repository tree.
 
 ## 3) If sensitive data already exists in history
 
@@ -264,6 +271,11 @@ No repository can be published publicly without:
 3. exfiltration review
 4. verified .gitignore effectiveness
 5. defined license
+
+Important:
+
+- `exfil_code_indicators` requires explicit review, but it is advisory by default and does not automatically force FAIL on its own.
+- A dirty working tree is a blocking publication-gate failure until it is reviewed and cleaned.
 
 If a sensitive file was ever committed and later ignored/deleted,
 status remains FAIL until:

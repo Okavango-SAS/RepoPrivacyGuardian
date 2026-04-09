@@ -46,6 +46,3 @@ desktop.ini
 
 # MCP servers and local tools
 .playwright-mcp/
-
-# Added by Repo_Privacy_Guardian.py (secret remediation)
-tests/test_reporting_and_policy.py

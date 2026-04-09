@@ -48,6 +48,10 @@ Remove personal paths, names, and private emails from defaults.
 
 JSON-style escaped paths (for example `C:\\Users\\...`) and plain paths must both be sanitized in artifacts.
 
+1. Release tests must come from tracked files only.
+
+If `pytest` can see local-only test files that are not in `HEAD`, the workspace can report a false green state that CI and clean clones cannot reproduce.
+
 ## Documentation lessons
 
 1. Governance docs are part of the product.

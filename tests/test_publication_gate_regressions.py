@@ -1,0 +1,335 @@
+from __future__ import annotations
+
+import html
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import Repo_Privacy_Guardian as rpg
+
+
+DEFAULT_BASELINE = "\n".join(
+    [
+        ".venv/",
+        "__pycache__/",
+        ".pytest_cache/",
+        ".mypy_cache/",
+        ".ruff_cache/",
+        ".env",
+        ".env.*",
+        "wsa-config.local.yaml",
+        "Audit_Results/",
+        "sessions/*",
+        "artifacts/",
+        "exports/",
+        "*.log",
+        "*.tmp",
+        "*.bak",
+        ".vscode/",
+        ".idea/",
+        ".DS_Store",
+        "Thumbs.db",
+        "desktop.ini",
+        "",
+    ]
+)
+
+
+def _run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
+    proc = subprocess.run(
+        cmd,
+        cwd=str(cwd) if cwd else None,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if check and proc.returncode != 0:
+        raise RuntimeError(f"{cmd}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
+    return proc
+
+
+def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return _run(["git", "-C", str(repo), *args], check=check)
+
+
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _commit_all(repo: Path, message: str) -> None:
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", message)
+
+
+def _init_repo(
+    tmp_path: Path,
+    name: str,
+    *,
+    branch: str = "main",
+    remote: str | None = None,
+    user_email: str = "12345+repoowner@users.noreply.github.com",
+) -> Path:
+    repo = tmp_path / name
+    _run(["git", "init", "-b", branch, str(repo)], check=False)
+    if not (repo / ".git").exists():
+        _run(["git", "init", str(repo)])
+        _git(repo, "checkout", "-b", branch)
+    _git(repo, "config", "user.name", "Repo Owner")
+    _git(repo, "config", "user.email", user_email)
+    if remote:
+        _git(repo, "remote", "add", "origin", remote)
+    return repo
+
+
+def _make_guard(tmp_path: Path, *, policy_path: Path | None = None) -> rpg.RepoPublicationGuard:
+    return rpg.RepoPublicationGuard(
+        root=tmp_path,
+        policy_path=policy_path or (tmp_path / "POLICY.md"),
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        owner_name="Repo Owner",
+        owner_emails=[],
+        redact_third_party=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        low_confidence_email_mode="informational",
+        push=False,
+        dry_run=False,
+        max_matches=50,
+        audit_litellm_incident=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=[],
+        logger=lambda _msg: None,
+    )
+
+
+def test_policy_parser_reads_english_minimum_baseline(tmp_path: Path) -> None:
+    policy = tmp_path / "POLICY.md"
+    policy.write_text(
+        "# Policy\n\n"
+        "Minimum baseline:\n\n"
+        "- .venv/\n"
+        "- __pycache__/\n"
+        "- local-only/\n\n"
+        "Check currently ignored sensitive paths:\n",
+        encoding="utf-8",
+    )
+
+    guard = _make_guard(tmp_path, policy_path=policy)
+
+    assert "local-only/" in guard.required_ignore_patterns
+
+
+def test_private_commit_metadata_blocks_when_owner_cannot_be_inferred(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "metadata-no-origin", user_email="owner.real@privacy.dev")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "README.md", "private metadata\n")
+    _commit_all(repo, "private metadata commit")
+
+    guard = _make_guard(tmp_path)
+    report = guard.audit_repo(repo)
+
+    assert report.unexpected_emails
+    assert report.unexpected_emails_owned_repo == report.unexpected_emails
+    assert report.unexpected_emails_third_party_repo == []
+    assert "unexpected commit metadata emails in owned repository" in report.failures
+
+
+def test_history_email_classification_keeps_readme_examples_low_confidence(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "history-low-confidence")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "README.md", "Contact example: helper@privacy.dev\n")
+    _commit_all(repo, "doc email example")
+
+    guard = _make_guard(tmp_path)
+    report = guard.audit_repo(repo)
+
+    assert report.tracked_email_low_confidence
+    assert report.history_email_low_confidence
+    assert report.history_email_high_confidence == []
+
+
+def test_dirty_worktree_blocks_publication_gate(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "dirty-repo")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "README.md", "clean\n")
+    _commit_all(repo, "baseline")
+    _write(repo / "README.md", "clean\nmodified\n")
+
+    guard = _make_guard(tmp_path)
+    report = guard.audit_repo(repo)
+
+    assert report.status == "FAIL"
+    assert "working tree is not clean" in report.failures
+
+
+def test_execute_guard_pipeline_marks_fix_errors_as_failures(tmp_path: Path, monkeypatch) -> None:
+    class FakeGuard:
+        def __init__(self, **_kwargs) -> None:
+            self.rewrite_personal_paths = False
+
+        def discover_repositories(self, repo_filters, public_only):
+            del repo_filters, public_only
+            return [tmp_path / "repo-a"]
+
+        def audit_repo(self, repo: Path) -> rpg.RepoReport:
+            report = rpg.RepoReport(name=repo.name, path=str(repo))
+            report.finalize()
+            return report
+
+        def apply_fixes(self, repo: Path, report: rpg.RepoReport) -> rpg.RepoReport:
+            del repo
+            report.fix_errors.append("push blocked: simulated failure")
+            return report
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", FakeGuard)
+
+    config = rpg.GuardRunConfig(
+        mode="cli",
+        root=tmp_path,
+        policy=tmp_path / "POLICY.md",
+        repos=["repo-a"],
+        public_only=False,
+        fix=True,
+        push=False,
+        dry_run=False,
+        redact_third_party_emails=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        low_confidence_email_mode="informational",
+        owner_name="Repo Owner",
+        owner_emails=[],
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        max_matches=50,
+        open_report=False,
+        confirm_each_repo_fix=True,
+        allow_non_owner_push=False,
+        allowed_remote_owners=[],
+        report_json=None,
+    )
+    artifacts = rpg.create_run_artifacts(tmp_path / "Audit_Results")
+    lines: list[str] = []
+
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=lines.append,
+        results_dir=tmp_path / "Audit_Results",
+    )
+
+    payload = json.loads(artifacts.json_path.read_text(encoding="utf-8"))[0]
+    assert exit_code == 2
+    assert payload["status"] == "FAIL"
+    assert "fix execution errors occurred" in payload["failures"]
+
+
+def test_exfil_indicators_remain_advisory_by_default(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "exfil-advisory")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "main.py", 'import urllib.request\nurllib.request.urlopen("https://collector.example")\n')
+    _commit_all(repo, "add outbound code")
+
+    guard = _make_guard(tmp_path)
+    report = guard.audit_repo(repo)
+    guidance_level, guidance_risk, _consequence, guidance_suggestion = rpg.repo_user_guidance(report)
+    severity, _score, highlights = rpg.classify_repo_severity(report)
+
+    assert report.status == "PASS"
+    assert report.exfil_code_indicators
+    assert guidance_level == "REVIEW"
+    assert "advisory" in guidance_risk.lower()
+    assert "does not change pass/fail" in guidance_suggestion.lower()
+    assert severity == "OK"
+    assert any("advisory" in item.lower() for item in highlights)
+
+
+def test_persisted_artifacts_redact_sensitive_values(tmp_path: Path) -> None:
+    artifacts = rpg.create_run_artifacts(tmp_path / "Audit_Results")
+    logger = rpg.RunLogger(artifacts.log_path)
+    secret = "redacted-fixture-token-not-real"
+    email = "owner.real@privacy.dev"
+    win_path = r"<redacted-path>"
+
+    report = rpg.RepoReport(name="redaction-demo", path=win_path)
+    report.clean_status = f"## main\n M README.md {email} {secret} {win_path}"
+    report.tracked_secret_matches = [f"app.py:1:{secret}"]
+    report.tracked_email_matches = [f"README.md:1:{email}"]
+    report.tracked_path_matches = [f"README.md:1:{win_path}"]
+    report.exfil_code_indicators = ['main.py:2:urllib.request.urlopen("https://collector.example")']
+    report.finalize()
+
+    rpg.persist_run_outputs(
+        reports=[report],
+        artifacts=artifacts,
+        root_path=tmp_path,
+        policy_path=tmp_path / "POLICY.md",
+        run_settings={"mode": "cli", "exfil_indicator_mode": rpg.EXFIL_INDICATOR_MODE},
+        logger=logger,
+    )
+
+    for artifact_name in ("report.json", "report.html", "run.log"):
+        content = (artifacts.run_dir / artifact_name).read_text(encoding="utf-8")
+        assert secret not in content
+        assert email not in content
+        assert "alice" not in content
+        if artifact_name == "report.json":
+            assert rpg.REDACTED_SECRET in content
+            assert rpg.REDACTED_EMAIL in content
+        elif artifact_name == "report.html":
+            assert html.escape(rpg.REDACTED_SECRET) in content
+            assert html.escape(rpg.REDACTED_EMAIL) in content
+
+
+def test_cli_smoke_passes_on_clean_repo(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "cli-smoke")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "README.md", "smoke\n")
+    _commit_all(repo, "baseline")
+
+    report_dir = Path.cwd() / "Audit_Results" / f"pytest-cli-smoke-{tmp_path.name}"
+    shutil.rmtree(report_dir, ignore_errors=True)
+    try:
+        proc = _run(
+            [
+                sys.executable,
+                str(Path(__file__).resolve().parents[1] / "Repo_Privacy_Guardian.py"),
+                "--root",
+                str(tmp_path),
+                "--repos",
+                "cli-smoke",
+                "--report-dir",
+                str(report_dir),
+                "--yes",
+                "--no-open-report",
+            ],
+            check=False,
+        )
+
+        run_dirs = sorted([p for p in report_dir.iterdir() if p.is_dir()])
+        payload = json.loads((run_dirs[-1] / "report.json").read_text(encoding="utf-8"))[0]
+        assert proc.returncode == 0
+        assert payload["status"] == "PASS"
+    finally:
+        shutil.rmtree(report_dir, ignore_errors=True)
+
+
+def test_audit_repo_uses_upstream_head_for_non_main_branch(tmp_path: Path) -> None:
+    remote = tmp_path / "branch-master-remote.git"
+    _run(["git", "init", "--bare", "--initial-branch=master", str(remote)])
+
+    repo = _init_repo(tmp_path, "branch-master", branch="master", remote=str(remote))
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "README.md", "tracked master branch\n")
+    _commit_all(repo, "master branch commit")
+    _git(repo, "push", "-u", "origin", "master")
+
+    guard = _make_guard(tmp_path)
+    report = guard.audit_repo(repo)
+
+    assert report.branch == "master"
+    assert report.origin_head == report.head

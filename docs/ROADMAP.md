@@ -28,10 +28,16 @@ Provide a safe, repeatable, and auditable workflow to prepare repositories for p
 
 ## Milestone 0.3 - Quality and automation
 
-- Add unit tests for parser, path resolution, and remediation planning.
-- Add integration tests for dry-run and report generation behavior.
-- Add CI pipeline for lint, syntax checks, and smoke tests.
-- Add release notes template and semantic versioning policy.
+Current baseline in repo:
+
+- tracked pytest coverage for publication-gate regressions
+- Windows CI running install, pytest and non-destructive CLI smoke
+
+Next hardening steps:
+
+- expand synthetic integration coverage for rewrite planning and artifact redaction edge cases
+- add a small release notes template and versioning policy
+- add optional lint/static checks once they are stable enough to avoid release noise
 
 ## Milestone 0.4 - Advanced operations
 

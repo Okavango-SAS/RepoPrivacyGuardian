@@ -1,9 +1,5 @@
-# Runtime UI
+# Desktop GUI support
 customtkinter>=5.2.2,<6
 
-# Testing
-pytest>=8.0,<9
-pytest-cov>=5.0,<6
-
-# Optional remediation support (history rewrite)
+# Optional history rewrite support
 git-filter-repo>=2.45,<3
