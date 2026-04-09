@@ -166,6 +166,7 @@ GUI and CLI share:
 - the same remediation logic
 - the same JSON, HTML, and log artifacts
 - the same destructive-action guardrails
+- the same advanced replace-text remediation path for reviewed substitutions
 
 The GUI keeps the staged safety contract:
 

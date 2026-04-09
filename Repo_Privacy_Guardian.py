@@ -282,7 +282,15 @@ class RunLogger:
         # Keep persisted artifacts privacy-safe by redacting common sensitive tokens.
         text = redact_sensitive_text(str(msg))
         if self.sink:
-            self.sink(text)
+            try:
+                self.sink(text)
+            except UnicodeEncodeError:
+                encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+                safe_text = text.encode(encoding, errors="replace").decode(
+                    encoding,
+                    errors="replace",
+                )
+                self.sink(safe_text)
         stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         line = f"[{stamp}] {text}\n"
         with self.log_path.open("a", encoding="utf-8") as fh:
@@ -1193,7 +1201,7 @@ class RepoPublicationGuard:  # pragma: no cover
         if replace_text_file:
             replace_path = Path(replace_text_file).expanduser().resolve()
             try:
-                raw_extra_lines = replace_path.read_text(encoding="utf-8", errors="replace")
+                raw_extra_lines = replace_path.read_text(encoding="utf-8-sig", errors="replace")
             except OSError as exc:
                 raise RuntimeError(
                     f"Unable to read --replace-text-file '{replace_path}': {exc}"
@@ -3481,6 +3489,7 @@ class GuiApp:  # pragma: no cover
         self.git_user_email_var = tk.StringVar(value=DEFAULT_NOREPLY)
         self.report_dir_var = tk.StringVar(value=str(default_results_dir()))
         self.report_json_var = tk.StringVar(value="")
+        self.replace_text_file_var = tk.StringVar(value="")
         self.max_matches_var = tk.StringVar(value="50")
 
         self.public_only_var = tk.BooleanVar(value=GUI_DEFAULT_PUBLIC_ONLY)
@@ -3981,6 +3990,23 @@ class GuiApp:  # pragma: no cover
             "Reemplaza rutas personales detectadas en historial/contenido mediante git-filter-repo --replace-text.",
         ).grid(row=3, column=1, sticky="e", padx=(0, 12), pady=4)
 
+        ctk.CTkLabel(
+            destructive_options,
+            text="Explicit replace-text file (optional)",
+            font=("Segoe UI", 12),
+            text_color="#1E293B",
+        ).grid(row=4, column=0, sticky="w", padx=12, pady=(4, 0))
+        ctk.CTkEntry(
+            destructive_options,
+            textvariable=self.replace_text_file_var,
+            height=32,
+            corner_radius=8,
+        ).grid(row=5, column=0, columnspan=2, sticky="we", padx=12, pady=(2, 4))
+        self._make_info_badge(
+            destructive_options,
+            "Archivo opcional con reglas literal:OLD==>NEW para reemplazos supervisados.",
+        ).grid(row=4, column=1, sticky="e", padx=(0, 12), pady=(4, 0))
+
         self._push_checkbox = ctk.CTkCheckBox(
             destructive_options,
             text="Force push remoto (--force-with-lease)",
@@ -3988,11 +4014,11 @@ class GuiApp:  # pragma: no cover
             font=("Segoe UI", 12),
             text_color="#1E293B",
         )
-        self._push_checkbox.grid(row=4, column=0, sticky="w", padx=12, pady=4)
+        self._push_checkbox.grid(row=6, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
             "Publica el historial reescrito en origin/<branch> con --force-with-lease.",
-        ).grid(row=4, column=1, sticky="e", padx=(0, 12), pady=4)
+        ).grid(row=6, column=1, sticky="e", padx=(0, 12), pady=4)
 
         self._allow_non_owner_push_checkbox = ctk.CTkCheckBox(
             destructive_options,
@@ -4002,18 +4028,18 @@ class GuiApp:  # pragma: no cover
             font=("Segoe UI", 12),
             text_color="#1E293B",
         )
-        self._allow_non_owner_push_checkbox.grid(row=5, column=0, sticky="w", padx=12, pady=4)
+        self._allow_non_owner_push_checkbox.grid(row=7, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
             "Permite push aunque origin owner no coincida con allowlist. Riesgoso.",
-        ).grid(row=5, column=1, sticky="e", padx=(0, 12), pady=4)
+        ).grid(row=7, column=1, sticky="e", padx=(0, 12), pady=4)
 
         ctk.CTkLabel(
             destructive_options,
             text="Allowed push owner(s) comma (--allow-remote-owner)",
             font=("Segoe UI", 12),
             text_color="#1E293B",
-        ).grid(row=6, column=0, sticky="w", padx=12, pady=(4, 0))
+        ).grid(row=8, column=0, sticky="w", padx=12, pady=(4, 0))
         self._allowed_remote_owner_entry = ctk.CTkEntry(
             destructive_options,
             textvariable=self.allowed_remote_owners_var,
@@ -4021,7 +4047,7 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
         )
         self._allowed_remote_owner_entry.grid(
-            row=7,
+            row=9,
             column=0,
             columnspan=2,
             sticky="we",
@@ -4037,11 +4063,11 @@ class GuiApp:  # pragma: no cover
             font=("Segoe UI", 12),
             text_color="#1E293B",
         )
-        self._purge_safe_checkbox.grid(row=8, column=0, sticky="w", padx=12, pady=4)
+        self._purge_safe_checkbox.grid(row=10, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
             "Solo purga candidatos automáticos de bajo riesgo y deja manual-review sin tocar.",
-        ).grid(row=8, column=1, sticky="e", padx=(0, 12), pady=4)
+        ).grid(row=10, column=1, sticky="e", padx=(0, 12), pady=4)
 
         self._purge_risky_checkbox = ctk.CTkCheckBox(
             destructive_options,
@@ -4051,11 +4077,11 @@ class GuiApp:  # pragma: no cover
             font=("Segoe UI", 12),
             text_color="#1E293B",
         )
-        self._purge_risky_checkbox.grid(row=9, column=0, sticky="w", padx=12, pady=4)
+        self._purge_risky_checkbox.grid(row=11, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
             "Modo agresivo: también purga candidatos que requieren revisión manual.",
-        ).grid(row=9, column=1, sticky="e", padx=(0, 12), pady=4)
+        ).grid(row=11, column=1, sticky="e", padx=(0, 12), pady=4)
         self._sync_purge_mode_controls()
         self._sync_push_guardrail_controls()
 
@@ -4513,6 +4539,7 @@ class GuiApp:  # pragma: no cover
             "",
             "Opciones activas:",
             f"- Rewrite personal paths: {'SI' if self.rewrite_personal_paths_var.get() else 'NO'}",
+            f"- Explicit replace-text file: {self.replace_text_file_var.get().strip() or 'NO'}",
             f"- Purge SAFE: {'SI' if self.purge_detected_secret_files_var.get() else 'NO'}",
             f"- Purge RISKY: {'SI' if self.purge_all_detected_secret_files_var.get() else 'NO'}",
             f"- Force push remoto: {'SI' if self.push_var.get() else 'NO'}",
@@ -4817,6 +4844,7 @@ class GuiApp:  # pragma: no cover
             requested_report_dir = self.report_dir_var.get().strip() or str(default_results_dir())
             enforced_results_dir, forced = enforce_results_dir(Path(requested_report_dir))
             report_json = self.report_json_var.get().strip() or None
+            replace_text_file = self.replace_text_file_var.get().strip() or None
 
             def _ui_sink(message: str) -> None:
                 def _emit() -> None:
@@ -4861,7 +4889,7 @@ class GuiApp:  # pragma: no cover
                 open_report=self.open_report_var.get(),
                 allow_non_owner_push=(run_fix and self.allow_non_owner_push_var.get()),
                 allowed_remote_owners=allowed_remote_owners,
-                replace_text_file=None,
+                replace_text_file=(replace_text_file if run_fix else None),
                 report_json=report_json,
                 audit_litellm_incident=self.audit_litellm_incident_var.get(),
             )

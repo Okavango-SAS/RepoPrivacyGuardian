@@ -133,6 +133,26 @@ def test_run_logger_redacts_sensitive_content(tmp_path: Path) -> None:
     assert all("dev@example.com" not in item for item in seen)
 
 
+def test_run_logger_falls_back_when_sink_cannot_encode_text(tmp_path: Path, monkeypatch) -> None:
+    seen: list[str] = []
+
+    class DummyStdout:
+        encoding = "cp1252"
+
+    def fragile_sink(text: str) -> None:
+        if "\ufeff" in text:
+            raise UnicodeEncodeError("cp1252", text, 0, 1, "cannot encode")
+        seen.append(text)
+
+    monkeypatch.setattr(rpg.sys, "stdout", DummyStdout())
+
+    logger = rpg.RunLogger(tmp_path / "run.log", sink=fragile_sink)
+    logger("\ufeffprefix line")
+
+    assert seen == ["?prefix line"]
+    assert "\ufeffprefix line" in (tmp_path / "run.log").read_text(encoding="utf-8")
+
+
 def test_repo_report_finalize_builds_failures() -> None:
     report = _make_report("repo-a")
     report.unexpected_emails = ["private@example.com"]
@@ -558,6 +578,34 @@ def test_write_replace_text_file_merges_explicit_file(
     contents = replace_file.read_text(encoding="utf-8")
     assert "literal:fixture-token==>redacted-fixture-token" in contents
     assert any("merged explicit replace-text mappings" in item for item in report.fix_actions)
+
+
+def test_write_replace_text_file_accepts_utf8_bom_explicit_file(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    guard.owner_emails = set()
+    guard.noreply_email = rpg.DEFAULT_NOREPLY
+    guard.placeholder_email = rpg.DEFAULT_PLACEHOLDER
+    guard.redact_third_party = False
+    guard.rewrite_personal_paths = False
+    guard._is_allowed_email = lambda _email: False
+
+    explicit = tmp_path / "explicit-replace-bom.txt"
+    explicit.write_text(
+        "literal:fixture-token==>redacted-fixture-token\n",
+        encoding="utf-8-sig",
+    )
+    guard.replace_text_file = str(explicit)
+
+    monkeypatch.setattr(rpg.tempfile, "mkdtemp", lambda prefix: str(tmp_path))
+
+    report = _make_report("repo-explicit-replace-bom")
+    replace_file = guard._write_replace_text_file(report)
+
+    contents = replace_file.read_text(encoding="utf-8")
+    assert contents.splitlines()[0] == "literal:fixture-token==>redacted-fixture-token"
 
 
 def test_rewrite_history_auto_confirms_git_filter_repo_continuation(tmp_path: Path) -> None:

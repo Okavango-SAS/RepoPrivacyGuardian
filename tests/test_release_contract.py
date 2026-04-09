@@ -211,6 +211,10 @@ def test_has_desktop_display_detects_headless_linux() -> None:
     assert rpg.has_desktop_display(platform_name="linux", env={"DISPLAY": ":0"}) is True
 
 
+def test_has_desktop_display_treats_macos_as_desktop_capable() -> None:
+    assert rpg.has_desktop_display(platform_name="darwin", env={}) is True
+
+
 def test_load_gui_runtime_requires_display(monkeypatch) -> None:
     monkeypatch.setattr(rpg, "has_desktop_display", lambda: False)
 
@@ -244,6 +248,75 @@ def test_module_wrapper_runs_help_without_launching_gui() -> None:
 
     assert proc.returncode == 0
     assert "usage:" in proc.stdout
+
+
+def test_discover_python_executables_includes_posix_virtualenv(tmp_path: Path) -> None:
+    repo = tmp_path / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+    posix_python = repo / ".venv" / "bin" / "python"
+    posix_python.parent.mkdir(parents=True)
+    posix_python.write_text("#!/usr/bin/env python\n", encoding="utf-8")
+
+    discovered = rpg.discover_python_executables_for_supply_chain(tmp_path, ["repo-a"])
+
+    assert posix_python.resolve() in discovered
+
+
+def test_gui_run_worker_passes_replace_text_file_for_repair(tmp_path: Path, monkeypatch) -> None:
+    class DummyVar:
+        def __init__(self, value):
+            self.value = value
+
+        def get(self):
+            return self.value
+
+    class DummyRoot:
+        def after(self, _delay, callback):
+            callback()
+
+    captured: dict[str, object] = {}
+
+    def fake_execute_guard_pipeline(*, config, artifacts, logger, results_dir, **kwargs):  # type: ignore[no-untyped-def]
+        del artifacts, logger, results_dir, kwargs
+        captured["config"] = config
+        return 0
+
+    monkeypatch.setattr(rpg, "execute_guard_pipeline", fake_execute_guard_pipeline)
+
+    policy = tmp_path / "POLICY.md"
+    policy.write_text("# Policy\n", encoding="utf-8")
+
+    app = object.__new__(rpg.GuiApp)
+    app.root = DummyRoot()
+    app.root_var = DummyVar(str(tmp_path))
+    app.policy_var = DummyVar(str(policy))
+    app.owner_emails_var = DummyVar("")
+    app.allowed_remote_owners_var = DummyVar("")
+    app.report_dir_var = DummyVar(str(tmp_path / "Audit_Results"))
+    app.report_json_var = DummyVar("")
+    app.replace_text_file_var = DummyVar("ops/replace-text.txt")
+    app.public_only_var = DummyVar(False)
+    app.push_var = DummyVar(False)
+    app.redact_var = DummyVar(False)
+    app.rewrite_personal_paths_var = DummyVar(False)
+    app.purge_detected_secret_files_var = DummyVar(False)
+    app.purge_all_detected_secret_files_var = DummyVar(False)
+    app.dry_run_var = DummyVar(False)
+    app.low_confidence_blocking_var = DummyVar(False)
+    app.audit_litellm_incident_var = DummyVar(False)
+    app.open_report_var = DummyVar(True)
+    app.confirm_each_repo_fix_var = DummyVar(True)
+    app.allow_non_owner_push_var = DummyVar(False)
+    app.owner_name_var = DummyVar("Owner")
+    app.noreply_var = DummyVar(rpg.DEFAULT_NOREPLY)
+    app.placeholder_var = DummyVar(rpg.DEFAULT_PLACEHOLDER)
+    app.max_matches_var = DummyVar("50")
+    app.log = lambda _msg: None
+    app._on_gui_run_finished = lambda *args, **kwargs: None
+
+    app._run_worker(["repo-a"], 50, True, ("repo-a",))
+
+    assert captured["config"].replace_text_file == "ops/replace-text.txt"
 
 
 def test_cli_defaults_follow_current_working_directory(tmp_path: Path) -> None:

@@ -64,3 +64,31 @@ jobs:
           .pkg-venv/bin/python -m pip install dist/*.whl
           .pkg-venv/bin/repo-privacy-guardian --help
           .pkg-venv/bin/python -m Repo_Privacy_Guardian --help
+
+  smoke-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install base package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Smoke CLI help
+        run: |
+          repo-privacy-guardian --help
+          python -m Repo_Privacy_Guardian --help
+
+      - name: Install test extras
+        run: python -m pip install -e ".[test]"
+
+      - name: Smoke CLI clean repo
+        run: python tests/release_smoke_cli.py
