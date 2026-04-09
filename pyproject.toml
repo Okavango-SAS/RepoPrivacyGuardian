@@ -4,20 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "repo-privacy-guardian"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local-first publication gate for auditing and hardening Git repositories before public release."
 readme = "README.MD"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [
   { name = "Axel E. Sacca" },
 ]
 keywords = ["git", "privacy", "security", "publication-gate", "release-engineering"]
 classifiers = [
   "Development Status :: 3 - Alpha",
-  "Environment :: Win32 (MS Windows)",
+  "Environment :: Console",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.10",
@@ -30,16 +32,24 @@ classifiers = [
 ]
 dependencies = []
 
+[project.urls]
+Homepage = "https://github.com/axeljackal/RepoPrivacyGuardian"
+Issues = "https://github.com/axeljackal/RepoPrivacyGuardian/issues"
+Source = "https://github.com/axeljackal/RepoPrivacyGuardian"
+
 [project.optional-dependencies]
 gui = ["customtkinter>=5.2.2,<6"]
+remediation = ["git-filter-repo>=2.45,<3"]
 rewrite = ["git-filter-repo>=2.45,<3"]
 test = [
+  "build>=1.2,<2",
   "pytest>=8.0,<9",
   "pytest-cov>=5.0,<6",
 ]
 dev = [
   "customtkinter>=5.2.2,<6",
   "git-filter-repo>=2.45,<3",
+  "build>=1.2,<2",
   "pytest>=8.0,<9",
   "pytest-cov>=5.0,<6",
 ]
@@ -52,13 +62,14 @@ py-modules = ["Repo_Privacy_Guardian"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --cov=Repo_Privacy_Guardian --cov-report=term-missing --cov-report=xml --cov-fail-under=80"
+addopts = "-q --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=80"
 
 [tool.coverage.run]
 branch = false
-source = ["Repo_Privacy_Guardian"]
+source = ["."]
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
 fail_under = 80
+omit = ["tests/*"]

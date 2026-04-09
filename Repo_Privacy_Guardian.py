@@ -23,6 +23,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -43,6 +44,8 @@ DEFAULT_NOREPLY = "noreply@github.com"
 DEFAULT_PLACEHOLDER = "redacted-contributor@example.invalid"
 DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "Audit_Results"
 GUI_DEFAULT_PUBLIC_ONLY = False
+GUI_INSTALL_EXTRA = "repo-privacy-guardian[gui]"
+REMEDIATION_INSTALL_EXTRA = "repo-privacy-guardian[remediation]"
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
 GITHUB_REPO_API_URL = "https://api.github.com/repos/{owner}/{repo}"
 LITELLM_INCIDENT_ID = "litellm-2026-03"
@@ -252,7 +255,7 @@ class GuardRunConfig:
     max_matches: int
     audit_litellm_incident: bool = False
     rewrite_personal_paths: bool = False
-    open_report: bool = True
+    open_report: bool = False
     confirm_each_repo_fix: bool = True
     allow_non_owner_push: bool = False
     allowed_remote_owners: list[str] = field(default_factory=list)
@@ -275,6 +278,79 @@ class RunLogger:
         line = f"[{stamp}] {text}\n"
         with self.log_path.open("a", encoding="utf-8") as fh:
             fh.write(line)
+
+
+def _missing_executable_message(executable: str) -> str:
+    binary = Path(str(executable)).name.lower()
+    if binary == "git":
+        return "Git executable not found. Install Git and ensure it is available on PATH."
+    return f"Required executable not found: {executable}"
+
+
+def probe_git_available(
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> tuple[bool, str | None]:
+    try:
+        proc = runner(
+            ["git", "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except FileNotFoundError:
+        return False, _missing_executable_message("git")
+    except Exception as exc:
+        return False, f"Unable to execute git --version: {exc}"
+
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip() or "unknown git startup failure"
+        return False, f"Git executable is not usable: {detail}"
+
+    return True, None
+
+
+def has_desktop_display(
+    *,
+    platform_name: str | None = None,
+    env: dict[str, str] | None = None,
+) -> bool:
+    current_platform = platform_name or sys.platform
+    current_env = env or os.environ
+    if current_platform.startswith("win") or current_platform == "darwin":
+        return True
+    return bool(
+        current_env.get("DISPLAY")
+        or current_env.get("WAYLAND_DISPLAY")
+        or current_env.get("MIR_SOCKET")
+    )
+
+
+def load_gui_runtime() -> tuple[object, object, object, type[BaseException]]:
+    if not has_desktop_display():
+        raise RuntimeError(
+            "GUI mode requires a desktop session with DISPLAY/Wayland support. "
+            "Use the CLI in headless environments."
+        )
+
+    try:
+        import tkinter as tk
+        from tkinter import TclError, messagebox
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Tkinter is not available in this Python installation. "
+            "Install Python with Tk support, or use the CLI instead."
+        ) from exc
+
+    try:
+        import customtkinter as ctk
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "GUI dependencies are not installed. Install them with: "
+            f"{sys.executable} -m pip install '{GUI_INSTALL_EXTRA}'"
+        ) from exc
+
+    return tk, messagebox, ctk, TclError
 
 
 @dataclass
@@ -438,14 +514,19 @@ class RepoPublicationGuard:  # pragma: no cover
         self.required_ignore_patterns = self._load_required_ignore_patterns()
 
     def _run(self, cmd: list[str], cwd: Path | None = None) -> CommandResult:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(cwd) if cwd else None,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(cwd) if cwd else None,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except FileNotFoundError:
+            return CommandResult(127, "", _missing_executable_message(cmd[0]))
+        except Exception as exc:
+            return CommandResult(1, "", f"Unable to execute {shlex.join(cmd)}: {exc}")
         return CommandResult(proc.returncode, proc.stdout, proc.stderr)
 
     def _run_checked(self, cmd: list[str], cwd: Path | None = None) -> CommandResult:
@@ -1012,18 +1093,13 @@ class RepoPublicationGuard:  # pragma: no cover
         probe = self._run([sys.executable, "-m", "git_filter_repo", "--help"])
         if probe.returncode == 0:
             return
-
-        self.log("[INFO] git-filter-repo not found in current interpreter. Installing...")
-        install = self._run([sys.executable, "-m", "pip", "install", "git-filter-repo"])
-        if install.returncode != 0:
-            raise RuntimeError(
-                "Unable to install git-filter-repo.\n"
-                f"STDOUT:\n{install.stdout}\nSTDERR:\n{install.stderr}"
-            )
-
-        verify = self._run([sys.executable, "-m", "git_filter_repo", "--help"])
-        if verify.returncode != 0:
-            raise RuntimeError("git-filter-repo installation verification failed.")
+        detail = probe.stderr.strip() or probe.stdout.strip()
+        raise RuntimeError(
+            "git-filter-repo is required for remediation that rewrites history. "
+            f"Install it with: {sys.executable} -m pip install '{REMEDIATION_INSTALL_EXTRA}' "
+            "or install git-filter-repo directly."
+            + (f"\nDetails: {detail}" if detail else "")
+        )
 
     def _write_mailmap(self, repo: Path, unique_emails: list[str]) -> Path | None:
         lines: list[str] = []
@@ -2721,6 +2797,11 @@ def execute_guard_pipeline(
     supply_chain_payload: dict[str, object] | None = None
     exit_code = 0
 
+    git_ok, git_error = probe_git_available()
+    if not git_ok:
+        logger(f"[ERROR] {git_error}")
+        return 3
+
     guard_kwargs: dict[str, object] = {
         "root": config.root,
         "policy_path": config.policy,
@@ -2890,14 +2971,19 @@ def validate_git_identity_inputs(user_name: str, user_email: str) -> list[str]:
 
 
 def run_git_command(args: list[str], cwd: Path | None = None) -> CommandResult:
-    proc = subprocess.run(
-        ["git", *args],
-        cwd=str(cwd) if cwd else None,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        proc = subprocess.run(
+            ["git", *args],
+            cwd=str(cwd) if cwd else None,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except FileNotFoundError:
+        return CommandResult(127, "", _missing_executable_message("git"))
+    except Exception as exc:
+        return CommandResult(1, "", f"Unable to execute git {' '.join(args)}: {exc}")
     return CommandResult(proc.returncode, proc.stdout.strip(), proc.stderr.strip())
 
 
@@ -3302,16 +3388,7 @@ def persist_litellm_supply_chain_output(
 
 class GuiApp:  # pragma: no cover
     def __init__(self) -> None:
-        import tkinter as tk
-        from tkinter import messagebox
-
-        try:
-            import customtkinter as ctk
-        except ModuleNotFoundError as exc:
-            raise RuntimeError(
-                "CustomTkinter is required for GUI mode. Install it with: "
-                f"{sys.executable} -m pip install customtkinter"
-            ) from exc
+        tk, messagebox, ctk, tcl_error = load_gui_runtime()
 
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
@@ -3319,7 +3396,14 @@ class GuiApp:  # pragma: no cover
         self.tk = tk
         self.ctk = ctk
         self.messagebox = messagebox
-        self.root = ctk.CTk()
+        try:
+            self.root = ctk.CTk()
+        except tcl_error as exc:
+            raise RuntimeError(
+                "GUI mode could not initialize Tk. "
+                "On Linux desktop, install python3-tk and start from a graphical session. "
+                "Otherwise, use the CLI."
+            ) from exc
         self.root.title("Repo Publication Guard")
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
@@ -4866,10 +4950,16 @@ def make_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument("--yes", action="store_true", help="Skip destructive action confirmation prompt")
-    parser.add_argument(
+    report_open_group = parser.add_mutually_exclusive_group()
+    report_open_group.add_argument(
+        "--open-report",
+        action="store_true",
+        help="Open the generated HTML report in a browser after a CLI run completes",
+    )
+    report_open_group.add_argument(
         "--no-open-report",
         action="store_true",
-        help="Do not open the generated HTML report automatically after each run",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--no-confirm-each-repo",
@@ -4887,7 +4977,7 @@ def make_parser() -> argparse.ArgumentParser:
         default=[],
         help="Allow force-push only when origin owner matches this value (can repeat)",
     )
-    parser.add_argument("--gui", action="store_true", help="Launch GUI")
+    parser.add_argument("--gui", action="store_true", help="Launch the optional desktop GUI")
     return parser
 
 
@@ -4903,6 +4993,11 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
             f"[WARN] report-dir was forced to {DEFAULT_RESULTS_DIR} to comply with mandatory Audit_Results policy"
         )
     cli_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
+    if args.no_open_report:
+        cli_logger(
+            "[INFO] --no-open-report is accepted for compatibility. "
+            "CLI already defaults to not opening the browser automatically."
+        )
 
     config = build_guard_run_config(
         mode="cli",
@@ -4923,7 +5018,7 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         noreply_email=args.noreply_email,
         placeholder_email=args.placeholder_email,
         max_matches=args.max_matches,
-        open_report=not args.no_open_report,
+        open_report=bool(args.open_report),
         confirm_each_repo_fix=not args.no_confirm_each_repo,
         allow_non_owner_push=args.allow_non_owner_push,
         allowed_remote_owners=args.allow_remote_owner,
@@ -4955,19 +5050,31 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
     )
 
 
-def should_launch_gui(args: argparse.Namespace, argv: list[str]) -> bool:
-    # UX default: opening the script without flags launches the desktop GUI.
-    return args.gui or len(argv) <= 1
+def should_launch_gui(args: argparse.Namespace) -> bool:
+    return bool(args.gui)
 
 
-def main() -> int:  # pragma: no cover
-    parser = make_parser()
-    args = parser.parse_args()
-
-    if should_launch_gui(args, sys.argv):
+def launch_gui() -> int:
+    try:
         app = GuiApp()
-        app.run()
+    except RuntimeError as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return 3
+    app.run()
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:  # pragma: no cover
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    parser = make_parser()
+    if not raw_args:
+        parser.print_help()
         return 0
+
+    args = parser.parse_args(raw_args)
+
+    if should_launch_gui(args):
+        return launch_gui()
 
     return run_cli(args)
 

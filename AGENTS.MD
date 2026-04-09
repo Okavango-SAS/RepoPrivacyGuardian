@@ -26,27 +26,33 @@ Notes:
 
 Use one of these command styles:
 
-- `py Repo_Privacy_Guardian.py ...`
-- `.venv/Scripts/python.exe Repo_Privacy_Guardian.py ...`
+- `repo-privacy-guardian ...`
+- `python -m repo_privacy_guardian ...`
+- `python Repo_Privacy_Guardian.py ...` (compatibility path)
 
 Minimal safe audit for one repository:
 
-```powershell
-py Repo_Privacy_Guardian.py --root C:/path/to/repos --repos MyRepo --dry-run --yes
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes
 ```
 
 Fix preview (no destructive write):
 
-```powershell
-py Repo_Privacy_Guardian.py --root C:/path/to/repos --repos MyRepo --fix --dry-run --yes
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --fix --dry-run --yes
 ```
 
 Low-confidence email policy selection:
 
-```powershell
-py Repo_Privacy_Guardian.py --root C:/path/to/repos --repos MyRepo --low-confidence-email-mode informational
-py Repo_Privacy_Guardian.py --root C:/path/to/repos --repos MyRepo --low-confidence-email-mode blocking
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --low-confidence-email-mode informational
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --low-confidence-email-mode blocking
 ```
+
+Notes:
+
+- Use `py` instead of `python` on Windows if preferred.
+- Use `--gui` explicitly for the desktop interface; the default entry path is CLI help.
 
 ## Push Guardrails
 
@@ -54,8 +60,8 @@ py Repo_Privacy_Guardian.py --root C:/path/to/repos --repos MyRepo --low-confide
 - If push is required, keep owner guardrails enabled.
 - Prefer explicit owner allowlist when needed:
 
-```powershell
-py Repo_Privacy_Guardian.py --fix --push --allow-remote-owner axeljackal
+```sh
+repo-privacy-guardian --fix --push --allow-remote-owner axeljackal
 ```
 
 ## User Experience Contract

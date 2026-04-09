@@ -1,5 +1,2 @@
-# Desktop GUI support
-customtkinter>=5.2.2,<6
-
-# Optional history rewrite support
-git-filter-repo>=2.45,<3
+# Base CLI install has no extra Python runtime dependencies.
+# External requirement: Git must be installed and available on PATH.

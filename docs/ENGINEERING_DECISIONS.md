@@ -85,7 +85,7 @@ This file captures key design decisions and their rationale.
   - optional extra JSON export path
   - max matches
 - Extended GUI parity controls with:
-  - open report toggle (`open_report` parity with CLI `--no-open-report`)
+  - open report toggle (`open_report` parity with CLI `--open-report`)
   - per-repository repair confirmation toggle (`confirm_each_repo_fix` parity)
   - push owner guardrail options (`allow_non_owner_push` and `allowed_remote_owners` parity)
 - Updated GUI interaction model with:
@@ -121,12 +121,33 @@ This file captures key design decisions and their rationale.
 - Decision: release validation must be reproducible from a clean clone, and `pytest` collection must ignore local-only/untracked test files.
 - Rationale: local ignored tests can make the workspace look healthier than `HEAD`, which breaks release trust and CI parity.
 - Implementation notes:
-  - meaningful coverage must live under tracked `tests/`;
-  - collection should not depend on editor scratch tests or ignored local files;
-  - minimal CI must execute the same tracked suite from a clean checkout.
+- meaningful coverage must live under tracked `tests/`;
+- collection should not depend on editor scratch tests or ignored local files;
+- minimal CI must execute the same tracked suite from a clean checkout.
+
+## DEC-010 - Public release defaults are CLI-first and side-effect free
+
+- Status: accepted
+- Decision: running the tool without flags prints CLI help instead of launching the GUI, and CLI browser opening is opt-in via `--open-report`.
+- Rationale: the public release target is automation-friendly desktop and headless CLI use. Auto-launching a GUI or browser from the default path is surprising, harder to script, and brittle in CI or remote shells.
+- Implementation notes:
+  - `--gui` is required for desktop mode;
+  - GUI dependencies remain optional and lazily imported;
+  - missing GUI or display prerequisites must fail with actionable messages instead of stack traces or hangs.
+
+## DEC-011 - Packaging separates CLI, GUI, remediation, and development concerns
+
+- Status: accepted
+- Decision: the base install is CLI-only, with separate extras for GUI and remediation.
+- Rationale: CLI users should not be forced to install desktop dependencies, and rewrite dependencies should only be required when destructive remediation is explicitly requested.
+- Implementation notes:
+  - base install remains minimal;
+  - `gui` extra enables desktop dependencies;
+  - `remediation` extra enables rewrite tooling;
+  - `dev` bundles test and release tooling.
 
 ## Future candidates
 
-- DEC-010: scoped allowlists to reduce false positives.
-- DEC-011: optional HTML report renderer.
-- DEC-012: policy profiles by organization.
+- DEC-012: scoped allowlists to reduce false positives.
+- DEC-013: optional HTML report renderer.
+- DEC-014: policy profiles by organization.

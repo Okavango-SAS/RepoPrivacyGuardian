@@ -1,8 +1,6 @@
 import pytest
 import subprocess
 from unittest import mock
-import tkinter as tk
-from tkinter import messagebox
 from pathlib import Path
 
 from Repo_Privacy_Guardian import (
@@ -57,13 +55,9 @@ def test_open_github_email_settings_fail(mock_open):
 @mock.patch("Repo_Privacy_Guardian.GuiApp._handle_identity_validation")
 def test_gui_apply_git_identity_local_validation_error(mock_validate):
     mock_validate.return_value = False
-    # Tests GUI error states without regressing main flow
-    app = GuiApp()
-    app.git_user_name_var.set("")
-    app.git_user_email_var.set("test@example.com")
-    
+    app = object.__new__(GuiApp)
+    app._read_identity_inputs = lambda: ("", "test@example.com")
+
     app.apply_git_identity_local_clicked()
-    
-    # ensure it returns before prompting local identity
+
     mock_validate.assert_called_once()
-    app.root.destroy()

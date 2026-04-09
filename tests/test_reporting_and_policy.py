@@ -40,7 +40,7 @@ def _make_run_config(**overrides) -> rpg.GuardRunConfig:
         "noreply_email": rpg.DEFAULT_NOREPLY,
         "placeholder_email": rpg.DEFAULT_PLACEHOLDER,
         "max_matches": 50,
-        "open_report": True,
+        "open_report": False,
         "confirm_each_repo_fix": True,
         "allow_non_owner_push": False,
         "allowed_remote_owners": [],
@@ -716,17 +716,17 @@ def test_make_parser_rejects_non_positive_max_matches() -> None:
         parser.parse_args(["--max-matches", "0"])
 
 
-def test_should_launch_gui_default_and_cli_override() -> None:
+def test_should_launch_gui_requires_explicit_flag() -> None:
     parser = rpg.make_parser()
 
     args_default = parser.parse_args([])
-    assert rpg.should_launch_gui(args_default, ["Repo_Privacy_Guardian.py"]) is True
+    assert rpg.should_launch_gui(args_default) is False
 
     args_gui = parser.parse_args(["--gui"])
-    assert rpg.should_launch_gui(args_gui, ["Repo_Privacy_Guardian.py", "--gui"]) is True
+    assert rpg.should_launch_gui(args_gui) is True
 
     args_cli = parser.parse_args(["--dry-run"])
-    assert rpg.should_launch_gui(args_cli, ["Repo_Privacy_Guardian.py", "--dry-run"]) is False
+    assert rpg.should_launch_gui(args_cli) is False
 
 
 def test_parse_positive_int_validation() -> None:

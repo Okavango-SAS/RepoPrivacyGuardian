@@ -7,6 +7,7 @@ Use this checklist before tagging a public release.
 - Confirm clean working tree.
 - Confirm target branch and remote.
 - Confirm local git identity is correct for release commits.
+- Confirm public support matrix in README still matches validated platforms.
 
 ## 2. Audit run
 
@@ -47,8 +48,9 @@ Use this checklist before tagging a public release.
 ## 7. Release criteria
 
 - Required checks pass.
-- Clean-clone validation passes: `py -m pip install -e .[test]`, `py -m pytest`, `repo-privacy-guardian --help`.
-- CI is green on the tracked test suite and Windows smoke CLI job.
+- Clean-clone validation passes: `python -m pip install -e ".[test]"`, `python -m pytest`, `repo-privacy-guardian --help`.
+- Package build succeeds (`python -m build`) and the wheel installs cleanly.
+- CI is green on the tracked test suite for Windows and Linux plus package-build smoke.
 - Risk exceptions are documented and approved.
 - License and notice files are present and correct.
 - Final report artifacts are stored in the expected local path.

@@ -3,6 +3,12 @@
 > Generic baseline policy to prepare repositories for safe public publication.
 > This template is intentionally identity-agnostic and does not contain personal data.
 
+Shell note:
+
+- Commands below are written in a shell-neutral form where possible.
+- In PowerShell, `py` may be used instead of `python`.
+- Adapt path quoting to your shell when repository paths contain spaces.
+
 ## Scope
 
 - Applies to every repository maintained by this workspace/team.
@@ -29,21 +35,21 @@ Rules:
 
 Suggested global config:
 
-```powershell
+```sh
 git config --global user.name "<YOUR_NAME>"
 git config --global user.email "<YOUR_GITHUB_NOREPLY_EMAIL>"
 ```
 
 Verification:
 
-```powershell
+```sh
 git config --show-origin --global --get user.name
 git config --show-origin --global --get user.email
 ```
 
 Repo-specific override (only when required by organization policy):
 
-```powershell
+```sh
 git config --local user.name "<REQUIRED_NAME>"
 git config --local user.email "<REQUIRED_EMAIL>"
 ```
@@ -52,7 +58,7 @@ git config --local user.email "<REQUIRED_EMAIL>"
 
 ### A) Clean local state
 
-```powershell
+```sh
 git status --short --branch
 ```
 
@@ -62,32 +68,32 @@ No unexpected changes should exist.
 
 Review all historical author/committer emails:
 
-```powershell
+```sh
 git shortlog -sne --all
 git log --all --pretty=format:"%h %ae %ce"
 ```
 
 Search for secrets in patch history:
 
-```powershell
+```sh
 git log --all -p --no-color | rg -n "ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z\-_]{35}|xox[baprs]-[A-Za-z0-9-]+|Authorization:\\s*(Bearer|token)\\s+[A-Za-z0-9._-]+|BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY"
 ```
 
 Search for personal/local paths in history:
 
-```powershell
+```sh
 git log --all -p --no-color | rg -n "C:\\\\Users\\\\|/Users/|/home/|AppData\\\\|Documents\\\\"
 ```
 
 Detect sensitive filenames ever added:
 
-```powershell
+```sh
 git log --all --diff-filter=A --name-only --pretty=format: | rg -n -i "^\.env$|^\.env\.|\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|id_rsa|secrets?\\.|credentials?\\.|token"
 ```
 
 Detect sensitive filenames later deleted (still a historical leak risk):
 
-```powershell
+```sh
 git log --all --diff-filter=D --name-only --pretty=format: | rg -n -i "^\.env$|^\.env\.|\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|id_rsa|secrets?\\.|credentials?\\.|token"
 ```
 
@@ -95,25 +101,25 @@ git log --all --diff-filter=D --name-only --pretty=format: | rg -n -i "^\.env$|^
 
 Search secrets in current tracked files:
 
-```powershell
+```sh
 git grep -n -I -E "ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z\-_]{35}|xox[baprs]-[A-Za-z0-9-]+|Authorization: Bearer|Authorization: token|BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY"
 ```
 
 Search personal/local paths:
 
-```powershell
+```sh
 git grep -n -I -E "C:\\\\Users\\\\|/Users/|/home/"
 ```
 
 Search emails in tracked content:
 
-```powershell
+```sh
 git grep -n -I -E "[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
 ```
 
 ### D) Exfiltration surface review
 
-```powershell
+```sh
 rg -n --hidden -S "Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|HttpClient|WebClient|curl\\b|wget\\b|socket|upload|webhook|telemetry|analytics|http://|https://" src scripts playbooks prompts tools
 ```
 
@@ -156,26 +162,26 @@ Minimum baseline:
 
 Check currently ignored sensitive paths:
 
-```powershell
+```sh
 git status --short --ignored | rg -n "^!! (\.venv/|sessions/|\.env|\.env\.)"
 ```
 
 Detect tracked-but-ignored files:
 
-```powershell
+```sh
 git ls-files -ci --exclude-standard
 ```
 
 If output exists, fix immediately:
 
-```powershell
+```sh
 git rm --cached <path>
 git commit -m "chore: stop tracking ignored sensitive/local file"
 ```
 
 Review .gitignore evolution to catch late-added protections:
 
-```powershell
+```sh
 git log --all -- .gitignore
 ```
 
@@ -188,9 +194,9 @@ git log --all -- .gitignore
 
 Run project validators/tests before publication:
 
-```powershell
+```sh
 # Examples, adapt to each project
-py -m pip install -e .[test]
+python -m pip install -e ".[test]"
 pytest
 ```
 
@@ -202,31 +208,31 @@ Preferred tool: git-filter-repo.
 
 1. Create full backup bundle:
 
-```powershell
-git bundle create ..\<repo>-pre-redaction.bundle --all
+```sh
+git bundle create ../<repo>-pre-redaction.bundle --all
 ```
 
 1. Install if missing:
 
-```powershell
+```sh
 python -m pip install git-filter-repo
 ```
 
 1. Rewrite private emails in metadata (example):
 
-```powershell
+```sh
 git filter-repo --email-callback "return b'<NOREPLY_EMAIL>' if email == b'<PRIVATE_EMAIL>' else email"
 ```
 
 1. Remove sensitive files from all history (example):
 
-```powershell
+```sh
 git filter-repo --path .env --path-glob "*.pem" --path-glob "*.key" --invert-paths
 ```
 
 1. Replace leaked values in historical file content using a mapping file:
 
-```powershell
+```sh
 # replacements.txt format:
 # literal:old_value==>redacted_value
 git filter-repo --replace-text replacements.txt
@@ -234,13 +240,13 @@ git filter-repo --replace-text replacements.txt
 
 1. Push safely:
 
-```powershell
+```sh
 git push --force-with-lease origin main
 ```
 
 1. Re-audit after rewrite:
 
-```powershell
+```sh
 git shortlog -sne --all
 ```
 

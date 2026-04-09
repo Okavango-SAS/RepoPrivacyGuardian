@@ -32,6 +32,11 @@ Workaround: always create bundle backups and coordinate with collaborators.
 Impact: low.
 Workaround: run long operations from CLI for better control.
 
+1. Linux GUI support depends on optional desktop prerequisites.
+
+Impact: low.
+Workaround: use the supported CLI path in headless or minimal Linux environments; for GUI use, install Tk support and run from a graphical session.
+
 1. No built-in integration with provider APIs for secret rotation.
 
 Impact: medium.
