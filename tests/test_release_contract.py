@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -241,6 +243,35 @@ def test_module_wrapper_runs_help_without_launching_gui() -> None:
 
     assert proc.returncode == 0
     assert "usage:" in proc.stdout
+
+
+def test_cli_defaults_follow_current_working_directory(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repo_root)
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import json; "
+                "import Repo_Privacy_Guardian as rpg; "
+                "args = rpg.make_parser().parse_args([]); "
+                "print(json.dumps({'root': args.root, 'report_dir': args.report_dir}))"
+            ),
+        ],
+        cwd=str(tmp_path),
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert proc.returncode == 0
+    payload = json.loads(proc.stdout.strip())
+    assert Path(payload["root"]) == tmp_path
+    assert Path(payload["report_dir"]) == tmp_path / "Audit_Results"
 
 
 def test_public_docs_describe_cli_first_release_contract() -> None:

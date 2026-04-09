@@ -27,7 +27,7 @@ Notes:
 Use one of these command styles:
 
 - `repo-privacy-guardian ...`
-- `python -m repo_privacy_guardian ...`
+- `python -m Repo_Privacy_Guardian ...`
 - `python Repo_Privacy_Guardian.py ...` (compatibility path)
 
 Minimal safe audit for one repository:

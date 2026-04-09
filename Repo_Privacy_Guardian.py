@@ -38,11 +38,19 @@ from pathlib import Path
 from typing import Callable
 
 
-DEFAULT_ROOT = Path(__file__).resolve().parent.parent
+def default_root_dir() -> Path:
+    return Path.cwd()
+
+
+def default_results_dir() -> Path:
+    return default_root_dir() / "Audit_Results"
+
+
+DEFAULT_ROOT = default_root_dir()
 DEFAULT_POLICY = Path(__file__).resolve().parent / "docs" / "POLICY.md"
 DEFAULT_NOREPLY = "noreply@github.com"
 DEFAULT_PLACEHOLDER = "redacted-contributor@example.invalid"
-DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "Audit_Results"
+DEFAULT_RESULTS_DIR = default_results_dir()
 GUI_DEFAULT_PUBLIC_ONLY = False
 GUI_INSTALL_EXTRA = "repo-privacy-guardian[gui]"
 REMEDIATION_INSTALL_EXTRA = "repo-privacy-guardian[remediation]"
@@ -1594,7 +1602,7 @@ def create_run_artifacts(base_dir: Path) -> RunArtifacts:
 
 
 def enforce_results_dir(requested_dir: Path | None) -> tuple[Path, bool]:
-    base = DEFAULT_RESULTS_DIR.resolve()
+    base = default_results_dir().resolve()
     if requested_dir is None:
         return base, False
 
@@ -3417,7 +3425,7 @@ class GuiApp:  # pragma: no cover
         self.root.minsize(min(1120, screen_w), min(700, screen_h))
         self.root.maxsize(screen_w, screen_h)
 
-        self.root_var = tk.StringVar(value=str(DEFAULT_ROOT))
+        self.root_var = tk.StringVar(value=str(default_root_dir()))
         self.policy_var = tk.StringVar(value=str(DEFAULT_POLICY))
         self.noreply_var = tk.StringVar(value=DEFAULT_NOREPLY)
         self.placeholder_var = tk.StringVar(value=DEFAULT_PLACEHOLDER)
@@ -3426,7 +3434,7 @@ class GuiApp:  # pragma: no cover
         self.allowed_remote_owners_var = tk.StringVar(value="")
         self.git_user_name_var = tk.StringVar(value="Owner")
         self.git_user_email_var = tk.StringVar(value=DEFAULT_NOREPLY)
-        self.report_dir_var = tk.StringVar(value=str(DEFAULT_RESULTS_DIR))
+        self.report_dir_var = tk.StringVar(value=str(default_results_dir()))
         self.report_json_var = tk.StringVar(value="")
         self.max_matches_var = tk.StringVar(value="50")
 
@@ -4761,7 +4769,7 @@ class GuiApp:  # pragma: no cover
             policy = Path(self.policy_var.get())
             owner_emails = normalize_csv_values(self.owner_emails_var.get())
             allowed_remote_owners = normalize_csv_values(self.allowed_remote_owners_var.get())
-            requested_report_dir = self.report_dir_var.get().strip() or str(DEFAULT_RESULTS_DIR)
+            requested_report_dir = self.report_dir_var.get().strip() or str(default_results_dir())
             enforced_results_dir, forced = enforce_results_dir(Path(requested_report_dir))
             report_json = self.report_json_var.get().strip() or None
 
@@ -4778,7 +4786,7 @@ class GuiApp:  # pragma: no cover
             )
             if forced:
                 gui_logger(
-                    f"[WARN] report-dir was forced to {DEFAULT_RESULTS_DIR} to comply with mandatory Audit_Results policy"
+                    f"[WARN] report-dir was forced to {default_results_dir()} to comply with mandatory Audit_Results policy"
                 )
             gui_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
             gui_logger(f"[INFO] GUI action: {'repair' if run_fix else 'audit'}")
@@ -4881,7 +4889,7 @@ def make_parser() -> argparse.ArgumentParser:
             "Outbound/exfil indicators remain advisory/manual-review by default."
         ),
     )
-    parser.add_argument("--root", default=str(DEFAULT_ROOT), help="Root folder containing repositories")
+    parser.add_argument("--root", default=str(default_root_dir()), help="Root folder containing repositories")
     parser.add_argument("--policy", default=str(DEFAULT_POLICY), help="Policy markdown path")
     parser.add_argument("--repos", nargs="*", help="Repo folder names or absolute paths")
     parser.add_argument(
@@ -4945,7 +4953,7 @@ def make_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--report-dir",
-        default=str(DEFAULT_RESULTS_DIR),
+        default=str(default_results_dir()),
         help="Requested base directory for timestamped run folders; values outside Audit_Results are ignored by policy",
     )
 
@@ -4990,7 +4998,7 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
     cli_logger = RunLogger(artifacts.log_path, sink=print)
     if forced:
         cli_logger(
-            f"[WARN] report-dir was forced to {DEFAULT_RESULTS_DIR} to comply with mandatory Audit_Results policy"
+            f"[WARN] report-dir was forced to {default_results_dir()} to comply with mandatory Audit_Results policy"
         )
     cli_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
     if args.no_open_report:
