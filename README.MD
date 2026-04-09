@@ -135,6 +135,12 @@ Safe fix preview:
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --fix --dry-run --yes
 ```
 
+Advanced fix with explicit history replacements supplied by the operator or an agent:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --fix --yes --replace-text-file /path/to/replace-text.txt
+```
+
 Open the HTML report explicitly after a CLI run:
 
 ```sh
@@ -194,6 +200,50 @@ It does not:
 - rotate leaked credentials for you
 - make outbound review decisions automatically
 - bypass destructive safeguards by default
+
+## Automatic vs reviewed remediation
+
+The tool can already remediate several classes of findings safely once you explicitly request `--fix`:
+
+- create a mandatory backup bundle before rewrite
+- append required `.gitignore` baseline rules
+- stop tracking ignored files
+- rewrite commit metadata emails to approved noreply or placeholder addresses
+- rewrite detected personal paths when `--rewrite-personal-paths` is explicitly enabled
+- merge an explicit `--replace-text-file` for known literals that cannot be inferred safely
+- re-audit after remediation and fail the run if fix execution itself errors
+
+Human or agent review is still required when the tool cannot safely infer intent from the finding alone:
+
+- deciding whether a match in tests/docs/examples is a real leak or an intentional fixture
+- rewriting source fixtures so the working tree stops re-seeding the same secret or personal path
+- deciding whether a sensitive file should be purged conservatively or only reviewed
+- rotating real credentials after cleanup
+
+Practical rule: let the tool perform mechanical Git-safe rewrites, but keep semantic source edits and any non-obvious substitution under reviewed operator control.
+
+## Agentic CLI workflow
+
+Repo Privacy Guardian works well as an agent-driven CLI tool. A safe default pattern is:
+
+1. `repo-privacy-guardian --help`
+2. dry-run audit
+3. reviewed dry-run fix plan
+4. real fix only for the reviewed repos
+5. re-audit until `PASS`
+
+Recommended agent prompt template:
+
+```text
+Act as a release/security engineer. Work only on <target-repo>.
+Use Repo Privacy Guardian from CLI, not GUI.
+Start with --help, then run a dry-run audit, analyze whether findings are real leaks or intentional fixtures,
+apply only safe reviewed fixes, use --replace-text-file only when an explicit literal replacement is required,
+re-run the audit until the repository is PASS, and preserve audit artifacts under Audit_Results.
+Do not push or rewrite history without explicit approval.
+```
+
+The repository also includes reusable prompt files under `prompts/` for agentic audit and parity workflows.
 
 ## Headless and desktop diagnostics
 

@@ -191,6 +191,7 @@ def test_execute_guard_pipeline_returns_error_when_git_missing(tmp_path: Path, m
         confirm_each_repo_fix=True,
         allow_non_owner_push=False,
         allowed_remote_owners=[],
+        replace_text_file=None,
         report_json=None,
     )
 
@@ -285,7 +286,24 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "CLI does not open a browser automatically",
         "Use `--gui` for the desktop interface",
         "`exfil_code_indicators` is intentionally manual-review only by default",
+        "--replace-text-file",
+        "Recommended agent prompt template",
     ]
 
     for snippet in required_snippets:
         assert snippet in readme
+
+
+def test_agents_doc_describes_agentic_cli_workflow() -> None:
+    agents = (Path(__file__).resolve().parents[1] / "AGENTS.MD").read_text(encoding="utf-8")
+
+    required_snippets = [
+        "`repo-privacy-guardian ...`",
+        "`python -m Repo_Privacy_Guardian ...`",
+        "`python Repo_Privacy_Guardian.py ...`",
+        "`--replace-text-file`",
+        "Act as a release/security engineer.",
+    ]
+
+    for snippet in required_snippets:
+        assert snippet in agents

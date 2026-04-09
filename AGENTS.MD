@@ -21,6 +21,8 @@ Notes:
 
 - Treat `exfil_code_indicators` as advisory/manual-review by default. Review them, but do not expect them to flip PASS/FAIL on their own.
 - Release validation should come from tracked tests only so a clean clone reproduces the same `pytest` signal.
+- Let the tool automate mechanical Git-safe remediation, but keep semantic source edits under review.
+- Use `--replace-text-file` when the repository contains a known literal that must be rewritten but the replacement cannot be inferred safely from the finding alone.
 
 ## Recommended Commands
 
@@ -40,6 +42,12 @@ Fix preview (no destructive write):
 
 ```sh
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --fix --dry-run --yes
+```
+
+Advanced fix with explicit replace-text mappings:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --fix --yes --replace-text-file /path/to/replace-text.txt
 ```
 
 Low-confidence email policy selection:
@@ -73,6 +81,19 @@ When reporting findings, keep outputs actionable and brief.
 - State one suggested next action.
 
 Avoid dumping all raw findings first. Start with decision guidance, then show details only if needed.
+
+## Agentic Prompt Template
+
+Use this prompt style when delegating execution to an agent:
+
+```text
+Act as a release/security engineer. Work only on <target-repo>.
+Use Repo Privacy Guardian from CLI, not GUI.
+Start with --help, then run a dry-run audit, review whether findings are real leaks or intentional fixtures,
+apply only safe reviewed fixes, use --replace-text-file only for explicit operator-approved substitutions,
+re-run until PASS, and preserve artifacts under Audit_Results.
+Do not push or rewrite history without explicit approval.
+```
 
 ## Artifacts
 

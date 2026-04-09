@@ -83,6 +83,7 @@ def _make_run_config(**overrides) -> rpg.GuardRunConfig:
         "confirm_each_repo_fix": True,
         "allow_non_owner_push": False,
         "allowed_remote_owners": [],
+        "replace_text_file": None,
         "report_json": None,
     }
     base.update(overrides)
@@ -529,6 +530,77 @@ def test_write_replace_text_file_skips_personal_paths_when_disabled(
     assert any("rewrite-personal-paths" in item for item in report.fix_actions)
 
 
+def test_write_replace_text_file_merges_explicit_file(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    guard.owner_emails = set()
+    guard.noreply_email = rpg.DEFAULT_NOREPLY
+    guard.placeholder_email = rpg.DEFAULT_PLACEHOLDER
+    guard.redact_third_party = False
+    guard.rewrite_personal_paths = False
+    guard._is_allowed_email = lambda _email: False
+
+    explicit = tmp_path / "explicit-replace.txt"
+    explicit.write_text(
+        "# operator-provided mapping\nliteral:fixture-token==>redacted-fixture-token\n",
+        encoding="utf-8",
+    )
+    guard.replace_text_file = str(explicit)
+
+    monkeypatch.setattr(rpg.tempfile, "mkdtemp", lambda prefix: str(tmp_path))
+
+    report = _make_report("repo-explicit-replace")
+    replace_file = guard._write_replace_text_file(report)
+
+    assert replace_file == tmp_path / "replace-text.txt"
+    contents = replace_file.read_text(encoding="utf-8")
+    assert "literal:fixture-token==>redacted-fixture-token" in contents
+    assert any("merged explicit replace-text mappings" in item for item in report.fix_actions)
+
+
+def test_rewrite_history_auto_confirms_git_filter_repo_continuation(tmp_path: Path) -> None:
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    guard.dry_run = False
+    guard.replace_text_file = None
+    guard.rewrite_personal_paths = False
+    guard.owner_name = "Owner"
+    guard.owner_emails = {"owner@example.com"}
+    guard.noreply_email = rpg.DEFAULT_NOREPLY
+    guard.placeholder_email = rpg.DEFAULT_PLACEHOLDER
+    guard.redact_third_party = False
+    guard._is_allowed_email = lambda _email: False
+    guard._ensure_git_filter_repo = lambda: None
+    guard._save_remotes = lambda _repo: {"origin": "https://example.test/repo.git"}
+    guard._restore_remotes = lambda _repo, _remotes: None
+
+    captured: dict[str, object] = {}
+
+    def fake_run_checked(
+        cmd: list[str],
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> rpg.CommandResult:
+        captured["cmd"] = cmd
+        captured["cwd"] = cwd
+        captured["input_text"] = input_text
+        return rpg.CommandResult(0, "", "")
+
+    guard._run_checked = fake_run_checked
+
+    report = _make_report("rewrite-history")
+    report.author_emails = ["owner@example.com"]
+    report.committer_emails = []
+
+    guard._rewrite_history(tmp_path, report)
+
+    assert captured["cwd"] == tmp_path
+    assert captured["input_text"] == "y\n"
+    assert "--mailmap" in captured["cmd"]
+    assert "history rewritten with git-filter-repo" in report.fix_actions
+
+
 def test_classify_repo_severity_all_levels() -> None:
     high = _make_report("high")
     high.tracked_secret_matches = ["a"]
@@ -736,6 +808,7 @@ def test_make_parser_defaults_and_flags() -> None:
 
     assert Path(args.policy) == rpg.DEFAULT_POLICY
     assert Path(args.report_dir) == rpg.DEFAULT_RESULTS_DIR
+    assert args.replace_text_file is None
     assert args.fix is False
     assert args.rewrite_personal_paths is False
     assert args.public_only == rpg.GUI_DEFAULT_PUBLIC_ONLY
@@ -750,6 +823,9 @@ def test_make_parser_defaults_and_flags() -> None:
 
     args = parser.parse_args(["--low-confidence-email-mode", "blocking"])
     assert args.low_confidence_email_mode == "blocking"
+
+    args = parser.parse_args(["--replace-text-file", "ops/replace-text.txt"])
+    assert args.replace_text_file == "ops/replace-text.txt"
 
 
 def test_make_parser_rejects_non_positive_max_matches() -> None:
@@ -831,11 +907,13 @@ def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
         confirm_each_repo_fix=False,
         allow_non_owner_push=False,
         allowed_remote_owners=["axeljackal", "axeljackal"],
+        replace_text_file="ops/replace-text.txt",
         report_json=None,
     )
 
     assert config.owner_emails == ["dev@example.com"]
     assert config.allowed_remote_owners == ["axeljackal", "octocat"]
+    assert config.replace_text_file == "ops/replace-text.txt"
     assert config.open_report is False
     assert config.confirm_each_repo_fix is False
 
@@ -863,6 +941,7 @@ def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
         confirm_each_repo_fix=True,
         allow_non_owner_push=False,
         allowed_remote_owners=["axeljackal"],
+        replace_text_file="ops/replace-text.txt",
         report_json="C:/repos/Audit_Results/export.json",
     )
     cli_config = rpg.build_guard_run_config(mode="cli", **kwargs)
@@ -893,6 +972,7 @@ def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
         "confirm_each_repo_fix",
         "allow_non_owner_push",
         "allowed_remote_owners",
+        "replace_text_file",
         "report_json",
     ]
     for field in same_fields:

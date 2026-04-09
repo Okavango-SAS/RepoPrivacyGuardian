@@ -111,6 +111,7 @@ def _make_guard(tmp_path: Path, *, policy_path: Path | None = None) -> rpg.RepoP
         audit_litellm_incident=False,
         allow_non_owner_push=False,
         allowed_remote_owners=[],
+        replace_text_file=None,
         logger=lambda _msg: None,
     )
 

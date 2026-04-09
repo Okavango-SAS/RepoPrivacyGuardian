@@ -267,6 +267,7 @@ class GuardRunConfig:
     confirm_each_repo_fix: bool = True
     allow_non_owner_push: bool = False
     allowed_remote_owners: list[str] = field(default_factory=list)
+    replace_text_file: str | None = None
     report_json: str | None = None
 
 
@@ -486,6 +487,7 @@ class RepoPublicationGuard:  # pragma: no cover
         audit_litellm_incident: bool,
         allow_non_owner_push: bool,
         allowed_remote_owners: list[str],
+        replace_text_file: str | None,
         logger: Callable[[str], None],
     ) -> None:
         self.root = root
@@ -512,6 +514,7 @@ class RepoPublicationGuard:  # pragma: no cover
             for owner in allowed_remote_owners
             if owner.strip()
         }
+        self.replace_text_file = replace_text_file
         self.rewrite_personal_paths = False
         self.log = logger
 
@@ -521,7 +524,12 @@ class RepoPublicationGuard:  # pragma: no cover
 
         self.required_ignore_patterns = self._load_required_ignore_patterns()
 
-    def _run(self, cmd: list[str], cwd: Path | None = None) -> CommandResult:
+    def _run(
+        self,
+        cmd: list[str],
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> CommandResult:
         try:
             proc = subprocess.run(
                 cmd,
@@ -530,6 +538,7 @@ class RepoPublicationGuard:  # pragma: no cover
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                input=input_text,
             )
         except FileNotFoundError:
             return CommandResult(127, "", _missing_executable_message(cmd[0]))
@@ -537,8 +546,13 @@ class RepoPublicationGuard:  # pragma: no cover
             return CommandResult(1, "", f"Unable to execute {shlex.join(cmd)}: {exc}")
         return CommandResult(proc.returncode, proc.stdout, proc.stderr)
 
-    def _run_checked(self, cmd: list[str], cwd: Path | None = None) -> CommandResult:
-        result = self._run(cmd, cwd=cwd)
+    def _run_checked(
+        self,
+        cmd: list[str],
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> CommandResult:
+        result = self._run(cmd, cwd=cwd, input_text=input_text)
         if result.returncode != 0:
             raise RuntimeError(
                 f"Command failed ({result.returncode}): {shlex.join(cmd)}\n"
@@ -1174,10 +1188,33 @@ class RepoPublicationGuard:  # pragma: no cover
                 "path remediation skipped: explicit opt-in required (--rewrite-personal-paths)"
             )
 
-        if not replacement_map:
+        extra_replace_lines: list[str] = []
+        replace_text_file = getattr(self, "replace_text_file", None)
+        if replace_text_file:
+            replace_path = Path(replace_text_file).expanduser().resolve()
+            try:
+                raw_extra_lines = replace_path.read_text(encoding="utf-8", errors="replace")
+            except OSError as exc:
+                raise RuntimeError(
+                    f"Unable to read --replace-text-file '{replace_path}': {exc}"
+                ) from exc
+
+            extra_replace_lines = [
+                line.strip()
+                for line in raw_extra_lines.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+            ]
+            if extra_replace_lines:
+                report.fix_actions.append(
+                    f"merged explicit replace-text mappings from {replace_path}"
+                )
+
+        if not replacement_map and not extra_replace_lines:
             return None
 
         lines = [f"literal:{src}==>{dst}" for src, dst in sorted(replacement_map.items())]
+        lines.extend(extra_replace_lines)
+        lines = list(dict.fromkeys(lines))
         tmp = Path(tempfile.mkdtemp(prefix="repo-publication-guard-")) / "replace-text.txt"
         tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return tmp
@@ -1368,7 +1405,7 @@ class RepoPublicationGuard:  # pragma: no cover
 
             cmd.append("--invert-paths")
 
-        self._run_checked(cmd, cwd=repo)
+        self._run_checked(cmd, cwd=repo, input_text="y\n")
         self._restore_remotes(repo, remotes)
         report.fix_actions.append("history rewritten with git-filter-repo")
 
@@ -1901,6 +1938,7 @@ def build_fix_preflight_summary(config: GuardRunConfig, repos: list[Path]) -> li
         f"[PREVIEW] dry_run={config.dry_run} push={config.push}",
         f"[PREVIEW] audit_litellm_incident={config.audit_litellm_incident}",
         f"[PREVIEW] rewrite_personal_paths={config.rewrite_personal_paths}",
+        f"[PREVIEW] explicit replace-text file={bool(config.replace_text_file)}",
         f"[PREVIEW] low-confidence email mode: {config.low_confidence_email_mode}",
         f"[PREVIEW] confirm_each_repo_fix={config.confirm_each_repo_fix}",
         "[PREVIEW] potential destructive actions: history rewrite, file untracking, force push",
@@ -2785,6 +2823,7 @@ def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, s
         "confirm_each_repo_fix": str(config.confirm_each_repo_fix),
         "allow_non_owner_push": str(config.allow_non_owner_push),
         "allowed_remote_owners": ",".join(config.allowed_remote_owners),
+        "replace_text_file": str(config.replace_text_file or ""),
         "exfil_indicator_mode": EXFIL_INDICATOR_MODE,
         "results_dir": str(results_dir),
         "report_json": str(config.report_json or ""),
@@ -2827,12 +2866,16 @@ def execute_guard_pipeline(
         "audit_litellm_incident": config.audit_litellm_incident,
         "allow_non_owner_push": config.allow_non_owner_push,
         "allowed_remote_owners": config.allowed_remote_owners,
+        "replace_text_file": config.replace_text_file,
         "logger": logger,
     }
 
     guard_init_params = inspect.signature(RepoPublicationGuard.__init__).parameters
-    if "audit_litellm_incident" not in guard_init_params:
-        guard_kwargs.pop("audit_litellm_incident", None)
+    guard_kwargs = {
+        key: value
+        for key, value in guard_kwargs.items()
+        if key in guard_init_params
+    }
     guard = RepoPublicationGuard(**guard_kwargs)
     guard.rewrite_personal_paths = config.rewrite_personal_paths
 
@@ -3155,6 +3198,7 @@ def build_guard_run_config(
     confirm_each_repo_fix: bool,
     allow_non_owner_push: bool,
     allowed_remote_owners: list[str],
+    replace_text_file: str | None,
     report_json: str | None,
     audit_litellm_incident: bool = False,
 ) -> GuardRunConfig:
@@ -3188,6 +3232,7 @@ def build_guard_run_config(
         confirm_each_repo_fix=confirm_each_repo_fix,
         allow_non_owner_push=allow_non_owner_push,
         allowed_remote_owners=normalized_allowed_remote_owners,
+        replace_text_file=replace_text_file,
         report_json=report_json,
     )
 
@@ -4816,6 +4861,7 @@ class GuiApp:  # pragma: no cover
                 open_report=self.open_report_var.get(),
                 allow_non_owner_push=(run_fix and self.allow_non_owner_push_var.get()),
                 allowed_remote_owners=allowed_remote_owners,
+                replace_text_file=None,
                 report_json=report_json,
                 audit_litellm_incident=self.audit_litellm_incident_var.get(),
             )
@@ -4956,6 +5002,13 @@ def make_parser() -> argparse.ArgumentParser:
         default=str(default_results_dir()),
         help="Requested base directory for timestamped run folders; values outside Audit_Results are ignored by policy",
     )
+    parser.add_argument(
+        "--replace-text-file",
+        help=(
+            "Advanced remediation input: merge an explicit git-filter-repo replace-text file "
+            "into the generated rewrite plan"
+        ),
+    )
 
     parser.add_argument("--yes", action="store_true", help="Skip destructive action confirmation prompt")
     report_open_group = parser.add_mutually_exclusive_group()
@@ -5030,6 +5083,7 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         confirm_each_repo_fix=not args.no_confirm_each_repo,
         allow_non_owner_push=args.allow_non_owner_push,
         allowed_remote_owners=args.allow_remote_owner,
+        replace_text_file=args.replace_text_file,
         report_json=args.report_json,
         audit_litellm_incident=args.audit_litellm_incident,
     )
