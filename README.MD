@@ -102,10 +102,10 @@ python -m pip install ".[dev]"
 
 Compatibility requirement files:
 
-- `requirements.txt`: base CLI has no extra Python runtime dependencies
-- `requirements-gui.txt`: optional GUI dependency set
-- `requirements-remediation.txt`: optional remediation dependency set
-- `requirements-dev.txt`: local development and test dependencies
+- `config/requirements/requirements.txt`: base CLI has no extra Python runtime dependencies
+- `config/requirements/requirements-gui.txt`: optional GUI dependency set
+- `config/requirements/requirements-remediation.txt`: optional remediation dependency set
+- `config/requirements/requirements-dev.txt`: local development and test dependencies
 
 External requirements:
 
@@ -114,6 +114,16 @@ External requirements:
 - Linux desktop GUI use may require a Tk package such as `python3-tk`
 
 ## 🚀 Quick Start
+
+Main script in this repository:
+
+- `Repo_Privacy_Guardian.py`
+
+Recommended execution order:
+
+- `repo-privacy-guardian ...`: installed console entry point
+- `python -m Repo_Privacy_Guardian ...`: module execution
+- `python Repo_Privacy_Guardian.py ...`: direct compatibility path from the repository root
 
 Installed entry point:
 
@@ -256,7 +266,7 @@ re-run the audit until the repository is PASS, and preserve audit artifacts unde
 Do not push or rewrite history without explicit approval.
 ```
 
-The repository also includes reusable prompt files under `prompts/` for agentic audit and parity workflows.
+The repository also includes reusable prompt files under `docs/prompts/` for agentic audit and parity workflows.
 
 ## 🧰 Headless and Desktop Diagnostics
 
@@ -278,10 +288,21 @@ Pytest collection is restricted to tracked test files so local ignored test file
 
 ## 🏗️ Repository Layout
 
-- `Repo_Privacy_Guardian.py`: core CLI and optional GUI implementation
-- `docs/`: policy, release docs, and engineering rationale
+- `Repo_Privacy_Guardian.py`: main script, core CLI, and optional GUI implementation
+- `repo_privacy_guardian_resources/`: packaged policy resource used by installed builds
+- `config/requirements/`: compatibility dependency manifests
+- `docs/`: policy, prompts, release docs, and engineering rationale
 - `tests/`: tracked regression, packaging, smoke coverage, and release hygiene
 - `.github/workflows/ci.yml`: cross-platform CLI/package CI plus Windows GUI smoke
+
+Files that intentionally remain in the repository root:
+
+- `README.MD`
+- `Repo_Privacy_Guardian.py`
+- `pyproject.toml`
+- `AGENTS.MD`
+- `LICENSE`
+- `NOTICE`
 
 ## ⚠️ Limitations
 

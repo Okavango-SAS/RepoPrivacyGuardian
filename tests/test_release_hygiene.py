@@ -19,7 +19,30 @@ GUI_CONTRACT_DOCS = [
     "docs/LEARNED_LESSONS.md",
     "docs/RELEASE_CHECKLIST.md",
     "docs/ROADMAP.md",
-    "prompts/02_PARIDAD_GUI_CLI.prompt.md",
+    "docs/prompts/02_PARIDAD_GUI_CLI.prompt.md",
+]
+
+ROOT_LAYOUT_OFFENDERS = [
+    "requirements.txt",
+    "requirements-gui.txt",
+    "requirements-remediation.txt",
+    "requirements-dev.txt",
+    "prompts",
+]
+
+ROOT_LAYOUT_REQUIRED = [
+    "Repo_Privacy_Guardian.py",
+    "README.MD",
+    "config/requirements/requirements.txt",
+    "config/requirements/requirements-gui.txt",
+    "config/requirements/requirements-remediation.txt",
+    "config/requirements/requirements-dev.txt",
+    "repo_privacy_guardian_resources/__init__.py",
+    "repo_privacy_guardian_resources/POLICY.md",
+    "docs/prompts/01_AUDITORIA_Y_SEGUIMIENTO.prompt.md",
+    "docs/prompts/02_PARIDAD_GUI_CLI.prompt.md",
+    "docs/prompts/03_MEJORA_GUI_GITHUB_EMAIL.prompt.md",
+    "docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md",
 ]
 
 
@@ -50,6 +73,24 @@ def test_no_capture_like_release_media_is_tracked() -> None:
             offenders.append(rel)
 
     assert not offenders, "Capture-like release media should not be tracked:\n" + "\n".join(offenders)
+
+
+def test_support_files_are_moved_out_of_root() -> None:
+    root = _repo_root()
+
+    offenders = [rel for rel in ROOT_LAYOUT_OFFENDERS if (root / rel).exists()]
+    missing = [rel for rel in ROOT_LAYOUT_REQUIRED if not (root / rel).exists()]
+
+    assert not offenders, "Support files should not live in the repository root:\n" + "\n".join(offenders)
+    assert not missing, "Expected organized support files are missing:\n" + "\n".join(missing)
+
+
+def test_packaged_policy_resource_matches_repo_policy() -> None:
+    root = _repo_root()
+    docs_policy = (root / "docs" / "POLICY.md").read_text(encoding="utf-8")
+    packaged_policy = (root / "repo_privacy_guardian_resources" / "POLICY.md").read_text(encoding="utf-8")
+
+    assert packaged_policy == docs_policy
 
 
 def test_gui_contract_docs_use_audit_repair_labels() -> None:

@@ -60,6 +60,10 @@ repo-privacy-guardian = "Repo_Privacy_Guardian:main"
 
 [tool.setuptools]
 py-modules = ["Repo_Privacy_Guardian"]
+packages = ["repo_privacy_guardian_resources"]
+
+[tool.setuptools.package-data]
+repo_privacy_guardian_resources = ["POLICY.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

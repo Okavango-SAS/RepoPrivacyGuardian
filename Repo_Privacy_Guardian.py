@@ -46,8 +46,26 @@ def default_results_dir() -> Path:
     return default_root_dir() / "Audit_Results"
 
 
+def default_policy_path() -> Path:
+    repo_policy = Path(__file__).resolve().parent / "docs" / "POLICY.md"
+    if repo_policy.exists():
+        return repo_policy
+
+    try:
+        from importlib import resources
+
+        packaged_policy = resources.files("repo_privacy_guardian_resources").joinpath("POLICY.md")
+        packaged_policy_path = Path(str(packaged_policy))
+        if packaged_policy_path.exists():
+            return packaged_policy_path
+    except (ImportError, ModuleNotFoundError, OSError):
+        pass
+
+    return repo_policy
+
+
 DEFAULT_ROOT = default_root_dir()
-DEFAULT_POLICY = Path(__file__).resolve().parent / "docs" / "POLICY.md"
+DEFAULT_POLICY = default_policy_path()
 DEFAULT_NOREPLY = "noreply@github.com"
 DEFAULT_PLACEHOLDER = "redacted-contributor@example.invalid"
 DEFAULT_RESULTS_DIR = default_results_dir()

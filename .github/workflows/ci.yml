@@ -64,6 +64,7 @@ jobs:
           .pkg-venv/bin/python -m pip install dist/*.whl
           .pkg-venv/bin/repo-privacy-guardian --help
           .pkg-venv/bin/python -m Repo_Privacy_Guardian --help
+          .pkg-venv/bin/python -c "from pathlib import Path; import Repo_Privacy_Guardian as rpg; assert Path(rpg.DEFAULT_POLICY).exists(), rpg.DEFAULT_POLICY"
 
   gui-smoke-windows:
     runs-on: windows-latest
