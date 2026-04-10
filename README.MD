@@ -1,24 +1,34 @@
 # Repo Privacy Guardian
 
-![Policy](https://img.shields.io/badge/policy-publication%20gate-blue)
-![Platform](https://img.shields.io/badge/platform-Windows%20CLI%20%7C%20Linux%20CLI-lightgrey)
+![Policy](https://img.shields.io/badge/policy-publication%20gate-14532d)
+![Support](https://img.shields.io/badge/support-Windows%20CLI%2FGUI%20%7C%20Linux%20CLI%20%7C%20macOS%20CLI-1d4ed8)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
+![License](https://img.shields.io/badge/license-Apache%202.0-f97316)
 
-Repo Privacy Guardian is a local-first publication gate for Git repositories before public release.
+🔒 Repo Privacy Guardian is a local-first publication gate for auditing and hardening Git repositories before public release.
 
-Its primary value is the repeatable CLI audit/remediation engine. The desktop GUI is optional and uses the same pipeline, but it is not required to operate the product.
+It is designed for repeatable CLI execution first, with an optional desktop GUI that runs on the same underlying pipeline. Built and maintained by **Axel E. Sacca**.
 
-## Support matrix
+## ✨ Why This Exists
+
+- Catch sensitive Git identity metadata before it leaks.
+- Detect secrets, personal paths, tracked-but-ignored files, and risky history artifacts.
+- Keep remediation explicit, reviewable, and safe-by-default.
+- Generate local JSON, HTML, and log artifacts for release traceability.
+
+**GUI is optional.** The core product value is the reproducible CLI audit and remediation workflow.
+
+## 🧭 Support Matrix
 
 - Windows CLI: supported
 - Linux CLI: supported
-- macOS CLI: best-effort; not fully validated for this release
-- Windows GUI: supported as an optional interface
+- macOS CLI: supported
+- Windows GUI: supported
 - Linux GUI desktop: best-effort and depends on Tk availability plus a graphical session
-- macOS GUI: not a release priority
+- macOS GUI: best-effort / not a release priority
 - Headless and CI environments: CLI only
 
-## What it audits
+## 🔍 What It Audits
 
 - leaked Git identity metadata
 - secrets in tracked content and history
@@ -28,7 +38,7 @@ Its primary value is the repeatable CLI audit/remediation engine. The desktop GU
 - advisory outbound or exfil-capable code indicators
 - LiteLLM March 2026 supply-chain indicators
 
-## Product contract
+## ✅ Product Contract
 
 Blocking checks that can change `PASS` to `FAIL`:
 
@@ -50,15 +60,15 @@ Advisory checks that do not change `PASS` or `FAIL` by default:
 
 `exfil_code_indicators` is intentionally manual-review only by default. It is surfaced in CLI guidance, JSON, HTML, and severity highlights, but it does not fail a repository unless a future strict mode is introduced.
 
-## CLI-first behavior
+## 🖥️ CLI-First Behavior
 
 - Running the program without flags shows CLI help and exits successfully.
 - Use `--gui` for the desktop interface.
 - CLI does not open a browser automatically.
-- Use `--open-report` if you explicitly want the HTML report opened after a CLI run.
-- GUI can still open the report naturally as part of the desktop flow.
+- Use `--open-report` only when you explicitly want the HTML report opened after a CLI run.
+- The GUI keeps the staged `Audit -> Repair` interaction so operators cannot jump straight to write actions.
 
-## Installation
+## 📦 Installation
 
 Base CLI install:
 
@@ -103,7 +113,7 @@ External requirements:
 - `git-filter-repo` is required only for remediation that rewrites history
 - Linux desktop GUI use may require a Tk package such as `python3-tk`
 
-## Quick start
+## 🚀 Quick Start
 
 Installed entry point:
 
@@ -158,7 +168,7 @@ Windows note:
 - `py` can be used instead of `python`
 - `C:/path/to/repos` is accepted as a path form in PowerShell
 
-## GUI contract
+## 🧩 GUI Contract
 
 GUI and CLI share:
 
@@ -170,11 +180,13 @@ GUI and CLI share:
 
 The GUI keeps the staged safety contract:
 
-1. `Auditar`
+1. `Audit`
 2. review findings
-3. `Reparar` only after audit context unlocks it
+3. `Repair` only after audit context unlocks it
 
-## Artifacts
+The GUI is intentionally privacy-first for public release. This repository does not ship desktop screenshots by default to avoid publishing local paths, usernames, or internal repository lists in documentation assets.
+
+## 🗂️ Artifacts
 
 Each run writes local artifacts under `Audit_Results/<run_id>/`:
 
@@ -184,7 +196,7 @@ Each run writes local artifacts under `Audit_Results/<run_id>/`:
 
 Artifacts are redacted, but they still contain operational security context and should be treated as sensitive local outputs.
 
-## What `--fix` does
+## 🛠️ What `--fix` Can Do
 
 When applicable and explicitly requested, the fix flow can:
 
@@ -202,7 +214,7 @@ It does not:
 - make outbound review decisions automatically
 - bypass destructive safeguards by default
 
-## Automatic vs reviewed remediation
+## 🧪 Automatic vs Reviewed Remediation
 
 The tool can already remediate several classes of findings safely once you explicitly request `--fix`:
 
@@ -223,7 +235,7 @@ Human or agent review is still required when the tool cannot safely infer intent
 
 Practical rule: let the tool perform mechanical Git-safe rewrites, but keep semantic source edits and any non-obvious substitution under reviewed operator control.
 
-## Agentic CLI workflow
+## 🤖 Agentic CLI Workflow
 
 Repo Privacy Guardian works well as an agent-driven CLI tool. A safe default pattern is:
 
@@ -231,9 +243,9 @@ Repo Privacy Guardian works well as an agent-driven CLI tool. A safe default pat
 2. dry-run audit
 3. reviewed dry-run fix plan
 4. real fix only for the reviewed repos
-5. re-audit until `PASS`
+5. re-run until `PASS`
 
-Recommended agent prompt template:
+### Recommended agent prompt template
 
 ```text
 Act as a release/security engineer. Work only on <target-repo>.
@@ -246,14 +258,14 @@ Do not push or rewrite history without explicit approval.
 
 The repository also includes reusable prompt files under `prompts/` for agentic audit and parity workflows.
 
-## Headless and desktop diagnostics
+## 🧰 Headless and Desktop Diagnostics
 
 - If Git is missing, the CLI exits with an actionable error before the audit starts.
 - If `--gui` is requested without GUI extras, the program reports how to install them.
 - If `--gui` is requested in a headless Linux environment, the program exits with a desktop-session message instead of hanging.
 - Browser opening is opt-in in CLI mode and warnings stay non-fatal if a browser cannot be launched.
 
-## Release validation from a clean clone
+## 🧾 Release Validation From a Clean Clone
 
 ```sh
 python -m pip install ".[test]"
@@ -264,20 +276,25 @@ python tests/release_smoke_cli.py
 
 Pytest collection is restricted to tracked test files so local ignored test files do not change the release signal.
 
-## Repository layout
+## 🏗️ Repository Layout
 
 - `Repo_Privacy_Guardian.py`: core CLI and optional GUI implementation
 - `docs/`: policy, release docs, and engineering rationale
-- `tests/`: tracked regression, packaging, and smoke coverage
-- `.github/workflows/ci.yml`: cross-platform CLI and packaging CI
+- `tests/`: tracked regression, packaging, smoke coverage, and release hygiene
+- `.github/workflows/ci.yml`: cross-platform CLI/package CI plus Windows GUI smoke
 
-## Safety notes
+## ⚠️ Limitations
 
-- history rewrites are destructive for commit SHAs
-- backup bundles are mandatory before rewrite
-- leaked secrets still require rotation after cleanup
-- `--push` should only be used after a reviewed dry-run
+- Linux GUI support is still desktop-dependent and best-effort.
+- macOS GUI is not a release priority for this version.
+- History rewrites are destructive for commit SHAs and require careful coordination.
+- Leaked secrets still need rotation after cleanup.
+- `--push` should only be used after a reviewed dry-run.
 
-## License
+## 👤 Developer
+
+Repo Privacy Guardian is developed by **Axel E. Sacca**.
+
+## 📄 License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

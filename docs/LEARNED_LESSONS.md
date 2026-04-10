@@ -34,7 +34,7 @@ Dangerous actions should require dedicated flags.
 
 1. Phase-separated GUI flow reduces unsafe remediation attempts.
 
-Keeping `Reparar` visually locked until `Auditar` yields valid context prevents premature fix actions and mirrors CLI safety gating.
+Keeping `Repair` visually locked until `Audit` yields valid context prevents premature fix actions and mirrors CLI safety gating.
 
 1. Reports should include action guidance, not only findings.
 

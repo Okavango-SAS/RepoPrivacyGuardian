@@ -15,7 +15,7 @@ Use this checklist before tagging a public release.
 - Save JSON report artifact.
 - Review FAIL reasons by severity.
 - Review advisory/manual-review findings separately from blockers, including `exfil_code_indicators`.
-- If using GUI, confirm `Auditar` is the first executable step and `Reparar` is visually locked before audit context is available.
+- If using GUI, confirm `Audit` is the first executable step and `Repair` is visually locked before audit context is available.
 
 ## 3. Remediation plan
 
@@ -23,7 +23,7 @@ Use this checklist before tagging a public release.
 - Confirm secret file candidates.
 - Classify manual-review candidates.
 - Confirm backup bundle location.
-- If using GUI, confirm `Reparar` unlocks only after a valid audit provides actionable remediation context.
+- If using GUI, confirm `Repair` unlocks only after a valid audit provides actionable remediation context.
 
 ## 4. Controlled fix execution
 

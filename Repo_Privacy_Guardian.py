@@ -7,7 +7,7 @@ The checks are aligned with docs/POLICY.md.
 
 Features:
 - CLI mode (audit and optional fix)
-- Simple Tkinter GUI mode
+- Optional desktop GUI mode
 - History and working-tree scans for secrets/PII/path leaks
 - Git identity and commit metadata checks
 - .gitignore completeness checks based on policy + baseline patterns
@@ -343,7 +343,7 @@ def has_desktop_display(
     )
 
 
-def load_gui_runtime() -> tuple[object, object, object, type[BaseException]]:
+def load_gui_runtime() -> tuple[object, object, object, object, type[BaseException]]:
     if not has_desktop_display():
         raise RuntimeError(
             "GUI mode requires a desktop session with DISPLAY/Wayland support. "
@@ -352,7 +352,7 @@ def load_gui_runtime() -> tuple[object, object, object, type[BaseException]]:
 
     try:
         import tkinter as tk
-        from tkinter import TclError, messagebox
+        from tkinter import TclError, filedialog, messagebox
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             "Tkinter is not available in this Python installation. "
@@ -367,7 +367,41 @@ def load_gui_runtime() -> tuple[object, object, object, type[BaseException]]:
             f"{sys.executable} -m pip install '{GUI_INSTALL_EXTRA}'"
         ) from exc
 
-    return tk, messagebox, ctk, TclError
+    return tk, messagebox, filedialog, ctk, TclError
+
+
+def gui_font_candidates(platform_name: str | None = None) -> dict[str, tuple[str, ...]]:
+    current_platform = platform_name or sys.platform
+    if current_platform.startswith("win"):
+        return {
+            "ui": ("Segoe UI", "Arial", "TkDefaultFont"),
+            "mono": ("Cascadia Mono", "Cascadia Code", "Consolas", "Courier New", "TkFixedFont"),
+        }
+    if current_platform == "darwin":
+        return {
+            "ui": ("SF Pro Text", "Helvetica Neue", "Arial", "TkDefaultFont"),
+            "mono": ("SF Mono", "Menlo", "Monaco", "Courier", "TkFixedFont"),
+        }
+    return {
+        "ui": ("Inter", "Noto Sans", "DejaVu Sans", "Liberation Sans", "Arial", "TkDefaultFont"),
+        "mono": ("JetBrains Mono", "DejaVu Sans Mono", "Liberation Mono", "Courier New", "TkFixedFont"),
+    }
+
+
+def choose_gui_font_family(
+    candidates: tuple[str, ...],
+    available_families: set[str] | None = None,
+) -> str:
+    if not candidates:
+        raise ValueError("At least one font candidate is required.")
+
+    if available_families:
+        lowered = {family.lower() for family in available_families}
+        for candidate in candidates:
+            if candidate.lower() in lowered:
+                return candidate
+
+    return candidates[0]
 
 
 @dataclass
@@ -3449,7 +3483,7 @@ def persist_litellm_supply_chain_output(
 
 class GuiApp:  # pragma: no cover
     def __init__(self) -> None:
-        tk, messagebox, ctk, tcl_error = load_gui_runtime()
+        tk, messagebox, filedialog, ctk, tcl_error = load_gui_runtime()
 
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
@@ -3457,6 +3491,7 @@ class GuiApp:  # pragma: no cover
         self.tk = tk
         self.ctk = ctk
         self.messagebox = messagebox
+        self.filedialog = filedialog
         try:
             self.root = ctk.CTk()
         except tcl_error as exc:
@@ -3465,18 +3500,33 @@ class GuiApp:  # pragma: no cover
                 "On Linux desktop, install python3-tk and start from a graphical session. "
                 "Otherwise, use the CLI."
             ) from exc
-        self.root.title("Repo Publication Guard")
+        self.root.title("Repo Privacy Guardian")
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
-        window_w = min(max(int(screen_w * 0.9), 1120), 1560)
+        window_w = min(max(int(screen_w * 0.92), 1180), 1620)
         window_h = min(max(int(screen_h * 0.9), 760), 980)
         window_x = max((screen_w - window_w) // 2, 0)
         window_y = max((screen_h - window_h) // 2, 0)
-        self._top_stack_width_threshold = 1500
+        self._top_stack_width_threshold = 1420
         self._options_stack_width_threshold = 1220
+        self._results_stack_width_threshold = 1500
         self.root.geometry(f"{window_w}x{window_h}+{window_x}+{window_y}")
-        self.root.minsize(min(1120, screen_w), min(700, screen_h))
+        self.root.minsize(min(1180, screen_w), min(700, screen_h))
         self.root.maxsize(screen_w, screen_h)
+
+        available_families: set[str] | None = None
+        try:
+            available_families = {
+                str(name)
+                for name in self.root.tk.call("font", "families")
+                if isinstance(name, str)
+            }
+        except Exception:
+            available_families = None
+
+        font_options = gui_font_candidates()
+        self._ui_font_family = choose_gui_font_family(font_options["ui"], available_families)
+        self._mono_font_family = choose_gui_font_family(font_options["mono"], available_families)
 
         self.root_var = tk.StringVar(value=str(default_root_dir()))
         self.policy_var = tk.StringVar(value=str(DEFAULT_POLICY))
@@ -3511,17 +3561,21 @@ class GuiApp:  # pragma: no cover
         self._repair_button = None
         self._run_in_progress = False
         self._repair_ready = False
-        self._repair_button_text = "Reparar (auditar primero)"
+        self._repair_button_text = "Repair (run audit first)"
         self._repair_cooldown_seconds = 10
         self._repair_cooldown_remaining = 0
         self._repair_cooldown_after_id = None
         self._last_audit_reports_payload: list[dict[str, object]] = []
         self._last_audit_selection_signature: tuple[str, ...] | None = None
         self._flow_tabs = None
-        self._audit_tab_name = "Auditar"
-        self._repair_tab_name = "Reparar"
+        self._audit_tab_name = "Audit"
+        self._repair_tab_name = "Repair"
         self._repair_tab_block_overlay = None
         self._repair_tab_block_label = None
+        self._results_row = None
+        self._repos_card = None
+        self._output_card = None
+        self._compact_results_layout = False
 
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -3540,14 +3594,14 @@ class GuiApp:  # pragma: no cover
         header.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
             header,
-            text="Repo Publication Guard",
-            font=("Segoe UI Semibold", 24),
+            text="Repo Privacy Guardian",
+            font=self._font(24, bold=True),
             text_color="#F8FAFC",
         ).grid(row=0, column=0, sticky="w", padx=18, pady=(14, 0))
         ctk.CTkLabel(
             header,
-            text="Audit pipelines and Git identity privacy in one focused workspace.",
-            font=("Segoe UI", 13),
+            text="Audit repositories, harden Git identity, and prepare safer public releases.",
+            font=self._font(13),
             text_color="#D8E8F7",
         ).grid(row=1, column=0, sticky="w", padx=18, pady=(4, 14))
 
@@ -3589,82 +3643,54 @@ class GuiApp:  # pragma: no cover
         ctk.CTkLabel(
             settings_card,
             text="Run Configuration",
-            font=("Segoe UI Semibold", 16),
+            font=self._font(16, bold=True),
             text_color="#113150",
         ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
 
         row = 1
-        ctk.CTkLabel(settings_card, text="Root", font=("Segoe UI", 12), text_color="#1E293B").grid(
-            row=row,
-            column=0,
-            sticky="w",
-            padx=(14, 8),
-            pady=4,
-        )
-        ctk.CTkEntry(settings_card, textvariable=self.root_var, height=32, corner_radius=8).grid(
-            row=row,
-            column=1,
-            columnspan=2,
-            sticky="we",
-            padx=(0, 14),
-            pady=4,
-        )
-
-        row += 1
-        ctk.CTkLabel(settings_card, text="Policy", font=("Segoe UI", 12), text_color="#1E293B").grid(
-            row=row,
-            column=0,
-            sticky="w",
-            padx=(14, 8),
-            pady=4,
-        )
-        ctk.CTkEntry(settings_card, textvariable=self.policy_var, height=32, corner_radius=8).grid(
-            row=row,
-            column=1,
-            columnspan=2,
-            sticky="we",
-            padx=(0, 14),
-            pady=4,
-        )
-
-        row += 1
-        ctk.CTkLabel(settings_card, text="Results dir", font=("Segoe UI", 12), text_color="#1E293B").grid(
-            row=row,
-            column=0,
-            sticky="w",
-            padx=(14, 8),
-            pady=4,
-        )
-        ctk.CTkEntry(settings_card, textvariable=self.report_dir_var, height=32, corner_radius=8).grid(
-            row=row,
-            column=1,
-            columnspan=2,
-            sticky="we",
-            padx=(0, 14),
-            pady=4,
-        )
-
-        row += 1
-        ctk.CTkLabel(
+        self._add_directory_field(
             settings_card,
-            text="Extra JSON export (optional)",
-            font=("Segoe UI", 12),
-            text_color="#1E293B",
-        ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=4)
-        ctk.CTkEntry(settings_card, textvariable=self.report_json_var, height=32, corner_radius=8).grid(
             row=row,
-            column=1,
-            columnspan=2,
-            sticky="we",
-            padx=(0, 14),
-            pady=4,
+            label="Root",
+            variable=self.root_var,
+            title="Choose the root directory",
+        )
+
+        row += 1
+        self._add_file_field(
+            settings_card,
+            row=row,
+            label="Policy",
+            variable=self.policy_var,
+            title="Choose a policy file",
+            filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
+        )
+
+        row += 1
+        self._add_directory_field(
+            settings_card,
+            row=row,
+            label="Results Directory",
+            variable=self.report_dir_var,
+            title="Choose the base results directory",
+        )
+
+        row += 1
+        self._add_save_file_field(
+            settings_card,
+            row=row,
+            label="Extra JSON Export (Optional)",
+            variable=self.report_json_var,
+            title="Choose the extra JSON export path",
+            default_extension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
         )
 
         row += 1
         ctk.CTkLabel(
             settings_card,
             text="Max matches per check",
-            font=("Segoe UI", 12),
+            font=self._font(12),
             text_color="#1E293B",
         ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
         ctk.CTkEntry(
@@ -3690,12 +3716,12 @@ class GuiApp:  # pragma: no cover
         ctk.CTkLabel(
             profile_card,
             text="Owner Profile",
-            font=("Segoe UI Semibold", 16),
+            font=self._font(16, bold=True),
             text_color="#113150",
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
 
         row = 1
-        ctk.CTkLabel(profile_card, text="Noreply email", font=("Segoe UI", 12), text_color="#1E293B").grid(
+        ctk.CTkLabel(profile_card, text="Noreply Email", font=self._font(12), text_color="#1E293B").grid(
             row=row,
             column=0,
             sticky="w",
@@ -3711,7 +3737,7 @@ class GuiApp:  # pragma: no cover
         )
 
         row += 1
-        ctk.CTkLabel(profile_card, text="Placeholder email", font=("Segoe UI", 12), text_color="#1E293B").grid(
+        ctk.CTkLabel(profile_card, text="Placeholder Email", font=self._font(12), text_color="#1E293B").grid(
             row=row,
             column=0,
             sticky="w",
@@ -3727,7 +3753,7 @@ class GuiApp:  # pragma: no cover
         )
 
         row += 1
-        ctk.CTkLabel(profile_card, text="Owner name", font=("Segoe UI", 12), text_color="#1E293B").grid(
+        ctk.CTkLabel(profile_card, text="Owner Name", font=self._font(12), text_color="#1E293B").grid(
             row=row,
             column=0,
             sticky="w",
@@ -3745,8 +3771,8 @@ class GuiApp:  # pragma: no cover
         row += 1
         ctk.CTkLabel(
             profile_card,
-            text="Owner private emails (comma)",
-            font=("Segoe UI", 12),
+            text="Owner Private Emails (Comma)",
+            font=self._font(12),
             text_color="#1E293B",
         ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
         ctk.CTkEntry(profile_card, textvariable=self.owner_emails_var, height=32, corner_radius=8).grid(
@@ -3769,11 +3795,11 @@ class GuiApp:  # pragma: no cover
         ctk.CTkLabel(
             identity_card,
             text="Git Identity & GitHub Email Privacy",
-            font=("Segoe UI Semibold", 16),
+            font=self._font(16, bold=True),
             text_color="#113150",
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
 
-        ctk.CTkLabel(identity_card, text="git user.name", font=("Segoe UI", 12), text_color="#1E293B").grid(
+        ctk.CTkLabel(identity_card, text="git user.name", font=self._font(12), text_color="#1E293B").grid(
             row=1,
             column=0,
             sticky="w",
@@ -3791,7 +3817,7 @@ class GuiApp:  # pragma: no cover
         ctk.CTkLabel(
             identity_card,
             text="git user.email (noreply)",
-            font=("Segoe UI", 12),
+            font=self._font(12),
             text_color="#1E293B",
         ).grid(row=2, column=0, sticky="w", padx=(14, 8), pady=4)
         ctk.CTkEntry(identity_card, textvariable=self.git_user_email_var, height=32, corner_radius=8).grid(
@@ -3807,7 +3833,7 @@ class GuiApp:  # pragma: no cover
         identity_actions.grid_columnconfigure((0, 1), weight=1)
         ctk.CTkButton(
             identity_actions,
-            text="Apply GLOBAL git config",
+            text="Apply Global Git Config",
             command=self.apply_git_identity_global_clicked,
             height=32,
             corner_radius=8,
@@ -3816,7 +3842,7 @@ class GuiApp:  # pragma: no cover
         ).grid(row=0, column=0, sticky="we", padx=(0, 6), pady=3)
         ctk.CTkButton(
             identity_actions,
-            text="Apply LOCAL git config",
+            text="Apply Local Git Config",
             command=self.apply_git_identity_local_clicked,
             height=32,
             corner_radius=8,
@@ -3848,7 +3874,7 @@ class GuiApp:  # pragma: no cover
             justify="left",
             anchor="w",
             wraplength=1200,
-            font=("Segoe UI", 12),
+            font=self._font(12),
             text_color="#334155",
         ).grid(row=4, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 12))
 
@@ -3863,14 +3889,14 @@ class GuiApp:  # pragma: no cover
         ctk.CTkLabel(
             audit_actions_card,
             text="Audit Flow",
-            font=("Segoe UI Semibold", 14),
+            font=self._font(14, bold=True),
             text_color="#113150",
         ).pack(anchor="w", padx=14, pady=(10, 4))
         audit_controls = ctk.CTkFrame(audit_actions_card, fg_color="transparent")
         audit_controls.pack(fill="x", padx=14, pady=(0, 10))
         self._audit_button = ctk.CTkButton(
             audit_controls,
-            text="Auditar",
+            text="Audit",
             command=lambda: self.run_clicked(run_fix=False),
             width=150,
             height=34,
@@ -3881,7 +3907,7 @@ class GuiApp:  # pragma: no cover
         self._audit_button.pack(side="left")
         self._make_info_badge(
             audit_controls,
-            "Ejecuta solo auditoria. No aplica fixes ni reescribe historial.",
+            "Runs the audit only. It does not apply fixes or rewrite history.",
         ).pack(side="left", padx=(6, 0), pady=8)
 
         options_card = ctk.CTkFrame(
@@ -3897,8 +3923,8 @@ class GuiApp:  # pragma: no cover
         self._options_card = options_card
         ctk.CTkLabel(
             options_card,
-            text="Audit Options",
-            font=("Segoe UI Semibold", 16),
+            text="Repair Options",
+            font=self._font(16, bold=True),
             text_color="#113150",
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
 
@@ -3916,7 +3942,7 @@ class GuiApp:  # pragma: no cover
         ctk.CTkLabel(
             safe_options,
             text="Safe / Advisory",
-            font=("Segoe UI Semibold", 13),
+            font=self._font(13, bold=True),
             text_color="#12405E",
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
         self._make_info_badge(
@@ -3938,7 +3964,7 @@ class GuiApp:  # pragma: no cover
                 safe_options,
                 text=label,
                 variable=var,
-                font=("Segoe UI", 12),
+                font=self._font(12),
                 text_color="#1E293B",
             ).grid(row=idx, column=0, sticky="w", padx=12, pady=4)
 
@@ -3957,67 +3983,84 @@ class GuiApp:  # pragma: no cover
         ctk.CTkLabel(
             destructive_options,
             text="Destructive / Write Actions",
-            font=("Segoe UI Semibold", 13),
+            font=self._font(13, bold=True),
             text_color="#7B1E1E",
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
         self._make_info_badge(
             destructive_options,
-            "These options are only applied when you click Reparar.",
+            "These options are only applied when you click Repair.",
         ).grid(row=0, column=1, sticky="e", padx=(0, 12), pady=(10, 2))
         ctk.CTkLabel(
             destructive_options,
             text="Enable only after reviewing risk and consequence.",
-            font=("Segoe UI", 11),
+            font=self._font(11),
             text_color="#8F3A3A",
         ).grid(row=1, column=0, sticky="w", padx=12, pady=(0, 4))
         ctk.CTkLabel(
             destructive_options,
-            text="Reparar se ejecuta con el boton Reparar (no con un toggle).",
-            font=("Segoe UI", 11),
+            text="Repair is executed with the Repair button, not with a toggle.",
+            font=self._font(11),
             text_color="#8F3A3A",
         ).grid(row=2, column=0, sticky="w", padx=12, pady=(0, 4))
 
         self._rewrite_paths_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Rewrite personal paths (opt-in, usa replace-text en historial)",
+            text="Rewrite personal paths (opt-in, uses replace-text in history)",
             variable=self.rewrite_personal_paths_var,
-            font=("Segoe UI", 12),
+            font=self._font(12),
             text_color="#1E293B",
         )
         self._rewrite_paths_checkbox.grid(row=3, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
-            "Reemplaza rutas personales detectadas en historial/contenido mediante git-filter-repo --replace-text.",
+            "Rewrites detected personal paths in tracked content/history via git-filter-repo --replace-text.",
         ).grid(row=3, column=1, sticky="e", padx=(0, 12), pady=4)
 
         ctk.CTkLabel(
             destructive_options,
             text="Explicit replace-text file (optional)",
-            font=("Segoe UI", 12),
+            font=self._font(12),
             text_color="#1E293B",
         ).grid(row=4, column=0, sticky="w", padx=12, pady=(4, 0))
+        replace_text_row = ctk.CTkFrame(destructive_options, fg_color="transparent")
+        replace_text_row.grid(row=5, column=0, columnspan=2, sticky="we", padx=12, pady=(2, 4))
+        replace_text_row.grid_columnconfigure(0, weight=1)
         ctk.CTkEntry(
-            destructive_options,
+            replace_text_row,
             textvariable=self.replace_text_file_var,
             height=32,
             corner_radius=8,
-        ).grid(row=5, column=0, columnspan=2, sticky="we", padx=12, pady=(2, 4))
+        ).grid(row=0, column=0, sticky="we", padx=(0, 8))
+        ctk.CTkButton(
+            replace_text_row,
+            text="Browse...",
+            width=92,
+            height=32,
+            corner_radius=8,
+            fg_color="#8A9AAF",
+            hover_color="#72839A",
+            command=lambda: self._browse_existing_file(
+                self.replace_text_file_var,
+                title="Choose an explicit replace-text file",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            ),
+        ).grid(row=0, column=1)
         self._make_info_badge(
             destructive_options,
-            "Archivo opcional con reglas literal:OLD==>NEW para reemplazos supervisados.",
+            "Optional file with literal OLD==>NEW rules for operator-reviewed replacements.",
         ).grid(row=4, column=1, sticky="e", padx=(0, 12), pady=(4, 0))
 
         self._push_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Force push remoto (--force-with-lease)",
+            text="Force push remote (--force-with-lease)",
             variable=self.push_var,
-            font=("Segoe UI", 12),
+            font=self._font(12),
             text_color="#1E293B",
         )
         self._push_checkbox.grid(row=6, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
-            "Publica el historial reescrito en origin/<branch> con --force-with-lease.",
+            "Publishes the rewritten history to origin/<branch> with --force-with-lease.",
         ).grid(row=6, column=1, sticky="e", padx=(0, 12), pady=4)
 
         self._allow_non_owner_push_checkbox = ctk.CTkCheckBox(
@@ -4025,19 +4068,19 @@ class GuiApp:  # pragma: no cover
             text="Bypass owner guardrail (--allow-non-owner-push)",
             variable=self.allow_non_owner_push_var,
             command=self._on_allow_non_owner_push_toggled,
-            font=("Segoe UI", 12),
+            font=self._font(12),
             text_color="#1E293B",
         )
         self._allow_non_owner_push_checkbox.grid(row=7, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
-            "Permite push aunque origin owner no coincida con allowlist. Riesgoso.",
+            "Allows push even when the origin owner does not match the allowlist. Unsafe.",
         ).grid(row=7, column=1, sticky="e", padx=(0, 12), pady=4)
 
         ctk.CTkLabel(
             destructive_options,
             text="Allowed push owner(s) comma (--allow-remote-owner)",
-            font=("Segoe UI", 12),
+            font=self._font(12),
             text_color="#1E293B",
         ).grid(row=8, column=0, sticky="w", padx=12, pady=(4, 0))
         self._allowed_remote_owner_entry = ctk.CTkEntry(
@@ -4057,30 +4100,30 @@ class GuiApp:  # pragma: no cover
 
         self._purge_safe_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Purge SAFE (gitignore + untrack + purge candidatos seguros)",
+            text="Purge SAFE (gitignore + untrack + purge safe candidates)",
             variable=self.purge_detected_secret_files_var,
             command=self._on_purge_safe_toggled,
-            font=("Segoe UI", 12),
+            font=self._font(12),
             text_color="#1E293B",
         )
         self._purge_safe_checkbox.grid(row=10, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
-            "Solo purga candidatos automáticos de bajo riesgo y deja manual-review sin tocar.",
+            "Purges only low-risk automatic candidates and leaves manual-review items untouched.",
         ).grid(row=10, column=1, sticky="e", padx=(0, 12), pady=4)
 
         self._purge_risky_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Purge RISKY (incluye candidatos manual-review)",
+            text="Purge RISKY (includes manual-review candidates)",
             variable=self.purge_all_detected_secret_files_var,
             command=self._on_purge_risky_toggled,
-            font=("Segoe UI", 12),
+            font=self._font(12),
             text_color="#1E293B",
         )
         self._purge_risky_checkbox.grid(row=11, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge(
             destructive_options,
-            "Modo agresivo: también purga candidatos que requieren revisión manual.",
+            "Aggressive mode: also purges candidates that require manual review.",
         ).grid(row=11, column=1, sticky="e", padx=(0, 12), pady=4)
         self._sync_purge_mode_controls()
         self._sync_push_guardrail_controls()
@@ -4096,7 +4139,7 @@ class GuiApp:  # pragma: no cover
         ctk.CTkLabel(
             repair_actions_card,
             text="Repair Flow",
-            font=("Segoe UI Semibold", 14),
+            font=self._font(14, bold=True),
             text_color="#7B1E1E",
         ).pack(anchor="w", padx=14, pady=(10, 4))
         repair_controls = ctk.CTkFrame(repair_actions_card, fg_color="transparent")
@@ -4114,7 +4157,7 @@ class GuiApp:  # pragma: no cover
         self._repair_button.pack(side="left")
         self._make_info_badge(
             repair_controls,
-            "Se habilita solo tras auditar. Muestra plan explicito y pide aceptacion antes de ejecutar.",
+            "Available only after a completed audit. Shows an explicit plan and asks for confirmation before execution.",
         ).pack(side="left", padx=(6, 0), pady=8)
 
         blocker_overlay = ctk.CTkFrame(
@@ -4131,14 +4174,14 @@ class GuiApp:  # pragma: no cover
             blocker_overlay,
             text="",
             justify="center",
-            font=("Segoe UI Semibold", 14),
+            font=self._font(14, bold=True),
             text_color="#1E3A5F",
             wraplength=760,
         )
         self._repair_tab_block_label.grid(row=0, column=0, padx=24, pady=(26, 10), sticky="ew")
         ctk.CTkButton(
             blocker_overlay,
-            text="Ir a Auditar",
+            text="Go to Audit",
             command=lambda: self._set_active_flow_tab(self._audit_tab_name),
             width=170,
             height=34,
@@ -4147,21 +4190,29 @@ class GuiApp:  # pragma: no cover
             hover_color="#0A5585",
         ).grid(row=1, column=0, pady=(0, 20))
 
+        results_row = ctk.CTkFrame(app, fg_color="transparent")
+        results_row.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 14))
+        results_row.grid_columnconfigure(0, weight=1)
+        results_row.grid_columnconfigure(1, weight=1)
+        results_row.grid_rowconfigure(0, weight=1)
+        self._results_row = results_row
+
         repos_card = ctk.CTkFrame(
-            app,
+            results_row,
             fg_color="#F8FBFF",
             corner_radius=12,
             border_width=1,
             border_color="#D1DDEA",
         )
-        repos_card.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 6))
+        repos_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=0)
         repos_card.grid_columnconfigure(0, weight=1)
         repos_card.grid_columnconfigure(1, weight=0)
         repos_card.grid_rowconfigure(1, weight=1)
+        self._repos_card = repos_card
         ctk.CTkLabel(
             repos_card,
             text="Repositories",
-            font=("Segoe UI Semibold", 16),
+            font=self._font(16, bold=True),
             text_color="#113150",
         ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
         ctk.CTkButton(
@@ -4197,7 +4248,7 @@ class GuiApp:  # pragma: no cover
             foreground="#0F172A",
             selectbackground="#0B5E8E",
             selectforeground="#F8FAFC",
-            font=("Segoe UI", 11),
+            font=self._font(11),
         )
         self.repo_list.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=10)
         repo_scroll = ctk.CTkScrollbar(list_shell, orientation="vertical", command=self.repo_list.yview)
@@ -4208,7 +4259,7 @@ class GuiApp:  # pragma: no cover
         run_controls.grid(row=2, column=0, sticky="w", padx=14, pady=(4, 12))
         ctk.CTkButton(
             run_controls,
-            text="Select all",
+            text="Select All",
             command=self.select_all,
             width=120,
             height=34,
@@ -4218,7 +4269,17 @@ class GuiApp:  # pragma: no cover
         ).pack(side="left", padx=8)
         ctk.CTkButton(
             run_controls,
-            text="Clear log",
+            text="Clear Selection",
+            command=self.clear_selection,
+            width=120,
+            height=34,
+            corner_radius=8,
+            fg_color="#8A9AAF",
+            hover_color="#72839A",
+        ).pack(side="left", padx=8)
+        ctk.CTkButton(
+            run_controls,
+            text="Clear Log",
             command=self.clear_output,
             width=120,
             height=34,
@@ -4228,19 +4289,20 @@ class GuiApp:  # pragma: no cover
         ).pack(side="left", padx=8)
 
         output_card = ctk.CTkFrame(
-            app,
+            results_row,
             fg_color="#F8FBFF",
             corner_radius=12,
             border_width=1,
             border_color="#D1DDEA",
         )
-        output_card.grid(row=3, column=0, sticky="nsew", padx=16, pady=(0, 14))
+        output_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0), pady=0)
         output_card.grid_columnconfigure(0, weight=1)
         output_card.grid_rowconfigure(1, weight=1)
+        self._output_card = output_card
         ctk.CTkLabel(
             output_card,
             text="Execution Log",
-            font=("Segoe UI Semibold", 16),
+            font=self._font(16, bold=True),
             text_color="#113150",
         ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
         self.output = ctk.CTkTextbox(
@@ -4250,15 +4312,170 @@ class GuiApp:  # pragma: no cover
             corner_radius=10,
             border_width=0,
             wrap="word",
-            font=("Cascadia Mono", 10),
+            font=self._font(10, mono=True),
         )
         self.output.grid(row=1, column=0, sticky="nsew", padx=14, pady=(0, 12))
 
         self.refresh_repos()
         self.root.bind("<Configure>", self._on_root_resize)
         self.root.after(0, self._apply_responsive_layout)
-        self._lock_repair_until_next_audit("Reparar (auditar primero)")
+        self._lock_repair_until_next_audit("Repair (run audit first)")
         self._set_active_flow_tab(self._audit_tab_name)
+
+    def _font(self, size: int, *, bold: bool = False, mono: bool = False):
+        family = self._mono_font_family if mono else self._ui_font_family
+        return (family, size, "bold") if bold else (family, size)
+
+    def _dialog_initial_dir(self, current_value: str) -> str:
+        raw_value = current_value.strip()
+        if not raw_value:
+            return str(default_root_dir())
+
+        candidate = Path(raw_value).expanduser()
+        if candidate.exists():
+            return str(candidate if candidate.is_dir() else candidate.parent)
+
+        if candidate.suffix:
+            return str(candidate.parent if candidate.parent.exists() else default_root_dir())
+
+        return str(candidate if candidate.parent.exists() else default_root_dir())
+
+    def _browse_directory(self, target_var, *, title: str) -> None:
+        selected = self.filedialog.askdirectory(
+            title=title,
+            initialdir=self._dialog_initial_dir(target_var.get()),
+            mustexist=False,
+        )
+        if selected:
+            target_var.set(selected)
+
+    def _browse_existing_file(self, target_var, *, title: str, filetypes) -> None:
+        selected = self.filedialog.askopenfilename(
+            title=title,
+            initialdir=self._dialog_initial_dir(target_var.get()),
+            filetypes=filetypes,
+        )
+        if selected:
+            target_var.set(selected)
+
+    def _browse_save_file(
+        self,
+        target_var,
+        *,
+        title: str,
+        default_extension: str,
+        filetypes,
+    ) -> None:
+        selected = self.filedialog.asksaveasfilename(
+            title=title,
+            initialdir=self._dialog_initial_dir(target_var.get()),
+            defaultextension=default_extension,
+            filetypes=filetypes,
+        )
+        if selected:
+            target_var.set(selected)
+
+    def _add_directory_field(self, parent, *, row: int, label: str, variable, title: str) -> None:
+        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color="#1E293B").grid(
+            row=row,
+            column=0,
+            sticky="w",
+            padx=(14, 8),
+            pady=4,
+        )
+        self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8).grid(
+            row=row,
+            column=1,
+            sticky="we",
+            padx=(0, 8),
+            pady=4,
+        )
+        self.ctk.CTkButton(
+            parent,
+            text="Browse...",
+            width=92,
+            height=32,
+            corner_radius=8,
+            fg_color="#8A9AAF",
+            hover_color="#72839A",
+            command=lambda: self._browse_directory(variable, title=title),
+        ).grid(row=row, column=2, padx=(0, 14), pady=4)
+
+    def _add_file_field(
+        self,
+        parent,
+        *,
+        row: int,
+        label: str,
+        variable,
+        title: str,
+        filetypes,
+    ) -> None:
+        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color="#1E293B").grid(
+            row=row,
+            column=0,
+            sticky="w",
+            padx=(14, 8),
+            pady=4,
+        )
+        self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8).grid(
+            row=row,
+            column=1,
+            sticky="we",
+            padx=(0, 8),
+            pady=4,
+        )
+        self.ctk.CTkButton(
+            parent,
+            text="Browse...",
+            width=92,
+            height=32,
+            corner_radius=8,
+            fg_color="#8A9AAF",
+            hover_color="#72839A",
+            command=lambda: self._browse_existing_file(variable, title=title, filetypes=filetypes),
+        ).grid(row=row, column=2, padx=(0, 14), pady=4)
+
+    def _add_save_file_field(
+        self,
+        parent,
+        *,
+        row: int,
+        label: str,
+        variable,
+        title: str,
+        default_extension: str,
+        filetypes,
+    ) -> None:
+        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color="#1E293B").grid(
+            row=row,
+            column=0,
+            sticky="w",
+            padx=(14, 8),
+            pady=4,
+        )
+        self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8).grid(
+            row=row,
+            column=1,
+            sticky="we",
+            padx=(0, 8),
+            pady=4,
+        )
+        self.ctk.CTkButton(
+            parent,
+            text="Save As...",
+            width=92,
+            height=32,
+            corner_radius=8,
+            fg_color="#8A9AAF",
+            hover_color="#72839A",
+            command=lambda: self._browse_save_file(
+                variable,
+                title=title,
+                default_extension=default_extension,
+                filetypes=filetypes,
+            ),
+        ).grid(row=row, column=2, padx=(0, 14), pady=4)
 
     def _get_logical_window_width(self) -> int:
         geometry = self.root.wm_geometry().split("+", maxsplit=1)[0]
@@ -4285,6 +4502,7 @@ class GuiApp:  # pragma: no cover
         width = self._get_logical_window_width()
         self._apply_top_layout(compact=width <= self._top_stack_width_threshold)
         self._apply_options_layout(compact=width <= self._options_stack_width_threshold)
+        self._apply_results_layout(compact=width <= self._results_stack_width_threshold)
 
     def _apply_top_layout(self, compact: bool) -> None:
         if compact == self._compact_top_layout:
@@ -4328,6 +4546,26 @@ class GuiApp:  # pragma: no cover
             sticky="nsew",
         )
 
+    def _apply_results_layout(self, compact: bool) -> None:
+        if compact == self._compact_results_layout:
+            return
+
+        self._compact_results_layout = compact
+        if self._results_row is None or self._repos_card is None or self._output_card is None:
+            return
+
+        if compact:
+            self._results_row.grid_columnconfigure(0, weight=1)
+            self._results_row.grid_columnconfigure(1, weight=0)
+            self._repos_card.grid_configure(row=0, column=0, padx=0, pady=(0, 8), sticky="nsew")
+            self._output_card.grid_configure(row=1, column=0, padx=0, pady=(8, 0), sticky="nsew")
+            return
+
+        self._results_row.grid_columnconfigure(0, weight=1)
+        self._results_row.grid_columnconfigure(1, weight=1)
+        self._repos_card.grid_configure(row=0, column=0, padx=(0, 8), pady=0, sticky="nsew")
+        self._output_card.grid_configure(row=0, column=1, padx=(8, 0), pady=0, sticky="nsew")
+
     def _set_active_flow_tab(self, tab_name: str) -> None:
         if self._flow_tabs is None:
             return
@@ -4345,12 +4583,12 @@ class GuiApp:  # pragma: no cover
             return
 
         if self._repair_tab_block_label is not None:
-            lock_reason = reason or "Reparar bloqueado hasta completar una auditoria valida."
+            lock_reason = reason or "Repair stays locked until a valid audit has completed."
             self._repair_tab_block_label.configure(
                 text=(
-                    "Hoja Reparar bloqueada\n\n"
+                    "Repair tab locked\n\n"
                     f"{lock_reason}\n\n"
-                    "Ejecuta Auditar, revisa resultados y luego vuelve para reparar."
+                    "Run Audit, review the results, and come back when you are ready to repair."
                 )
             )
 
@@ -4366,7 +4604,7 @@ class GuiApp:  # pragma: no cover
             corner_radius=9,
             fg_color="#DDEAF7",
             text_color="#16436E",
-            font=("Segoe UI Semibold", 11),
+            font=self._font(11, bold=True),
         )
         self._bind_tooltip(badge, message)
         return badge
@@ -4399,7 +4637,7 @@ class GuiApp:  # pragma: no cover
                 justify="left",
                 anchor="w",
                 wraplength=360,
-                font=("Segoe UI", 11),
+                font=self._font(11),
                 text_color="#E2ECF6",
             ).pack(padx=10, pady=8)
 
@@ -4470,7 +4708,7 @@ class GuiApp:  # pragma: no cover
         state = "normal" if (self._repair_ready and not self._run_in_progress) else "disabled"
         self._repair_button.configure(state=state, text=self._repair_button_text)
 
-    def _lock_repair_until_next_audit(self, reason: str = "Reparar (auditar primero)") -> None:
+    def _lock_repair_until_next_audit(self, reason: str = "Repair (run audit first)") -> None:
         self._cancel_repair_cooldown()
         self._repair_ready = False
         self._repair_cooldown_remaining = 0
@@ -4487,17 +4725,17 @@ class GuiApp:  # pragma: no cover
         self._last_audit_selection_signature = selection_signature
 
         if not reports_payload:
-            self._lock_repair_until_next_audit("Reparar (sin resultados auditados)")
+            self._lock_repair_until_next_audit("Repair (no audited results yet)")
             return
 
         self._cancel_repair_cooldown()
         self._repair_ready = False
         self._repair_cooldown_remaining = self._repair_cooldown_seconds
-        self._repair_button_text = f"Reparar (espera {self._repair_cooldown_remaining}s)"
+        self._repair_button_text = f"Repair (wait {self._repair_cooldown_remaining}s)"
         self._set_repair_tab_visual_lock(False)
         self._update_run_buttons_state()
         self.log(
-            "[INFO] Reparar se habilitara en 10 segundos para forzar una revision minima de resultados."
+            "[INFO] Repair unlocks in 10 seconds to enforce a minimum review window."
         )
         self._repair_cooldown_after_id = self.root.after(1000, self._tick_repair_cooldown)
 
@@ -4506,13 +4744,13 @@ class GuiApp:  # pragma: no cover
         if self._repair_cooldown_remaining <= 1:
             self._repair_ready = True
             self._repair_cooldown_remaining = 0
-            self._repair_button_text = "Reparar"
+            self._repair_button_text = "Repair"
             self._update_run_buttons_state()
-            self.log("[INFO] Reparar habilitado.")
+            self.log("[INFO] Repair unlocked.")
             return
 
         self._repair_cooldown_remaining -= 1
-        self._repair_button_text = f"Reparar (espera {self._repair_cooldown_remaining}s)"
+        self._repair_button_text = f"Repair (wait {self._repair_cooldown_remaining}s)"
         self._update_run_buttons_state()
         self._repair_cooldown_after_id = self.root.after(1000, self._tick_repair_cooldown)
 
@@ -4535,36 +4773,36 @@ class GuiApp:  # pragma: no cover
         owners_text = ", ".join(allowed_owners) if allowed_owners else "(auto from noreply if available)"
 
         lines = [
-            "Se va a ejecutar Reparar con el siguiente plan:",
+            "Repair will run with the following plan:",
             "",
-            "Opciones activas:",
-            f"- Rewrite personal paths: {'SI' if self.rewrite_personal_paths_var.get() else 'NO'}",
+            "Active options:",
+            f"- Rewrite personal paths: {'YES' if self.rewrite_personal_paths_var.get() else 'NO'}",
             f"- Explicit replace-text file: {self.replace_text_file_var.get().strip() or 'NO'}",
-            f"- Purge SAFE: {'SI' if self.purge_detected_secret_files_var.get() else 'NO'}",
-            f"- Purge RISKY: {'SI' if self.purge_all_detected_secret_files_var.get() else 'NO'}",
-            f"- Force push remoto: {'SI' if self.push_var.get() else 'NO'}",
-            f"- Open HTML report automatically: {'SI' if self.open_report_var.get() else 'NO'}",
-            f"- Confirm each repo fix: {'SI' if self.confirm_each_repo_fix_var.get() else 'NO'}",
-            f"- Allow non-owner push bypass: {'SI' if self.allow_non_owner_push_var.get() else 'NO'}",
+            f"- Purge SAFE: {'YES' if self.purge_detected_secret_files_var.get() else 'NO'}",
+            f"- Purge RISKY: {'YES' if self.purge_all_detected_secret_files_var.get() else 'NO'}",
+            f"- Force push remote: {'YES' if self.push_var.get() else 'NO'}",
+            f"- Open HTML report automatically: {'YES' if self.open_report_var.get() else 'NO'}",
+            f"- Confirm each repo fix: {'YES' if self.confirm_each_repo_fix_var.get() else 'NO'}",
+            f"- Allow non-owner push bypass: {'YES' if self.allow_non_owner_push_var.get() else 'NO'}",
             f"- Allowed push owner(s): {owners_text}",
             "",
-            "Cambios base de Reparar:",
-            "- Puede agregar patrones faltantes en .gitignore",
-            "- Puede hacer git rm --cached de archivos tracked-but-ignored",
-            "- Puede reescribir historial con git-filter-repo segun opciones",
+            "Repair baseline changes:",
+            "- May add missing .gitignore patterns",
+            "- May run git rm --cached on tracked-but-ignored files",
+            "- May rewrite history with git-filter-repo depending on the selected options",
         ]
 
         if risky_mode:
             lines.extend(
                 [
                     "",
-                    "ATENCION: seleccionaste opciones RISKY (purge all, force push o bypass guardrail).",
-                    "Esto puede eliminar contenido historico de forma irreversible y/o saltar protecciones de owner remoto.",
+                    "WARNING: you selected RISKY options (purge all, force push, or owner-guardrail bypass).",
+                    "This can remove historical content irreversibly and/or bypass remote-owner protections.",
                 ]
             )
 
         lines.append("")
-        lines.append("Resumen explicito de detecciones auditadas:")
+        lines.append("Explicit summary of audited findings:")
 
         for rep in self._last_audit_reports_payload:
             name = str(rep.get("name", "(repo)"))
@@ -4573,39 +4811,39 @@ class GuiApp:  # pragma: no cover
 
             tracked_ignored = self._report_list(rep, "tracked_but_ignored")
             if tracked_ignored:
-                lines.append(f"  * Untrack previsto (tracked-but-ignored): {len(tracked_ignored)}")
+                lines.append(f"  * Planned untrack (tracked-but-ignored): {len(tracked_ignored)}")
 
             if self.rewrite_personal_paths_var.get():
                 path_findings = self._report_list(rep, "tracked_path_matches") + self._report_list(
                     rep,
                     "history_path_matches",
                 )
-                lines.append(f"  * Reescritura de paths personales prevista: {len(path_findings)} hallazgos")
+                lines.append(f"  * Planned personal-path rewrite: {len(path_findings)} findings")
             else:
-                lines.append("  * Paths personales: no se reescriben (opt-in desactivado)")
+                lines.append("  * Personal paths: rewrite disabled")
 
             if self.purge_all_detected_secret_files_var.get():
                 purge_targets = self._report_list(rep, "secret_file_candidates")
-                lines.append(f"  * Purge RISKY previsto: {len(purge_targets)} candidatos")
+                lines.append(f"  * Planned Purge RISKY: {len(purge_targets)} candidates")
                 for item in purge_targets[:4]:
                     lines.append(f"    - {item}")
                 if len(purge_targets) > 4:
-                    lines.append(f"    - ... y {len(purge_targets) - 4} mas")
+                    lines.append(f"    - ... and {len(purge_targets) - 4} more")
             elif self.purge_detected_secret_files_var.get():
                 purge_targets = self._report_list(rep, "secret_file_autopurge_candidates")
-                lines.append(f"  * Purge SAFE previsto: {len(purge_targets)} candidatos")
+                lines.append(f"  * Planned Purge SAFE: {len(purge_targets)} candidates")
                 for item in purge_targets[:4]:
                     lines.append(f"    - {item}")
                 if len(purge_targets) > 4:
-                    lines.append(f"    - ... y {len(purge_targets) - 4} mas")
+                    lines.append(f"    - ... and {len(purge_targets) - 4} more")
             else:
-                lines.append("  * Purge de secret files: desactivado")
+                lines.append("  * Secret-file purge: disabled")
 
         lines.extend(
             [
                 "",
-                "Continuar?",
-                "(Si cambiaste seleccion de repos/opciones, re-audita primero).",
+                "Continue?",
+                "(If you changed the repo selection or options, run Audit again first.)",
             ]
         )
         return "\n".join(lines)
@@ -4613,35 +4851,35 @@ class GuiApp:  # pragma: no cover
     def _confirm_repair_run(self, selected_signature: tuple[str, ...] | None) -> bool:
         if not self._repair_ready:
             self.messagebox.showwarning(
-                "Reparar bloqueado",
-                "Reparar solo se habilita despues de terminar una auditoria y esperar 10 segundos.",
+                "Repair Locked",
+                "Repair becomes available only after a completed audit and a 10-second review window.",
             )
             return False
 
         if not self._last_audit_reports_payload:
             self.messagebox.showwarning(
-                "Reparar bloqueado",
-                "No hay resultados de auditoria en esta sesion. Ejecuta Auditar primero.",
+                "Repair Locked",
+                "There are no audit results in this session yet. Run Audit first.",
             )
             return False
 
         if selected_signature != self._last_audit_selection_signature:
             self.messagebox.showwarning(
-                "Requiere nueva auditoria",
-                "La seleccion de repos no coincide con la ultima auditoria. Audita de nuevo antes de reparar.",
+                "New Audit Required",
+                "The current repo selection does not match the last audit. Run Audit again before Repair.",
             )
             return False
 
         plan_message = self._build_repair_confirmation_text(selected_signature)
-        confirmed = self.messagebox.askyesno("Confirmar plan de reparacion", plan_message)
+        confirmed = self.messagebox.askyesno("Confirm Repair Plan", plan_message)
         if not confirmed:
             return False
 
         if self._is_risky_repair_selected():
             accepted = self.messagebox.askyesno(
-                "Aceptacion de riesgo requerida",
-                "Seleccionaste opciones RISKY (purge all, force push o bypass guardrail).\n"
-                "Confirma que aceptas continuar BAJO TU PROPIO RIESGO.",
+                "Risk Acceptance Required",
+                "You selected RISKY options (purge all, force push, or owner-guardrail bypass).\n"
+                "Confirm that you accept continuing AT YOUR OWN RISK.",
             )
             if not accepted:
                 return False
@@ -4656,13 +4894,13 @@ class GuiApp:  # pragma: no cover
     ) -> None:
         self._run_in_progress = False
         if run_fix:
-            self._lock_repair_until_next_audit("Reparar (auditar nuevamente)")
+            self._lock_repair_until_next_audit("Repair (run audit again)")
             self._set_active_flow_tab(self._repair_tab_name)
             return
 
         self._start_repair_cooldown(reports_payload, selection_signature)
         self._set_active_flow_tab(self._repair_tab_name)
-        self.log("[INFO] Flujo: auditoria finalizada. Revisa y ejecuta Reparar desde la pestana Reparar.")
+        self.log("[INFO] Flow: audit finished. Review the findings, then continue from the Repair tab.")
 
     def log(self, msg: str) -> None:
         self.output.insert("end", msg + "\n")
@@ -4670,6 +4908,9 @@ class GuiApp:  # pragma: no cover
 
     def clear_output(self) -> None:
         self.output.delete("1.0", "end")
+
+    def clear_selection(self) -> None:
+        self.repo_list.selection_clear(0, "end")
 
     def select_all(self) -> None:
         self.repo_list.select_set(0, "end")
@@ -4712,7 +4953,7 @@ class GuiApp:  # pragma: no cover
             return
 
         confirmed = self.messagebox.askyesno(
-            "Confirm global git config",
+            "Confirm Global Git Config",
             "This updates git config --global for all repositories on this machine. Continue?",
         )
         if not confirmed:
@@ -4727,7 +4968,7 @@ class GuiApp:  # pragma: no cover
         if ok:
             self.owner_name_var.set(user_name)
             self.noreply_var.set(user_email)
-        self._show_identity_result("Global Git config", ok, msg)
+        self._show_identity_result("Global Git Config", ok, msg)
 
     def apply_git_identity_local_clicked(self) -> None:
         user_name, user_email = self._read_identity_inputs()
@@ -4736,7 +4977,7 @@ class GuiApp:  # pragma: no cover
 
         repo_path, error = resolve_identity_repo_path(Path(self.root_var.get()), self._selected_repo_names())
         if error:
-            self.messagebox.showwarning("Local git config", error)
+            self.messagebox.showwarning("Local Git Config", error)
             return
 
         ok, msg = apply_git_identity_config(
@@ -4748,13 +4989,13 @@ class GuiApp:  # pragma: no cover
         if ok:
             self.owner_name_var.set(user_name)
             self.noreply_var.set(user_email)
-        self._show_identity_result("Local Git config", ok, msg)
+        self._show_identity_result("Local Git Config", ok, msg)
 
     def read_git_identity_clicked(self) -> None:
         selected_repos = self._selected_repo_names()
         if len(selected_repos) > 1:
             self.messagebox.showwarning(
-                "Read Git identity",
+                "Read Git Identity",
                 "Select zero or one repository to inspect local/effective git identity.",
             )
             return
@@ -4764,7 +5005,7 @@ class GuiApp:  # pragma: no cover
         if len(selected_repos) == 1:
             candidate = root / selected_repos[0]
             if not (candidate / ".git").exists():
-                self.messagebox.showwarning("Read Git identity", f"Not a git repository: {candidate}")
+                self.messagebox.showwarning("Read Git Identity", f"Not a git repository: {candidate}")
                 return
             repo_path = candidate
         elif (root / ".git").exists():
@@ -4772,10 +5013,10 @@ class GuiApp:  # pragma: no cover
 
         config_values = read_git_identity_config(repo_path=repo_path)
         self.messagebox.showinfo(
-            "Current Git identity",
+            "Current Git Identity",
             format_git_identity_status(config_values, repo_path),
         )
-        self.log("[INFO] Read current git identity configuration.")
+        self.log("[INFO] Read current Git identity configuration.")
 
     def open_github_email_settings_clicked(self) -> None:
         ok, msg = open_github_email_settings()
@@ -4784,7 +5025,7 @@ class GuiApp:  # pragma: no cover
     def run_clicked(self, run_fix: bool) -> None:
         if self._run_in_progress:
             self.messagebox.showinfo(
-                "Run in progress",
+                "Run In Progress",
                 "There is already an execution in progress. Wait until it finishes.",
             )
             return
@@ -4811,13 +5052,13 @@ class GuiApp:  # pragma: no cover
             max_matches = parse_positive_int(self.max_matches_var.get().strip())
         except argparse.ArgumentTypeError:
             self.messagebox.showwarning(
-                "Invalid max matches",
+                "Invalid Max Matches",
                 "Max matches must be a positive integer.",
             )
             return
 
         if not run_fix:
-            self._lock_repair_until_next_audit("Reparar (auditoria en curso)")
+            self._lock_repair_until_next_audit("Repair (audit in progress)")
 
         self._run_in_progress = True
         self._update_run_buttons_state()
@@ -4902,10 +5143,10 @@ class GuiApp:  # pragma: no cover
                     try:
                         result["value"] = bool(
                             self.messagebox.askyesno(
-                                "Confirmar reparacion por repositorio",
-                                f"Repositorio {index}/{total}: {repo.name}\n\n"
-                                "Aplicar Reparar en este repositorio?\n"
-                                "Puedes responder No para omitir solo este repositorio.",
+                                "Confirm Repair for This Repository",
+                                f"Repository {index}/{total}: {repo.name}\n\n"
+                                "Apply Repair to this repository?\n"
+                                "You can answer No to skip only this repository.",
                             )
                         )
                     finally:

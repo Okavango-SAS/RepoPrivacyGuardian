@@ -6,7 +6,7 @@ This document defines how coding agents should use Repo Privacy Guardian from CL
 
 - Use CLI for automation, reproducibility, and stable artifacts.
 - GUI and CLI are parity paths for checks and policy logic.
-- GUI parity includes staged interaction: `Auditar` first, then `Reparar` after audit context unlocks visual repair gate.
+- GUI parity includes staged interaction: `Audit` first, then `Repair` after audit context unlocks the visual repair gate.
 - Prefer CLI in agentic IDE workflows (Codex, Cursor, Antigravity, VS Code with GitHub Copilot, and similar tools).
 
 ## CLI First Workflow

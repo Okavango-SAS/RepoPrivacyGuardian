@@ -14,7 +14,7 @@ Comparar y alinear:
 
 - opciones de auditoria
 - opciones de fix/remediacion
-- flujo por tabs (`Auditar` y `Reparar`) y bloqueo visual de `Reparar` hasta tener contexto valido de auditoria
+- flujo por tabs (`Audit` y `Repair`) y bloqueo visual de `Repair` hasta tener contexto valido de auditoria
 - opciones de severidad y reportes
 - comportamiento de dry-run
 - comportamiento de purge de secretos
@@ -34,7 +34,7 @@ Comparar y alinear:
 2. Marcar gaps funcionales y de flujo.
 3. Implementar correcciones hasta cerrar gaps.
 4. Agregar tests automáticos de paridad (argumentos, flags, flujo de salida, errores).
-5. Verificar contrato de interaccion GUI: `Auditar` como paso inicial y `Reparar` bloqueado visualmente hasta auditoria valida.
+5. Verificar contrato de interaccion GUI: `Audit` como paso inicial y `Repair` bloqueado visualmente hasta auditoria valida.
 6. Ejecutar suite y validar cobertura objetivo del repo.
 7. Documentar resultado final de la paridad en docs/ENGINEERING_DECISIONS.md o docs/KNOWN_ISSUES.md segun corresponda.
 
@@ -49,6 +49,6 @@ Comparar y alinear:
 
 - No hay diferencias funcionales no justificadas entre GUI y CLI.
 - El flujo de corrida y artefactos es equivalente.
-- El contrato de tabs GUI (`Auditar` -> `Reparar`) y el bloqueo visual previo a remediacion quedan explicitamente verificados.
+- El contrato de tabs GUI (`Audit` -> `Repair`) y el bloqueo visual previo a remediacion quedan explicitamente verificados.
 - Tests agregados cubren los escenarios de paridad clave.
 - Documentacion actualizada con estado de paridad.

@@ -14,7 +14,7 @@ Provide a safe, repeatable, and auditable workflow to prepare repositories for p
 ## Milestone 0.1 - Stabilization
 
 - Keep CLI and GUI parity for core audit and fix options.
-- Align GUI interaction flow with parity safety gates (`Auditar` -> `Reparar`, with `Reparar` visually locked until valid audit context).
+- Align GUI interaction flow with parity safety gates (`Audit` -> `Repair`, with `Repair` visually locked until valid audit context).
 - Improve report readability and failure grouping.
 - Expand documentation and release checklist.
 - Harden defaults around local policy and local result directory.

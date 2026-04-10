@@ -319,6 +319,120 @@ def test_gui_run_worker_passes_replace_text_file_for_repair(tmp_path: Path, monk
     assert captured["config"].replace_text_file == "ops/replace-text.txt"
 
 
+def test_choose_gui_font_family_prefers_available_candidates() -> None:
+    picked = rpg.choose_gui_font_family(
+        ("SF Pro Text", "Helvetica Neue", "Arial"),
+        {"Arial", "Courier New"},
+    )
+
+    assert picked == "Arial"
+
+
+def test_choose_gui_font_family_falls_back_to_first_candidate() -> None:
+    picked = rpg.choose_gui_font_family(("Inter", "Noto Sans"), {"Menlo", "Courier"})
+    assert picked == "Inter"
+
+
+def test_gui_lock_default_text_is_english() -> None:
+    app = object.__new__(rpg.GuiApp)
+    app._repair_cooldown_after_id = None
+    app._repair_ready = True
+    app._repair_cooldown_remaining = 5
+    app._repair_button_text = ""
+    app._set_repair_tab_visual_lock = lambda *_args, **_kwargs: None
+    app._update_run_buttons_state = lambda: None
+
+    app._lock_repair_until_next_audit()
+
+    assert app._repair_button_text == "Repair (run audit first)"
+
+
+def test_gui_browse_helpers_update_variables(tmp_path: Path) -> None:
+    class DummyVar:
+        def __init__(self, value: str):
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
+        def set(self, value: str) -> None:
+            self.value = value
+
+    class DummyDialog:
+        def askdirectory(self, **kwargs):  # type: ignore[no-untyped-def]
+            assert kwargs["title"] == "Choose the root directory"
+            return str(tmp_path)
+
+        def askopenfilename(self, **kwargs):  # type: ignore[no-untyped-def]
+            assert kwargs["title"] == "Choose a policy file"
+            return str(tmp_path / "POLICY.md")
+
+        def asksaveasfilename(self, **kwargs):  # type: ignore[no-untyped-def]
+            assert kwargs["title"] == "Choose the extra JSON export path"
+            return str(tmp_path / "report.json")
+
+    app = object.__new__(rpg.GuiApp)
+    app.filedialog = DummyDialog()
+
+    root_var = DummyVar("")
+    policy_var = DummyVar("")
+    report_var = DummyVar("")
+
+    app._browse_directory(root_var, title="Choose the root directory")
+    app._browse_existing_file(
+        policy_var,
+        title="Choose a policy file",
+        filetypes=[("Markdown files", "*.md")],
+    )
+    app._browse_save_file(
+        report_var,
+        title="Choose the extra JSON export path",
+        default_extension=".json",
+        filetypes=[("JSON files", "*.json")],
+    )
+
+    assert root_var.get() == str(tmp_path)
+    assert policy_var.get() == str(tmp_path / "POLICY.md")
+    assert report_var.get() == str(tmp_path / "report.json")
+
+
+def test_gui_repair_confirmation_text_uses_english_labels() -> None:
+    class DummyVar:
+        def __init__(self, value):
+            self.value = value
+
+        def get(self):
+            return self.value
+
+    app = object.__new__(rpg.GuiApp)
+    app.allowed_remote_owners_var = DummyVar("axeljackal")
+    app.rewrite_personal_paths_var = DummyVar(True)
+    app.replace_text_file_var = DummyVar("ops/replace-text.txt")
+    app.purge_detected_secret_files_var = DummyVar(True)
+    app.purge_all_detected_secret_files_var = DummyVar(False)
+    app.push_var = DummyVar(False)
+    app.open_report_var = DummyVar(True)
+    app.confirm_each_repo_fix_var = DummyVar(True)
+    app.allow_non_owner_push_var = DummyVar(False)
+    app._last_audit_reports_payload = [
+        {
+            "name": "repo-a",
+            "status": "FAIL",
+            "tracked_but_ignored": ["secret.txt"],
+            "tracked_path_matches": ["<redacted-path>"],
+            "history_path_matches": [],
+            "secret_file_autopurge_candidates": [".env"],
+            "secret_file_candidates": [".env"],
+        }
+    ]
+
+    text = app._build_repair_confirmation_text(("repo-a",))
+
+    assert "Repair will run with the following plan:" in text
+    assert "Continue?" in text
+    assert "Se va a ejecutar" not in text
+
+
 def test_cli_defaults_follow_current_working_directory(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
@@ -354,13 +468,15 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
     required_snippets = [
         "Windows CLI: supported",
         "Linux CLI: supported",
-        "macOS CLI: best-effort",
+        "macOS CLI: supported",
+        "Windows GUI: supported",
         "GUI is optional",
         "CLI does not open a browser automatically",
         "Use `--gui` for the desktop interface",
         "`exfil_code_indicators` is intentionally manual-review only by default",
         "--replace-text-file",
         "Recommended agent prompt template",
+        "Axel E. Sacca",
     ]
 
     for snippet in required_snippets:

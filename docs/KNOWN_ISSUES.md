@@ -56,8 +56,8 @@ Workaround: add manual `git log --all --pretty=format:%an\ <%ae\>` review for st
 
 ## Intentional behavior (not a bug)
 
-- GUI uses a staged flow: run `Auditar` first, then `Reparar`.
-- `Reparar` is intentionally visually locked until a valid audit produces actionable remediation context.
+- GUI uses a staged flow: run `Audit` first, then `Repair`.
+- `Repair` is intentionally visually locked until a valid audit produces actionable remediation context.
 - `exfil_code_indicators` is advisory by default. It elevates review guidance, but it does not automatically fail a repository.
 - `pytest` release validation intentionally ignores untracked/local-only `tests/test_*.py` files so the release signal matches a clean clone.
 

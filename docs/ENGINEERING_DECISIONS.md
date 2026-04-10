@@ -89,12 +89,12 @@ This file captures key design decisions and their rationale.
   - per-repository repair confirmation toggle (`confirm_each_repo_fix` parity)
   - push owner guardrail options (`allow_non_owner_push` and `allowed_remote_owners` parity)
 - Updated GUI interaction model with:
-  - tabbed workflow (`Auditar` and `Reparar`) to reduce single-page overload
-  - action separation (audit button in `Auditar`, repair button in `Reparar`)
+  - tabbed workflow (`Audit` and `Repair`) to reduce single-page overload
+  - action separation (audit button in `Audit`, repair button in `Repair`)
   - visual repair-tab lock overlay until a valid audit has produced actionable context
 - Explicit GUI interaction contract:
-  - `Auditar` is the mandatory first step of every GUI run.
-  - `Reparar` remains visually locked until audit context is valid and actionable.
+  - `Audit` is the mandatory first step of every GUI run.
+  - `Repair` remains visually locked until audit context is valid and actionable.
   - Once unlocked, repair behavior preserves CLI-equivalent remediation semantics.
 - Aligned GUI `public_only` default with CLI default.
 - Aligned GUI repository scope behavior with CLI: if no repository filter is provided, run all repositories under root after explicit confirmation.
