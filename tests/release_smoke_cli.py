@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import json
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 BASELINE = "\n".join(
@@ -49,8 +52,32 @@ def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[
     if proc.returncode != 0:
         raise SystemExit(
             f"Command failed: {cmd}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
-        )
+    )
     return proc
+
+
+def resolve_cli_command(
+    *,
+    repo_root: Path = REPO_ROOT,
+    scripts_dir: Path | None = None,
+    which: Callable[[str], str | None] = shutil.which,
+) -> list[str]:
+    resolved_scripts_dir = scripts_dir or Path(sys.executable).resolve().parent
+    cli_candidates = [
+        resolved_scripts_dir / "repo-privacy-guardian.exe",
+        resolved_scripts_dir / "repo-privacy-guardian",
+    ]
+    cli = next((str(path) for path in cli_candidates if path.exists()), None)
+    if not cli:
+        cli = which("repo-privacy-guardian")
+    if cli:
+        return [cli]
+
+    direct_script = repo_root / "Repo_Privacy_Guardian.py"
+    if direct_script.exists():
+        return [sys.executable, str(direct_script)]
+
+    return [sys.executable, "-m", "Repo_Privacy_Guardian"]
 
 
 def main() -> int:
@@ -77,20 +104,10 @@ def main() -> int:
         run(["git", "-C", str(repo), "add", "-A"])
         run(["git", "-C", str(repo), "commit", "-m", "baseline"])
 
-        scripts_dir = Path(sys.executable).resolve().parent
-        cli_candidates = [
-            scripts_dir / "repo-privacy-guardian.exe",
-            scripts_dir / "repo-privacy-guardian",
-        ]
-        cli = next((str(path) for path in cli_candidates if path.exists()), None)
-        if not cli:
-            cli = shutil.which("repo-privacy-guardian")
-        if not cli:
-            raise SystemExit("repo-privacy-guardian entry point is not available.")
-
+        cli_cmd = resolve_cli_command()
         proc = subprocess.run(
             [
-                cli,
+                *cli_cmd,
                 "--root",
                 str(root),
                 "--repos",

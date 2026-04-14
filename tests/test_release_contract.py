@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -8,6 +9,16 @@ from pathlib import Path
 
 import pytest
 import Repo_Privacy_Guardian as rpg
+
+
+def _load_support_module(module_name: str, relative_path: str):
+    module_path = Path(__file__).resolve().parents[1] / relative_path
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_should_launch_gui_requires_explicit_flag() -> None:
@@ -248,6 +259,31 @@ def test_module_wrapper_runs_help_without_launching_gui() -> None:
 
     assert proc.returncode == 0
     assert "usage:" in proc.stdout
+
+
+def test_release_smoke_cli_resolves_direct_script_without_installed_entrypoint(tmp_path: Path) -> None:
+    smoke_cli = _load_support_module("release_smoke_cli_support", "tests/release_smoke_cli.py")
+    repo_root = Path(__file__).resolve().parents[1]
+
+    command = smoke_cli.resolve_cli_command(
+        repo_root=repo_root,
+        scripts_dir=tmp_path,
+        which=lambda _name: None,
+    )
+
+    assert command == [sys.executable, str(repo_root / "Repo_Privacy_Guardian.py")]
+
+
+def test_release_smoke_gui_bootstrap_adds_repo_root_only_once() -> None:
+    smoke_gui = _load_support_module("release_smoke_gui_support", "tests/release_smoke_gui.py")
+    script_path = Path(__file__).resolve().parents[1] / "tests" / "release_smoke_gui.py"
+    path_list = ["sentinel"]
+
+    repo_root = smoke_gui.bootstrap_repo_root(script_path=script_path, path_list=path_list)
+    smoke_gui.bootstrap_repo_root(script_path=script_path, path_list=path_list)
+
+    assert path_list[0] == str(repo_root)
+    assert path_list.count(str(repo_root)) == 1
 
 
 def test_discover_python_executables_includes_posix_virtualenv(tmp_path: Path) -> None:
