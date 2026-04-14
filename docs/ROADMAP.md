@@ -31,8 +31,10 @@ Provide a safe, repeatable, and auditable workflow to prepare repositories for p
 Current baseline in repo:
 
 - tracked pytest coverage for publication-gate regressions
-- Windows and Linux CI running install, pytest, and non-destructive CLI smoke
-- package build plus wheel-install smoke in CI
+- CLI CI on Windows, Linux, and macOS
+- Python 3.10 through 3.13 validated in CI
+- package build plus `wheel` and `sdist` install smoke in CI
+- Windows GUI smoke in CI
 
 Next hardening steps:
 

@@ -50,8 +50,9 @@ Use this checklist before tagging a public release.
 
 - Required checks pass.
 - Clean-clone validation passes: `python -m pip install -e ".[test]"`, `python -m pytest`, `repo-privacy-guardian --help`.
-- Package build succeeds (`python -m build`) and the wheel installs cleanly.
-- CI is green on the tracked test suite for Windows and Linux plus package-build smoke.
+- Package build succeeds (`python -m build`) and both `wheel` and `sdist` installs complete cleanly.
+- CI is green on the tracked CLI test suite for Windows, Linux, and macOS plus Windows GUI smoke.
+- Supported Python claims remain aligned with the Python versions that CI actually validates.
 - Risk exceptions are documented and approved.
 - License and notice files are present and correct.
 - Final report artifacts are stored in the expected local path.

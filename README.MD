@@ -20,13 +20,20 @@ It is designed for repeatable CLI execution first, with an optional desktop GUI 
 
 ## 🧭 Support Matrix
 
-- Windows CLI: supported
-- Linux CLI: supported
-- macOS CLI: supported
-- Windows GUI: supported
+- Windows CLI: supported and CI-validated
+- Linux CLI: supported and CI-validated
+- macOS CLI: supported and CI-validated
+- Windows GUI: supported with CI smoke coverage
 - Linux GUI desktop: best-effort and depends on Tk availability plus a graphical session
 - macOS GUI: best-effort / not a release priority
 - Headless and CI environments: CLI only
+
+## 📈 Release Posture
+
+- Public maturity: packaging and release engineering are in public beta territory rather than early alpha.
+- Python support claims (`3.10` to `3.13`) are backed by CI coverage.
+- Built package validation covers both `sdist` and `wheel` install paths.
+- GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
 
 ## 🔍 What It Audits
 
@@ -288,9 +295,10 @@ python -m pip install ".[test]"
 python -m pytest
 repo-privacy-guardian --help
 python tests/release_smoke_cli.py
+python -m build
 ```
 
-Pytest collection is restricted to tracked test files so local ignored test files do not change the release signal.
+Pytest collection is restricted to tracked test files so local ignored test files do not change the release signal. CI additionally validates built `wheel` and `sdist` installs plus Windows GUI smoke.
 
 ## 🏗️ Repository Layout
 

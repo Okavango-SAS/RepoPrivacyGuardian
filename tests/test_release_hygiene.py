@@ -67,6 +67,13 @@ def test_pyproject_declares_macos_support_classifier() -> None:
     assert '"Operating System :: MacOS :: MacOS X"' in pyproject
 
 
+def test_pyproject_uses_public_beta_classifier() -> None:
+    pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert '"Development Status :: 4 - Beta"' in pyproject
+    assert '"Development Status :: 3 - Alpha"' not in pyproject
+
+
 def test_no_capture_like_release_media_is_tracked() -> None:
     offenders = []
     for path in _tracked_paths():
@@ -121,3 +128,14 @@ def test_ci_workflow_uses_sha_pinned_actions_and_least_privilege() -> None:
     assert workflow.count("persist-credentials: false") == 3
     assert len(pinned_actions) == 6
     assert not re.search(r"uses:\s+actions/(?:checkout|setup-python)@v\d", workflow)
+
+
+def test_ci_workflow_covers_supported_python_versions_and_package_artifacts() -> None:
+    workflow = (_repo_root() / CI_WORKFLOW).read_text(encoding="utf-8")
+
+    for version in ('"3.10"', '"3.11"', '"3.12"', '"3.13"'):
+        assert version in workflow
+
+    assert "dist/*.whl" in workflow
+    assert "dist/*.tar.gz" in workflow
+    assert workflow.count("python tests/release_smoke_cli.py") >= 3
