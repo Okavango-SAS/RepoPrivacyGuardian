@@ -193,6 +193,26 @@ def test_build_system_tool_install_command_prefers_supported_package_manager() -
     assert mac_cmd == ["brew", "install", "git"]
 
 
+def test_build_system_tool_install_command_bootstraps_winget_when_windows_has_no_package_manager() -> None:
+    win_cmd = rpg.build_system_tool_install_command(
+        "git",
+        platform_name="win32",
+        which=lambda _exe: None,
+    )
+
+    assert win_cmd == [
+        "winget",
+        "install",
+        "--id",
+        "Git.Git",
+        "-e",
+        "--source",
+        "winget",
+        "--accept-package-agreements",
+        "--accept-source-agreements",
+    ]
+
+
 def test_format_install_command_and_install_missing_tooling() -> None:
     issued: list[list[str]] = []
 
@@ -214,6 +234,31 @@ def test_format_install_command_and_install_missing_tooling() -> None:
     assert rpg.format_install_command(checks[0].auto_install_command) == "python -m pip install 'customtkinter>=5.2.2,<6'"
     rpg.install_missing_tooling(checks, lambda _msg: None, runner=fake_runner)
     assert issued == [["python", "-m", "pip", "install", "customtkinter>=5.2.2,<6"]]
+
+
+def test_install_missing_tooling_bootstraps_winget_before_running_install(monkeypatch) -> None:
+    issued: list[list[str]] = []
+
+    def fake_runner(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        del kwargs
+        issued.append(cmd)
+        return rpg.subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(rpg, "ensure_windows_winget_available", lambda logger, runner=fake_runner: True)
+
+    checks = [
+        rpg.ToolingCheck(
+            name="github-auth",
+            state="warning",
+            blocking=False,
+            detail="missing gh",
+            auto_install_command=["winget", "install", "--id", "GitHub.cli"],
+        )
+    ]
+
+    rpg.install_missing_tooling(checks, lambda _msg: None, runner=fake_runner)
+
+    assert issued == [["winget", "install", "--id", "GitHub.cli"]]
 
 
 def test_collect_auto_installable_tooling_checks_filters_ready_and_non_blocking() -> None:
@@ -240,6 +285,113 @@ def test_collect_auto_installable_tooling_checks_filters_ready_and_non_blocking(
 
     assert [check.name for check in blocking_only] == ["customtkinter"]
     assert [check.name for check in all_installable] == ["customtkinter", "gh"]
+
+
+def test_probe_windows_winget_bootstrap_available_requires_powershell() -> None:
+    ok, detail = rpg.probe_windows_winget_bootstrap_available(
+        platform_name="win32",
+        which=lambda _exe: None,
+    )
+
+    assert ok is False
+    assert "PowerShell" in str(detail)
+
+
+def test_probe_windows_winget_bootstrap_available_success_and_failure_paths() -> None:
+    ok, detail = rpg.probe_windows_winget_bootstrap_available(
+        platform_name="win32",
+        which=lambda exe: exe if exe == "powershell" else None,
+        runner=lambda *args, **kwargs: rpg.subprocess.CompletedProcess(args[0], 0, "", ""),
+    )
+    assert ok is True
+    assert detail is None
+
+    ok, detail = rpg.probe_windows_winget_bootstrap_available(
+        platform_name="win32",
+        which=lambda exe: exe if exe == "powershell" else None,
+        runner=lambda *args, **kwargs: rpg.subprocess.CompletedProcess(args[0], 1, "", "missing cmdlet"),
+    )
+    assert ok is False
+    assert detail == "missing cmdlet"
+
+
+def test_build_winget_bootstrap_command_variants() -> None:
+    assert rpg.build_winget_bootstrap_command(platform_name="linux") is None
+    assert rpg.build_winget_bootstrap_command(platform_name="win32", which=lambda _exe: None) is None
+
+    command = rpg.build_winget_bootstrap_command(
+        platform_name="win32",
+        which=lambda exe: exe if exe == "powershell" else None,
+    )
+
+    assert command is not None
+    assert command[0] == "powershell"
+    assert rpg.WINGET_BOOTSTRAP_URL in command[-1]
+    assert rpg.WINGET_PACKAGE_FAMILY_NAME in command[-1]
+
+
+def test_build_windows_winget_tooling_check_reports_bootstrap_path(monkeypatch) -> None:
+    monkeypatch.setattr(rpg, "probe_command_available", lambda executable, **kwargs: (False, f"{executable} missing"))
+    monkeypatch.setattr(rpg, "probe_windows_winget_bootstrap_available", lambda **kwargs: (True, None))
+    monkeypatch.setattr(
+        rpg,
+        "build_winget_bootstrap_command",
+        lambda **kwargs: ["powershell", "-NoProfile", "-Command", "bootstrap-winget"],
+    )
+
+    check = rpg.build_windows_winget_tooling_check(platform_name="win32")
+
+    assert check is not None
+    assert check.name == "winget"
+    assert check.state == "warning"
+    assert check.auto_install_command == ["powershell", "-NoProfile", "-Command", "bootstrap-winget"]
+    assert rpg.WINGET_BOOTSTRAP_URL in str(check.install_hint)
+
+
+def test_ensure_windows_winget_available_paths(monkeypatch) -> None:
+    messages: list[str] = []
+    monkeypatch.setattr(rpg.sys, "platform", "win32")
+
+    probe_states = iter(
+        [
+            (False, "missing"),
+            (True, None),
+        ]
+    )
+    monkeypatch.setattr(rpg, "probe_command_available", lambda executable, runner=None: next(probe_states))
+    monkeypatch.setattr(
+        rpg,
+        "build_winget_bootstrap_command",
+        lambda: ["powershell", "-NoProfile", "-Command", "bootstrap-winget"],
+    )
+
+    ok = rpg.ensure_windows_winget_available(
+        messages.append,
+        runner=lambda *args, **kwargs: rpg.subprocess.CompletedProcess(args[0], 0, "", ""),
+    )
+
+    assert ok is True
+    assert any("bootstrap completed" in message for message in messages)
+
+    messages.clear()
+    monkeypatch.setattr(rpg, "probe_command_available", lambda executable, runner=None: (False, "missing"))
+    monkeypatch.setattr(rpg, "build_winget_bootstrap_command", lambda: None)
+    ok = rpg.ensure_windows_winget_available(messages.append)
+    assert ok is False
+    assert any(rpg.WINGET_BOOTSTRAP_URL in message for message in messages)
+
+    messages.clear()
+    monkeypatch.setattr(
+        rpg,
+        "build_winget_bootstrap_command",
+        lambda: ["powershell", "-NoProfile", "-Command", "bootstrap-winget"],
+    )
+    ok = rpg.ensure_windows_winget_available(
+        messages.append,
+        runner=lambda *args, **kwargs: rpg.subprocess.CompletedProcess(args[0], 1, "", "boom"),
+    )
+    assert ok is False
+    assert any("boom" in message for message in messages)
 
 
 def test_prompt_gui_tooling_install_accepts_with_tk_popup(monkeypatch) -> None:
@@ -297,6 +449,70 @@ def test_prompt_gui_tooling_install_returns_none_without_promptable_tools(monkey
     ]
 
     assert rpg.prompt_gui_tooling_install(checks, lambda _msg: None) is None
+
+
+def test_prompt_gui_tooling_install_supports_optional_non_blocking_prompts(monkeypatch) -> None:
+    events: list[str] = []
+
+    class DummyRoot:
+        def withdraw(self) -> None:
+            events.append("withdraw")
+
+        def attributes(self, name: str, value: object) -> None:
+            events.append(f"attributes:{name}={value}")
+
+        def destroy(self) -> None:
+            events.append("destroy")
+
+    fake_messagebox = types.SimpleNamespace(
+        askyesno=lambda title, message, parent=None: events.append(message) or True
+    )
+    fake_tk = types.SimpleNamespace(
+        Tk=lambda: DummyRoot(),
+        TclError=RuntimeError,
+        messagebox=fake_messagebox,
+    )
+
+    monkeypatch.setattr(rpg, "has_desktop_display", lambda: True)
+    monkeypatch.setitem(sys.modules, "tkinter", fake_tk)
+
+    checks = [
+        rpg.ToolingCheck(
+            name="github-auth",
+            state="warning",
+            blocking=False,
+            detail="missing gh",
+            auto_install_command=["winget", "install", "--id", "GitHub.cli"],
+        )
+    ]
+
+    accepted = rpg.prompt_gui_tooling_install(
+        checks,
+        lambda _msg: None,
+        blocking_only=False,
+        title="Install GitHub Tooling",
+        confirm_question="Install or repair that tooling now?",
+    )
+
+    assert accepted is True
+    assert any("Install or repair that tooling now?" in item for item in events)
+
+
+def test_build_github_optional_tooling_checks_include_winget_when_needed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        rpg,
+        "build_windows_winget_tooling_check",
+        lambda: rpg.ToolingCheck(name="winget", state="warning", blocking=False, detail="missing", auto_install_command=["powershell", "-NoProfile", "-Command", "bootstrap-winget"]),
+    )
+    monkeypatch.setattr(
+        rpg,
+        "build_github_tooling_check",
+        lambda: rpg.ToolingCheck(name="github-auth", state="warning", blocking=False, detail="missing gh", auto_install_command=["winget", "install", "--id", "GitHub.cli"]),
+    )
+
+    checks = rpg.build_github_optional_tooling_checks()
+
+    assert [check.name for check in checks] == ["winget", "github-auth"]
 
 
 def test_summarize_tooling_checks_counts_blocking_and_warnings() -> None:

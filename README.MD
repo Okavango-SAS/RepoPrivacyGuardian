@@ -86,8 +86,9 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 
 - `--check-tooling` verifies the local tools needed for the selected mode before you start a run.
 - `--install-missing-tools` attempts to install supported missing tools automatically.
-- The current readiness flow checks Git, GUI dependencies, rewrite tooling, and GitHub hardening auth helpers when those features are relevant.
+- The current readiness flow checks Git, GUI dependencies, rewrite tooling, Windows App Installer / `winget`, and GitHub hardening auth helpers when those features are relevant.
 - In `--gui` mode, when the desktop preflight detects supported missing prerequisites, the app offers a popup to install them and retry startup automatically.
+- In the GUI, enabling GitHub hardening also offers optional installation/repair of `gh`, and on Windows it can bootstrap App Installer / `winget` from the official Microsoft bundle when possible.
 - For GitHub hardening admin checks, the supported helpers are token environment variables or an authenticated GitHub CLI (`gh auth login`).
 - GitHub MCP is not a prerequisite for the standalone CLI/Desktop tool and is not required for end-user installations.
 

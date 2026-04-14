@@ -113,6 +113,60 @@ def test_launch_gui_declined_install_keeps_missing_status(monkeypatch, capsys) -
     assert "GUI tooling is not ready" in captured.err
 
 
+def test_gui_github_hardening_toggle_offers_optional_install(monkeypatch) -> None:
+    class DummyVar:
+        def __init__(self, value: bool) -> None:
+            self.value = value
+
+        def get(self) -> bool:
+            return self.value
+
+    notices: list[tuple[str, str]] = []
+    install_calls: list[str] = []
+    checks_by_round = [
+        [
+            rpg.ToolingCheck(
+                name="winget",
+                state="warning",
+                blocking=False,
+                detail="missing winget",
+                auto_install_command=["powershell", "-NoProfile", "-Command", "bootstrap-winget"],
+            ),
+            rpg.ToolingCheck(
+                name="github-auth",
+                state="warning",
+                blocking=False,
+                detail="missing gh",
+                auto_install_command=["winget", "install", "--id", "GitHub.cli"],
+            ),
+        ],
+        [
+            rpg.ToolingCheck(
+                name="github-auth",
+                state="warning",
+                blocking=False,
+                detail="gh installed but unauthenticated",
+            ),
+        ],
+    ]
+
+    app = object.__new__(rpg.GuiApp)
+    app.audit_github_hardening_var = DummyVar(True)
+    app.log = lambda _msg: None
+    app.messagebox = type("MessageBox", (), {"showinfo": lambda self, title, message: notices.append((title, message))})()
+
+    monkeypatch.setattr(rpg, "build_github_optional_tooling_checks", lambda: checks_by_round.pop(0))
+    monkeypatch.setattr(rpg, "prompt_gui_tooling_install", lambda *args, **kwargs: True)
+    monkeypatch.setattr(rpg, "install_missing_tooling", lambda checks, logger: install_calls.append(",".join(check.name for check in checks)))
+
+    app._on_audit_github_hardening_toggled()
+
+    assert install_calls == ["winget,github-auth"]
+    assert notices
+    assert "Authentication Still Needed" in notices[0][0]
+    assert "gh auth login" in notices[0][1]
+
+
 def test_missing_executable_message_variants() -> None:
     assert "Git executable not found" in rpg._missing_executable_message("git")
     assert "python3" in rpg._missing_executable_message("python3")
@@ -680,6 +734,7 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "--check-tooling",
         "--install-missing-tools",
         "GitHub MCP is not a prerequisite",
+        "winget",
         "--replace-text-file",
         "Recommended agent prompt template",
         "What It Does Not Try To Be",
@@ -704,6 +759,7 @@ def test_agents_doc_describes_agentic_cli_workflow() -> None:
         "`python Repo_Privacy_Guardian.py ...`",
         "`--check-tooling`",
         "`--install-missing-tools`",
+        "winget",
         "`--replace-text-file`",
         "Act as a release/security engineer.",
     ]

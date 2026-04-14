@@ -76,6 +76,8 @@ GUI_INSTALL_EXTRA = "repo-privacy-guardian[gui]"
 REMEDIATION_INSTALL_EXTRA = "repo-privacy-guardian[remediation]"
 GUI_INSTALL_PACKAGES = ["customtkinter>=5.2.2,<6"]
 REMEDIATION_INSTALL_PACKAGES = ["git-filter-repo>=2.45,<3"]
+WINGET_BOOTSTRAP_URL = "https://aka.ms/getwinget"
+WINGET_PACKAGE_FAMILY_NAME = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe"
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
 GITHUB_REPO_API_URL = "https://api.github.com/repos/{owner}/{repo}"
 GITHUB_API_VERSION = "2022-11-28"
@@ -401,6 +403,176 @@ def probe_git_filter_repo_available() -> bool:
     return probe_python_module_available("git_filter_repo")
 
 
+def resolve_windows_powershell(
+    which: Callable[[str], str | None] = shutil.which,
+) -> str | None:
+    for candidate in ("powershell", "pwsh"):
+        resolved = which(candidate)
+        if resolved:
+            return candidate
+    return None
+
+
+def probe_windows_winget_bootstrap_available(
+    *,
+    platform_name: str | None = None,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    which: Callable[[str], str | None] = shutil.which,
+) -> tuple[bool, str | None]:
+    current_platform = platform_name or sys.platform
+    if not current_platform.startswith("win"):
+        return False, "winget bootstrap is only supported on Windows."
+
+    shell = resolve_windows_powershell(which=which)
+    if not shell:
+        return False, "PowerShell is not available, so App Installer bootstrap cannot run automatically."
+
+    try:
+        proc = runner(
+            [shell, "-NoProfile", "-Command", "Get-Command Add-AppxPackage | Out-Null"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except Exception as exc:
+        return False, f"Unable to probe Add-AppxPackage support: {exc}"
+
+    if proc.returncode == 0:
+        return True, None
+
+    detail = proc.stderr.strip() or proc.stdout.strip() or "Add-AppxPackage support is unavailable."
+    return False, detail
+
+
+def build_winget_bootstrap_command(
+    *,
+    platform_name: str | None = None,
+    which: Callable[[str], str | None] = shutil.which,
+) -> list[str] | None:
+    current_platform = platform_name or sys.platform
+    if not current_platform.startswith("win"):
+        return None
+
+    shell = resolve_windows_powershell(which=which)
+    if not shell:
+        return None
+
+    script = (
+        "$ErrorActionPreference='Stop'; "
+        "if (Get-Command winget -ErrorAction SilentlyContinue) { exit 0 }; "
+        f"try {{ Add-AppxPackage -RegisterByFamilyName -MainPackage '{WINGET_PACKAGE_FAMILY_NAME}' -ErrorAction Stop }} catch {{}}; "
+        "if (Get-Command winget -ErrorAction SilentlyContinue) { exit 0 }; "
+        "$temp = Join-Path $env:TEMP 'RepoPrivacyGuardian-winget-bootstrap.msixbundle'; "
+        f"Invoke-WebRequest -Uri '{WINGET_BOOTSTRAP_URL}' -OutFile $temp; "
+        "try { Add-AppxPackage -Path $temp -ErrorAction Stop } finally { Remove-Item $temp -Force -ErrorAction SilentlyContinue }; "
+        "if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { "
+        "throw 'App Installer was added but winget is still unavailable. Restart the session and try again.' "
+        "}"
+    )
+    return [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script]
+
+
+def build_windows_winget_tooling_check(
+    *,
+    platform_name: str | None = None,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    which: Callable[[str], str | None] = shutil.which,
+) -> ToolingCheck | None:
+    current_platform = platform_name or sys.platform
+    if not current_platform.startswith("win"):
+        return None
+
+    winget_ready, winget_error = probe_command_available("winget", runner=runner)
+    if winget_ready:
+        return ToolingCheck(
+            name="winget",
+            state="ready",
+            blocking=False,
+            detail="Windows App Installer / winget is available.",
+        )
+
+    bootstrap_ready, bootstrap_error = probe_windows_winget_bootstrap_available(
+        platform_name=current_platform,
+        runner=runner,
+        which=which,
+    )
+    auto_install_command = (
+        build_winget_bootstrap_command(platform_name=current_platform, which=which)
+        if bootstrap_ready
+        else None
+    )
+    detail = (
+        "Windows App Installer / winget is not available. Automatic bootstrap can install it from the official Microsoft bundle."
+        if bootstrap_ready
+        else (
+            "Windows App Installer / winget is not available. "
+            + (bootstrap_error or winget_error or _missing_executable_message("winget"))
+        )
+    )
+    return ToolingCheck(
+        name="winget",
+        state="warning",
+        blocking=False,
+        detail=detail,
+        install_hint=(
+            f"Bootstrap App Installer from {WINGET_BOOTSTRAP_URL}"
+            if bootstrap_ready
+            else f"Install App Installer manually from {WINGET_BOOTSTRAP_URL}"
+        ),
+        auto_install_command=auto_install_command,
+    )
+
+
+def ensure_windows_winget_available(
+    logger: Callable[[str], None],
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> bool:
+    if not sys.platform.startswith("win"):
+        return False
+
+    winget_ready, _winget_error = probe_command_available("winget", runner=runner)
+    if winget_ready:
+        return True
+
+    bootstrap_command = build_winget_bootstrap_command()
+    if not bootstrap_command:
+        logger(
+            f"[TOOLING] winget/App Installer is missing and automatic bootstrap is unavailable. "
+            f"Install it from {WINGET_BOOTSTRAP_URL}."
+        )
+        return False
+
+    logger(f"[TOOLING] Bootstrapping winget/App Installer from {WINGET_BOOTSTRAP_URL}")
+    try:
+        proc = runner(
+            bootstrap_command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except Exception as exc:
+        logger(f"[TOOLING] winget bootstrap failed: {exc}")
+        return False
+
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip() or "unknown winget bootstrap failure"
+        logger(f"[TOOLING] winget bootstrap failed: {detail}")
+        return False
+
+    winget_ready, winget_error = probe_command_available("winget", runner=runner)
+    if winget_ready:
+        logger("[TOOLING] winget/App Installer bootstrap completed.")
+        return True
+
+    logger(
+        "[TOOLING] winget bootstrap completed but the command is still unavailable. "
+        + (winget_error or "Restart the session and try again.")
+    )
+    return False
+
+
 def read_github_cli_token(
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> tuple[str | None, str]:
@@ -468,6 +640,18 @@ def build_system_tool_install_command(
             ]
         if which("choco") and tool_name in choco_names:
             return ["choco", "install", choco_names[tool_name], "-y"]
+        if tool_name in windows_ids:
+            return [
+                "winget",
+                "install",
+                "--id",
+                windows_ids[tool_name],
+                "-e",
+                "--source",
+                "winget",
+                "--accept-package-agreements",
+                "--accept-source-agreements",
+            ]
         return None
 
     if which("brew") and tool_name in brew_names:
@@ -504,6 +688,15 @@ def collect_auto_installable_tooling_checks(
     return selected
 
 
+def build_github_optional_tooling_checks() -> list[ToolingCheck]:
+    checks: list[ToolingCheck] = []
+    winget_check = build_windows_winget_tooling_check()
+    if winget_check and winget_check.state != "ready":
+        checks.append(winget_check)
+    checks.append(build_github_tooling_check())
+    return checks
+
+
 def summarize_tooling_checks(
     checks: list[ToolingCheck],
     logger: Callable[[str], None],
@@ -534,6 +727,11 @@ def install_missing_tooling(
         if check.state == "ready" or not check.auto_install_command:
             continue
         command = check.auto_install_command
+        executable = Path(command[0]).name.lower()
+        if executable == "winget":
+            if not ensure_windows_winget_available(logger, runner=runner):
+                logger(f"[TOOLING] Skipping install for {check.name}: winget/App Installer is still unavailable.")
+                continue
         logger(f"[TOOLING] Attempting install for {check.name}: {format_install_command(command)}")
         try:
             proc = runner(
@@ -556,8 +754,13 @@ def install_missing_tooling(
 def prompt_gui_tooling_install(
     checks: list[ToolingCheck],
     logger: Callable[[str], None],
+    *,
+    blocking_only: bool = True,
+    title: str = "Install Missing GUI Tooling",
+    intro: str = "Repo Privacy Guardian detected missing GUI prerequisites that can be installed automatically.",
+    confirm_question: str = "Install them now and retry GUI startup?",
 ) -> bool | None:
-    installable = collect_auto_installable_tooling_checks(checks, blocking_only=True)
+    installable = collect_auto_installable_tooling_checks(checks, blocking_only=blocking_only)
     if not installable or not has_desktop_display():
         return None
 
@@ -573,9 +776,11 @@ def prompt_gui_tooling_install(
         for check in installable
     ]
     prompt_message = (
-        "Repo Privacy Guardian detected missing GUI prerequisites that can be installed automatically.\n\n"
+        intro
+        + "\n\n"
         + "\n".join(detail_lines)
-        + "\n\nInstall them now and retry GUI startup?"
+        + "\n\n"
+        + confirm_question
     )
 
     root = None
@@ -587,7 +792,7 @@ def prompt_gui_tooling_install(
         except TclError:
             pass
         accepted = messagebox.askyesno(
-            "Install Missing GUI Tooling",
+            title,
             prompt_message,
             parent=root,
         )
@@ -699,6 +904,10 @@ def build_github_tooling_check() -> ToolingCheck:
 def build_cli_tooling_checks(config: GuardRunConfig) -> list[ToolingCheck]:
     checks: list[ToolingCheck] = []
 
+    winget_check = build_windows_winget_tooling_check()
+    if winget_check:
+        checks.append(winget_check)
+
     git_ok, git_error = probe_git_available()
     git_install = build_system_tool_install_command("git")
     checks.append(
@@ -742,6 +951,10 @@ def build_cli_tooling_checks(config: GuardRunConfig) -> list[ToolingCheck]:
 
 def build_gui_tooling_checks() -> list[ToolingCheck]:
     checks: list[ToolingCheck] = []
+
+    winget_check = build_windows_winget_tooling_check()
+    if winget_check:
+        checks.append(winget_check)
 
     git_ok, git_error = probe_git_available()
     git_install = build_system_tool_install_command("git")
@@ -4300,6 +4513,7 @@ class GuiApp:  # pragma: no cover
         self.open_report_var = tk.BooleanVar(value=True)
         self.confirm_each_repo_fix_var = tk.BooleanVar(value=True)
         self.allow_non_owner_push_var = tk.BooleanVar(value=False)
+        self.audit_github_hardening_var.trace_add("write", self._on_audit_github_hardening_toggled)
         self._purge_safe_checkbox = None
         self._purge_risky_checkbox = None
         self._allowed_remote_owner_entry = None
@@ -5430,6 +5644,36 @@ class GuiApp:  # pragma: no cover
 
     def _on_allow_non_owner_push_toggled(self) -> None:
         self._sync_push_guardrail_controls()
+
+    def _offer_github_hardening_tooling_install(self) -> None:
+        checks = build_github_optional_tooling_checks()
+        accepted = prompt_gui_tooling_install(
+            checks,
+            self.log,
+            blocking_only=False,
+            title="Install GitHub Tooling",
+            intro=(
+                "GitHub hardening checks work best with GitHub CLI (`gh`) and, on Windows, a healthy App Installer / winget setup."
+            ),
+            confirm_question="Install or repair that tooling now?",
+        )
+        if not accepted:
+            return
+
+        install_missing_tooling(checks, self.log)
+        refreshed = build_github_optional_tooling_checks()
+        github_check = next((check for check in refreshed if check.name == "github-auth"), None)
+        if github_check and github_check.state == "warning" and not github_check.auto_install_command:
+            self.messagebox.showinfo(
+                "GitHub Authentication Still Needed",
+                "GitHub CLI is installed, but admin-only hardening checks still need authentication.\n\n"
+                "Run `gh auth login`, or set REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN.",
+            )
+
+    def _on_audit_github_hardening_toggled(self, *_args: object) -> None:
+        if not self.audit_github_hardening_var.get():
+            return
+        self._offer_github_hardening_tooling_install()
 
     def _selection_signature(self, selected: list[str] | None) -> tuple[str, ...] | None:
         if selected is None:

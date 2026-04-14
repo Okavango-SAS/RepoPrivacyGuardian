@@ -124,10 +124,12 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
     assert "--audit-github-hardening" in readme
     assert "--check-tooling" in readme
     assert "--install-missing-tools" in readme
+    assert "winget" in readme
     assert "GitHub MCP is not a prerequisite" in readme
     assert "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN" in readme
     assert "--audit-github-hardening" in agents
     assert "--check-tooling" in agents
+    assert "winget" in agents
     assert "branch protection" in policy.lower()
 
 

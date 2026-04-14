@@ -50,6 +50,8 @@ repo-privacy-guardian --check-tooling --install-missing-tools
 
 Use `--install-missing-tools` only when you explicitly want the tool to attempt local dependency installation.
 
+On Windows, the readiness flow can bootstrap App Installer / `winget` when supported, then continue with `git` or `gh` installation.
+
 Fix preview (no destructive write):
 
 ```sh
