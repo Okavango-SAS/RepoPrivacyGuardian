@@ -36,12 +36,13 @@ Current baseline in repo:
 - package build plus `wheel` and `sdist` install smoke in CI
 - Windows GUI smoke in CI
 - lightweight versioning policy and release notes template in docs
-- public `CHANGELOG.md` and stable `1.0.0` metadata
+- public `CHANGELOG.md` and stable `1.x` metadata
 
 Next hardening steps:
 
 - expand synthetic integration coverage for rewrite planning and artifact redaction edge cases
 - keep `1.x` release notes and support claims aligned with validated behavior
+- keep additive GitHub hardening checks and playbooks aligned with the real remote settings they document
 - add optional lint/static checks once they are stable enough to avoid release noise
 
 ## Milestone 0.4 - Advanced operations

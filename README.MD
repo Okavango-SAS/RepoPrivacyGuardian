@@ -30,7 +30,9 @@ It is designed for repeatable CLI execution first, with an optional desktop GUI 
 
 ## 📈 Release Posture
 
-- Public maturity: `v1.0.0` establishes a stable CLI, packaging, and release contract within the current local-first scope.
+- Current release line: `v1.1.x`.
+- `v1.0.0` established the stable CLI, packaging, and release contract within the current local-first scope.
+- `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - Python support claims (`3.10` to `3.13`) are backed by CI coverage.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -369,7 +371,7 @@ Pytest collection is restricted to tracked test files so local ignored test file
 ## 📚 Release Engineering Docs
 
 - [CHANGELOG](CHANGELOG.md): shipped release notes and public version history
-- [VERSIONING](docs/VERSIONING.md): versioning policy and `1.0.0` exit criteria
+- [VERSIONING](docs/VERSIONING.md): versioning policy, stable-baseline notes, and `1.x` release discipline
 - [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md): pre-tag release checklist
 - [RELEASE_NOTES_TEMPLATE](docs/RELEASE_NOTES_TEMPLATE.md): lightweight notes template for public releases
 - [ROADMAP](docs/ROADMAP.md): current maturity, next hardening steps, and out-of-scope boundaries

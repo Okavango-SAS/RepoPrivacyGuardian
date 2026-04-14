@@ -4,11 +4,13 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 ## Current stage
 
-- Current public line: `1.0.x`
+- Current public line: `1.1.x`
 - Maturity: stable for the CLI, packaging, and release-engineering surface
 - Goal of this stage: preserve the `1.x` contract while continuing additive hardening and documentation improvements
 
 `1.0.0` is a stability milestone, not an architecture change. The project remains a local-first publication gate with an optional desktop GUI.
+
+`1.1.0` is an additive release on top of that stable baseline. It adds reusable GitHub release-hardening audit support and related operator playbooks without changing the local-first contract.
 
 ## Versioning rules
 
