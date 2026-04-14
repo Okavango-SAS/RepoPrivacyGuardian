@@ -129,6 +129,12 @@ def test_release_checklist_mentions_clearing_stale_build_outputs() -> None:
     assert "`dist/`, `build/`, and `*.egg-info/`" in checklist
 
 
+def test_repo_declares_single_owner_codeowners_file() -> None:
+    codeowners = (_repo_root() / ".github" / "CODEOWNERS").read_text(encoding="utf-8")
+
+    assert "* @axeljackal" in codeowners
+
+
 def test_packaged_policy_resource_matches_repo_policy() -> None:
     root = _repo_root()
     docs_policy = (root / "docs" / "POLICY.md").read_text(encoding="utf-8")

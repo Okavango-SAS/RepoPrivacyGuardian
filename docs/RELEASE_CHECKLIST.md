@@ -8,6 +8,8 @@ Use this checklist before tagging a public release.
 - Confirm target branch and remote.
 - Confirm local git identity is correct for release commits.
 - Clear stale local build outputs (`dist/`, `build/`, and `*.egg-info/`) before the final package build if you are reusing a workspace.
+- Confirm the public repository keeps `main` protected with pull-request-only changes and code-owner review.
+- Confirm issues remain enabled if public issue intake is desired.
 - Confirm public support matrix in README still matches validated platforms.
 - Review GitHub Actions workflows for least-privilege permissions, explicit timeouts, and SHA-pinned actions.
 
