@@ -855,6 +855,68 @@ def test_audit_github_release_hardening_reports_missing_controls(tmp_path: Path,
     assert any("automated security fixes are disabled or paused" in item for item in findings)
 
 
+def test_audit_github_release_hardening_uses_resolved_token_for_repo_metadata(tmp_path: Path, monkeypatch) -> None:
+    codeowners = tmp_path / ".github" / "CODEOWNERS"
+    codeowners.parent.mkdir(parents=True)
+    codeowners.write_text("* @owner\n", encoding="utf-8")
+
+    seen_tokens: list[str | None] = []
+
+    def fake_get_json(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
+        seen_tokens.append(token)
+        if url.endswith("/actions/permissions"):
+            return ({"allowed_actions": "selected", "sha_pinning_required": True}, "http_200")
+        if url.endswith("/actions/permissions/workflow"):
+            return (
+                {
+                    "default_workflow_permissions": "read",
+                    "can_approve_pull_request_reviews": False,
+                },
+                "http_200",
+            )
+        if url.endswith("/automated-security-fixes"):
+            return ({"enabled": True, "paused": False}, "http_200")
+        if url.endswith("/branches/main/protection"):
+            return (
+                {
+                    "required_pull_request_reviews": {
+                        "required_approving_review_count": 1,
+                        "require_code_owner_reviews": True,
+                        "dismiss_stale_reviews": True,
+                    },
+                    "required_conversation_resolution": {"enabled": True},
+                    "required_status_checks": {"strict": True, "contexts": ["ci"]},
+                    "allow_force_pushes": {"enabled": False},
+                    "allow_deletions": {"enabled": False},
+                },
+                "http_200",
+            )
+        return (
+            {
+                "default_branch": "main",
+                "has_wiki": False,
+                "has_projects": False,
+                "allow_auto_merge": False,
+            },
+            "http_200",
+        )
+
+    monkeypatch.setattr(rpg, "resolve_github_hardening_token", lambda env=None, runner=None: "gh-admin-token")
+    monkeypatch.setattr(rpg, "github_api_get_json", fake_get_json)
+    monkeypatch.setattr(rpg, "github_api_probe_enabled", lambda url, token=None: (True, "http_204"))
+
+    findings, warnings = rpg.audit_github_release_hardening(
+        repo=tmp_path,
+        remote_url="https://github.com/example/private-repo.git",
+        token=None,
+    )
+
+    assert findings == []
+    assert warnings == []
+    assert seen_tokens
+    assert all(token == "gh-admin-token" for token in seen_tokens)
+
+
 def test_discover_repositories_public_only_filters_private_and_non_github(tmp_path: Path, monkeypatch) -> None:
     public_repo = tmp_path / "repo-a-public"
     private_repo = tmp_path / "repo-b-private"

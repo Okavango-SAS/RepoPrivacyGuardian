@@ -2546,7 +2546,8 @@ def audit_github_release_hardening(
 
     owner, repo_name = slug
     repo_api_url = GITHUB_REPO_API_URL.format(owner=owner, repo=repo_name)
-    repo_payload, repo_reason = github_api_get_json(repo_api_url, token=token)
+    resolved_token = token if token is not None else resolve_github_hardening_token()
+    repo_payload, repo_reason = github_api_get_json(repo_api_url, token=resolved_token)
     if not isinstance(repo_payload, dict):
         warnings.append(
             f"GitHub hardening audit could not read repository metadata ({repo_reason})."
@@ -2561,7 +2562,6 @@ def audit_github_release_hardening(
     if repo_payload.get("allow_auto_merge") is True:
         findings.append("GitHub repository settings: auto-merge is enabled.")
 
-    resolved_token = token if token is not None else resolve_github_hardening_token()
     if not resolved_token:
         warnings.append(
             "Admin-only GitHub hardening checks were skipped. "
