@@ -154,6 +154,82 @@ def test_run_logger_falls_back_when_sink_cannot_encode_text(tmp_path: Path, monk
     assert "\ufeffprefix line" in (tmp_path / "run.log").read_text(encoding="utf-8")
 
 
+def test_probe_command_available_handles_missing_binary() -> None:
+    def missing_runner(*args, **kwargs):  # type: ignore[no-untyped-def]
+        del args, kwargs
+        raise FileNotFoundError
+
+    ok, error = rpg.probe_command_available("gh", runner=missing_runner)
+
+    assert ok is False
+    assert "Required executable not found: gh" in str(error)
+
+
+def test_build_system_tool_install_command_prefers_supported_package_manager() -> None:
+    win_cmd = rpg.build_system_tool_install_command(
+        "gh",
+        platform_name="win32",
+        which=lambda exe: exe if exe == "winget" else None,
+    )
+    mac_cmd = rpg.build_system_tool_install_command(
+        "git",
+        platform_name="darwin",
+        which=lambda exe: exe if exe == "brew" else None,
+    )
+
+    assert win_cmd == [
+        "winget",
+        "install",
+        "--id",
+        "GitHub.cli",
+        "-e",
+        "--source",
+        "winget",
+        "--accept-package-agreements",
+        "--accept-source-agreements",
+    ]
+    assert mac_cmd == ["brew", "install", "git"]
+
+
+def test_format_install_command_and_install_missing_tooling() -> None:
+    issued: list[list[str]] = []
+
+    def fake_runner(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        del kwargs
+        issued.append(cmd)
+        return rpg.subprocess.CompletedProcess(cmd, 0, "", "")
+
+    checks = [
+        rpg.ToolingCheck(
+            name="customtkinter",
+            state="missing",
+            blocking=True,
+            detail="missing",
+            auto_install_command=["python", "-m", "pip", "install", "customtkinter>=5.2.2,<6"],
+        )
+    ]
+
+    assert rpg.format_install_command(checks[0].auto_install_command) == "python -m pip install 'customtkinter>=5.2.2,<6'"
+    rpg.install_missing_tooling(checks, lambda _msg: None, runner=fake_runner)
+    assert issued == [["python", "-m", "pip", "install", "customtkinter>=5.2.2,<6"]]
+
+
+def test_summarize_tooling_checks_counts_blocking_and_warnings() -> None:
+    messages: list[str] = []
+    checks = [
+        rpg.ToolingCheck(name="git", state="ready", blocking=True, detail="ok"),
+        rpg.ToolingCheck(name="gh", state="warning", blocking=False, detail="warn", install_hint="gh auth login"),
+        rpg.ToolingCheck(name="tk", state="missing", blocking=True, detail="missing"),
+    ]
+
+    blocking, warnings = rpg.summarize_tooling_checks(checks, messages.append, include_ready=False)
+
+    assert blocking == 1
+    assert warnings == 1
+    assert all("git" not in msg for msg in messages)
+    assert any("gh auth login" in msg for msg in messages)
+
+
 def test_repo_report_finalize_builds_failures() -> None:
     report = _make_report("repo-a")
     report.unexpected_emails = ["private@example.com"]
@@ -283,6 +359,105 @@ def test_resolve_github_hardening_token_prefers_tool_specific_env() -> None:
     }
 
     assert rpg.resolve_github_hardening_token(env) == "guardian-token"
+
+
+def test_resolve_github_hardening_token_falls_back_to_github_cli(monkeypatch) -> None:
+    monkeypatch.setattr(rpg, "read_github_cli_token", lambda runner=None: ("gh-cli-token", "ready"))
+
+    assert rpg.resolve_github_hardening_token({}) == "gh-cli-token"
+
+
+def test_build_cli_tooling_checks_warns_when_rewrite_tooling_missing(monkeypatch) -> None:
+    monkeypatch.setattr(rpg, "probe_git_available", lambda runner=None: (True, None))
+    monkeypatch.setattr(rpg, "probe_git_filter_repo_available", lambda: False)
+
+    checks = rpg.build_cli_tooling_checks(_make_run_config(fix=True))
+
+    rewrite_check = next(check for check in checks if check.name == "git-filter-repo")
+    assert rewrite_check.state == "warning"
+    assert "Rewrite-based remediations may fail" in rewrite_check.detail
+    assert rewrite_check.auto_install_command == [
+        rpg.sys.executable,
+        "-m",
+        "pip",
+        "install",
+        *rpg.REMEDIATION_INSTALL_PACKAGES,
+    ]
+
+
+def test_build_github_tooling_check_warns_when_no_token_or_gh(monkeypatch) -> None:
+    monkeypatch.setattr(rpg, "resolve_github_hardening_token", lambda env=None, runner=None: None)
+    monkeypatch.setattr(rpg, "probe_command_available", lambda executable, version_args=("--version",), runner=None: (False, "missing"))
+    monkeypatch.setattr(
+        rpg,
+        "build_system_tool_install_command",
+        lambda tool_name, platform_name=None, which=None: [
+            "winget",
+            "install",
+            "--id",
+            "GitHub.cli",
+            "-e",
+            "--source",
+            "winget",
+            "--accept-package-agreements",
+            "--accept-source-agreements",
+        ],
+    )
+
+    check = rpg.build_github_tooling_check()
+
+    assert check.state == "warning"
+    assert "GitHub hardening audit will be partial" in check.detail
+    assert check.auto_install_command == [
+        "winget",
+        "install",
+        "--id",
+        "GitHub.cli",
+        "-e",
+        "--source",
+        "winget",
+        "--accept-package-agreements",
+        "--accept-source-agreements",
+    ]
+
+
+def test_build_github_tooling_check_uses_authenticated_github_cli(monkeypatch) -> None:
+    monkeypatch.setattr(rpg, "resolve_github_hardening_token", lambda env=None, runner=None: None)
+    monkeypatch.setattr(
+        rpg,
+        "probe_command_available",
+        lambda executable, version_args=("--version",), runner=None: (True, None),
+    )
+    monkeypatch.setattr(rpg, "read_github_cli_token", lambda runner=None: ("gh-cli-token", "ready"))
+
+    check = rpg.build_github_tooling_check()
+
+    assert check.state == "ready"
+    assert "authenticated GitHub CLI token" in check.detail
+
+
+def test_build_gui_tooling_checks_reports_missing_python_gui_bits(monkeypatch) -> None:
+    monkeypatch.setattr(rpg, "probe_git_available", lambda runner=None: (True, None))
+    monkeypatch.setattr(rpg, "has_desktop_display", lambda platform_name=None, env=None: True)
+    monkeypatch.setattr(
+        rpg,
+        "probe_python_module_available",
+        lambda module_name: module_name == "tkinter",
+    )
+
+    checks = rpg.build_gui_tooling_checks()
+
+    tkinter_check = next(check for check in checks if check.name == "tkinter")
+    customtkinter_check = next(check for check in checks if check.name == "customtkinter")
+    assert tkinter_check.state == "ready"
+    assert customtkinter_check.state == "missing"
+    assert customtkinter_check.auto_install_command == [
+        rpg.sys.executable,
+        "-m",
+        "pip",
+        "install",
+        *rpg.GUI_INSTALL_PACKAGES,
+    ]
 
 
 def test_audit_github_release_hardening_warns_when_admin_checks_are_skipped(tmp_path: Path, monkeypatch) -> None:

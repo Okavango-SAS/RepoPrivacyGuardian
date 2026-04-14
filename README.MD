@@ -82,6 +82,14 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - `--audit-github-hardening` performs read-only GitHub REST API requests against GitHub remotes to inspect repository settings. Admin-only checks require `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN`.
 - The default CLI/GUI paths do not upload repository contents, reports, or telemetry to a remote service.
 
+## 🧰 Tooling Readiness
+
+- `--check-tooling` verifies the local tools needed for the selected mode before you start a run.
+- `--install-missing-tools` attempts to install supported missing tools automatically.
+- The current readiness flow checks Git, GUI dependencies, rewrite tooling, and GitHub hardening auth helpers when those features are relevant.
+- For GitHub hardening admin checks, the supported helpers are token environment variables or an authenticated GitHub CLI (`gh auth login`).
+- GitHub MCP is not a prerequisite for the standalone CLI/Desktop tool and is not required for end-user installations.
+
 ## 🖥️ CLI-First Behavior
 
 - Running the program without flags shows CLI help and exits successfully.
@@ -142,6 +150,7 @@ External requirements:
 
 - Git must be installed and available on `PATH`
 - `git-filter-repo` is required only for remediation that rewrites history
+- GitHub CLI (`gh`) is optional, but it can supply admin auth for `--audit-github-hardening` when token environment variables are not configured
 - Linux desktop GUI use may require a Tk package such as `python3-tk`
 
 Recommended support target:
@@ -163,10 +172,23 @@ Recommended execution order:
 Typical first run for a new user:
 
 1. install the base CLI
-2. verify `--help`
-3. run a dry-run audit against one repository
-4. inspect the generated JSON, HTML, and log artifacts
-5. run a dry-run fix preview before any destructive action
+2. run `repo-privacy-guardian --check-tooling`
+3. verify `--help`
+4. run a dry-run audit against one repository
+5. inspect the generated JSON, HTML, and log artifacts
+6. run a dry-run fix preview before any destructive action
+
+Tooling preflight:
+
+```sh
+repo-privacy-guardian --check-tooling
+```
+
+Attempt automatic installation of supported missing tools:
+
+```sh
+repo-privacy-guardian --check-tooling --install-missing-tools
+```
 
 Installed entry point:
 

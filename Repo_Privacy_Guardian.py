@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import importlib.util
 import inspect
 import json
 import os
@@ -73,6 +74,8 @@ DEFAULT_RESULTS_DIR = default_results_dir()
 GUI_DEFAULT_PUBLIC_ONLY = False
 GUI_INSTALL_EXTRA = "repo-privacy-guardian[gui]"
 REMEDIATION_INSTALL_EXTRA = "repo-privacy-guardian[remediation]"
+GUI_INSTALL_PACKAGES = ["customtkinter>=5.2.2,<6"]
+REMEDIATION_INSTALL_PACKAGES = ["git-filter-repo>=2.45,<3"]
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
 GITHUB_REPO_API_URL = "https://api.github.com/repos/{owner}/{repo}"
 GITHUB_API_VERSION = "2022-11-28"
@@ -271,6 +274,16 @@ class RunArtifacts:
 
 
 @dataclass
+class ToolingCheck:
+    name: str
+    state: str
+    blocking: bool
+    detail: str
+    install_hint: str | None = None
+    auto_install_command: list[str] | None = None
+
+
+@dataclass
 class GuardRunConfig:
     mode: str
     root: Path
@@ -356,6 +369,175 @@ def probe_git_available(
     return True, None
 
 
+def probe_command_available(
+    executable: str,
+    version_args: tuple[str, ...] = ("--version",),
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> tuple[bool, str | None]:
+    try:
+        proc = runner(
+            [executable, *version_args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except FileNotFoundError:
+        return False, _missing_executable_message(executable)
+    except Exception as exc:
+        return False, f"Unable to execute {executable} {' '.join(version_args)}: {exc}"
+
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip() or "unknown startup failure"
+        return False, f"{executable} is not usable: {detail}"
+    return True, None
+
+
+def probe_python_module_available(module_name: str) -> bool:
+    return importlib.util.find_spec(module_name) is not None
+
+
+def probe_git_filter_repo_available() -> bool:
+    return probe_python_module_available("git_filter_repo")
+
+
+def read_github_cli_token(
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> tuple[str | None, str]:
+    try:
+        proc = runner(
+            ["gh", "auth", "token"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except FileNotFoundError:
+        return None, "missing"
+    except Exception as exc:
+        return None, f"gh_error:{exc}"
+
+    token = proc.stdout.strip()
+    if proc.returncode == 0 and token:
+        return token, "ready"
+
+    detail = proc.stderr.strip() or proc.stdout.strip()
+    if detail:
+        return None, detail
+    return None, "not_authenticated"
+
+
+def build_system_tool_install_command(
+    tool_name: str,
+    *,
+    platform_name: str | None = None,
+    which: Callable[[str], str | None] = shutil.which,
+) -> list[str] | None:
+    current_platform = platform_name or sys.platform
+
+    windows_ids = {
+        "git": "Git.Git",
+        "gh": "GitHub.cli",
+    }
+    brew_names = {
+        "git": "git",
+        "gh": "gh",
+    }
+    apt_names = {
+        "git": "git",
+        "gh": "gh",
+    }
+    dnf_names = apt_names
+    choco_names = {
+        "git": "git",
+        "gh": "gh",
+    }
+
+    if current_platform.startswith("win"):
+        if which("winget") and tool_name in windows_ids:
+            return [
+                "winget",
+                "install",
+                "--id",
+                windows_ids[tool_name],
+                "-e",
+                "--source",
+                "winget",
+                "--accept-package-agreements",
+                "--accept-source-agreements",
+            ]
+        if which("choco") and tool_name in choco_names:
+            return ["choco", "install", choco_names[tool_name], "-y"]
+        return None
+
+    if which("brew") and tool_name in brew_names:
+        return ["brew", "install", brew_names[tool_name]]
+    if which("apt-get") and tool_name in apt_names:
+        return ["apt-get", "install", "-y", apt_names[tool_name]]
+    if which("dnf") and tool_name in dnf_names:
+        return ["dnf", "install", "-y", dnf_names[tool_name]]
+    return None
+
+
+def format_install_command(command: list[str] | None) -> str | None:
+    if not command:
+        return None
+    return shlex.join(command)
+
+
+def build_python_package_install_command(packages: list[str]) -> list[str]:
+    return [sys.executable, "-m", "pip", "install", *packages]
+
+
+def summarize_tooling_checks(
+    checks: list[ToolingCheck],
+    logger: Callable[[str], None],
+    *,
+    include_ready: bool = True,
+) -> tuple[int, int]:
+    blocking_failures = 0
+    warnings = 0
+    for check in checks:
+        if check.state == "ready" and not include_ready:
+            continue
+        logger(f"[TOOLING] {check.name}: {check.state.upper()} - {check.detail}")
+        if check.install_hint:
+            logger(f"[TOOLING] {check.name} install hint: {check.install_hint}")
+        if check.state == "missing" and check.blocking:
+            blocking_failures += 1
+        elif check.state != "ready":
+            warnings += 1
+    return blocking_failures, warnings
+
+
+def install_missing_tooling(
+    checks: list[ToolingCheck],
+    logger: Callable[[str], None],
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> None:
+    for check in checks:
+        if check.state == "ready" or not check.auto_install_command:
+            continue
+        command = check.auto_install_command
+        logger(f"[TOOLING] Attempting install for {check.name}: {format_install_command(command)}")
+        try:
+            proc = runner(
+                command,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except Exception as exc:
+            logger(f"[TOOLING] Install attempt failed for {check.name}: {exc}")
+            continue
+        if proc.returncode == 0:
+            logger(f"[TOOLING] Install completed for {check.name}.")
+        else:
+            detail = proc.stderr.strip() or proc.stdout.strip() or "unknown install failure"
+            logger(f"[TOOLING] Install failed for {check.name}: {detail}")
+
+
 def has_desktop_display(
     *,
     platform_name: str | None = None,
@@ -393,10 +575,185 @@ def load_gui_runtime() -> tuple[object, object, object, object, type[BaseExcepti
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             "GUI dependencies are not installed. Install them with: "
-            f"{sys.executable} -m pip install '{GUI_INSTALL_EXTRA}'"
+            f"{sys.executable} -m pip install {' '.join(GUI_INSTALL_PACKAGES)} "
+            "or re-run with --gui --install-missing-tools."
         ) from exc
 
     return tk, messagebox, filedialog, ctk, TclError
+
+
+def build_github_tooling_check() -> ToolingCheck:
+    env_token = resolve_github_hardening_token(env=os.environ)
+    if env_token:
+        return ToolingCheck(
+            name="github-auth",
+            state="ready",
+            blocking=False,
+            detail="GitHub hardening admin checks can use a configured token or GitHub CLI token.",
+        )
+
+    gh_available, gh_error = probe_command_available("gh")
+    install_command = build_system_tool_install_command("gh")
+    install_hint = format_install_command(install_command)
+
+    if not gh_available:
+        return ToolingCheck(
+            name="github-auth",
+            state="warning",
+            blocking=False,
+            detail=(
+                "GitHub hardening audit will be partial until you configure "
+                "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, GH_TOKEN, or install/authenticate gh."
+            ),
+            install_hint=install_hint,
+            auto_install_command=install_command,
+        )
+
+    gh_token, gh_status = read_github_cli_token()
+    if gh_token:
+        return ToolingCheck(
+            name="github-auth",
+            state="ready",
+            blocking=False,
+            detail="GitHub hardening admin checks can use the authenticated GitHub CLI token.",
+        )
+
+    return ToolingCheck(
+        name="github-auth",
+        state="warning",
+        blocking=False,
+        detail=(
+            "GitHub CLI is installed but not authenticated. "
+            "Run `gh auth login` or configure REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN."
+            + (f" Details: {gh_status}" if gh_status and gh_status != "not_authenticated" else "")
+        ),
+        install_hint="gh auth login",
+    )
+
+
+def build_cli_tooling_checks(config: GuardRunConfig) -> list[ToolingCheck]:
+    checks: list[ToolingCheck] = []
+
+    git_ok, git_error = probe_git_available()
+    git_install = build_system_tool_install_command("git")
+    checks.append(
+        ToolingCheck(
+            name="git",
+            state="ready" if git_ok else "missing",
+            blocking=True,
+            detail="Git executable available." if git_ok else (git_error or _missing_executable_message("git")),
+            install_hint=format_install_command(git_install),
+            auto_install_command=(None if git_ok else git_install),
+        )
+    )
+
+    if config.fix:
+        remediation_ready = probe_git_filter_repo_available()
+        remediation_cmd = build_python_package_install_command(REMEDIATION_INSTALL_PACKAGES)
+        checks.append(
+            ToolingCheck(
+                name="git-filter-repo",
+                state="ready" if remediation_ready else "warning",
+                blocking=False,
+                detail=(
+                    "Rewrite-based remediation tooling is available."
+                    if remediation_ready
+                    else "Rewrite-based remediations may fail until git-filter-repo is installed."
+                ),
+                install_hint=(
+                    None
+                    if remediation_ready
+                    else f"{sys.executable} -m pip install {' '.join(REMEDIATION_INSTALL_PACKAGES)}"
+                ),
+                auto_install_command=(None if remediation_ready else remediation_cmd),
+            )
+        )
+
+    if config.audit_github_hardening:
+        checks.append(build_github_tooling_check())
+
+    return checks
+
+
+def build_gui_tooling_checks() -> list[ToolingCheck]:
+    checks: list[ToolingCheck] = []
+
+    git_ok, git_error = probe_git_available()
+    git_install = build_system_tool_install_command("git")
+    checks.append(
+        ToolingCheck(
+            name="git",
+            state="ready" if git_ok else "missing",
+            blocking=True,
+            detail="Git executable available." if git_ok else (git_error or _missing_executable_message("git")),
+            install_hint=format_install_command(git_install),
+            auto_install_command=(None if git_ok else git_install),
+        )
+    )
+
+    if not has_desktop_display():
+        checks.append(
+            ToolingCheck(
+                name="desktop-session",
+                state="missing",
+                blocking=True,
+                detail=(
+                    "GUI mode requires a desktop session with DISPLAY/Wayland support. "
+                    "Use the CLI in headless environments."
+                ),
+            )
+        )
+    else:
+        checks.append(
+            ToolingCheck(
+                name="desktop-session",
+                state="ready",
+                blocking=True,
+                detail="Desktop session detected.",
+            )
+        )
+
+    tkinter_ready = probe_python_module_available("tkinter")
+    checks.append(
+        ToolingCheck(
+            name="tkinter",
+            state="ready" if tkinter_ready else "missing",
+            blocking=True,
+            detail=(
+                "Tkinter is available."
+                if tkinter_ready
+                else "Tkinter is not available in this Python installation."
+            ),
+            install_hint=(
+                None
+                if tkinter_ready
+                else "Install Python with Tk support, or install python3-tk on Linux desktop environments."
+            ),
+        )
+    )
+
+    customtkinter_ready = probe_python_module_available("customtkinter")
+    customtkinter_cmd = build_python_package_install_command(GUI_INSTALL_PACKAGES)
+    checks.append(
+        ToolingCheck(
+            name="customtkinter",
+            state="ready" if customtkinter_ready else "missing",
+            blocking=True,
+            detail=(
+                "GUI dependency customtkinter is available."
+                if customtkinter_ready
+                else "GUI dependency customtkinter is not installed."
+            ),
+            install_hint=(
+                None
+                if customtkinter_ready
+                else f"{sys.executable} -m pip install {' '.join(GUI_INSTALL_PACKAGES)}"
+            ),
+            auto_install_command=(None if customtkinter_ready else customtkinter_cmd),
+        )
+    )
+
+    return checks
 
 
 def gui_font_candidates(platform_name: str | None = None) -> dict[str, tuple[str, ...]]:
@@ -1206,8 +1563,8 @@ class RepoPublicationGuard:  # pragma: no cover
         detail = probe.stderr.strip() or probe.stdout.strip()
         raise RuntimeError(
             "git-filter-repo is required for remediation that rewrites history. "
-            f"Install it with: {sys.executable} -m pip install '{REMEDIATION_INSTALL_EXTRA}' "
-            "or install git-filter-repo directly."
+            f"Install it with: {sys.executable} -m pip install {' '.join(REMEDIATION_INSTALL_PACKAGES)} "
+            "or re-run with --install-missing-tools."
             + (f"\nDetails: {detail}" if detail else "")
         )
 
@@ -1841,13 +2198,17 @@ def is_public_github_remote(remote_url: str) -> tuple[bool | None, str]:
     return None, "unknown_visibility"
 
 
-def resolve_github_hardening_token(env: dict[str, str] | None = None) -> str | None:
+def resolve_github_hardening_token(
+    env: dict[str, str] | None = None,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> str | None:
     current_env = env or os.environ
     for key in GITHUB_HARDENING_TOKEN_ENV_KEYS:
         value = current_env.get(key, "").strip()
         if value:
             return value
-    return None
+    token, _status = read_github_cli_token(runner=runner)
+    return token
 
 
 def build_github_api_headers(token: str | None = None) -> dict[str, str]:
@@ -1927,7 +2288,8 @@ def audit_github_release_hardening(
         warnings.append(
             "Admin-only GitHub hardening checks were skipped. "
             "Set REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN "
-            "to audit branch protection, Actions permissions, and security alerts."
+            "or authenticate GitHub CLI with `gh auth login` to audit branch protection, "
+            "Actions permissions, and security alerts."
         )
         return normalize_text_values(findings), normalize_text_values(warnings)
 
@@ -2402,7 +2764,7 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
             "REVIEW",
             "Advisory review: GitHub hardening audit was partial or could not authenticate.",
             "Possible consequence: repository settings may still have unaudited gaps even if local content checks passed.",
-            "Suggestion: set REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN with repo-admin access and re-run --audit-github-hardening.",
+            "Suggestion: set REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN, or authenticate GitHub CLI with `gh auth login`, then re-run --audit-github-hardening.",
         )
 
     if email_status == "REVIEW":
@@ -5610,6 +5972,16 @@ def make_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument("--yes", action="store_true", help="Skip destructive action confirmation prompt")
+    parser.add_argument(
+        "--check-tooling",
+        action="store_true",
+        help="Check required/optional local tooling for the selected mode and exit",
+    )
+    parser.add_argument(
+        "--install-missing-tools",
+        action="store_true",
+        help="Attempt to install supported missing tools before continuing",
+    )
     report_open_group = parser.add_mutually_exclusive_group()
     report_open_group.add_argument(
         "--open-report",
@@ -5645,20 +6017,6 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
     root = Path(args.root)
     policy = Path(args.policy)
 
-    enforced_results_dir, forced = enforce_results_dir(Path(args.report_dir))
-    artifacts = create_run_artifacts(enforced_results_dir)
-    cli_logger = RunLogger(artifacts.log_path, sink=print)
-    if forced:
-        cli_logger(
-            f"[WARN] report-dir was forced to {default_results_dir()} to comply with mandatory Audit_Results policy"
-        )
-    cli_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
-    if args.no_open_report:
-        cli_logger(
-            "[INFO] --no-open-report is accepted for compatibility. "
-            "CLI already defaults to not opening the browser automatically."
-        )
-
     config = build_guard_run_config(
         mode="cli",
         root=root,
@@ -5688,6 +6046,40 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         audit_github_hardening=args.audit_github_hardening,
     )
 
+    tooling_checks = build_cli_tooling_checks(config)
+    if args.install_missing_tools:
+        install_missing_tooling(tooling_checks, print)
+        tooling_checks = build_cli_tooling_checks(config)
+
+    if args.check_tooling:
+        blocking_failures, _warnings = summarize_tooling_checks(tooling_checks, print, include_ready=True)
+        return 2 if blocking_failures else 0
+
+    enforced_results_dir, forced = enforce_results_dir(Path(args.report_dir))
+    artifacts = create_run_artifacts(enforced_results_dir)
+    cli_logger = RunLogger(artifacts.log_path, sink=print)
+    if forced:
+        cli_logger(
+            f"[WARN] report-dir was forced to {default_results_dir()} to comply with mandatory Audit_Results policy"
+        )
+    cli_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
+    if args.no_open_report:
+        cli_logger(
+            "[INFO] --no-open-report is accepted for compatibility. "
+            "CLI already defaults to not opening the browser automatically."
+        )
+    blocking_failures, warnings = summarize_tooling_checks(tooling_checks, cli_logger, include_ready=False)
+    if blocking_failures:
+        if args.install_missing_tools:
+            cli_logger("[ERROR] Required tooling is still missing after install attempts.")
+        else:
+            cli_logger(
+                "[ERROR] Required tooling is missing. Re-run with --check-tooling or --install-missing-tools."
+            )
+        return 3
+    if warnings and not args.install_missing_tools:
+        cli_logger("[INFO] Optional tooling warnings detected. Re-run with --check-tooling for a focused summary.")
+
     def confirm_force_push() -> bool:
         print("WARNING: --fix with --push rewrites history and force-pushes.")
         answer = input("Continue? [y/N]: ").strip().lower()
@@ -5716,7 +6108,29 @@ def should_launch_gui(args: argparse.Namespace) -> bool:
     return bool(args.gui)
 
 
-def launch_gui() -> int:
+def launch_gui(
+    *,
+    check_tooling_only: bool = False,
+    install_missing_tools: bool = False,
+) -> int:
+    tooling_checks = build_gui_tooling_checks()
+    if install_missing_tools:
+        install_missing_tooling(tooling_checks, print)
+        tooling_checks = build_gui_tooling_checks()
+    blocking_failures, _warnings = summarize_tooling_checks(
+        tooling_checks,
+        print,
+        include_ready=check_tooling_only,
+    )
+    if check_tooling_only:
+        return 2 if blocking_failures else 0
+    if blocking_failures:
+        print(
+            "[ERROR] GUI tooling is not ready. Re-run with --gui --check-tooling "
+            "or --gui --install-missing-tools.",
+            file=sys.stderr,
+        )
+        return 3
     try:
         app = GuiApp()
     except RuntimeError as exc:
@@ -5736,7 +6150,10 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover
     args = parser.parse_args(raw_args)
 
     if should_launch_gui(args):
-        return launch_gui()
+        return launch_gui(
+            check_tooling_only=bool(args.check_tooling),
+            install_missing_tools=bool(args.install_missing_tools),
+        )
 
     return run_cli(args)
 

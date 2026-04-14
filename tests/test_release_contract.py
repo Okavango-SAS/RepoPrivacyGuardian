@@ -201,6 +201,105 @@ def test_run_cli_passes_audit_github_hardening_flag_to_config(tmp_path: Path, mo
     assert captured["config"].audit_github_hardening is True
 
 
+def test_run_cli_check_tooling_returns_blocking_exit_without_running_pipeline(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        rpg,
+        "build_cli_tooling_checks",
+        lambda config: [
+            rpg.ToolingCheck(
+                name="git",
+                state="missing",
+                blocking=True,
+                detail="Git executable not found.",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        rpg,
+        "execute_guard_pipeline",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("pipeline should not run")),
+    )
+
+    parser = rpg.make_parser()
+    args = parser.parse_args(
+        [
+            "--root",
+            str(tmp_path),
+            "--check-tooling",
+        ]
+    )
+
+    assert rpg.run_cli(args) == 2
+
+
+def test_run_cli_check_tooling_attempts_auto_install(tmp_path: Path, monkeypatch) -> None:
+    installed: list[list[str]] = []
+
+    def fake_build_checks(config):  # type: ignore[no-untyped-def]
+        del config
+        return [
+            rpg.ToolingCheck(
+                name="gh",
+                state="warning",
+                blocking=False,
+                detail="Install gh.",
+                auto_install_command=[
+                    "winget",
+                    "install",
+                    "--id",
+                    "GitHub.cli",
+                    "-e",
+                    "--source",
+                    "winget",
+                    "--accept-package-agreements",
+                    "--accept-source-agreements",
+                ],
+            )
+        ]
+
+    monkeypatch.setattr(rpg, "build_cli_tooling_checks", fake_build_checks)
+    monkeypatch.setattr(
+        rpg,
+        "install_missing_tooling",
+        lambda checks, logger, runner=None: installed.extend(
+            [check.auto_install_command for check in checks if check.auto_install_command]
+        ),
+    )
+
+    parser = rpg.make_parser()
+    args = parser.parse_args(
+        [
+            "--root",
+            str(tmp_path),
+            "--check-tooling",
+            "--install-missing-tools",
+        ]
+    )
+
+    assert rpg.run_cli(args) == 0
+    assert installed == [[
+        "winget",
+        "install",
+        "--id",
+        "GitHub.cli",
+        "-e",
+        "--source",
+        "winget",
+        "--accept-package-agreements",
+        "--accept-source-agreements",
+    ]]
+
+
+def test_launch_gui_check_tooling_only_returns_missing_status(monkeypatch) -> None:
+    monkeypatch.setattr(
+        rpg,
+        "build_gui_tooling_checks",
+        lambda: [rpg.ToolingCheck(name="customtkinter", state="missing", blocking=True, detail="missing")],
+    )
+
+    assert rpg.launch_gui(check_tooling_only=True, install_missing_tools=False) == 2
+
+
 def test_execute_guard_pipeline_returns_error_when_git_missing(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(rpg, "probe_git_available", lambda: (False, "Git executable not found."))
     messages: list[str] = []
@@ -538,6 +637,9 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "CLI does not open a browser automatically",
         "Use `--gui` for the desktop interface",
         "`exfil_code_indicators` is intentionally manual-review only by default",
+        "--check-tooling",
+        "--install-missing-tools",
+        "GitHub MCP is not a prerequisite",
         "--replace-text-file",
         "Recommended agent prompt template",
         "What It Does Not Try To Be",
@@ -560,6 +662,8 @@ def test_agents_doc_describes_agentic_cli_workflow() -> None:
         "`repo-privacy-guardian ...`",
         "`python -m Repo_Privacy_Guardian ...`",
         "`python Repo_Privacy_Guardian.py ...`",
+        "`--check-tooling`",
+        "`--install-missing-tools`",
         "`--replace-text-file`",
         "Act as a release/security engineer.",
     ]

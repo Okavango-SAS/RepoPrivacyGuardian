@@ -12,15 +12,17 @@ This document defines how coding agents should use Repo Privacy Guardian from CL
 ## CLI First Workflow
 
 1. Start with help.
-2. Run audit in dry-run mode.
-3. Review findings with user-facing guidance: risk, possible consequence, and suggested action.
-4. Authorize only the remediations that were reviewed.
-5. Re-run audit until policy status is PASS.
+2. Run `--check-tooling` when the target environment is not known.
+3. Run audit in dry-run mode.
+4. Review findings with user-facing guidance: risk, possible consequence, and suggested action.
+5. Authorize only the remediations that were reviewed.
+6. Re-run audit until policy status is PASS.
 
 Notes:
 
 - Treat `exfil_code_indicators` as advisory/manual-review by default. Review them, but do not expect them to flip PASS/FAIL on their own.
 - Treat `github_hardening_findings` and `github_hardening_warnings` as advisory/manual-review by default. Use `--audit-github-hardening` when the target repo lives on GitHub and you want to inspect repository settings as part of release readiness.
+- For GitHub hardening admin checks, support either token environment variables or an authenticated GitHub CLI session. GitHub MCP is not required for standalone CLI/Desktop use.
 - Release validation should come from tracked tests only so a clean clone reproduces the same `pytest` signal.
 - Let the tool automate mechanical Git-safe remediation, but keep semantic source edits under review.
 - Use `--replace-text-file` when the repository contains a known literal that must be rewritten but the replacement cannot be inferred safely from the finding alone.
@@ -38,6 +40,15 @@ Minimal safe audit for one repository:
 ```sh
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes
 ```
+
+Tooling preflight:
+
+```sh
+repo-privacy-guardian --check-tooling
+repo-privacy-guardian --check-tooling --install-missing-tools
+```
+
+Use `--install-missing-tools` only when you explicitly want the tool to attempt local dependency installation.
 
 Fix preview (no destructive write):
 
