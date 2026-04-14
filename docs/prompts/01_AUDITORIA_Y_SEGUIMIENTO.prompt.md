@@ -36,6 +36,7 @@ Ejecutar una auditoria completa, dejar evidencia trazable y generar un plan de s
    - archivos sensibles historicos
    - tracked-but-ignored
    - faltantes de .gitignore
+   - hardening remoto de GitHub cuando el repositorio objetivo use GitHub y se habilite `--audit-github-hardening`
 4. Listar repositorios de severidad ALTA con razon concreta.
 5. Generar plan de seguimiento con 3 niveles:
    - urgente (bloquea release)

@@ -30,6 +30,7 @@ import tempfile
 import threading
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 from dataclasses import dataclass, field
@@ -74,8 +75,15 @@ GUI_INSTALL_EXTRA = "repo-privacy-guardian[gui]"
 REMEDIATION_INSTALL_EXTRA = "repo-privacy-guardian[remediation]"
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
 GITHUB_REPO_API_URL = "https://api.github.com/repos/{owner}/{repo}"
+GITHUB_API_VERSION = "2022-11-28"
+GITHUB_HARDENING_TOKEN_ENV_KEYS = (
+    "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+)
 LITELLM_INCIDENT_ID = "litellm-2026-03"
 EXFIL_INDICATOR_MODE = "advisory"
+GITHUB_HARDENING_MODE = "advisory"
 REDACTED_EMAIL = "<redacted-email>"
 REDACTED_SECRET = "<redacted-secret>"
 REDACTED_PATH = "<redacted-path>"
@@ -282,6 +290,7 @@ class GuardRunConfig:
     placeholder_email: str
     max_matches: int
     audit_litellm_incident: bool = False
+    audit_github_hardening: bool = False
     rewrite_personal_paths: bool = False
     open_report: bool = False
     confirm_each_repo_fix: bool = True
@@ -471,6 +480,9 @@ class RepoReport:
     tracked_but_ignored: list[str] = field(default_factory=list)
     gitignore_missing_patterns: list[str] = field(default_factory=list)
     exfil_code_indicators: list[str] = field(default_factory=list)
+    github_hardening_checked: bool = False
+    github_hardening_findings: list[str] = field(default_factory=list)
+    github_hardening_warnings: list[str] = field(default_factory=list)
 
     litellm_reference_hits: list[str] = field(default_factory=list)
     litellm_compromised_reference_hits: list[str] = field(default_factory=list)
@@ -547,6 +559,7 @@ class RepoPublicationGuard:  # pragma: no cover
         dry_run: bool,
         max_matches: int,
         audit_litellm_incident: bool,
+        audit_github_hardening: bool,
         allow_non_owner_push: bool,
         allowed_remote_owners: list[str],
         replace_text_file: str | None,
@@ -570,6 +583,7 @@ class RepoPublicationGuard:  # pragma: no cover
         self.dry_run = dry_run
         self.max_matches = max_matches
         self.audit_litellm_incident = audit_litellm_incident
+        self.audit_github_hardening = audit_github_hardening
         self.allow_non_owner_push = allow_non_owner_push
         self.allowed_remote_owners = {
             owner.strip().lower()
@@ -791,6 +805,15 @@ class RepoPublicationGuard:  # pragma: no cover
             path_filter=self._is_supply_chain_candidate_path,
         )
         report.litellm_incident_severity = classify_litellm_incident_severity(report)
+
+    def _scan_github_hardening(self, repo: Path, report: RepoReport) -> None:
+        findings, warnings = audit_github_release_hardening(
+            repo=repo,
+            remote_url=report.origin_url or report.upstream_url or "",
+        )
+        report.github_hardening_checked = True
+        report.github_hardening_findings = findings[: self.max_matches]
+        report.github_hardening_warnings = warnings[: self.max_matches]
 
     def _finalize_git_stream_process(self, proc: subprocess.Popen[str], timeout: int = 10) -> None:
         try:
@@ -1153,6 +1176,9 @@ class RepoPublicationGuard:  # pragma: no cover
             EXFIL_CODE_RE,
             only_code_files=True,
         )
+
+        if self.audit_github_hardening:
+            self._scan_github_hardening(repo, report)
 
         if self.audit_litellm_incident:
             self._scan_litellm_incident(repo, report)
@@ -1634,6 +1660,10 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"gitignore_missing_patterns: {len(report.gitignore_missing_patterns)}")
     logger(f"exfil_code_indicators: {len(report.exfil_code_indicators)}")
     logger(f"exfil_indicator_mode: {EXFIL_INDICATOR_MODE}")
+    logger(f"github_hardening_checked: {report.github_hardening_checked}")
+    logger(f"github_hardening_findings: {len(report.github_hardening_findings)}")
+    logger(f"github_hardening_warnings: {len(report.github_hardening_warnings)}")
+    logger(f"github_hardening_mode: {GITHUB_HARDENING_MODE}")
     logger(f"litellm_incident_severity: {report.litellm_incident_severity}")
     logger(f"litellm_reference_hits: {len(report.litellm_reference_hits)}")
     logger(f"litellm_compromised_reference_hits: {len(report.litellm_compromised_reference_hits)}")
@@ -1651,6 +1681,14 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     if report.exfil_code_indicators:
         logger("exfil_code_indicator_samples:")
         for item in report.exfil_code_indicators[:8]:
+            logger(f"  - {item}")
+    if report.github_hardening_findings:
+        logger("github_hardening_findings_samples:")
+        for item in report.github_hardening_findings[:8]:
+            logger(f"  - {item}")
+    if report.github_hardening_warnings:
+        logger("github_hardening_warnings_samples:")
+        for item in report.github_hardening_warnings[:8]:
             logger(f"  - {item}")
 
     detected_preview = build_detected_findings_preview(report)
@@ -1801,6 +1839,218 @@ def is_public_github_remote(remote_url: str) -> tuple[bool | None, str]:
         return (not private), "public" if not private else "private"
 
     return None, "unknown_visibility"
+
+
+def resolve_github_hardening_token(env: dict[str, str] | None = None) -> str | None:
+    current_env = env or os.environ
+    for key in GITHUB_HARDENING_TOKEN_ENV_KEYS:
+        value = current_env.get(key, "").strip()
+        if value:
+            return value
+    return None
+
+
+def build_github_api_headers(token: str | None = None) -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "Repo-Privacy-Guardian",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def github_api_get_json(url: str, token: str | None = None) -> tuple[object | None, str]:
+    request = urllib.request.Request(url, headers=build_github_api_headers(token))
+
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            payload = response.read().decode("utf-8", errors="replace").strip()
+            if not payload:
+                return {}, f"http_{getattr(response, 'status', 200)}"
+            return json.loads(payload), f"http_{getattr(response, 'status', 200)}"
+    except urllib.error.HTTPError as exc:
+        return None, f"http_{exc.code}"
+    except (TimeoutError, OSError, json.JSONDecodeError):
+        return None, "request_failed"
+
+
+def github_api_probe_enabled(url: str, token: str | None = None) -> tuple[bool | None, str]:
+    request = urllib.request.Request(url, headers=build_github_api_headers(token))
+
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            return True, f"http_{getattr(response, 'status', 200)}"
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return False, "http_404"
+        return None, f"http_{exc.code}"
+    except (TimeoutError, OSError):
+        return None, "request_failed"
+
+
+def audit_github_release_hardening(
+    repo: Path,
+    remote_url: str,
+    token: str | None = None,
+) -> tuple[list[str], list[str]]:
+    findings: list[str] = []
+    warnings: list[str] = []
+    slug = parse_github_remote_slug(remote_url)
+    if not slug:
+        warnings.append("GitHub hardening audit skipped: origin is not a GitHub remote.")
+        return findings, warnings
+
+    if not (repo / ".github" / "CODEOWNERS").exists():
+        findings.append("GitHub repository hardening: .github/CODEOWNERS is missing.")
+
+    owner, repo_name = slug
+    repo_api_url = GITHUB_REPO_API_URL.format(owner=owner, repo=repo_name)
+    repo_payload, repo_reason = github_api_get_json(repo_api_url, token=token)
+    if not isinstance(repo_payload, dict):
+        warnings.append(
+            f"GitHub hardening audit could not read repository metadata ({repo_reason})."
+        )
+        return findings, warnings
+
+    default_branch = str(repo_payload.get("default_branch") or "main")
+    if repo_payload.get("has_wiki") is True:
+        findings.append("GitHub repository settings: wiki is enabled.")
+    if repo_payload.get("has_projects") is True:
+        findings.append("GitHub repository settings: projects are enabled.")
+    if repo_payload.get("allow_auto_merge") is True:
+        findings.append("GitHub repository settings: auto-merge is enabled.")
+
+    resolved_token = token if token is not None else resolve_github_hardening_token()
+    if not resolved_token:
+        warnings.append(
+            "Admin-only GitHub hardening checks were skipped. "
+            "Set REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN "
+            "to audit branch protection, Actions permissions, and security alerts."
+        )
+        return normalize_text_values(findings), normalize_text_values(warnings)
+
+    protection_url = (
+        f"{repo_api_url}/branches/"
+        f"{urllib.parse.quote(default_branch, safe='')}/protection"
+    )
+    protection_payload, protection_reason = github_api_get_json(
+        protection_url,
+        token=resolved_token,
+    )
+    if isinstance(protection_payload, dict):
+        pull_request_reviews = protection_payload.get("required_pull_request_reviews") or {}
+        if not isinstance(pull_request_reviews, dict):
+            pull_request_reviews = {}
+        if not pull_request_reviews:
+            findings.append(
+                "GitHub default branch protection: pull request reviews are not required."
+            )
+        else:
+            if int(pull_request_reviews.get("required_approving_review_count") or 0) < 1:
+                findings.append(
+                    "GitHub default branch protection: at least one approving review is not required."
+                )
+            if pull_request_reviews.get("require_code_owner_reviews") is not True:
+                findings.append(
+                    "GitHub default branch protection: code owner reviews are not required."
+                )
+            if pull_request_reviews.get("dismiss_stale_reviews") is not True:
+                findings.append(
+                    "GitHub default branch protection: stale reviews are not dismissed."
+                )
+
+        conversation_resolution = protection_payload.get("required_conversation_resolution") or {}
+        if not isinstance(conversation_resolution, dict) or conversation_resolution.get("enabled") is not True:
+            findings.append(
+                "GitHub default branch protection: conversation resolution is not required."
+            )
+
+        status_checks = protection_payload.get("required_status_checks") or {}
+        if not isinstance(status_checks, dict) or not (
+            status_checks.get("contexts") or status_checks.get("checks")
+        ):
+            findings.append(
+                "GitHub default branch protection: required status checks are not configured."
+            )
+        elif status_checks.get("strict") is not True:
+            findings.append(
+                "GitHub default branch protection: required status checks are not strict."
+            )
+
+        allow_force_pushes = protection_payload.get("allow_force_pushes") or {}
+        if isinstance(allow_force_pushes, dict) and allow_force_pushes.get("enabled") is True:
+            findings.append("GitHub default branch protection: force pushes are allowed.")
+
+        allow_deletions = protection_payload.get("allow_deletions") or {}
+        if isinstance(allow_deletions, dict) and allow_deletions.get("enabled") is True:
+            findings.append("GitHub default branch protection: branch deletion is allowed.")
+    elif protection_reason == "http_404":
+        findings.append("GitHub default branch protection is not enabled.")
+    else:
+        warnings.append(
+            f"GitHub default branch protection could not be audited ({protection_reason})."
+        )
+
+    actions_payload, actions_reason = github_api_get_json(
+        f"{repo_api_url}/actions/permissions",
+        token=resolved_token,
+    )
+    if isinstance(actions_payload, dict):
+        if str(actions_payload.get("allowed_actions") or "").lower() == "all":
+            findings.append("GitHub Actions permissions: all external actions are allowed.")
+        if actions_payload.get("sha_pinning_required") is not True:
+            findings.append("GitHub Actions permissions: SHA pinning is not required.")
+    else:
+        warnings.append(
+            f"GitHub Actions permissions could not be audited ({actions_reason})."
+        )
+
+    workflow_payload, workflow_reason = github_api_get_json(
+        f"{repo_api_url}/actions/permissions/workflow",
+        token=resolved_token,
+    )
+    if isinstance(workflow_payload, dict):
+        if str(workflow_payload.get("default_workflow_permissions") or "").lower() != "read":
+            findings.append(
+                "GitHub Actions workflow permissions are broader than read-only."
+            )
+        if workflow_payload.get("can_approve_pull_request_reviews") is True:
+            findings.append("GitHub Actions workflow permissions allow PR approval.")
+    else:
+        warnings.append(
+            f"GitHub Actions workflow permissions could not be audited ({workflow_reason})."
+        )
+
+    vulnerability_enabled, vulnerability_reason = github_api_probe_enabled(
+        f"{repo_api_url}/vulnerability-alerts",
+        token=resolved_token,
+    )
+    if vulnerability_enabled is False:
+        findings.append("GitHub security alerts: Dependabot vulnerability alerts are disabled.")
+    elif vulnerability_enabled is None:
+        warnings.append(
+            f"GitHub vulnerability alerts could not be audited ({vulnerability_reason})."
+        )
+
+    security_fixes_payload, security_fixes_reason = github_api_get_json(
+        f"{repo_api_url}/automated-security-fixes",
+        token=resolved_token,
+    )
+    if isinstance(security_fixes_payload, dict):
+        if security_fixes_payload.get("enabled") is not True or security_fixes_payload.get("paused") is True:
+            findings.append(
+                "GitHub security fixes: automated security fixes are disabled or paused."
+            )
+    elif security_fixes_reason == "http_404":
+        findings.append("GitHub security fixes: automated security fixes are disabled.")
+    else:
+        warnings.append(
+            f"GitHub automated security fixes could not be audited ({security_fixes_reason})."
+        )
+
+    return normalize_text_values(findings), normalize_text_values(warnings)
 
 
 def is_relevant_email_candidate(email: str) -> bool:
@@ -1983,6 +2233,8 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload["tracked_but_ignored"] = _redact_text_list(report.tracked_but_ignored)
     payload["gitignore_missing_patterns"] = _redact_text_list(report.gitignore_missing_patterns)
     payload["exfil_code_indicators"] = _redact_text_list(report.exfil_code_indicators)
+    payload["github_hardening_findings"] = _redact_text_list(report.github_hardening_findings)
+    payload["github_hardening_warnings"] = _redact_text_list(report.github_hardening_warnings)
     payload["backups_created"] = _redact_text_list(report.backups_created)
     payload["fix_actions"] = _redact_text_list(report.fix_actions)
     payload["fix_errors"] = _redact_text_list(report.fix_errors)
@@ -1999,6 +2251,7 @@ def build_fix_preflight_summary(config: GuardRunConfig, repos: list[Path]) -> li
         f"[PREVIEW] repositories targeted: {len(repos)}",
         f"[PREVIEW] dry_run={config.dry_run} push={config.push}",
         f"[PREVIEW] audit_litellm_incident={config.audit_litellm_incident}",
+        f"[PREVIEW] audit_github_hardening={config.audit_github_hardening}",
         f"[PREVIEW] rewrite_personal_paths={config.rewrite_personal_paths}",
         f"[PREVIEW] explicit replace-text file={bool(config.replace_text_file)}",
         f"[PREVIEW] low-confidence email mode: {config.low_confidence_email_mode}",
@@ -2136,6 +2389,22 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
             "Suggestion: review each cited network-capable code path manually. This signal does not change PASS/FAIL by default.",
         )
 
+    if report.github_hardening_findings:
+        return (
+            "REVIEW",
+            "Advisory review: GitHub repository settings need hardening before public release.",
+            "Possible consequence: direct pushes, weak workflow permissions, or missing review/security controls may remain active after publication.",
+            "Suggestion: review github_hardening_findings, apply the remote settings manually, and re-run with --audit-github-hardening.",
+        )
+
+    if report.github_hardening_warnings:
+        return (
+            "REVIEW",
+            "Advisory review: GitHub hardening audit was partial or could not authenticate.",
+            "Possible consequence: repository settings may still have unaudited gaps even if local content checks passed.",
+            "Suggestion: set REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN with repo-admin access and re-run --audit-github-hardening.",
+        )
+
     if email_status == "REVIEW":
         return (
             "REVIEW",
@@ -2212,6 +2481,12 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     if report.exfil_code_indicators:
         score = max(score, 20)
         highlights.append("Outbound/exfil heuristics require manual review (advisory)")
+    if report.github_hardening_findings:
+        score = max(score, 25)
+        highlights.append("GitHub release hardening settings need manual follow-up (advisory)")
+    if report.github_hardening_warnings:
+        score = max(score, 10)
+        highlights.append("GitHub release hardening audit was partial/incomplete")
 
     if score >= 90:
         return "HIGH", score, highlights
@@ -2260,6 +2535,8 @@ def build_detected_findings_preview(report: RepoReport) -> list[str]:
     add("history sensitive add", report.history_sensitive_added)
     add("history sensitive delete", report.history_sensitive_deleted)
     add("exfil advisory", report.exfil_code_indicators)
+    add("github advisory", report.github_hardening_findings)
+    add("github audit warning", report.github_hardening_warnings)
     add("litellm reference", report.litellm_reference_hits)
     add("litellm compromised", report.litellm_compromised_reference_hits)
     add("litellm ioc", report.litellm_ioc_hits)
@@ -2470,6 +2747,7 @@ def render_html_report(
             f"<td class=\"num\">{len(rep.secret_file_candidates)}</td>"
             f"<td class=\"num\">{len(owned_unexpected)}</td>"
             f"<td class=\"num\">{len(rep.exfil_code_indicators)}</td>"
+            f"<td class=\"num\">{len(rep.github_hardening_findings)}</td>"
             f"<td class=\"num\">{len(rep.litellm_ioc_hits)}</td>"
             f"<td class=\"num\">{len(rep.gitignore_missing_patterns)}</td>"
             "</tr>"
@@ -2513,6 +2791,9 @@ def render_html_report(
             f"<tr><td>tracked_but_ignored</td><td class=\"num\">{len(rep.tracked_but_ignored)}</td></tr>"
             f"<tr><td>gitignore_missing_patterns</td><td class=\"num\">{len(rep.gitignore_missing_patterns)}</td></tr>"
             f"<tr><td>exfil_code_indicators</td><td class=\"num\">{len(rep.exfil_code_indicators)}</td></tr>"
+            f"<tr><td>github_hardening_checked</td><td>{esc(str(rep.github_hardening_checked))}</td></tr>"
+            f"<tr><td>github_hardening_findings</td><td class=\"num\">{len(rep.github_hardening_findings)}</td></tr>"
+            f"<tr><td>github_hardening_warnings</td><td class=\"num\">{len(rep.github_hardening_warnings)}</td></tr>"
             f"<tr><td>litellm_incident_severity</td><td>{esc(classify_litellm_incident_severity(rep))}</td></tr>"
             f"<tr><td>litellm_reference_hits</td><td class=\"num\">{len(rep.litellm_reference_hits)}</td></tr>"
             f"<tr><td>litellm_compromised_reference_hits</td><td class=\"num\">{len(rep.litellm_compromised_reference_hits)}</td></tr>"
@@ -2576,6 +2857,14 @@ def render_html_report(
             "</section>"
             "<section><h5>Exfil indicators (advisory sample)</h5>"
             f"{render_lines(rep.exfil_code_indicators)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>GitHub hardening findings (advisory sample)</h5>"
+            f"{render_lines(rep.github_hardening_findings)}"
+            "</section>"
+            "<section><h5>GitHub hardening audit warnings</h5>"
+            f"{render_lines(rep.github_hardening_warnings)}"
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
@@ -2788,6 +3077,7 @@ def render_html_report(
             <th class=\"num\">Secret file candidates</th>
             <th class=\"num\">Unexpected emails (owned repo)</th>
             <th class=\"num\">Exfil indicators</th>
+            <th class=\"num\">GitHub findings</th>
             <th class=\"num\">LiteLLM IoCs</th>
             <th class=\"num\">Missing .gitignore rules</th>
           </tr>
@@ -2877,6 +3167,7 @@ def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, s
         "purge_detected_secret_files": str(config.purge_detected_secret_files),
         "purge_all_detected_secret_files": str(config.purge_all_detected_secret_files),
         "audit_litellm_incident": str(config.audit_litellm_incident),
+        "audit_github_hardening": str(config.audit_github_hardening),
         "rewrite_personal_paths": str(config.rewrite_personal_paths),
         "open_report": str(config.open_report),
         "low_confidence_email_mode": config.low_confidence_email_mode,
@@ -2926,6 +3217,7 @@ def execute_guard_pipeline(
         "dry_run": config.dry_run,
         "max_matches": config.max_matches,
         "audit_litellm_incident": config.audit_litellm_incident,
+        "audit_github_hardening": config.audit_github_hardening,
         "allow_non_owner_push": config.allow_non_owner_push,
         "allowed_remote_owners": config.allowed_remote_owners,
         "replace_text_file": config.replace_text_file,
@@ -2945,6 +3237,10 @@ def execute_guard_pipeline(
         logger("[INFO] Email policy: low-confidence findings are blocking.")
     else:
         logger("[INFO] Email policy: low-confidence findings are informational.")
+    if config.audit_github_hardening:
+        logger(
+            "[INFO] GitHub hardening audit enabled: advisory/manual-review only by default."
+        )
 
     if config.purge_all_detected_secret_files and not config.purge_detected_secret_files:
         logger("[WARN] --purge-all-detected-secret-files implies --purge-detected-secret-files")
@@ -3263,6 +3559,7 @@ def build_guard_run_config(
     replace_text_file: str | None,
     report_json: str | None,
     audit_litellm_incident: bool = False,
+    audit_github_hardening: bool = False,
 ) -> GuardRunConfig:
     normalized_owner_emails = normalize_text_values(owner_emails)
     normalized_allowed_remote_owners = normalize_text_values(allowed_remote_owners)
@@ -3290,6 +3587,7 @@ def build_guard_run_config(
         placeholder_email=placeholder_email,
         max_matches=max_matches,
         audit_litellm_incident=audit_litellm_incident,
+        audit_github_hardening=audit_github_hardening,
         open_report=open_report,
         confirm_each_repo_fix=confirm_each_repo_fix,
         allow_non_owner_push=allow_non_owner_push,
@@ -3571,6 +3869,7 @@ class GuiApp:  # pragma: no cover
         self.dry_run_var = tk.BooleanVar(value=False)
         self.low_confidence_blocking_var = tk.BooleanVar(value=False)
         self.audit_litellm_incident_var = tk.BooleanVar(value=False)
+        self.audit_github_hardening_var = tk.BooleanVar(value=False)
         self.open_report_var = tk.BooleanVar(value=True)
         self.confirm_each_repo_fix_var = tk.BooleanVar(value=True)
         self.allow_non_owner_push_var = tk.BooleanVar(value=False)
@@ -3975,6 +4274,7 @@ class GuiApp:  # pragma: no cover
             ("Redact third-party emails", self.redact_var),
             ("Low-confidence emails are blocking", self.low_confidence_blocking_var),
             ("Dry run", self.dry_run_var),
+            ("Audit GitHub release hardening", self.audit_github_hardening_var),
             ("Audit LiteLLM incident (Mar-2026)", self.audit_litellm_incident_var),
             ("Open HTML report automatically", self.open_report_var),
             ("Confirm each repository during repair", self.confirm_each_repo_fix_var),
@@ -5153,6 +5453,7 @@ class GuiApp:  # pragma: no cover
                 replace_text_file=(replace_text_file if run_fix else None),
                 report_json=report_json,
                 audit_litellm_incident=self.audit_litellm_incident_var.get(),
+                audit_github_hardening=self.audit_github_hardening_var.get(),
             )
 
             def _confirm_repo_fix(repo: Path, index: int, total: int) -> bool:
@@ -5267,6 +5568,15 @@ def make_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable supply-chain incident audit checks for LiteLLM March-2026 indicators",
     )
+    parser.add_argument(
+        "--audit-github-hardening",
+        action="store_true",
+        help=(
+            "Enable optional GitHub repository settings audit for GitHub remotes. "
+            "Uses read-only GitHub API calls; admin-only checks require "
+            "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN."
+        ),
+    )
 
     parser.add_argument("--owner-name", default="Owner", help="Owner display name for rewritten commits")
     parser.add_argument(
@@ -5375,6 +5685,7 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         replace_text_file=args.replace_text_file,
         report_json=args.report_json,
         audit_litellm_incident=args.audit_litellm_incident,
+        audit_github_hardening=args.audit_github_hardening,
     )
 
     def confirm_force_push() -> bool:

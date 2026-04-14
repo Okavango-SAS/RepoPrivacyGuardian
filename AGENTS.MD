@@ -20,6 +20,7 @@ This document defines how coding agents should use Repo Privacy Guardian from CL
 Notes:
 
 - Treat `exfil_code_indicators` as advisory/manual-review by default. Review them, but do not expect them to flip PASS/FAIL on their own.
+- Treat `github_hardening_findings` and `github_hardening_warnings` as advisory/manual-review by default. Use `--audit-github-hardening` when the target repo lives on GitHub and you want to inspect repository settings as part of release readiness.
 - Release validation should come from tracked tests only so a clean clone reproduces the same `pytest` signal.
 - Let the tool automate mechanical Git-safe remediation, but keep semantic source edits under review.
 - Use `--replace-text-file` when the repository contains a known literal that must be rewritten but the replacement cannot be inferred safely from the finding alone.
@@ -57,7 +58,18 @@ repo-privacy-guardian --root /path/to/repos --repos MyRepo --low-confidence-emai
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --low-confidence-email-mode blocking
 ```
 
+Optional GitHub release-hardening audit:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening
+```
+
 Notes:
+
+- Admin-only GitHub checks require `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN`.
+- The GitHub hardening audit inspects repository settings only; it does not push configuration changes.
+
+Platform notes:
 
 - Use `py` instead of `python` on Windows if preferred.
 - Use `--gui` explicitly for the desktop interface; the default entry path is CLI help.

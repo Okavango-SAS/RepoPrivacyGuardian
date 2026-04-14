@@ -175,6 +175,32 @@ def test_run_cli_open_report_is_opt_in(tmp_path: Path, monkeypatch) -> None:
     assert captured["config"].open_report is True
 
 
+def test_run_cli_passes_audit_github_hardening_flag_to_config(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_execute_guard_pipeline(*, config, artifacts, logger, results_dir, **kwargs):  # type: ignore[no-untyped-def]
+        del artifacts, logger, results_dir, kwargs
+        captured["config"] = config
+        return 0
+
+    monkeypatch.setattr(rpg, "execute_guard_pipeline", fake_execute_guard_pipeline)
+
+    parser = rpg.make_parser()
+    args = parser.parse_args(
+        [
+            "--root",
+            str(tmp_path),
+            "--repos",
+            "repo-a",
+            "--audit-github-hardening",
+        ]
+    )
+    exit_code = rpg.run_cli(args)
+
+    assert exit_code == 0
+    assert captured["config"].audit_github_hardening is True
+
+
 def test_execute_guard_pipeline_returns_error_when_git_missing(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(rpg, "probe_git_available", lambda: (False, "Git executable not found."))
     messages: list[str] = []
@@ -340,6 +366,7 @@ def test_gui_run_worker_passes_replace_text_file_for_repair(tmp_path: Path, monk
     app.dry_run_var = DummyVar(False)
     app.low_confidence_blocking_var = DummyVar(False)
     app.audit_litellm_incident_var = DummyVar(False)
+    app.audit_github_hardening_var = DummyVar(True)
     app.open_report_var = DummyVar(True)
     app.confirm_each_repo_fix_var = DummyVar(True)
     app.allow_non_owner_push_var = DummyVar(False)
@@ -353,6 +380,7 @@ def test_gui_run_worker_passes_replace_text_file_for_repair(tmp_path: Path, monk
     app._run_worker(["repo-a"], 50, True, ("repo-a",))
 
     assert captured["config"].replace_text_file == "ops/replace-text.txt"
+    assert captured["config"].audit_github_hardening is True
 
 
 def test_choose_gui_font_family_prefers_available_candidates() -> None:

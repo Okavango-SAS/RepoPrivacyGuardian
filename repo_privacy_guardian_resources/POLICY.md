@@ -130,7 +130,35 @@ Action:
 - Treat heuristic exfil/outbound findings as mandatory manual review.
 - Repo Privacy Guardian reports these indicators as advisory by default; they do not change PASS/FAIL on their own.
 
-### E) .gitignore policy and effectiveness
+### E) GitHub repository hardening (recommended for public GitHub repos)
+
+Recommended baseline:
+
+- Protect the default branch.
+- Require at least one pull request review.
+- Require code owner review when `CODEOWNERS` is present.
+- Require conversation resolution before merge.
+- Disable force pushes and branch deletion on the protected branch.
+- Require status checks for CI before merge.
+- Restrict GitHub Actions, require SHA pinning, keep default workflow permissions at `read`, and do not allow Actions to approve pull requests.
+- Enable Dependabot vulnerability alerts and automated security fixes.
+- Keep issues enabled if you want community reports; disable wiki/projects when they are not intentionally part of the repository workflow.
+
+Optional Repo Privacy Guardian command:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening
+```
+
+Admin-only GitHub checks require one of these environment variables:
+
+- `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`
+- `GITHUB_TOKEN`
+- `GH_TOKEN`
+
+Without a token, Repo Privacy Guardian still audits local `CODEOWNERS` and public repository metadata, but branch protection, Actions permissions, and security-alert checks remain partial.
+
+### F) .gitignore policy and effectiveness
 
 Critical notes:
 
@@ -187,12 +215,12 @@ Review .gitignore evolution to catch late-added protections:
 git log --all -- .gitignore
 ```
 
-### F) Samples and fixtures
+### G) Samples and fixtures
 
 - Ensure examples, fixtures, screenshots, and logs are synthetic/anonymized.
 - Never publish raw production artifacts with usernames, hostnames, or internal URLs.
 
-### G) Technical final validation
+### H) Technical final validation
 
 Run project validators/tests before publication:
 

@@ -115,6 +115,17 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "Validation evidence" in release_notes
 
 
+def test_docs_cover_optional_github_hardening_audit() -> None:
+    readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
+    agents = (_repo_root() / "AGENTS.MD").read_text(encoding="utf-8")
+    policy = (_repo_root() / "docs" / "POLICY.md").read_text(encoding="utf-8")
+
+    assert "--audit-github-hardening" in readme
+    assert "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN" in readme
+    assert "--audit-github-hardening" in agents
+    assert "branch protection" in policy.lower()
+
+
 def test_changelog_records_stable_release() -> None:
     changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
 

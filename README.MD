@@ -44,6 +44,7 @@ It is designed for repeatable CLI execution first, with an optional desktop GUI 
 - sensitive filenames in history
 - tracked-but-ignored files and `.gitignore` drift
 - advisory outbound or exfil-capable code indicators
+- optional GitHub repository hardening posture for public GitHub remotes
 - LiteLLM March 2026 supply-chain indicators
 
 ## ✅ Product Contract
@@ -65,13 +66,18 @@ Blocking checks that can change `PASS` to `FAIL`:
 Advisory checks that do not change `PASS` or `FAIL` by default:
 
 - `exfil_code_indicators`
+- `github_hardening_findings`
+- `github_hardening_warnings`
 
 `exfil_code_indicators` is intentionally manual-review only by default. It is surfaced in CLI guidance, JSON, HTML, and severity highlights, but it does not fail a repository unless a future strict mode is introduced.
+
+GitHub hardening findings and warnings are also advisory/manual-review only by default when `--audit-github-hardening` is enabled.
 
 ## 🌐 Network Behavior
 
 - Default audits, fix planning, and report generation operate on local Git metadata, local tracked files, and local history.
 - `--public-only` performs a read-only unauthenticated GitHub REST API request for GitHub remotes to decide whether a repository is publicly accessible.
+- `--audit-github-hardening` performs read-only GitHub REST API requests against GitHub remotes to inspect repository settings. Admin-only checks require `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN`.
 - The default CLI/GUI paths do not upload repository contents, reports, or telemetry to a remote service.
 
 ## 🖥️ CLI-First Behavior
@@ -183,6 +189,14 @@ Safe audit:
 ```sh
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes
 ```
+
+Optional GitHub hardening audit for public-release settings:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening
+```
+
+If you want the branch-protection, Actions-permissions, and security-alert checks too, provide a repo-admin token via `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN` before running the command.
 
 Safe fix preview:
 

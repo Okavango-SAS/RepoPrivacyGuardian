@@ -22,6 +22,7 @@ Auditar un repositorio con trazabilidad, distinguir leaks reales de fixtures int
 5. Aplicar solo fixes revisados.
 6. Si existe un literal conocido que debe reescribirse y la sustitucion no puede inferirse con seguridad, preparar un archivo para `--replace-text-file`.
 7. Re-ejecutar auditoria hasta `PASS` o hasta dejar identificado el blocker real.
+8. Si el repositorio objetivo vive en GitHub y el operador quiere revisar settings remotos, correr tambien `--audit-github-hardening` y distinguir findings reales de settings no endurecidos versus auditoria parcial por falta de token.
 
 ## Guardrails
 
@@ -29,6 +30,7 @@ Auditar un repositorio con trazabilidad, distinguir leaks reales de fixtures int
 - No abrir browser automaticamente salvo pedido explicito.
 - No hacer push ni rewrite destructivo sin autorizacion explicita.
 - Tratar `exfil_code_indicators` como advisory/manual-review por defecto.
+- Tratar `github_hardening_findings` y `github_hardening_warnings` como advisory/manual-review por defecto.
 - Preservar artefactos bajo `Audit_Results/<run_id>/`.
 
 ## Comandos base
@@ -49,6 +51,12 @@ Fix con reemplazos explicitos:
 
 ```sh
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --fix --yes --replace-text-file /path/to/replace-text.txt
+```
+
+Auditoria opcional de hardening remoto de GitHub:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening
 ```
 
 ## Salida esperada

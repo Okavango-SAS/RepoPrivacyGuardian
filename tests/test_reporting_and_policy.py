@@ -79,6 +79,7 @@ def _make_run_config(**overrides) -> rpg.GuardRunConfig:
         "noreply_email": rpg.DEFAULT_NOREPLY,
         "placeholder_email": rpg.DEFAULT_PLACEHOLDER,
         "max_matches": 50,
+        "audit_github_hardening": False,
         "open_report": False,
         "confirm_each_repo_fix": True,
         "allow_non_owner_push": False,
@@ -274,6 +275,110 @@ def test_parse_github_remote_slug_helper() -> None:
     assert rpg.parse_github_remote_slug("https://gitlab.com/example/repo.git") is None
 
 
+def test_resolve_github_hardening_token_prefers_tool_specific_env() -> None:
+    env = {
+        "GH_TOKEN": "gh-token",
+        "GITHUB_TOKEN": "github-token",
+        "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN": "guardian-token",
+    }
+
+    assert rpg.resolve_github_hardening_token(env) == "guardian-token"
+
+
+def test_audit_github_release_hardening_warns_when_admin_checks_are_skipped(tmp_path: Path, monkeypatch) -> None:
+    codeowners = tmp_path / ".github" / "CODEOWNERS"
+    codeowners.parent.mkdir(parents=True)
+    codeowners.write_text("* @owner\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        rpg,
+        "github_api_get_json",
+        lambda url, token=None: ({"default_branch": "main", "has_wiki": False, "has_projects": False}, "http_200"),
+    )
+
+    findings, warnings = rpg.audit_github_release_hardening(
+        repo=tmp_path,
+        remote_url="https://github.com/example/repo.git",
+        token="",
+    )
+
+    assert findings == []
+    assert any("Admin-only GitHub hardening checks were skipped" in item for item in warnings)
+
+
+def test_audit_github_release_hardening_reports_missing_controls(tmp_path: Path, monkeypatch) -> None:
+    def fake_get_json(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
+        assert token == "gh-admin-token"
+        if url.endswith("/actions/permissions"):
+            return ({"allowed_actions": "all", "sha_pinning_required": False}, "http_200")
+        if url.endswith("/actions/permissions/workflow"):
+            return (
+                {
+                    "default_workflow_permissions": "write",
+                    "can_approve_pull_request_reviews": True,
+                },
+                "http_200",
+            )
+        if url.endswith("/automated-security-fixes"):
+            return ({"enabled": False, "paused": False}, "http_200")
+        if url.endswith("/branches/main/protection"):
+            return (
+                {
+                    "required_pull_request_reviews": {
+                        "required_approving_review_count": 0,
+                        "require_code_owner_reviews": False,
+                        "dismiss_stale_reviews": False,
+                    },
+                    "required_conversation_resolution": {"enabled": False},
+                    "required_status_checks": None,
+                    "allow_force_pushes": {"enabled": True},
+                    "allow_deletions": {"enabled": True},
+                },
+                "http_200",
+            )
+        return (
+            {
+                "default_branch": "main",
+                "has_wiki": True,
+                "has_projects": True,
+                "allow_auto_merge": True,
+            },
+            "http_200",
+        )
+
+    monkeypatch.setattr(rpg, "github_api_get_json", fake_get_json)
+    monkeypatch.setattr(
+        rpg,
+        "github_api_probe_enabled",
+        lambda url, token=None: (False, "http_404"),
+    )
+
+    findings, warnings = rpg.audit_github_release_hardening(
+        repo=tmp_path,
+        remote_url="https://github.com/example/repo.git",
+        token="gh-admin-token",
+    )
+
+    assert warnings == []
+    assert any(".github/CODEOWNERS is missing" in item for item in findings)
+    assert any("wiki is enabled" in item for item in findings)
+    assert any("projects are enabled" in item for item in findings)
+    assert any("auto-merge is enabled" in item for item in findings)
+    assert any("approving review is not required" in item for item in findings)
+    assert any("code owner reviews are not required" in item for item in findings)
+    assert any("stale reviews are not dismissed" in item for item in findings)
+    assert any("conversation resolution is not required" in item for item in findings)
+    assert any("required status checks are not configured" in item for item in findings)
+    assert any("force pushes are allowed" in item for item in findings)
+    assert any("branch deletion is allowed" in item for item in findings)
+    assert any("all external actions are allowed" in item for item in findings)
+    assert any("SHA pinning is not required" in item for item in findings)
+    assert any("workflow permissions are broader than read-only" in item for item in findings)
+    assert any("allow PR approval" in item for item in findings)
+    assert any("vulnerability alerts are disabled" in item for item in findings)
+    assert any("automated security fixes are disabled or paused" in item for item in findings)
+
+
 def test_discover_repositories_public_only_filters_private_and_non_github(tmp_path: Path, monkeypatch) -> None:
     public_repo = tmp_path / "repo-a-public"
     private_repo = tmp_path / "repo-b-private"
@@ -416,6 +521,8 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     report.history_email_matches = ["L1:dev@example.com:+ email = 'dev@example.com'"]
     report.history_email_high_confidence = ["L1:dev@example.com:+ email = 'dev@example.com'"]
     report.history_email_low_confidence = ["L2:dev@example.com:+ assert foo('dev@example.com')"]
+    report.github_hardening_findings = ["GitHub repository hardening: .github/CODEOWNERS is missing."]
+    report.github_hardening_warnings = ["GitHub default branch protection could not be audited (http_403)."]
     report.fix_actions = ["replace dev@example.com"]
     payload = rpg.sanitize_report_for_export(report)
 
@@ -431,6 +538,12 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     assert rpg.REDACTED_EMAIL in payload["tracked_email_low_confidence"][0]
     assert rpg.REDACTED_EMAIL in payload["history_email_high_confidence"][0]
     assert rpg.REDACTED_EMAIL in payload["history_email_low_confidence"][0]
+    assert payload["github_hardening_findings"] == [
+        "GitHub repository hardening: .github/CODEOWNERS is missing."
+    ]
+    assert payload["github_hardening_warnings"] == [
+        "GitHub default branch protection could not be audited (http_403)."
+    ]
     assert rpg.REDACTED_EMAIL in payload["fix_actions"][0]
 
 
@@ -754,6 +867,16 @@ def test_repo_user_guidance_variants() -> None:
     assert "informational/noisy" in risk.lower()
     assert "alert fatigue" in consequence.lower()
 
+    github_review = _make_report("github-review")
+    github_review.github_hardening_findings = [
+        "GitHub default branch protection is not enabled."
+    ]
+    level, risk, consequence, suggestion = rpg.repo_user_guidance(github_review)
+    assert level == "REVIEW"
+    assert "github repository settings" in risk.lower()
+    assert "review/security controls" in consequence.lower()
+    assert "--audit-github-hardening" in suggestion
+
     skip = _make_report("skip")
     level, risk, consequence, suggestion = rpg.repo_user_guidance(skip)
     assert level == "SKIP"
@@ -951,6 +1074,7 @@ def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
         noreply_email="12345+octocat@users.noreply.github.com",
         placeholder_email=rpg.DEFAULT_PLACEHOLDER,
         max_matches=50,
+        audit_github_hardening=True,
         open_report=False,
         confirm_each_repo_fix=False,
         allow_non_owner_push=False,
@@ -962,6 +1086,7 @@ def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
     assert config.owner_emails == ["dev@example.com"]
     assert config.allowed_remote_owners == ["axeljackal", "octocat"]
     assert config.replace_text_file == "ops/replace-text.txt"
+    assert config.audit_github_hardening is True
     assert config.open_report is False
     assert config.confirm_each_repo_fix is False
 
@@ -985,6 +1110,7 @@ def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
         noreply_email="12345+octocat@users.noreply.github.com",
         placeholder_email=rpg.DEFAULT_PLACEHOLDER,
         max_matches=75,
+        audit_github_hardening=True,
         open_report=True,
         confirm_each_repo_fix=True,
         allow_non_owner_push=False,
@@ -1016,6 +1142,7 @@ def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
         "noreply_email",
         "placeholder_email",
         "max_matches",
+        "audit_github_hardening",
         "open_report",
         "confirm_each_repo_fix",
         "allow_non_owner_push",
