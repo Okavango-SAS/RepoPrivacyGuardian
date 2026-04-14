@@ -73,6 +73,46 @@ def test_launch_gui_success_runs_app(monkeypatch) -> None:
     assert calls == ["run"]
 
 
+def test_launch_gui_prompts_and_installs_missing_tools(monkeypatch) -> None:
+    calls: list[str] = []
+    checks_by_round = [
+        [rpg.ToolingCheck(name="customtkinter", state="missing", blocking=True, detail="missing", auto_install_command=["python", "-m", "pip", "install", "customtkinter"])],
+        [rpg.ToolingCheck(name="customtkinter", state="ready", blocking=True, detail="ready")],
+    ]
+
+    class DummyApp:
+        def run(self) -> None:
+            calls.append("run")
+
+    monkeypatch.setattr(rpg, "GuiApp", DummyApp)
+    monkeypatch.setattr(
+        rpg,
+        "build_gui_tooling_checks",
+        lambda: checks_by_round.pop(0),
+    )
+    monkeypatch.setattr(rpg, "prompt_gui_tooling_install", lambda checks, logger: True)
+    monkeypatch.setattr(rpg, "install_missing_tooling", lambda checks, logger: calls.append("install"))
+
+    assert rpg.launch_gui() == 0
+    assert calls == ["install", "run"]
+
+
+def test_launch_gui_declined_install_keeps_missing_status(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        rpg,
+        "build_gui_tooling_checks",
+        lambda: [rpg.ToolingCheck(name="customtkinter", state="missing", blocking=True, detail="missing", auto_install_command=["python", "-m", "pip", "install", "customtkinter"])],
+    )
+    monkeypatch.setattr(rpg, "prompt_gui_tooling_install", lambda checks, logger: False)
+    monkeypatch.setattr(rpg, "install_missing_tooling", lambda checks, logger: (_ for _ in ()).throw(AssertionError("should not install")))
+
+    exit_code = rpg.launch_gui()
+    captured = capsys.readouterr()
+
+    assert exit_code == 3
+    assert "GUI tooling is not ready" in captured.err
+
+
 def test_missing_executable_message_variants() -> None:
     assert "Git executable not found" in rpg._missing_executable_message("git")
     assert "python3" in rpg._missing_executable_message("python3")

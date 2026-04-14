@@ -489,6 +489,21 @@ def build_python_package_install_command(packages: list[str]) -> list[str]:
     return [sys.executable, "-m", "pip", "install", *packages]
 
 
+def collect_auto_installable_tooling_checks(
+    checks: list[ToolingCheck],
+    *,
+    blocking_only: bool = False,
+) -> list[ToolingCheck]:
+    selected: list[ToolingCheck] = []
+    for check in checks:
+        if check.state == "ready" or not check.auto_install_command:
+            continue
+        if blocking_only and not check.blocking:
+            continue
+        selected.append(check)
+    return selected
+
+
 def summarize_tooling_checks(
     checks: list[ToolingCheck],
     logger: Callable[[str], None],
@@ -536,6 +551,56 @@ def install_missing_tooling(
         else:
             detail = proc.stderr.strip() or proc.stdout.strip() or "unknown install failure"
             logger(f"[TOOLING] Install failed for {check.name}: {detail}")
+
+
+def prompt_gui_tooling_install(
+    checks: list[ToolingCheck],
+    logger: Callable[[str], None],
+) -> bool | None:
+    installable = collect_auto_installable_tooling_checks(checks, blocking_only=True)
+    if not installable or not has_desktop_display():
+        return None
+
+    try:
+        import tkinter as tk
+        from tkinter import TclError, messagebox
+    except ModuleNotFoundError:
+        logger("[TOOLING] Tkinter is unavailable, so the GUI install prompt could not be shown.")
+        return None
+
+    detail_lines = [
+        f"- {check.name}: {check.detail}"
+        for check in installable
+    ]
+    prompt_message = (
+        "Repo Privacy Guardian detected missing GUI prerequisites that can be installed automatically.\n\n"
+        + "\n".join(detail_lines)
+        + "\n\nInstall them now and retry GUI startup?"
+    )
+
+    root = None
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            root.attributes("-topmost", True)
+        except TclError:
+            pass
+        accepted = messagebox.askyesno(
+            "Install Missing GUI Tooling",
+            prompt_message,
+            parent=root,
+        )
+        return bool(accepted)
+    except TclError as exc:
+        logger(f"[TOOLING] Unable to display GUI install prompt: {exc}")
+        return None
+    finally:
+        if root is not None:
+            try:
+                root.destroy()
+            except Exception:
+                pass
 
 
 def has_desktop_display(
@@ -6114,6 +6179,11 @@ def launch_gui(
     install_missing_tools: bool = False,
 ) -> int:
     tooling_checks = build_gui_tooling_checks()
+    if not check_tooling_only and not install_missing_tools:
+        accepted_install = prompt_gui_tooling_install(tooling_checks, print)
+        if accepted_install:
+            install_missing_tooling(tooling_checks, print)
+            tooling_checks = build_gui_tooling_checks()
     if install_missing_tools:
         install_missing_tooling(tooling_checks, print)
         tooling_checks = build_gui_tooling_checks()

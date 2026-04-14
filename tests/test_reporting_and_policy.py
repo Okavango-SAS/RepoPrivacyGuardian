@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from datetime import datetime
 from pathlib import Path
 
@@ -212,6 +214,89 @@ def test_format_install_command_and_install_missing_tooling() -> None:
     assert rpg.format_install_command(checks[0].auto_install_command) == "python -m pip install 'customtkinter>=5.2.2,<6'"
     rpg.install_missing_tooling(checks, lambda _msg: None, runner=fake_runner)
     assert issued == [["python", "-m", "pip", "install", "customtkinter>=5.2.2,<6"]]
+
+
+def test_collect_auto_installable_tooling_checks_filters_ready_and_non_blocking() -> None:
+    checks = [
+        rpg.ToolingCheck(name="git", state="ready", blocking=True, detail="ok"),
+        rpg.ToolingCheck(
+            name="customtkinter",
+            state="missing",
+            blocking=True,
+            detail="missing",
+            auto_install_command=["python", "-m", "pip", "install", "customtkinter"],
+        ),
+        rpg.ToolingCheck(
+            name="gh",
+            state="warning",
+            blocking=False,
+            detail="warn",
+            auto_install_command=["winget", "install", "--id", "GitHub.cli"],
+        ),
+    ]
+
+    blocking_only = rpg.collect_auto_installable_tooling_checks(checks, blocking_only=True)
+    all_installable = rpg.collect_auto_installable_tooling_checks(checks, blocking_only=False)
+
+    assert [check.name for check in blocking_only] == ["customtkinter"]
+    assert [check.name for check in all_installable] == ["customtkinter", "gh"]
+
+
+def test_prompt_gui_tooling_install_accepts_with_tk_popup(monkeypatch) -> None:
+    events: list[str] = []
+
+    class DummyRoot:
+        def withdraw(self) -> None:
+            events.append("withdraw")
+
+        def attributes(self, name: str, value: object) -> None:
+            events.append(f"attributes:{name}={value}")
+
+        def destroy(self) -> None:
+            events.append("destroy")
+
+    fake_messagebox = types.SimpleNamespace(
+        askyesno=lambda title, message, parent=None: events.append(f"prompt:{title}") or ("customtkinter" in message and parent is not None)
+    )
+    fake_tk = types.SimpleNamespace(
+        Tk=lambda: DummyRoot(),
+        TclError=RuntimeError,
+        messagebox=fake_messagebox,
+    )
+
+    monkeypatch.setattr(rpg, "has_desktop_display", lambda: True)
+    monkeypatch.setitem(sys.modules, "tkinter", fake_tk)
+
+    checks = [
+        rpg.ToolingCheck(
+            name="customtkinter",
+            state="missing",
+            blocking=True,
+            detail="GUI dependency customtkinter is not installed.",
+            auto_install_command=["python", "-m", "pip", "install", "customtkinter"],
+        )
+    ]
+
+    accepted = rpg.prompt_gui_tooling_install(checks, lambda _msg: None)
+
+    assert accepted is True
+    assert events == [
+        "withdraw",
+        "attributes:-topmost=True",
+        "prompt:Install Missing GUI Tooling",
+        "destroy",
+    ]
+
+
+def test_prompt_gui_tooling_install_returns_none_without_promptable_tools(monkeypatch) -> None:
+    monkeypatch.setattr(rpg, "has_desktop_display", lambda: True)
+
+    checks = [
+        rpg.ToolingCheck(name="git", state="missing", blocking=True, detail="missing"),
+        rpg.ToolingCheck(name="customtkinter", state="ready", blocking=True, detail="ready"),
+    ]
+
+    assert rpg.prompt_gui_tooling_install(checks, lambda _msg: None) is None
 
 
 def test_summarize_tooling_checks_counts_blocking_and_warnings() -> None:
