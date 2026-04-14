@@ -13,6 +13,7 @@ import Repo_Privacy_Guardian as rpg
 DEFAULT_BASELINE = "\n".join(
     [
         ".venv/",
+        ".pkg-venv/",
         "__pycache__/",
         ".pytest_cache/",
         ".mypy_cache/",
@@ -27,6 +28,7 @@ DEFAULT_BASELINE = "\n".join(
         "*.log",
         "*.tmp",
         "*.bak",
+        "*-pre-publication-fix-*.bundle",
         ".vscode/",
         ".idea/",
         ".DS_Store",

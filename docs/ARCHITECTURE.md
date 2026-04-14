@@ -10,6 +10,8 @@ It has two execution surfaces:
 
 GUI interaction is phase-based: operators run `Audit` first, and `Repair` is visually locked until audit state is valid and actionable.
 
+Local-first remains the default execution model. The only built-in network lookup in the normal audit path is the optional `--public-only` GitHub visibility check, which performs a read-only unauthenticated request against the GitHub repository API for GitHub remotes.
+
 ## Main components
 
 1. Repository discovery
@@ -43,11 +45,12 @@ GUI interaction is phase-based: operators run `Audit` first, and `Repair` is vis
 ## Data flow
 
 1. Input arguments (CLI/GUI) define scope and behavior.
-2. In GUI mode, `Audit` establishes audit context before remediation is available.
-3. Auditor builds `RepoReport` objects.
-4. Optional fixer mutates repository state based on explicit flags.
-5. Re-audit confirms resulting state.
-6. JSON output is written for traceability.
+2. If `--public-only` is enabled, discovery performs a read-only GitHub visibility lookup for GitHub remotes before a repository is included.
+3. In GUI mode, `Audit` establishes audit context before remediation is available.
+4. Auditor builds `RepoReport` objects.
+5. Optional fixer mutates repository state based on explicit flags.
+6. Re-audit confirms resulting state.
+7. JSON output is written for traceability.
 
 ## Safety model
 

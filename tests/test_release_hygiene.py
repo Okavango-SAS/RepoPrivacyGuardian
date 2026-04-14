@@ -22,6 +22,8 @@ GUI_CONTRACT_DOCS = [
     "docs/prompts/02_PARIDAD_GUI_CLI.prompt.md",
 ]
 
+CI_WORKFLOW = ".github/workflows/ci.yml"
+
 ROOT_LAYOUT_OFFENDERS = [
     "requirements.txt",
     "requirements-gui.txt",
@@ -101,3 +103,21 @@ def test_gui_contract_docs_use_audit_repair_labels() -> None:
             offenders.append(rel)
 
     assert not offenders, "Legacy GUI labels still present in docs/prompts:\n" + "\n".join(offenders)
+
+
+def test_repo_gitignore_covers_local_packaging_and_backup_artifacts() -> None:
+    gitignore = (_repo_root() / ".gitignore").read_text(encoding="utf-8")
+
+    assert ".pkg-venv/" in gitignore
+    assert "*-pre-publication-fix-*.bundle" in gitignore
+
+
+def test_ci_workflow_uses_sha_pinned_actions_and_least_privilege() -> None:
+    workflow = (_repo_root() / CI_WORKFLOW).read_text(encoding="utf-8")
+    pinned_actions = re.findall(r"uses:\s+actions/(?:checkout|setup-python)@[0-9a-f]{40}", workflow)
+
+    assert re.search(r"permissions:\s+contents:\s+read", workflow)
+    assert workflow.count("timeout-minutes:") == 3
+    assert workflow.count("persist-credentials: false") == 3
+    assert len(pinned_actions) == 6
+    assert not re.search(r"uses:\s+actions/(?:checkout|setup-python)@v\d", workflow)

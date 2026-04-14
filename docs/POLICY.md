@@ -140,6 +140,7 @@ Critical notes:
 Minimum baseline:
 
 - .venv/
+- .pkg-venv/
 - __pycache__/
 - .pytest_cache/
 - .mypy_cache/
@@ -154,6 +155,7 @@ Minimum baseline:
 - *.log
 - *.tmp
 - *.bak
+- *-pre-publication-fix-*.bundle
 - .vscode/
 - .idea/
 - .DS_Store
@@ -163,7 +165,7 @@ Minimum baseline:
 Check currently ignored sensitive paths:
 
 ```sh
-git status --short --ignored | rg -n "^!! (\.venv/|sessions/|\.env|\.env\.)"
+git status --short --ignored | rg -n "^!! (\.venv/|\.pkg-venv/|sessions/|\.env|\.env\.|.*-pre-publication-fix-.*\.bundle)"
 ```
 
 Detect tracked-but-ignored files:

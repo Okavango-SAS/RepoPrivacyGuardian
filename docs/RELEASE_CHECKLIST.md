@@ -8,6 +8,7 @@ Use this checklist before tagging a public release.
 - Confirm target branch and remote.
 - Confirm local git identity is correct for release commits.
 - Confirm public support matrix in README still matches validated platforms.
+- Review GitHub Actions workflows for least-privilege permissions, explicit timeouts, and SHA-pinned actions.
 
 ## 2. Audit run
 

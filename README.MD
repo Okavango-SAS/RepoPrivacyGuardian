@@ -60,6 +60,12 @@ Advisory checks that do not change `PASS` or `FAIL` by default:
 
 `exfil_code_indicators` is intentionally manual-review only by default. It is surfaced in CLI guidance, JSON, HTML, and severity highlights, but it does not fail a repository unless a future strict mode is introduced.
 
+## 🌐 Network Behavior
+
+- Default audits, fix planning, and report generation operate on local Git metadata, local tracked files, and local history.
+- `--public-only` performs a read-only unauthenticated GitHub REST API request for GitHub remotes to decide whether a repository is publicly accessible.
+- The default CLI/GUI paths do not upload repository contents, reports, or telemetry to a remote service.
+
 ## 🖥️ CLI-First Behavior
 
 - Running the program without flags shows CLI help and exits successfully.

@@ -95,6 +95,7 @@ GITHUB_EMAIL_PRIVACY_HELP = (
 
 DEFAULT_IGNORE_BASELINE = [
     ".venv/",
+    ".pkg-venv/",
     "__pycache__/",
     ".pytest_cache/",
     ".mypy_cache/",
@@ -109,6 +110,7 @@ DEFAULT_IGNORE_BASELINE = [
     "*.log",
     "*.tmp",
     "*.bak",
+    "*-pre-publication-fix-*.bundle",
     ".vscode/",
     ".idea/",
     ".DS_Store",

@@ -9,6 +9,7 @@ __pycache__/
 
 # Virtual environments
 .venv/
+.pkg-venv/
 venv/
 env/
 
@@ -26,6 +27,7 @@ wsa-config.local.yaml
 *.log
 *.tmp
 *.bak
+*-pre-publication-fix-*.bundle
 Audit_Results/
 artifacts/
 exports/
