@@ -2,6 +2,31 @@
 
 All notable public-release changes to this project are documented here.
 
+## [1.2.0] - 2026-04-14
+
+Tooling readiness and bootstrap update.
+
+### Highlights
+
+- Expanded preflight checks so the tool can detect missing local prerequisites more explicitly across CLI and GUI paths.
+- Added GUI-assisted optional installation flows for GitHub hardening helpers, including `gh` when GitHub hardening is enabled.
+- Added Windows App Installer / `winget` bootstrap support so system-tool installation can remain as automatic as possible on end-user machines.
+- Preserved the local-first and advisory defaults: GitHub hardening remains opt-in, and no remote service was introduced.
+
+### Validation
+
+- `python -m pytest -q`
+- `python tests/release_smoke_cli.py`
+- `python tests/release_smoke_gui.py`
+- `python -m Repo_Privacy_Guardian --help`
+- `python -m Repo_Privacy_Guardian --check-tooling --audit-github-hardening`
+- `python -m build`
+
+### Scope notes
+
+- `gh` remains optional unless the operator wants fuller GitHub hardening coverage.
+- On Windows, automatic system-tool installation now depends first on a healthy `winget` / App Installer path and can bootstrap that path when the platform supports it.
+
 ## [1.1.0] - 2026-04-14
 
 Release-hardening and operator-playbook update.

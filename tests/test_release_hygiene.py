@@ -110,8 +110,9 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     versioning = (root / "docs" / "VERSIONING.md").read_text(encoding="utf-8")
     release_notes = (root / "docs" / "RELEASE_NOTES_TEMPLATE.md").read_text(encoding="utf-8")
 
-    assert "`1.1.x`" in versioning
+    assert "`1.2.x`" in versioning
     assert "`1.0.0`" in versioning
+    assert "`1.2.0`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "Validation evidence" in release_notes
 
@@ -136,10 +137,20 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
 def test_changelog_records_stable_release() -> None:
     changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
 
+    assert "## [1.2.0] - 2026-04-14" in changelog
+    assert "Tooling readiness and bootstrap update." in changelog
     assert "## [1.1.0] - 2026-04-14" in changelog
     assert "Release-hardening and operator-playbook update." in changelog
     assert "## [1.0.0] - 2026-04-14" in changelog
     assert "Initial stable public release." in changelog
+
+
+def test_pyproject_version_matches_current_release_line() -> None:
+    pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
+    readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
+
+    assert 'version = "1.2.0"' in pyproject
+    assert "Current release line: `v1.2.x`." in readme
 
 
 def test_release_checklist_mentions_clearing_stale_build_outputs() -> None:

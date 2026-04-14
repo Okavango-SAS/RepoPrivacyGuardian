@@ -30,9 +30,10 @@ It is designed for repeatable CLI execution first, with an optional desktop GUI 
 
 ## 📈 Release Posture
 
-- Current release line: `v1.1.x`.
+- Current release line: `v1.2.x`.
 - `v1.0.0` established the stable CLI, packaging, and release contract within the current local-first scope.
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
+- `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
 - Python support claims (`3.10` to `3.13`) are backed by CI coverage.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.

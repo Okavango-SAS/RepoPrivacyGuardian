@@ -35,6 +35,7 @@ Current baseline in repo:
 - Python 3.10 through 3.13 validated in CI
 - package build plus `wheel` and `sdist` install smoke in CI
 - Windows GUI smoke in CI
+- tooling readiness checks plus optional local dependency installation paths
 - lightweight versioning policy and release notes template in docs
 - public `CHANGELOG.md` and stable `1.x` metadata
 
