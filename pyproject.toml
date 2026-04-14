@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "repo-privacy-guardian"
-version = "1.2.0"
+version = "1.2.1"
 description = "Local-first publication gate for auditing and hardening Git repositories before public release."
 readme = "README.MD"
 requires-python = ">=3.10"
@@ -45,14 +45,14 @@ remediation = ["git-filter-repo>=2.45,<3"]
 rewrite = ["git-filter-repo>=2.45,<3"]
 test = [
   "build>=1.2,<2",
-  "pytest>=8.0,<9",
+  "pytest>=9.0.3,<10",
   "pytest-cov>=5.0,<6",
 ]
 dev = [
   "customtkinter>=5.2.2,<6",
   "git-filter-repo>=2.45,<3",
   "build>=1.2,<2",
-  "pytest>=8.0,<9",
+  "pytest>=9.0.3,<10",
   "pytest-cov>=5.0,<6",
 ]
 

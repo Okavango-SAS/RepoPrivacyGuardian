@@ -14,6 +14,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.2.0` is another additive release within the same stable line. It strengthens local environment readiness with GUI-assisted tooling setup, optional GitHub CLI installation flows, and Windows `winget` bootstrap support without changing the core audit/fix model.
 
+`1.2.1` is a security-maintenance patch on top of `1.2.0`. It keeps the same feature surface while raising the development/test `pytest` floor to a non-vulnerable line.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

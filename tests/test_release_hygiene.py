@@ -113,6 +113,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.2.x`" in versioning
     assert "`1.0.0`" in versioning
     assert "`1.2.0`" in versioning
+    assert "`1.2.1`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "Validation evidence" in release_notes
 
@@ -137,6 +138,8 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
 def test_changelog_records_stable_release() -> None:
     changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
 
+    assert "## [1.2.1] - 2026-04-14" in changelog
+    assert "Release-hardening dependency update." in changelog
     assert "## [1.2.0] - 2026-04-14" in changelog
     assert "Tooling readiness and bootstrap update." in changelog
     assert "## [1.1.0] - 2026-04-14" in changelog
@@ -149,8 +152,18 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.2.0"' in pyproject
+    assert 'version = "1.2.1"' in pyproject
     assert "Current release line: `v1.2.x`." in readme
+
+
+def test_dev_pytest_floor_is_patched_against_known_alert() -> None:
+    pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
+    dev_requirements = (_repo_root() / "config" / "requirements" / "requirements-dev.txt").read_text(encoding="utf-8")
+
+    assert "pytest>=9.0.3,<10" in pyproject
+    assert "pytest>=9.0.3,<10" in dev_requirements
+    assert "pytest>=8.0,<9" not in pyproject
+    assert "pytest>=8.0,<9" not in dev_requirements
 
 
 def test_release_checklist_mentions_clearing_stale_build_outputs() -> None:

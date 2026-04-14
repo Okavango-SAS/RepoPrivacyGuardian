@@ -2,6 +2,26 @@
 
 All notable public-release changes to this project are documented here.
 
+## [1.2.1] - 2026-04-14
+
+Release-hardening dependency update.
+
+### Highlights
+
+- Raised the development/test `pytest` floor to `9.0.3` in both `pyproject.toml` and `config/requirements/requirements-dev.txt`.
+- Cleared the open Dependabot alert for `CVE-2025-71176` / `GHSA-6w46-j5rx-g56g` affecting older `pytest` releases in development tooling.
+- Preserved the runtime/local-first contract; this is a release-hygiene and security-maintenance patch only.
+
+### Validation
+
+- `python -m pytest -q`
+- `python -m Repo_Privacy_Guardian --help`
+- `python -m build`
+- `python tests/release_smoke_cli.py`
+- `python tests/release_smoke_gui.py`
+- clean install of `config/requirements/requirements-dev.txt` in an isolated venv
+- self-audit with `python -m Repo_Privacy_Guardian --root <repos> --repos <repo> --dry-run --yes --audit-github-hardening`
+
 ## [1.2.0] - 2026-04-14
 
 Tooling readiness and bootstrap update.
