@@ -47,6 +47,11 @@ ROOT_LAYOUT_REQUIRED = [
     "docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md",
 ]
 
+RELEASE_DOCS_REQUIRED = [
+    "docs/VERSIONING.md",
+    "docs/RELEASE_NOTES_TEMPLATE.md",
+]
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -92,6 +97,20 @@ def test_support_files_are_moved_out_of_root() -> None:
 
     assert not offenders, "Support files should not live in the repository root:\n" + "\n".join(offenders)
     assert not missing, "Expected organized support files are missing:\n" + "\n".join(missing)
+
+
+def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
+    root = _repo_root()
+
+    missing = [rel for rel in RELEASE_DOCS_REQUIRED if not (root / rel).exists()]
+    assert not missing, "Release docs are missing:\n" + "\n".join(missing)
+
+    versioning = (root / "docs" / "VERSIONING.md").read_text(encoding="utf-8")
+    release_notes = (root / "docs" / "RELEASE_NOTES_TEMPLATE.md").read_text(encoding="utf-8")
+
+    assert "`1.0.0`" in versioning
+    assert "semantic versioning" in versioning.lower()
+    assert "Validation evidence" in release_notes
 
 
 def test_packaged_policy_resource_matches_repo_policy() -> None:

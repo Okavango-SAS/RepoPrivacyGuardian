@@ -35,11 +35,12 @@ Current baseline in repo:
 - Python 3.10 through 3.13 validated in CI
 - package build plus `wheel` and `sdist` install smoke in CI
 - Windows GUI smoke in CI
+- lightweight versioning policy and release notes template in docs
 
 Next hardening steps:
 
 - expand synthetic integration coverage for rewrite planning and artifact redaction edge cases
-- add a small release notes template and versioning policy
+- complete the final `1.0.0` release-candidate sweep across docs, examples, and operator guidance
 - add optional lint/static checks once they are stable enough to avoid release noise
 
 ## Milestone 0.4 - Advanced operations

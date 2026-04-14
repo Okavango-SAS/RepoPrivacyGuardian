@@ -44,6 +44,8 @@ Use this checklist before tagging a public release.
 - Update KNOWN_ISSUES if new recurring patterns are found.
 - Update LEARNED_LESSONS with reusable insights.
 - Add/update ENGINEERING_DECISIONS when behavior changes.
+- Draft the release notes from `docs/RELEASE_NOTES_TEMPLATE.md`.
+- Confirm `docs/VERSIONING.md` still matches the intended release semantics.
 - Confirm README, POLICY and CLI help still match real PASS/FAIL semantics.
 
 ## 7. Release criteria

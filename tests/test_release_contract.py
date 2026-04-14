@@ -512,6 +512,9 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "`exfil_code_indicators` is intentionally manual-review only by default",
         "--replace-text-file",
         "Recommended agent prompt template",
+        "What It Does Not Try To Be",
+        "Release Engineering Docs",
+        "1. install the base CLI",
         "Axel E. Sacca",
     ]
 

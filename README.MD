@@ -30,7 +30,7 @@ It is designed for repeatable CLI execution first, with an optional desktop GUI 
 
 ## 📈 Release Posture
 
-- Public maturity: packaging and release engineering are in public beta territory rather than early alpha.
+- Public maturity: the CLI and packaging surface are in late public beta and are being prepared for a credible `1.0.0` cut.
 - Python support claims (`3.10` to `3.13`) are backed by CI coverage.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -83,10 +83,17 @@ Advisory checks that do not change `PASS` or `FAIL` by default:
 
 ## 📦 Installation
 
-Base CLI install:
+Recommended verified path for a cloned checkout:
 
 ```sh
 python -m pip install .
+```
+
+Verified path from a locally built artifact:
+
+```sh
+python -m build
+python -m pip install dist/<wheel-file.whl>
 ```
 
 Base CLI plus tests:
@@ -126,6 +133,10 @@ External requirements:
 - `git-filter-repo` is required only for remediation that rewrites history
 - Linux desktop GUI use may require a Tk package such as `python3-tk`
 
+Recommended support target:
+
+- Python `3.10` through `3.13`
+
 ## 🚀 Quick Start
 
 Main script in this repository:
@@ -137,6 +148,14 @@ Recommended execution order:
 - `repo-privacy-guardian ...`: installed console entry point
 - `python -m Repo_Privacy_Guardian ...`: module execution
 - `python Repo_Privacy_Guardian.py ...`: direct compatibility path from the repository root
+
+Typical first run for a new user:
+
+1. install the base CLI
+2. verify `--help`
+3. run a dry-run audit against one repository
+4. inspect the generated JSON, HTML, and log artifacts
+5. run a dry-run fix preview before any destructive action
 
 Installed entry point:
 
@@ -191,6 +210,27 @@ Windows note:
 - `py` can be used instead of `python`
 - `C:/path/to/repos` is accepted as a path form in PowerShell
 
+## 🧪 Expected CLI Outcome
+
+Illustrative clean summary:
+
+```text
+[SUMMARY] PASS 1/1
+[INFO] JSON report written to Audit_Results/<run_id>/report.json
+[INFO] HTML report written to Audit_Results/<run_id>/report.html
+[INFO] LOG report written to Audit_Results/<run_id>/run.log
+```
+
+Illustrative blocking summary:
+
+```text
+[SUMMARY] FAIL 1/1
+risk: High risk: tracked or historical sensitive content was detected.
+suggestion: Review the cited findings, run a dry-run fix preview, and authorize only the remediations you intend to keep.
+```
+
+Use the CLI summary for the operator decision, then open the JSON or HTML artifact only if you need the detailed finding list.
+
 ## 🧩 GUI Contract
 
 GUI and CLI share:
@@ -236,6 +276,14 @@ It does not:
 - rotate leaked credentials for you
 - make outbound review decisions automatically
 - bypass destructive safeguards by default
+
+## 🚫 What It Does Not Try To Be
+
+- a hosted service or remote scanner
+- a credential rotation platform
+- a generic DLP suite for every repository risk
+- an automatic authority for whether a network-capable code path is acceptable
+- a cross-platform desktop product with identical GUI support on every OS
 
 ## 🧪 Automatic vs Reviewed Remediation
 
@@ -299,6 +347,13 @@ python -m build
 ```
 
 Pytest collection is restricted to tracked test files so local ignored test files do not change the release signal. CI additionally validates built `wheel` and `sdist` installs plus Windows GUI smoke.
+
+## 📚 Release Engineering Docs
+
+- [VERSIONING](docs/VERSIONING.md): versioning policy and `1.0.0` exit criteria
+- [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md): pre-tag release checklist
+- [RELEASE_NOTES_TEMPLATE](docs/RELEASE_NOTES_TEMPLATE.md): lightweight notes template for public releases
+- [ROADMAP](docs/ROADMAP.md): current maturity, next hardening steps, and out-of-scope boundaries
 
 ## 🏗️ Repository Layout
 
