@@ -4,9 +4,9 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 ## Current stage
 
-- Current public line: `0.2.x`
-- Maturity: late beta for the CLI and packaging surface
-- Goal of this stage: make the repository credible and easy to adopt before the first `1.0.0` tag
+- Current public line: `1.0.x`
+- Maturity: stable for the CLI, packaging, and release-engineering surface
+- Goal of this stage: preserve the `1.x` contract while continuing additive hardening and documentation improvements
 
 `1.0.0` is a stability milestone, not an architecture change. The project remains a local-first publication gate with an optional desktop GUI.
 
@@ -16,13 +16,13 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 - Minor: backward-compatible features, new checks, new flags with safe defaults, packaging improvements, and additive documentation
 - Patch: bug fixes, small hardening changes, doc corrections, CI fixes, and low-risk behavior corrections
 
-## Pre-1.0 discipline
+## Release discipline
 
-- Avoid casual breaking changes even before `1.0.0`.
+- Avoid casual breaking changes after `1.0.0`.
 - If a CLI flag, default, exit-code path, or report field changes in a user-visible way, call it out in release notes.
-- Keep README, CLI help, tests, and package metadata aligned in the same change set.
+- Keep README, CLI help, tests, changelog, and package metadata aligned in the same change set.
 
-## `1.0.0` exit criteria
+## Stable release baseline
 
 - Tracked tests are green.
 - `python -m build` is green.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "repo-privacy-guardian"
-version = "0.2.0"
+version = "1.0.0"
 description = "Local-first publication gate for auditing and hardening Git repositories before public release."
 readme = "README.MD"
 requires-python = ">=3.10"
@@ -15,7 +15,7 @@ authors = [
 ]
 keywords = ["git", "privacy", "security", "publication-gate", "release-engineering"]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "Operating System :: MacOS :: MacOS X",
@@ -37,6 +37,7 @@ dependencies = []
 Homepage = "https://github.com/axeljackal/RepoPrivacyGuardian"
 Issues = "https://github.com/axeljackal/RepoPrivacyGuardian/issues"
 Source = "https://github.com/axeljackal/RepoPrivacyGuardian"
+Changelog = "https://github.com/axeljackal/RepoPrivacyGuardian/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 gui = ["customtkinter>=5.2.2,<6"]

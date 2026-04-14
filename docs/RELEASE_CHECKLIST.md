@@ -7,6 +7,7 @@ Use this checklist before tagging a public release.
 - Confirm clean working tree.
 - Confirm target branch and remote.
 - Confirm local git identity is correct for release commits.
+- Clear stale local build outputs (`dist/`, `build/`, and `*.egg-info/`) before the final package build if you are reusing a workspace.
 - Confirm public support matrix in README still matches validated platforms.
 - Review GitHub Actions workflows for least-privilege permissions, explicit timeouts, and SHA-pinned actions.
 
@@ -41,6 +42,7 @@ Use this checklist before tagging a public release.
 
 ## 6. Documentation and governance
 
+- Update `CHANGELOG.md` or the current release notes.
 - Update KNOWN_ISSUES if new recurring patterns are found.
 - Update LEARNED_LESSONS with reusable insights.
 - Add/update ENGINEERING_DECISIONS when behavior changes.
@@ -51,7 +53,7 @@ Use this checklist before tagging a public release.
 ## 7. Release criteria
 
 - Required checks pass.
-- Clean-clone validation passes: `python -m pip install -e ".[test]"`, `python -m pytest`, `repo-privacy-guardian --help`.
+- Clean-clone validation passes: `python -m pip install .`, `repo-privacy-guardian --help`, `python -m pip install ".[test]"`, `python -m pytest`.
 - Package build succeeds (`python -m build`) and both `wheel` and `sdist` installs complete cleanly.
 - CI is green on the tracked CLI test suite for Windows, Linux, and macOS plus Windows GUI smoke.
 - Supported Python claims remain aligned with the Python versions that CI actually validates.

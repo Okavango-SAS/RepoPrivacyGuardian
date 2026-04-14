@@ -33,6 +33,7 @@ ROOT_LAYOUT_OFFENDERS = [
 ]
 
 ROOT_LAYOUT_REQUIRED = [
+    "CHANGELOG.md",
     "Repo_Privacy_Guardian.py",
     "README.MD",
     "config/requirements/requirements.txt",
@@ -72,10 +73,11 @@ def test_pyproject_declares_macos_support_classifier() -> None:
     assert '"Operating System :: MacOS :: MacOS X"' in pyproject
 
 
-def test_pyproject_uses_public_beta_classifier() -> None:
+def test_pyproject_uses_production_stable_classifier() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert '"Development Status :: 4 - Beta"' in pyproject
+    assert '"Development Status :: 5 - Production/Stable"' in pyproject
+    assert '"Development Status :: 4 - Beta"' not in pyproject
     assert '"Development Status :: 3 - Alpha"' not in pyproject
 
 
@@ -111,6 +113,20 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.0.0`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "Validation evidence" in release_notes
+
+
+def test_changelog_records_stable_release() -> None:
+    changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert "## [1.0.0] - 2026-04-14" in changelog
+    assert "Initial stable public release." in changelog
+
+
+def test_release_checklist_mentions_clearing_stale_build_outputs() -> None:
+    checklist = (_repo_root() / "docs" / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+
+    assert "Clear stale local build outputs" in checklist
+    assert "`dist/`, `build/`, and `*.egg-info/`" in checklist
 
 
 def test_packaged_policy_resource_matches_repo_policy() -> None:

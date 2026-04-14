@@ -30,10 +30,11 @@ It is designed for repeatable CLI execution first, with an optional desktop GUI 
 
 ## 📈 Release Posture
 
-- Public maturity: the CLI and packaging surface are in late public beta and are being prepared for a credible `1.0.0` cut.
+- Public maturity: `v1.0.0` establishes a stable CLI, packaging, and release contract within the current local-first scope.
 - Python support claims (`3.10` to `3.13`) are backed by CI coverage.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
+- Stable does not mean "does everything"; it means the current publication-gate scope, defaults, and operator expectations are now intentionally stable for `1.x`.
 
 ## 🔍 What It Audits
 
@@ -95,6 +96,8 @@ Verified path from a locally built artifact:
 python -m build
 python -m pip install dist/<wheel-file.whl>
 ```
+
+If you reuse the same workspace for multiple builds, clear old `dist/`, `build/`, and `*.egg-info/` outputs before relying on a fresh local package artifact.
 
 Base CLI plus tests:
 
@@ -339,9 +342,10 @@ The repository also includes reusable prompt files under `docs/prompts/` for age
 ## 🧾 Release Validation From a Clean Clone
 
 ```sh
+python -m pip install .
+repo-privacy-guardian --help
 python -m pip install ".[test]"
 python -m pytest
-repo-privacy-guardian --help
 python tests/release_smoke_cli.py
 python -m build
 ```
@@ -350,6 +354,7 @@ Pytest collection is restricted to tracked test files so local ignored test file
 
 ## 📚 Release Engineering Docs
 
+- [CHANGELOG](CHANGELOG.md): shipped release notes and public version history
 - [VERSIONING](docs/VERSIONING.md): versioning policy and `1.0.0` exit criteria
 - [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md): pre-tag release checklist
 - [RELEASE_NOTES_TEMPLATE](docs/RELEASE_NOTES_TEMPLATE.md): lightweight notes template for public releases
@@ -366,6 +371,7 @@ Pytest collection is restricted to tracked test files so local ignored test file
 
 Files that intentionally remain in the repository root:
 
+- `CHANGELOG.md`
 - `README.MD`
 - `Repo_Privacy_Guardian.py`
 - `pyproject.toml`
@@ -376,7 +382,7 @@ Files that intentionally remain in the repository root:
 ## ⚠️ Limitations
 
 - Linux GUI support is still desktop-dependent and best-effort.
-- macOS GUI is not a release priority for this version.
+- macOS GUI is not a release priority for the current stable line.
 - History rewrites are destructive for commit SHAs and require careful coordination.
 - Leaked secrets still need rotation after cleanup.
 - `--push` should only be used after a reviewed dry-run.

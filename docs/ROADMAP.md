@@ -26,7 +26,7 @@ Provide a safe, repeatable, and auditable workflow to prepare repositories for p
 - Add optional confirmation gates for high-risk purge actions.
 - Add clearer guidance for credential rotation after history rewrite.
 
-## Milestone 0.3 - Quality and automation
+## Milestone 1.0 - Stable public release
 
 Current baseline in repo:
 
@@ -36,11 +36,12 @@ Current baseline in repo:
 - package build plus `wheel` and `sdist` install smoke in CI
 - Windows GUI smoke in CI
 - lightweight versioning policy and release notes template in docs
+- public `CHANGELOG.md` and stable `1.0.0` metadata
 
 Next hardening steps:
 
 - expand synthetic integration coverage for rewrite planning and artifact redaction edge cases
-- complete the final `1.0.0` release-candidate sweep across docs, examples, and operator guidance
+- keep `1.x` release notes and support claims aligned with validated behavior
 - add optional lint/static checks once they are stable enough to avoid release noise
 
 ## Milestone 0.4 - Advanced operations

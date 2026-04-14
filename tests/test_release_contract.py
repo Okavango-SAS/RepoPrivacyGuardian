@@ -514,6 +514,9 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "Recommended agent prompt template",
         "What It Does Not Try To Be",
         "Release Engineering Docs",
+        "CHANGELOG",
+        "python -m pip install .",
+        "clear old `dist/`, `build/`, and `*.egg-info/` outputs",
         "1. install the base CLI",
         "Axel E. Sacca",
     ]
