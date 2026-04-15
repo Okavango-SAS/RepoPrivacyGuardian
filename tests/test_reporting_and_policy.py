@@ -727,6 +727,75 @@ def test_build_cli_tooling_checks_warns_when_rewrite_tooling_missing(monkeypatch
     ]
 
 
+def test_build_cli_tooling_checks_skip_winget_when_not_relevant(monkeypatch) -> None:
+    monkeypatch.setattr(rpg, "probe_git_available", lambda runner=None: (True, None))
+    monkeypatch.setattr(
+        rpg,
+        "build_system_tool_install_command",
+        lambda tool_name, platform_name=None, which=None: [
+            "winget",
+            "install",
+            "--id",
+            "Git.Git",
+            "-e",
+            "--source",
+            "winget",
+        ],
+    )
+    monkeypatch.setattr(
+        rpg,
+        "build_windows_winget_tooling_check",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("winget should not be checked")),
+    )
+
+    checks = rpg.build_cli_tooling_checks(_make_run_config())
+
+    assert [check.name for check in checks] == ["git"]
+
+
+def test_build_cli_tooling_checks_include_winget_once_when_git_and_github_need_it(monkeypatch) -> None:
+    monkeypatch.setattr(rpg, "probe_git_available", lambda runner=None: (False, "missing git"))
+    monkeypatch.setattr(
+        rpg,
+        "build_system_tool_install_command",
+        lambda tool_name, platform_name=None, which=None: [
+            "winget",
+            "install",
+            "--id",
+            "Git.Git" if tool_name == "git" else "GitHub.cli",
+            "-e",
+            "--source",
+            "winget",
+        ],
+    )
+    monkeypatch.setattr(
+        rpg,
+        "build_windows_winget_tooling_check",
+        lambda **kwargs: rpg.ToolingCheck(
+            name="winget",
+            state="warning",
+            blocking=False,
+            detail="missing winget",
+            auto_install_command=["powershell", "-NoProfile", "-Command", "bootstrap-winget"],
+        ),
+    )
+    monkeypatch.setattr(
+        rpg,
+        "build_github_tooling_check",
+        lambda: rpg.ToolingCheck(
+            name="github-auth",
+            state="warning",
+            blocking=False,
+            detail="missing gh",
+            auto_install_command=["winget", "install", "--id", "GitHub.cli"],
+        ),
+    )
+
+    checks = rpg.build_cli_tooling_checks(_make_run_config(audit_github_hardening=True))
+
+    assert [check.name for check in checks] == ["winget", "git", "github-auth"]
+
+
 def test_build_github_tooling_check_warns_when_no_token_or_gh(monkeypatch) -> None:
     monkeypatch.setattr(rpg, "resolve_github_hardening_token", lambda env=None, runner=None: None)
     monkeypatch.setattr(rpg, "probe_command_available", lambda executable, version_args=("--version",), runner=None: (False, "missing"))
@@ -800,6 +869,26 @@ def test_build_gui_tooling_checks_reports_missing_python_gui_bits(monkeypatch) -
         "install",
         *rpg.GUI_INSTALL_PACKAGES,
     ]
+
+
+def test_build_gui_tooling_checks_skip_winget_when_git_is_ready(monkeypatch) -> None:
+    monkeypatch.setattr(rpg, "probe_git_available", lambda runner=None: (True, None))
+    monkeypatch.setattr(
+        rpg,
+        "build_system_tool_install_command",
+        lambda tool_name, platform_name=None, which=None: ["winget", "install", "--id", "Git.Git"],
+    )
+    monkeypatch.setattr(rpg, "has_desktop_display", lambda platform_name=None, env=None: True)
+    monkeypatch.setattr(rpg, "probe_python_module_available", lambda module_name: True)
+    monkeypatch.setattr(
+        rpg,
+        "build_windows_winget_tooling_check",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("winget should not be checked")),
+    )
+
+    checks = rpg.build_gui_tooling_checks()
+
+    assert [check.name for check in checks] == ["git", "desktop-session", "tkinter", "customtkinter"]
 
 
 def test_audit_github_release_hardening_warns_when_admin_checks_are_skipped(tmp_path: Path, monkeypatch) -> None:

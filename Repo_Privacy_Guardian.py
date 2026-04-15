@@ -688,16 +688,16 @@ def collect_auto_installable_tooling_checks(
     return selected
 
 
+def command_uses_executable(command: list[str] | None, executable: str) -> bool:
+    if not command:
+        return False
+    return Path(command[0]).name.lower() == executable.lower()
+
+
 def build_github_optional_tooling_checks() -> list[ToolingCheck]:
     checks: list[ToolingCheck] = []
     github_check = build_github_tooling_check()
-    github_install_command = github_check.auto_install_command or []
-    github_install_executable = (
-        Path(github_install_command[0]).name.lower()
-        if github_install_command
-        else None
-    )
-    if github_check.state != "ready" and github_install_executable == "winget":
+    if github_check.state != "ready" and command_uses_executable(github_check.auto_install_command, "winget"):
         winget_check = build_windows_winget_tooling_check()
         if winget_check and winget_check.state != "ready":
             checks.append(winget_check)
@@ -912,12 +912,14 @@ def build_github_tooling_check() -> ToolingCheck:
 def build_cli_tooling_checks(config: GuardRunConfig) -> list[ToolingCheck]:
     checks: list[ToolingCheck] = []
 
-    winget_check = build_windows_winget_tooling_check()
-    if winget_check:
-        checks.append(winget_check)
-
     git_ok, git_error = probe_git_available()
     git_install = build_system_tool_install_command("git")
+    winget_check_added = False
+    if not git_ok and command_uses_executable(git_install, "winget"):
+        winget_check = build_windows_winget_tooling_check()
+        if winget_check and winget_check.state != "ready":
+            checks.append(winget_check)
+            winget_check_added = True
     checks.append(
         ToolingCheck(
             name="git",
@@ -952,7 +954,17 @@ def build_cli_tooling_checks(config: GuardRunConfig) -> list[ToolingCheck]:
         )
 
     if config.audit_github_hardening:
-        checks.append(build_github_tooling_check())
+        github_check = build_github_tooling_check()
+        if (
+            not winget_check_added
+            and github_check.state != "ready"
+            and command_uses_executable(github_check.auto_install_command, "winget")
+        ):
+            winget_check = build_windows_winget_tooling_check()
+            if winget_check and winget_check.state != "ready":
+                checks.append(winget_check)
+                winget_check_added = True
+        checks.append(github_check)
 
     return checks
 
@@ -960,12 +972,12 @@ def build_cli_tooling_checks(config: GuardRunConfig) -> list[ToolingCheck]:
 def build_gui_tooling_checks() -> list[ToolingCheck]:
     checks: list[ToolingCheck] = []
 
-    winget_check = build_windows_winget_tooling_check()
-    if winget_check:
-        checks.append(winget_check)
-
     git_ok, git_error = probe_git_available()
     git_install = build_system_tool_install_command("git")
+    if not git_ok and command_uses_executable(git_install, "winget"):
+        winget_check = build_windows_winget_tooling_check()
+        if winget_check and winget_check.state != "ready":
+            checks.append(winget_check)
     checks.append(
         ToolingCheck(
             name="git",
