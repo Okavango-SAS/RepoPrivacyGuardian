@@ -2,6 +2,24 @@
 
 All notable public-release changes to this project are documented here.
 
+## [1.2.2] - 2026-04-15
+
+Operations/readiness runbook update.
+
+### Highlights
+
+- Added a repository-owned `scripts/release_readiness.py` harness to run the practical local release path end-to-end from one command.
+- Added `docs/OPERATIONS.md` and `docs/TROUBLESHOOTING.md` so local preflight, validation, recovery, and common failure handling are documented in one place.
+- Moved temporary install-smoke virtual environments out of the repository tree so interrupted release checks do not leave stray working-tree noise behind.
+
+### Validation
+
+- `python -m pytest -q`
+- `python scripts/release_readiness.py --skip-self-audit`
+- `python -m Repo_Privacy_Guardian --help`
+- `python Repo_Privacy_Guardian.py --help`
+- `python -m build`
+
 ## [1.2.1] - 2026-04-14
 
 Release-hardening dependency update.

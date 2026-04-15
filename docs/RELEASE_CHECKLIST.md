@@ -8,6 +8,7 @@ Use this checklist before tagging a public release.
 - Confirm target branch and remote.
 - Confirm local git identity is correct for release commits.
 - Clear stale local build outputs (`dist/`, `build/`, and `*.egg-info/`) before the final package build if you are reusing a workspace.
+- Prefer `python scripts/release_readiness.py` as the final local pre-tag validation path.
 - Confirm the public repository keeps `main` protected with pull-request-only changes and code-owner review.
 - Confirm issues remain enabled if public issue intake is desired.
 - Confirm public support matrix in README still matches validated platforms.
@@ -55,6 +56,7 @@ Use this checklist before tagging a public release.
 ## 7. Release criteria
 
 - Required checks pass.
+- `python scripts/release_readiness.py` passes locally, or any intentionally skipped parts are documented.
 - Clean-clone validation passes: `python -m pip install .`, `repo-privacy-guardian --help`, `python -m pip install ".[test]"`, `python -m pytest`.
 - Package build succeeds (`python -m build`) and both `wheel` and `sdist` installs complete cleanly.
 - CI is green on the tracked CLI test suite for Windows, Linux, and macOS plus Windows GUI smoke.

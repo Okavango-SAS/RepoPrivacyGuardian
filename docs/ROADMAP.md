@@ -36,6 +36,7 @@ Current baseline in repo:
 - package build plus `wheel` and `sdist` install smoke in CI
 - Windows GUI smoke in CI
 - tooling readiness checks plus optional local dependency installation paths
+- repository-owned local release-readiness harness and basic operator runbooks
 - lightweight versioning policy and release notes template in docs
 - public `CHANGELOG.md` and stable `1.x` metadata
 

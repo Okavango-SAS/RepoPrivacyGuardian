@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "repo-privacy-guardian"
-version = "1.2.1"
+version = "1.2.2"
 description = "Local-first publication gate for auditing and hardening Git repositories before public release."
 readme = "README.MD"
 requires-python = ">=3.10"
@@ -78,4 +78,4 @@ source = ["."]
 show_missing = true
 skip_covered = false
 fail_under = 80
-omit = ["tests/*"]
+omit = ["tests/*", "scripts/*"]

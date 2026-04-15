@@ -393,6 +393,12 @@ python tests/release_smoke_cli.py
 python -m build
 ```
 
+Preferred local pre-tag validation for this repository:
+
+```sh
+python scripts/release_readiness.py
+```
+
 Pytest collection is restricted to tracked test files so local ignored test files do not change the release signal. CI additionally validates built `wheel` and `sdist` installs plus Windows GUI smoke.
 
 ## 📚 Release Engineering Docs
@@ -400,6 +406,8 @@ Pytest collection is restricted to tracked test files so local ignored test file
 - [CHANGELOG](CHANGELOG.md): shipped release notes and public version history
 - [VERSIONING](docs/VERSIONING.md): versioning policy, stable-baseline notes, and `1.x` release discipline
 - [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md): pre-tag release checklist
+- [OPERATIONS](docs/OPERATIONS.md): local runbook for preflight, release validation, and recovery
+- [TROUBLESHOOTING](docs/TROUBLESHOOTING.md): common operator failures and fast diagnosis paths
 - [RELEASE_NOTES_TEMPLATE](docs/RELEASE_NOTES_TEMPLATE.md): lightweight notes template for public releases
 - [ROADMAP](docs/ROADMAP.md): current maturity, next hardening steps, and out-of-scope boundaries
 

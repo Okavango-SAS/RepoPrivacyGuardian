@@ -42,6 +42,7 @@ ROOT_LAYOUT_REQUIRED = [
     "config/requirements/requirements-dev.txt",
     "repo_privacy_guardian_resources/__init__.py",
     "repo_privacy_guardian_resources/POLICY.md",
+    "scripts/release_readiness.py",
     "docs/prompts/01_AUDITORIA_Y_SEGUIMIENTO.prompt.md",
     "docs/prompts/02_PARIDAD_GUI_CLI.prompt.md",
     "docs/prompts/03_MEJORA_GUI_GITHUB_EMAIL.prompt.md",
@@ -49,6 +50,8 @@ ROOT_LAYOUT_REQUIRED = [
 ]
 
 RELEASE_DOCS_REQUIRED = [
+    "docs/OPERATIONS.md",
+    "docs/TROUBLESHOOTING.md",
     "docs/VERSIONING.md",
     "docs/RELEASE_NOTES_TEMPLATE.md",
 ]
@@ -114,8 +117,23 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.0.0`" in versioning
     assert "`1.2.0`" in versioning
     assert "`1.2.1`" in versioning
+    assert "`1.2.2`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "Validation evidence" in release_notes
+
+
+def test_operational_docs_cover_release_harness_env_and_recovery() -> None:
+    root = _repo_root()
+    operations = (root / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
+    troubleshooting = (root / "docs" / "TROUBLESHOOTING.md").read_text(encoding="utf-8")
+
+    assert "python scripts/release_readiness.py" in operations
+    assert "Repo Privacy Guardian does not auto-load a `.env` file." in operations
+    assert "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN" in operations
+    assert "git clone path/to/<repo>-pre-publication-fix-<timestamp>.bundle recovered-repo" in operations
+    assert "Release harness skips the self-audit" in troubleshooting
+    assert "Build artifacts look stale" in troubleshooting
+    assert "Recovering after a bad rewrite" in troubleshooting
 
 
 def test_docs_cover_optional_github_hardening_audit() -> None:
@@ -138,6 +156,8 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
 def test_changelog_records_stable_release() -> None:
     changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
 
+    assert "## [1.2.2] - 2026-04-15" in changelog
+    assert "Operations/readiness runbook update." in changelog
     assert "## [1.2.1] - 2026-04-14" in changelog
     assert "Release-hardening dependency update." in changelog
     assert "## [1.2.0] - 2026-04-14" in changelog
@@ -152,7 +172,7 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.2.1"' in pyproject
+    assert 'version = "1.2.2"' in pyproject
     assert "Current release line: `v1.2.x`." in readme
 
 
@@ -166,11 +186,18 @@ def test_dev_pytest_floor_is_patched_against_known_alert() -> None:
     assert "pytest>=8.0,<9" not in dev_requirements
 
 
+def test_coverage_targets_package_code_not_local_ops_scripts() -> None:
+    pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert 'omit = ["tests/*", "scripts/*"]' in pyproject
+
+
 def test_release_checklist_mentions_clearing_stale_build_outputs() -> None:
     checklist = (_repo_root() / "docs" / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
 
     assert "Clear stale local build outputs" in checklist
     assert "`dist/`, `build/`, and `*.egg-info/`" in checklist
+    assert "python scripts/release_readiness.py" in checklist
 
 
 def test_repo_declares_single_owner_codeowners_file() -> None:

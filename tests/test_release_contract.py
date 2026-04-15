@@ -480,6 +480,21 @@ def test_module_wrapper_runs_help_without_launching_gui() -> None:
     assert "usage:" in proc.stdout
 
 
+def test_release_readiness_script_exposes_help() -> None:
+    proc = subprocess.run(
+        [sys.executable, "scripts/release_readiness.py", "--help"],
+        cwd=str(Path(__file__).resolve().parents[1]),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert proc.returncode == 0
+    assert "release-readiness checks" in proc.stdout
+    assert "--skip-self-audit" in proc.stdout
+
+
 def test_release_smoke_cli_resolves_direct_script_without_installed_entrypoint(tmp_path: Path) -> None:
     smoke_cli = _load_support_module("release_smoke_cli_support", "tests/release_smoke_cli.py")
     repo_root = Path(__file__).resolve().parents[1]
