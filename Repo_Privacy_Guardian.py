@@ -690,10 +690,18 @@ def collect_auto_installable_tooling_checks(
 
 def build_github_optional_tooling_checks() -> list[ToolingCheck]:
     checks: list[ToolingCheck] = []
-    winget_check = build_windows_winget_tooling_check()
-    if winget_check and winget_check.state != "ready":
-        checks.append(winget_check)
-    checks.append(build_github_tooling_check())
+    github_check = build_github_tooling_check()
+    github_install_command = github_check.auto_install_command or []
+    github_install_executable = (
+        Path(github_install_command[0]).name.lower()
+        if github_install_command
+        else None
+    )
+    if github_check.state != "ready" and github_install_executable == "winget":
+        winget_check = build_windows_winget_tooling_check()
+        if winget_check and winget_check.state != "ready":
+            checks.append(winget_check)
+    checks.append(github_check)
     return checks
 
 
@@ -709,7 +717,7 @@ def summarize_tooling_checks(
         if check.state == "ready" and not include_ready:
             continue
         logger(f"[TOOLING] {check.name}: {check.state.upper()} - {check.detail}")
-        if check.install_hint:
+        if check.install_hint and check.state != "ready":
             logger(f"[TOOLING] {check.name} install hint: {check.install_hint}")
         if check.state == "missing" and check.blocking:
             blocking_failures += 1
@@ -916,7 +924,7 @@ def build_cli_tooling_checks(config: GuardRunConfig) -> list[ToolingCheck]:
             state="ready" if git_ok else "missing",
             blocking=True,
             detail="Git executable available." if git_ok else (git_error or _missing_executable_message("git")),
-            install_hint=format_install_command(git_install),
+            install_hint=(None if git_ok else format_install_command(git_install)),
             auto_install_command=(None if git_ok else git_install),
         )
     )
@@ -964,7 +972,7 @@ def build_gui_tooling_checks() -> list[ToolingCheck]:
             state="ready" if git_ok else "missing",
             blocking=True,
             detail="Git executable available." if git_ok else (git_error or _missing_executable_message("git")),
-            install_hint=format_install_command(git_install),
+            install_hint=(None if git_ok else format_install_command(git_install)),
             auto_install_command=(None if git_ok else git_install),
         )
     )

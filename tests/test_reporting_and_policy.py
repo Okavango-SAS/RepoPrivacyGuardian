@@ -515,6 +515,28 @@ def test_build_github_optional_tooling_checks_include_winget_when_needed(monkeyp
     assert [check.name for check in checks] == ["winget", "github-auth"]
 
 
+def test_build_github_optional_tooling_checks_skip_winget_when_github_auth_is_already_ready(monkeypatch) -> None:
+    monkeypatch.setattr(
+        rpg,
+        "build_windows_winget_tooling_check",
+        lambda: (_ for _ in ()).throw(AssertionError("winget should not be checked")),
+    )
+    monkeypatch.setattr(
+        rpg,
+        "build_github_tooling_check",
+        lambda: rpg.ToolingCheck(
+            name="github-auth",
+            state="ready",
+            blocking=False,
+            detail="token available",
+        ),
+    )
+
+    checks = rpg.build_github_optional_tooling_checks()
+
+    assert [check.name for check in checks] == ["github-auth"]
+
+
 def test_summarize_tooling_checks_counts_blocking_and_warnings() -> None:
     messages: list[str] = []
     checks = [
@@ -529,6 +551,25 @@ def test_summarize_tooling_checks_counts_blocking_and_warnings() -> None:
     assert warnings == 1
     assert all("git" not in msg for msg in messages)
     assert any("gh auth login" in msg for msg in messages)
+
+
+def test_summarize_tooling_checks_omits_install_hint_for_ready_entries() -> None:
+    messages: list[str] = []
+    checks = [
+        rpg.ToolingCheck(
+            name="git",
+            state="ready",
+            blocking=True,
+            detail="ok",
+            install_hint="winget install --id Git.Git -e --source winget",
+        ),
+    ]
+
+    blocking, warnings = rpg.summarize_tooling_checks(checks, messages.append, include_ready=True)
+
+    assert blocking == 0
+    assert warnings == 0
+    assert messages == ["[TOOLING] git: READY - ok"]
 
 
 def test_repo_report_finalize_builds_failures() -> None:
