@@ -100,10 +100,8 @@ EMAIL_NOISE_DOMAINS = {
     "localdomain",
 }
 GITHUB_EMAIL_PRIVACY_HELP = (
-    "GitHub privacy checklist:\n"
-    '1. Enable "Keep my email addresses private"\n'
-    '2. Enable "Block command line pushes that expose my email"\n'
-    "From the same page, you can also obtain your noreply email address."
+    "Use GitHub Email Settings to verify private-email and push-block protections, "
+    "and to copy your noreply address when needed."
 )
 
 DEFAULT_IGNORE_BASELINE = [
@@ -4505,6 +4503,14 @@ class GuiApp:  # pragma: no cover
         font_options = gui_font_candidates()
         self._ui_font_family = choose_gui_font_family(font_options["ui"], available_families)
         self._mono_font_family = choose_gui_font_family(font_options["mono"], available_families)
+        self._primary_button_fg = "#0E6BA8"
+        self._primary_button_hover = "#0A5585"
+        self._support_button_fg = "#355C7D"
+        self._support_button_hover = "#274760"
+        self._secondary_button_fg = "#F3F7FB"
+        self._secondary_button_hover = "#E2ECF6"
+        self._secondary_button_border = "#9FB4C8"
+        self._secondary_button_text = "#173A5E"
 
         self.root_var = tk.StringVar(value=str(default_root_dir()))
         self.policy_var = tk.StringVar(value=str(DEFAULT_POLICY))
@@ -4530,7 +4536,7 @@ class GuiApp:  # pragma: no cover
         self.low_confidence_blocking_var = tk.BooleanVar(value=False)
         self.audit_litellm_incident_var = tk.BooleanVar(value=False)
         self.audit_github_hardening_var = tk.BooleanVar(value=False)
-        self.open_report_var = tk.BooleanVar(value=True)
+        self.open_report_var = tk.BooleanVar(value=False)
         self.confirm_each_repo_fix_var = tk.BooleanVar(value=True)
         self.allow_non_owner_push_var = tk.BooleanVar(value=False)
         self.audit_github_hardening_var.trace_add("write", self._on_audit_github_hardening_toggled)
@@ -4548,10 +4554,14 @@ class GuiApp:  # pragma: no cover
         self._last_audit_reports_payload: list[dict[str, object]] = []
         self._last_audit_selection_signature: tuple[str, ...] | None = None
         self._flow_tabs = None
-        self._audit_tab_name = "Audit"
-        self._repair_tab_name = "Repair"
+        self._audit_tab_name = "1. Audit"
+        self._repair_tab_name = "2. Repair"
         self._repair_tab_block_overlay = None
         self._repair_tab_block_label = None
+        self._repair_tab_block_steps: list[object] = []
+        self._identity_actions = None
+        self._identity_action_buttons: list[object] = []
+        self._compact_identity_actions_layout = False
         self._results_row = None
         self._repos_card = None
         self._output_card = None
@@ -4810,43 +4820,52 @@ class GuiApp:  # pragma: no cover
 
         identity_actions = ctk.CTkFrame(identity_card, fg_color="transparent")
         identity_actions.grid(row=3, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 4))
-        identity_actions.grid_columnconfigure((0, 1), weight=1)
-        ctk.CTkButton(
+        identity_actions.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        self._identity_actions = identity_actions
+        identity_primary_global = ctk.CTkButton(
             identity_actions,
             text="Apply Global Git Config",
             command=self.apply_git_identity_global_clicked,
             height=32,
             corner_radius=8,
-            fg_color="#355C7D",
-            hover_color="#274760",
-        ).grid(row=0, column=0, sticky="we", padx=(0, 6), pady=3)
-        ctk.CTkButton(
+            fg_color=self._support_button_fg,
+            hover_color=self._support_button_hover,
+        )
+        identity_primary_global.grid(row=0, column=0, sticky="we", padx=(0, 6), pady=3)
+        identity_primary_local = ctk.CTkButton(
             identity_actions,
             text="Apply Local Git Config",
             command=self.apply_git_identity_local_clicked,
             height=32,
             corner_radius=8,
-            fg_color="#355C7D",
-            hover_color="#274760",
-        ).grid(row=0, column=1, sticky="we", padx=(6, 0), pady=3)
-        ctk.CTkButton(
+            fg_color=self._support_button_fg,
+            hover_color=self._support_button_hover,
+        )
+        identity_primary_local.grid(row=0, column=1, sticky="we", padx=(6, 6), pady=3)
+        identity_secondary_read = ctk.CTkButton(
             identity_actions,
             text="Read Current Git Identity",
             command=self.read_git_identity_clicked,
             height=32,
             corner_radius=8,
-            fg_color="#8A9AAF",
-            hover_color="#72839A",
-        ).grid(row=1, column=0, sticky="we", padx=(0, 6), pady=3)
-        ctk.CTkButton(
+            **self._secondary_button_options(),
+        )
+        identity_secondary_read.grid(row=0, column=2, sticky="we", padx=(6, 6), pady=3)
+        identity_secondary_settings = ctk.CTkButton(
             identity_actions,
             text="Open GitHub Email Settings",
             command=self.open_github_email_settings_clicked,
             height=32,
             corner_radius=8,
-            fg_color="#8A9AAF",
-            hover_color="#72839A",
-        ).grid(row=1, column=1, sticky="we", padx=(6, 0), pady=3)
+            **self._secondary_button_options(),
+        )
+        identity_secondary_settings.grid(row=0, column=3, sticky="we", padx=(6, 0), pady=3)
+        self._identity_action_buttons = [
+            identity_primary_global,
+            identity_primary_local,
+            identity_secondary_read,
+            identity_secondary_settings,
+        ]
 
         ctk.CTkLabel(
             identity_card,
@@ -4881,8 +4900,8 @@ class GuiApp:  # pragma: no cover
             width=150,
             height=34,
             corner_radius=8,
-            fg_color="#0E6BA8",
-            hover_color="#0A5585",
+            fg_color=self._primary_button_fg,
+            hover_color=self._primary_button_hover,
         )
         self._audit_button.pack(side="left")
         self._make_info_badge(
@@ -4927,7 +4946,7 @@ class GuiApp:  # pragma: no cover
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
         self._make_info_badge(
             safe_options,
-            "Advisory options only. They do not rewrite history by themselves.",
+            "Advisory options only. They do not rewrite history on their own.",
         ).grid(row=0, column=1, sticky="e", padx=(0, 12), pady=(10, 2))
 
         safe_items = [
@@ -5018,8 +5037,7 @@ class GuiApp:  # pragma: no cover
             width=92,
             height=32,
             corner_radius=8,
-            fg_color="#8A9AAF",
-            hover_color="#72839A",
+            **self._secondary_button_options(),
             command=lambda: self._browse_existing_file(
                 self.replace_text_file_var,
                 title="Choose an explicit replace-text file",
@@ -5149,27 +5167,69 @@ class GuiApp:  # pragma: no cover
             border_color="#C5D8EB",
         )
         blocker_overlay.grid_columnconfigure(0, weight=1)
+        blocker_overlay.grid_rowconfigure(0, weight=1)
         self._repair_tab_block_overlay = blocker_overlay
 
-        self._repair_tab_block_label = ctk.CTkLabel(
+        blocker_card = ctk.CTkFrame(
             blocker_overlay,
+            fg_color="#FFFFFF",
+            corner_radius=14,
+            border_width=1,
+            border_color="#C5D8EB",
+        )
+        blocker_card.grid(row=0, column=0, padx=28, pady=28, sticky="")
+        blocker_card.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
+            blocker_card,
+            text="Repair tab locked",
+            justify="center",
+            font=self._font(18, bold=True),
+            text_color="#173A5E",
+        ).grid(row=0, column=0, padx=24, pady=(22, 8), sticky="ew")
+        self._repair_tab_block_label = ctk.CTkLabel(
+            blocker_card,
             text="",
             justify="center",
-            font=self._font(14, bold=True),
+            font=self._font(13, bold=True),
             text_color="#1E3A5F",
-            wraplength=760,
+            wraplength=620,
         )
-        self._repair_tab_block_label.grid(row=0, column=0, padx=24, pady=(26, 10), sticky="ew")
+        self._repair_tab_block_label.grid(row=1, column=0, padx=24, pady=(0, 10), sticky="ew")
+        ctk.CTkLabel(
+            blocker_card,
+            text="Before Repair, do this:",
+            justify="center",
+            font=self._font(12, bold=True),
+            text_color="#35506D",
+        ).grid(row=2, column=0, padx=24, pady=(0, 6), sticky="ew")
+        step_texts = [
+            "1. Run Audit and confirm the selected repositories are the ones you want to review.",
+            "2. Read the log and findings summary before enabling any write actions.",
+            "3. Come back here only when you are ready to confirm a repair plan.",
+        ]
+        self._repair_tab_block_steps = []
+        for idx, step_text in enumerate(step_texts, start=3):
+            step_label = ctk.CTkLabel(
+                blocker_card,
+                text=step_text,
+                justify="left",
+                anchor="w",
+                wraplength=620,
+                font=self._font(12),
+                text_color="#334155",
+            )
+            step_label.grid(row=idx, column=0, padx=24, pady=2, sticky="ew")
+            self._repair_tab_block_steps.append(step_label)
         ctk.CTkButton(
-            blocker_overlay,
+            blocker_card,
             text="Go to Audit",
             command=lambda: self._set_active_flow_tab(self._audit_tab_name),
             width=170,
             height=34,
             corner_radius=8,
-            fg_color="#0E6BA8",
-            hover_color="#0A5585",
-        ).grid(row=1, column=0, pady=(0, 20))
+            fg_color=self._primary_button_fg,
+            hover_color=self._primary_button_hover,
+        ).grid(row=6, column=0, pady=(14, 22))
 
         results_row = ctk.CTkFrame(app, fg_color="transparent")
         results_row.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 14))
@@ -5203,8 +5263,8 @@ class GuiApp:  # pragma: no cover
             width=190,
             corner_radius=8,
             command=self.refresh_repos,
-            fg_color="#355C7D",
-            hover_color="#274760",
+            fg_color=self._support_button_fg,
+            hover_color=self._support_button_hover,
         ).grid(row=0, column=1, sticky="e", padx=14, pady=(12, 8))
 
         list_shell = ctk.CTkFrame(
@@ -5245,8 +5305,7 @@ class GuiApp:  # pragma: no cover
             width=120,
             height=34,
             corner_radius=8,
-            fg_color="#8A9AAF",
-            hover_color="#72839A",
+            **self._secondary_button_options(),
         ).pack(side="left", padx=8)
         ctk.CTkButton(
             run_controls,
@@ -5255,8 +5314,7 @@ class GuiApp:  # pragma: no cover
             width=120,
             height=34,
             corner_radius=8,
-            fg_color="#8A9AAF",
-            hover_color="#72839A",
+            **self._secondary_button_options(),
         ).pack(side="left", padx=8)
         ctk.CTkButton(
             run_controls,
@@ -5265,8 +5323,7 @@ class GuiApp:  # pragma: no cover
             width=120,
             height=34,
             corner_radius=8,
-            fg_color="#8A9AAF",
-            hover_color="#72839A",
+            **self._secondary_button_options(),
         ).pack(side="left", padx=8)
 
         output_card = ctk.CTkFrame(
@@ -5306,6 +5363,15 @@ class GuiApp:  # pragma: no cover
     def _font(self, size: int, *, bold: bool = False, mono: bool = False):
         family = self._mono_font_family if mono else self._ui_font_family
         return (family, size, "bold") if bold else (family, size)
+
+    def _secondary_button_options(self) -> dict[str, object]:
+        return {
+            "fg_color": self._secondary_button_fg,
+            "hover_color": self._secondary_button_hover,
+            "border_width": 1,
+            "border_color": self._secondary_button_border,
+            "text_color": self._secondary_button_text,
+        }
 
     def _dialog_initial_dir(self, current_value: str) -> str:
         raw_value = current_value.strip()
@@ -5377,8 +5443,7 @@ class GuiApp:  # pragma: no cover
             width=92,
             height=32,
             corner_radius=8,
-            fg_color="#8A9AAF",
-            hover_color="#72839A",
+            **self._secondary_button_options(),
             command=lambda: self._browse_directory(variable, title=title),
         ).grid(row=row, column=2, padx=(0, 14), pady=4)
 
@@ -5412,8 +5477,7 @@ class GuiApp:  # pragma: no cover
             width=92,
             height=32,
             corner_radius=8,
-            fg_color="#8A9AAF",
-            hover_color="#72839A",
+            **self._secondary_button_options(),
             command=lambda: self._browse_existing_file(variable, title=title, filetypes=filetypes),
         ).grid(row=row, column=2, padx=(0, 14), pady=4)
 
@@ -5448,8 +5512,7 @@ class GuiApp:  # pragma: no cover
             width=92,
             height=32,
             corner_radius=8,
-            fg_color="#8A9AAF",
-            hover_color="#72839A",
+            **self._secondary_button_options(),
             command=lambda: self._browse_save_file(
                 variable,
                 title=title,
@@ -5482,6 +5545,7 @@ class GuiApp:  # pragma: no cover
     def _apply_responsive_layout(self) -> None:
         width = self._get_logical_window_width()
         self._apply_top_layout(compact=width <= self._top_stack_width_threshold)
+        self._apply_identity_actions_layout(compact=width <= self._top_stack_width_threshold)
         self._apply_options_layout(compact=width <= self._options_stack_width_threshold)
         self._apply_results_layout(compact=width <= self._results_stack_width_threshold)
 
@@ -5501,6 +5565,30 @@ class GuiApp:  # pragma: no cover
         self._top_row.grid_columnconfigure(1, weight=1)
         self._settings_card.grid_configure(row=0, column=0, padx=(0, 8), pady=0, sticky="nsew")
         self._profile_card.grid_configure(row=0, column=1, padx=(8, 0), pady=0, sticky="nsew")
+
+    def _apply_identity_actions_layout(self, compact: bool) -> None:
+        if compact == self._compact_identity_actions_layout:
+            return
+        if self._identity_actions is None or len(self._identity_action_buttons) != 4:
+            return
+
+        self._compact_identity_actions_layout = compact
+        buttons = self._identity_action_buttons
+
+        if compact:
+            self._identity_actions.grid_columnconfigure((0, 1), weight=1)
+            self._identity_actions.grid_columnconfigure((2, 3), weight=0)
+            buttons[0].grid_configure(row=0, column=0, padx=(0, 6), pady=3)
+            buttons[1].grid_configure(row=0, column=1, padx=(6, 0), pady=3)
+            buttons[2].grid_configure(row=1, column=0, padx=(0, 6), pady=3)
+            buttons[3].grid_configure(row=1, column=1, padx=(6, 0), pady=3)
+            return
+
+        self._identity_actions.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        buttons[0].grid_configure(row=0, column=0, padx=(0, 6), pady=3)
+        buttons[1].grid_configure(row=0, column=1, padx=(6, 6), pady=3)
+        buttons[2].grid_configure(row=0, column=2, padx=(6, 6), pady=3)
+        buttons[3].grid_configure(row=0, column=3, padx=(6, 0), pady=3)
 
     def _apply_options_layout(self, compact: bool) -> None:
         if compact == self._compact_options_layout:
@@ -5567,9 +5655,8 @@ class GuiApp:  # pragma: no cover
             lock_reason = reason or "Repair stays locked until a valid audit has completed."
             self._repair_tab_block_label.configure(
                 text=(
-                    "Repair tab locked\n\n"
                     f"{lock_reason}\n\n"
-                    "Run Audit, review the results, and come back when you are ready to repair."
+                    "Run Audit, review the results, and return here only when the repair plan is ready to confirm."
                 )
             )
 
@@ -5580,12 +5667,12 @@ class GuiApp:  # pragma: no cover
         badge = self.ctk.CTkLabel(
             parent,
             text="i",
-            width=18,
-            height=18,
-            corner_radius=9,
+            width=22,
+            height=22,
+            corner_radius=11,
             fg_color="#DDEAF7",
             text_color="#16436E",
-            font=self._font(11, bold=True),
+            font=self._font(12, bold=True),
         )
         self._bind_tooltip(badge, message)
         return badge

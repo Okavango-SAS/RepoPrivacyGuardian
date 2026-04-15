@@ -100,6 +100,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - Use `--gui` for the desktop interface.
 - CLI does not open a browser automatically.
 - Use `--open-report` only when you explicitly want the HTML report opened after a CLI run.
+- In the GUI, `Open HTML report automatically` is opt-in and off by default.
 - The GUI keeps the staged `Audit -> Repair` interaction so operators cannot jump straight to write actions.
 
 ## 📦 Installation
