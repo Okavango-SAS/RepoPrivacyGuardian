@@ -4647,9 +4647,9 @@ class GuiApp:  # pragma: no cover
         window_h = min(max(int(screen_h * 0.9), 760), 980)
         window_x = max((screen_w - window_w) // 2, 0)
         window_y = max((screen_h - window_h) // 2, 0)
-        self._top_stack_width_threshold = 1420
+        self._top_stack_width_threshold = 1220
         self._options_stack_width_threshold = 1220
-        self._results_stack_width_threshold = 1500
+        self._results_stack_width_threshold = 1240
         self.root.geometry(f"{window_w}x{window_h}+{window_x}+{window_y}")
         self.root.minsize(min(1180, screen_w), min(700, screen_h))
         self.root.maxsize(screen_w, screen_h)
@@ -4732,8 +4732,16 @@ class GuiApp:  # pragma: no cover
         self._compact_results_layout = False
         self._repo_summary_label = None
         self._repo_empty_state = None
+        self._repo_empty_state_title_label = None
+        self._repo_empty_state_body_label = None
+        self._repo_empty_state_hint_label = None
+        self._repo_empty_reason: str | None = None
         self._repo_items: list[tuple[str, str]] = []
+        self._select_all_button = None
+        self._clear_selection_button = None
         self._repair_status_label = None
+        self._repair_status_panel = None
+        self._repair_status_badge = None
 
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -5278,39 +5286,71 @@ class GuiApp:  # pragma: no cover
             border_color="#D1DDEA",
         )
         repair_actions_card.grid(row=1, column=0, sticky="we", padx=10, pady=(0, 8))
+        repair_actions_card.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
             repair_actions_card,
             text="Repair Flow",
             font=self._font(14, bold=True),
             text_color="#7B1E1E",
-        ).pack(anchor="w", padx=14, pady=(10, 4))
-        self._repair_status_label = ctk.CTkLabel(
+        ).grid(row=0, column=0, sticky="w", padx=14, pady=(10, 4))
+        self._repair_status_panel = ctk.CTkFrame(
             repair_actions_card,
+            fg_color="#F5F9FF",
+            corner_radius=10,
+            border_width=1,
+            border_color="#C5D8EB",
+        )
+        self._repair_status_panel.grid(row=1, column=0, sticky="we", padx=14, pady=(0, 8))
+        self._repair_status_panel.grid_columnconfigure(1, weight=1)
+        self._repair_status_badge = ctk.CTkLabel(
+            self._repair_status_panel,
+            text="Audit required",
+            height=28,
+            corner_radius=14,
+            fg_color="#DDEAF7",
+            text_color="#16436E",
+            font=self._font(11, bold=True),
+            padx=12,
+        )
+        self._repair_status_badge.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 6))
+        ctk.CTkLabel(
+            self._repair_status_panel,
+            text="Latest audit summary",
+            font=self._font(12, bold=True),
+            text_color="#173A5E",
+        ).grid(row=0, column=1, sticky="w", padx=(0, 12), pady=(10, 6))
+        self._repair_status_label = ctk.CTkLabel(
+            self._repair_status_panel,
             text="No audit results in this session yet. Run Audit first, then review the summary before applying write actions.",
             justify="left",
             anchor="w",
-            wraplength=1180,
+            wraplength=1080,
             font=self._font(12),
             text_color="#5C6F82",
         )
-        self._repair_status_label.pack(fill="x", padx=14, pady=(0, 4))
+        self._repair_status_label.grid(row=1, column=0, columnspan=2, sticky="we", padx=12, pady=(0, 12))
         repair_controls = ctk.CTkFrame(repair_actions_card, fg_color="transparent")
-        repair_controls.pack(fill="x", padx=14, pady=(0, 10))
+        repair_controls.grid(row=2, column=0, sticky="we", padx=14, pady=(0, 10))
+        repair_controls.grid_columnconfigure(1, weight=1)
         self._repair_button = ctk.CTkButton(
             repair_controls,
             text=self._repair_button_text,
             command=lambda: self.run_clicked(run_fix=True),
-            width=250,
+            width=280,
             height=34,
             corner_radius=8,
             fg_color="#B45309",
             hover_color="#92400E",
         )
-        self._repair_button.pack(side="left")
-        self._make_info_badge(
+        self._repair_button.grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(
             repair_controls,
-            "Available only after a completed audit. Shows an explicit plan and asks for confirmation before execution.",
-        ).pack(side="left", padx=(6, 0), pady=8)
+            text="Repair stays disabled until Audit finishes and the review window completes.",
+            justify="left",
+            anchor="w",
+            font=self._font(11),
+            text_color="#6B7F93",
+        ).grid(row=0, column=1, sticky="w", padx=(10, 0), pady=6)
 
         blocker_overlay = ctk.CTkFrame(
             repair_tab,
@@ -5330,7 +5370,7 @@ class GuiApp:  # pragma: no cover
             border_width=1,
             border_color="#C5D8EB",
         )
-        blocker_card.grid(row=0, column=0, padx=28, pady=28, sticky="")
+        blocker_card.grid(row=0, column=0, padx=28, pady=(28, 20), sticky="n")
         blocker_card.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
             blocker_card,
@@ -5475,19 +5515,47 @@ class GuiApp:  # pragma: no cover
         repo_scroll.grid(row=0, column=1, sticky="ns", padx=(8, 10), pady=10)
         self.repo_list.configure(yscrollcommand=repo_scroll.set)
         self.repo_list.bind("<<ListboxSelect>>", self._on_repo_selection_changed)
-        self._repo_empty_state = ctk.CTkLabel(
+        self._repo_empty_state = ctk.CTkFrame(
             list_shell,
-            text="No repositories found under the current Root yet.",
+            fg_color="#F6FAFE",
+            corner_radius=12,
+            border_width=1,
+            border_color="#C9DDEE",
+        )
+        self._repo_empty_state.grid_columnconfigure(0, weight=1)
+        self._repo_empty_state_title_label = ctk.CTkLabel(
+            self._repo_empty_state,
+            text="Repository targets unavailable",
+            justify="center",
+            anchor="center",
+            font=self._font(14, bold=True),
+            text_color="#143A5A",
+        )
+        self._repo_empty_state_title_label.grid(row=0, column=0, padx=18, pady=(16, 4), sticky="ew")
+        self._repo_empty_state_body_label = ctk.CTkLabel(
+            self._repo_empty_state,
+            text="Choose a valid Root folder to load one or more git repositories.",
             justify="center",
             anchor="center",
             font=self._font(12),
             text_color="#526679",
-            wraplength=360,
+            wraplength=420,
         )
+        self._repo_empty_state_body_label.grid(row=1, column=0, padx=18, pady=(0, 6), sticky="ew")
+        self._repo_empty_state_hint_label = ctk.CTkLabel(
+            self._repo_empty_state,
+            text="Run Audit becomes available once at least one repository target is visible in this list.",
+            justify="center",
+            anchor="center",
+            font=self._font(11),
+            text_color="#6B7F93",
+            wraplength=420,
+        )
+        self._repo_empty_state_hint_label.grid(row=2, column=0, padx=18, pady=(0, 16), sticky="ew")
 
         run_controls = ctk.CTkFrame(repos_card, fg_color="transparent")
         run_controls.grid(row=3, column=0, columnspan=2, sticky="w", padx=14, pady=(4, 12))
-        ctk.CTkButton(
+        self._select_all_button = ctk.CTkButton(
             run_controls,
             text="Select All",
             command=self.select_all,
@@ -5495,8 +5563,9 @@ class GuiApp:  # pragma: no cover
             height=34,
             corner_radius=8,
             **self._secondary_button_options(),
-        ).pack(side="left", padx=8)
-        ctk.CTkButton(
+        )
+        self._select_all_button.pack(side="left", padx=8)
+        self._clear_selection_button = ctk.CTkButton(
             run_controls,
             text="Clear Selection",
             command=self.clear_selection,
@@ -5504,7 +5573,8 @@ class GuiApp:  # pragma: no cover
             height=34,
             corner_radius=8,
             **self._secondary_button_options(),
-        ).pack(side="left", padx=8)
+        )
+        self._clear_selection_button.pack(side="left", padx=8)
         ctk.CTkButton(
             run_controls,
             text="Clear Log",
@@ -5832,22 +5902,90 @@ class GuiApp:  # pragma: no cover
         except Exception:
             pass
 
-    def _set_repair_status(self, message: str, *, text_color: str = "#5C6F82") -> None:
+    def _set_repair_status(
+        self,
+        message: str,
+        *,
+        text_color: str = "#5C6F82",
+        badge_text: str = "Audit required",
+        panel_fg: str = "#F5F9FF",
+        panel_border: str = "#C5D8EB",
+        badge_fg: str = "#DDEAF7",
+        badge_text_color: str = "#16436E",
+    ) -> None:
         repair_status_label = getattr(self, "_repair_status_label", None)
         if repair_status_label is None:
             return
         repair_status_label.configure(text=message, text_color=text_color)
+        repair_status_panel = getattr(self, "_repair_status_panel", None)
+        if repair_status_panel is not None:
+            repair_status_panel.configure(fg_color=panel_fg, border_color=panel_border)
+        repair_status_badge = getattr(self, "_repair_status_badge", None)
+        if repair_status_badge is not None:
+            repair_status_badge.configure(
+                text=badge_text,
+                fg_color=badge_fg,
+                text_color=badge_text_color,
+            )
 
-    def _set_repo_empty_state(self, visible: bool, message: str | None = None) -> None:
+    def _set_repo_empty_state(
+        self,
+        visible: bool,
+        message: str | None = None,
+        *,
+        reason: str | None = None,
+    ) -> None:
         repo_empty_state = getattr(self, "_repo_empty_state", None)
         if repo_empty_state is None:
             return
         if not visible:
+            self._repo_empty_reason = None
+            try:
+                self.repo_list.configure(state="normal")
+            except Exception:
+                pass
             repo_empty_state.place_forget()
             return
-        if message:
-            repo_empty_state.configure(text=message)
-        repo_empty_state.place(relx=0.5, rely=0.5, anchor="center")
+        self._repo_empty_reason = reason or "no_repos"
+        title_label = getattr(self, "_repo_empty_state_title_label", None)
+        body_label = getattr(self, "_repo_empty_state_body_label", None)
+        hint_label = getattr(self, "_repo_empty_state_hint_label", None)
+
+        palette = {
+            "invalid_root": {
+                "title": "Root folder not found",
+                "fg": "#FFF8F1",
+                "border": "#F2C48D",
+                "title_color": "#8A3B12",
+                "body_color": "#7C5A35",
+                "hint": "Pick a valid directory, then refresh the repository list.",
+            },
+            "no_repos": {
+                "title": "No repositories found",
+                "fg": "#F6FAFE",
+                "border": "#C9DDEE",
+                "title_color": "#143A5A",
+                "body_color": "#526679",
+                "hint": "Clone a repository here or point Root at a folder that already contains git repositories.",
+            },
+        }
+        theme = palette.get(self._repo_empty_reason, palette["no_repos"])
+        repo_empty_state.configure(fg_color=theme["fg"], border_color=theme["border"])
+        if title_label is not None:
+            title_label.configure(text=theme["title"], text_color=theme["title_color"])
+        if body_label is not None and message:
+            body_label.configure(text=message, text_color=theme["body_color"])
+        if hint_label is not None:
+            hint_label.configure(text=theme["hint"], text_color="#6B7F93")
+        try:
+            self.repo_list.configure(state="disabled")
+        except Exception:
+            pass
+        repo_empty_state.place(relx=0.5, rely=0.5, relwidth=0.82, anchor="center")
+        try:
+            repo_empty_state.lift()
+        except Exception:
+            pass
 
     def _update_repo_summary(self) -> None:
         repo_summary_label = getattr(self, "_repo_summary_label", None)
@@ -5859,9 +5997,14 @@ class GuiApp:  # pragma: no cover
         includes_current_root = any(value == "." for _label, value in self._repo_items)
 
         if total == 0:
-            repo_summary_label.configure(
-                text="Choose a Root folder that contains one or more git repositories."
-            )
+            if getattr(self, "_repo_empty_reason", None) == "invalid_root":
+                repo_summary_label.configure(
+                    text="Root folder not found. Choose a valid directory before running Audit."
+                )
+            else:
+                repo_summary_label.configure(
+                    text="No git repositories detected under Root yet. Choose another folder or refresh after cloning."
+                )
             return
 
         repo_word = "repository" if total == 1 else "repositories"
@@ -6056,14 +6199,31 @@ class GuiApp:  # pragma: no cover
         self._repair_cooldown_after_id = None
 
     def _update_run_buttons_state(self) -> None:
-        if self._audit_button is not None:
-            self._audit_button.configure(state="disabled" if self._run_in_progress else "normal")
+        audit_button = getattr(self, "_audit_button", None)
+        if audit_button is not None:
+            has_targets = bool(getattr(self, "_repo_items", []))
+            audit_button.configure(
+                text="Run Audit" if has_targets else "Audit unavailable",
+                state="disabled" if (self._run_in_progress or not has_targets) else "normal",
+            )
 
-        if self._repair_button is None:
+        self._update_repo_selection_controls()
+
+        repair_button = getattr(self, "_repair_button", None)
+        if repair_button is None:
             return
 
         state = "normal" if (self._repair_ready and not self._run_in_progress) else "disabled"
-        self._repair_button.configure(state=state, text=self._repair_button_text)
+        repair_button.configure(state=state, text=self._repair_button_text)
+
+    def _update_repo_selection_controls(self) -> None:
+        state = "normal" if getattr(self, "_repo_items", []) else "disabled"
+        for button in (
+            getattr(self, "_select_all_button", None),
+            getattr(self, "_clear_selection_button", None),
+        ):
+            if button is not None:
+                button.configure(state=state)
 
     def _lock_repair_until_next_audit(self, reason: str = "Repair (run audit first)") -> None:
         self._cancel_repair_cooldown()
@@ -6075,6 +6235,7 @@ class GuiApp:  # pragma: no cover
             if reason == "Repair (run audit first)"
             else f"{reason}. Run Audit again before applying more write actions.",
             text_color="#5C6F82",
+            badge_text="Audit required" if reason == "Repair (run audit first)" else "Audit again required",
         )
         self._set_repair_tab_visual_lock(True, reason)
         self._update_run_buttons_state()
@@ -6099,6 +6260,11 @@ class GuiApp:  # pragma: no cover
             self._build_repair_status_summary(reports_payload)
             + " Repair unlocks after the review window completes.",
             text_color="#7A4B13",
+            badge_text="Review window",
+            panel_fg="#FFF7ED",
+            panel_border="#F5C58B",
+            badge_fg="#FBD7A2",
+            badge_text_color="#7A4B13",
         )
         self._set_repair_tab_visual_lock(False)
         self._update_run_buttons_state()
@@ -6113,10 +6279,16 @@ class GuiApp:  # pragma: no cover
             self._repair_ready = True
             self._repair_cooldown_remaining = 0
             self._repair_button_text = "Repair"
+            failed = sum(1 for item in self._last_audit_reports_payload if item.get("status") == "FAIL")
             self._set_repair_status(
                 self._build_repair_status_summary(self._last_audit_reports_payload)
                 + " Repair is now available if you still want to apply reviewed cleanup actions.",
                 text_color="#7B1E1E",
+                badge_text="Repair ready" if failed else "Optional cleanup",
+                panel_fg="#FFF7ED" if failed else "#F0FDF4",
+                panel_border="#F5C58B" if failed else "#BBF7D0",
+                badge_fg="#FBD7A2" if failed else "#DCFCE7",
+                badge_text_color="#7A4B13" if failed else "#166534",
             )
             self._update_run_buttons_state()
             self.log("[INFO] Repair unlocked.")
@@ -6128,6 +6300,11 @@ class GuiApp:  # pragma: no cover
             self._build_repair_status_summary(self._last_audit_reports_payload)
             + f" Repair unlocks in {self._repair_cooldown_remaining}s.",
             text_color="#7A4B13",
+            badge_text="Review window",
+            panel_fg="#FFF7ED",
+            panel_border="#F5C58B",
+            badge_fg="#FBD7A2",
+            badge_text_color="#7A4B13",
         )
         self._update_run_buttons_state()
         self._repair_cooldown_after_id = self.root.after(1000, self._tick_repair_cooldown)
@@ -6288,10 +6465,14 @@ class GuiApp:  # pragma: no cover
         self.output.delete("1.0", "end")
 
     def clear_selection(self) -> None:
+        if not self._repo_items:
+            return
         self.repo_list.selection_clear(0, "end")
         self._update_repo_summary()
 
     def select_all(self) -> None:
+        if not self._repo_items:
+            return
         self.repo_list.select_set(0, "end")
         self._update_repo_summary()
 
@@ -6306,8 +6487,10 @@ class GuiApp:  # pragma: no cover
             self._set_repo_empty_state(
                 True,
                 "The selected Root folder does not exist.\nChoose a valid directory to load repositories.",
+                reason="invalid_root",
             )
             self._update_repo_summary()
+            self._update_run_buttons_state()
             return
         if (root / ".git").exists():
             self._repo_items.append((f"{root.name} (Current Root)", "."))
@@ -6324,8 +6507,10 @@ class GuiApp:  # pragma: no cover
         self._set_repo_empty_state(
             not self._repo_items,
             "No git repositories were found under the selected Root.",
+            reason="no_repos",
         )
         self._update_repo_summary()
+        self._update_run_buttons_state()
 
     def _selected_repo_names(self) -> list[str]:
         return [self._repo_items[i][1] for i in self.repo_list.curselection() if i < len(self._repo_items)]

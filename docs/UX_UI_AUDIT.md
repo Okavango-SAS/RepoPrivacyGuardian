@@ -6,109 +6,103 @@ Audit date: 2026-04-16
 
 Screens audited in the running GUI:
 
-- Audit view on desktop with default state
-- Audit view on desktop with the current repository selected
+- Audit view on desktop with the current repo as the only target
+- Audit view with an invalid Root path
 - Repair tab while the staged repair gate is still locked
-- Audit view after running an audit and waiting for the repair gate summary
-- Compact desktop width around the minimum supported GUI size
+- Repair tab immediately after an audit, during the review cooldown
+- Compact desktop width near the minimum supported GUI size
 
 ## Method
 
-- Launched the real `customtkinter` GUI locally from `main`
-- Walked the main Audit and Repair flows in the running app
+- Launched the shipped `customtkinter` GUI locally from `main`
+- Walked the main `Audit -> review -> Repair` flow in the running app
 - Captured before screenshots from the rendered interface
-- Applied UX, layout, and copy fixes in the shipped GUI
-- Re-ran the GUI and captured after screenshots from the same states
+- Applied corrective UX/UI changes in the GUI code
+- Re-ran the app and captured after screenshots from the same states
 
 ## Main Findings
 
-1. The default launch state could look broken.
-   When the selected root was itself the target repository, the list stayed empty because only child repositories were shown. The app opened in a state that looked like missing data instead of a valid starting point.
+1. Invalid or empty repo targets still looked too close to a broken blank state.
+   The list area could read like empty whitespace instead of a deliberate state with next-step guidance, and the main CTA still competed visually with that failure mode.
 
-2. The main action was too far from the decision point.
-   `Audit` lived outside the repositories section, so the core flow of pick repo then run audit was visually fragmented and harder to scan.
+2. Compact desktop widths were stacking too aggressively.
+   The responsive breakpoints pushed the repositories panel and execution log lower than necessary, so the main workflow was harder to discover near the minimum supported width.
 
-3. Repository feedback was too weak.
-   The screen did not clearly explain whether the root was valid, whether anything was selected, or why the repo list was empty.
+3. Repair status lacked hierarchy once an audit finished.
+   The cooldown and pass/fail summary existed, but the information was visually flat and easy to miss relative to the larger options cards around it.
 
-4. Repair gating was technically correct but visually under-explained.
-   After an audit, the repair state relied too much on logs and internal wording. Users had little high-signal summary about what passed, what failed, and when write actions would unlock.
-
-5. The write-actions area felt heavier than necessary.
-   Several labels were long, repetitive, and oriented around CLI flags instead of human intent. The section looked noisier than its actual function.
+4. The locked Repair screen used space inefficiently.
+   The blocker content sat too passively in the middle of a large blank area and did not feel anchored to the next action strongly enough.
 
 ## Corrections Applied
 
-- Included the current root repository in the GUI list whenever the selected root is itself a git repository.
-- Auto-selected the only available repository when the list contains exactly one valid target.
-- Added repository summary feedback so the screen explains current selection and whether the current root is part of the target set.
-- Added an explicit empty state message for invalid or empty roots instead of leaving the list visually blank.
-- Moved the main `Run Audit` action into the repositories header so repo choice and execution are grouped in the same visual area.
-- Tightened the top spacing so the repositories block becomes discoverable earlier on desktop.
-- Added a visible repair status summary that reports the latest audit outcome, pass/fail counts, and unlock timing during the staged cooldown.
-- Simplified copy in the write-actions card and replaced repeated warning badges with shorter contextual helper text.
-- Renamed several GUI labels to be more product-facing and less CLI-flag-centric.
+- Reworked the repo empty state into a visible overlay card with separate warning and neutral treatments for invalid Root vs. no repositories found.
+- Disabled repo-selection controls when there are no available targets and changed the primary CTA copy to `Audit unavailable` in that state.
+- Tightened the responsive thresholds so desktop widths around `1280px` keep the primary cards and results area visible sooner.
+- Strengthened the `Repair Flow` section with a dedicated status panel, clearer badge states, and better hierarchy for cooldown vs. ready states.
+- Kept the staged Repair guardrail, but moved the lock card higher in the canvas so the tab feels less visually abandoned.
+- Preserved the earlier current-root inclusion and repo-summary behavior while making the visible error and empty states much easier to understand.
 
 ## Screenshots
 
-### Audit View, Desktop Default State
+### Audit View, Desktop Baseline
 
 Before:
 
-![Audit default desktop before](ux-audit/before/audit-default-desktop-before.png)
+![Audit default desktop before](/<redacted-path>)
 
 After:
 
-![Audit default desktop after](ux-audit/after/audit-default-desktop-after.png)
+![Audit default desktop after](/<redacted-path>)
 
-### Audit View, Current Root Selected
+### Audit View, Invalid Root State
 
 Before:
 
-![Audit selected desktop before](ux-audit/before/audit-selected-desktop-before.png)
+![Audit invalid root before](/<redacted-path>)
 
 After:
 
-![Audit selected desktop after](ux-audit/after/audit-selected-desktop-after.png)
+![Audit invalid root after](/<redacted-path>)
 
 ### Repair Locked State
 
 Before:
 
-![Repair locked before](ux-audit/before/repair-locked-desktop-before.png)
+![Repair locked before](/<redacted-path>)
 
 After:
 
-![Repair locked after](ux-audit/after/repair-locked-desktop-after.png)
+![Repair locked after](/<redacted-path>)
 
-### Post-Audit State With Repair Summary
+### Repair State After Audit
 
 Before:
 
-![Audit post-run before](ux-audit/before/audit-post-run-before.png)
+![Repair post-audit before](/<redacted-path>)
 
 After:
 
-![Audit post-run after](ux-audit/after/audit-post-run-after.png)
+![Repair post-audit after](/<redacted-path>)
 
 ### Compact Desktop Layout
 
 Before:
 
-![Audit compact before](ux-audit/before/audit-compact-before.png)
+![Audit compact before](/<redacted-path>)
 
 After:
 
-![Audit compact after](ux-audit/after/audit-compact-after.png)
+![Audit compact after](/<redacted-path>)
 
 ## Validation
 
+- `python -m pytest -q`
 - `python tests/release_smoke_gui.py`
 - `python tests/release_smoke_cli.py`
-- `python -m pytest -q`
-- Manual GUI walkthrough with fresh screenshots after the fixes
+- Manual GUI walkthrough with fresh before/after screenshots from the live app
 
 ## Remaining Limits
 
-- The GUI remains desktop-first; compact widths are improved but still denser than the primary desktop layout.
-- There is still no automated visual regression suite. The screenshots in `docs/ux-audit/` remain the current audit artifact for UI review.
+- The GUI is still desktop-first. The compact layout is materially clearer now, but it is naturally denser than the primary desktop width.
+- The app still does not have automated visual regression coverage; `docs/ux-audit/` remains the current screenshot artifact for UI review.

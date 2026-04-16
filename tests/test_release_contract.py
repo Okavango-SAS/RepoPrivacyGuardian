@@ -694,6 +694,85 @@ def test_refresh_repos_includes_current_root_and_autoselects_single_repo(tmp_pat
     assert "Current Root is available in the list." in app._repo_summary_label.text
 
 
+def test_refresh_repos_invalid_root_surfaces_empty_state_and_disables_audit(tmp_path: Path) -> None:
+    class DummyVar:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
+    class DummyListbox:
+        def __init__(self) -> None:
+            self.items: list[str] = []
+            self.selected: set[int] = set()
+            self.state = "normal"
+
+        def delete(self, _start, _end) -> None:
+            self.items = []
+            self.selected.clear()
+
+        def insert(self, _index, value: str) -> None:
+            self.items.append(value)
+
+        def selection_set(self, index: int) -> None:
+            self.selected.add(index)
+
+        def curselection(self) -> tuple[int, ...]:
+            return tuple(sorted(self.selected))
+
+        def configure(self, **kwargs) -> None:
+            if "state" in kwargs:
+                self.state = kwargs["state"]
+
+    class DummyWidget:
+        def __init__(self) -> None:
+            self.text = ""
+            self.kwargs: dict[str, str] = {}
+
+        def configure(self, **kwargs) -> None:
+            self.kwargs.update(kwargs)
+            if "text" in kwargs:
+                self.text = kwargs["text"]
+
+        def place(self, **kwargs) -> None:
+            self.kwargs.update(kwargs)
+
+        def place_forget(self) -> None:
+            self.kwargs["hidden"] = "1"
+
+        def lift(self) -> None:
+            self.kwargs["lifted"] = "1"
+
+    missing_root = tmp_path / "missing-root"
+
+    app = object.__new__(rpg.GuiApp)
+    app.root_var = DummyVar(str(missing_root))
+    app.repo_list = DummyListbox()
+    app._repo_items = []
+    app._repo_summary_label = DummyWidget()
+    app._repo_empty_state = DummyWidget()
+    app._repo_empty_state_title_label = DummyWidget()
+    app._repo_empty_state_body_label = DummyWidget()
+    app._repo_empty_state_hint_label = DummyWidget()
+    app._audit_button = DummyWidget()
+    app._select_all_button = DummyWidget()
+    app._clear_selection_button = DummyWidget()
+    app._repair_button = None
+    app._run_in_progress = False
+
+    app.refresh_repos()
+
+    assert "Root folder not found" in app._repo_summary_label.text
+    assert app._repo_empty_state_title_label.text == "Root folder not found"
+    assert app._repo_empty_state_body_label.text.startswith("The selected Root folder does not exist.")
+    assert app._audit_button.kwargs["text"] == "Audit unavailable"
+    assert app._audit_button.kwargs["state"] == "disabled"
+    assert app._select_all_button.kwargs["state"] == "disabled"
+    assert app._clear_selection_button.kwargs["state"] == "disabled"
+    assert app.repo_list.state == "disabled"
+
+
 def test_build_repair_status_summary_mentions_pass_fail_counts() -> None:
     app = object.__new__(rpg.GuiApp)
 
