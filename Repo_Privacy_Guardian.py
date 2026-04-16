@@ -4577,6 +4577,10 @@ class GuiApp:  # pragma: no cover
         self._repos_card = None
         self._output_card = None
         self._compact_results_layout = False
+        self._repo_summary_label = None
+        self._repo_empty_state = None
+        self._repo_items: list[tuple[str, str]] = []
+        self._repair_status_label = None
 
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -4591,31 +4595,32 @@ class GuiApp:  # pragma: no cover
         app.grid_columnconfigure(0, weight=1)
 
         header = ctk.CTkFrame(app, fg_color="#0B4F7A", corner_radius=14)
-        header.grid(row=0, column=0, sticky="we", padx=16, pady=(14, 10))
+        header.grid(row=0, column=0, sticky="we", padx=16, pady=(10, 8))
         header.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
             header,
             text="Repo Privacy Guardian",
             font=self._font(24, bold=True),
             text_color="#F8FAFC",
-        ).grid(row=0, column=0, sticky="w", padx=18, pady=(14, 0))
+        ).grid(row=0, column=0, sticky="w", padx=18, pady=(12, 0))
         ctk.CTkLabel(
             header,
             text="Audit repositories, harden Git identity, and prepare safer public releases.",
             font=self._font(13),
             text_color="#D8E8F7",
-        ).grid(row=1, column=0, sticky="w", padx=18, pady=(4, 14))
+        ).grid(row=1, column=0, sticky="w", padx=18, pady=(2, 12))
 
         flow_tabs = ctk.CTkTabview(
             app,
             fg_color="#F2F6FC",
+            corner_radius=14,
             segmented_button_fg_color="#D6E3F2",
             segmented_button_selected_color="#0E6BA8",
             segmented_button_selected_hover_color="#0A5585",
             segmented_button_unselected_color="#D6E3F2",
             segmented_button_unselected_hover_color="#C5D8EB",
         )
-        flow_tabs.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 6))
+        flow_tabs.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 4))
         flow_tabs.add(self._audit_tab_name)
         flow_tabs.add(self._repair_tab_name)
         self._flow_tabs = flow_tabs
@@ -4626,7 +4631,7 @@ class GuiApp:  # pragma: no cover
         repair_tab.grid_columnconfigure(0, weight=1)
 
         top_row = ctk.CTkFrame(audit_tab, fg_color="transparent")
-        top_row.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 0))
+        top_row.grid(row=0, column=0, sticky="we", padx=10, pady=(6, 0))
         top_row.grid_columnconfigure(0, weight=2)
         top_row.grid_columnconfigure(1, weight=1)
         self._top_row = top_row
@@ -4652,16 +4657,16 @@ class GuiApp:  # pragma: no cover
         self._add_directory_field(
             settings_card,
             row=row,
-            label="Root",
+            label="Repositories Root",
             variable=self.root_var,
-            title="Choose the root directory",
+            title="Choose the repositories root directory",
         )
 
         row += 1
         self._add_file_field(
             settings_card,
             row=row,
-            label="Policy",
+            label="Policy File",
             variable=self.policy_var,
             title="Choose a policy file",
             filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
@@ -4671,7 +4676,7 @@ class GuiApp:  # pragma: no cover
         self._add_directory_field(
             settings_card,
             row=row,
-            label="Results Directory",
+            label="Artifacts Directory",
             variable=self.report_dir_var,
             title="Choose the base results directory",
         )
@@ -4680,7 +4685,7 @@ class GuiApp:  # pragma: no cover
         self._add_save_file_field(
             settings_card,
             row=row,
-            label="Extra JSON Export (Optional)",
+            label="Extra JSON Export",
             variable=self.report_json_var,
             title="Choose the extra JSON export path",
             default_extension=".json",
@@ -4701,6 +4706,18 @@ class GuiApp:  # pragma: no cover
             height=32,
             corner_radius=8,
         ).grid(row=row, column=1, sticky="w", pady=(4, 12))
+        ctk.CTkLabel(
+            settings_card,
+            text=(
+                "Choose a folder containing one or more git repositories. "
+                "If the selected Root is itself a git repository, it appears in the list as Current Root."
+            ),
+            justify="left",
+            anchor="w",
+            wraplength=760,
+            font=self._font(11),
+            text_color="#4A6076",
+        ).grid(row=row + 1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
 
         profile_card = ctk.CTkFrame(
             top_row,
@@ -4888,38 +4905,6 @@ class GuiApp:  # pragma: no cover
             text_color="#334155",
         ).grid(row=4, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 12))
 
-        audit_actions_card = ctk.CTkFrame(
-            audit_tab,
-            fg_color="#F8FBFF",
-            corner_radius=12,
-            border_width=1,
-            border_color="#D1DDEA",
-        )
-        audit_actions_card.grid(row=2, column=0, sticky="we", padx=10, pady=(0, 8))
-        ctk.CTkLabel(
-            audit_actions_card,
-            text="Audit Flow",
-            font=self._font(14, bold=True),
-            text_color="#113150",
-        ).pack(anchor="w", padx=14, pady=(10, 4))
-        audit_controls = ctk.CTkFrame(audit_actions_card, fg_color="transparent")
-        audit_controls.pack(fill="x", padx=14, pady=(0, 10))
-        self._audit_button = ctk.CTkButton(
-            audit_controls,
-            text="Audit",
-            command=lambda: self.run_clicked(run_fix=False),
-            width=150,
-            height=34,
-            corner_radius=8,
-            fg_color=self._primary_button_fg,
-            hover_color=self._primary_button_hover,
-        )
-        self._audit_button.pack(side="left")
-        self._make_info_badge(
-            audit_controls,
-            "Runs the audit only. It does not apply fixes or rewrite history.",
-        ).pack(side="left", padx=(6, 0), pady=8)
-
         options_card = ctk.CTkFrame(
             repair_tab,
             fg_color="#F8FBFF",
@@ -4993,7 +4978,7 @@ class GuiApp:  # pragma: no cover
         self._compact_options_layout = False
         ctk.CTkLabel(
             destructive_options,
-            text="Destructive / Write Actions",
+            text="Write Actions",
             font=self._font(13, bold=True),
             text_color="#7B1E1E",
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
@@ -5003,33 +4988,29 @@ class GuiApp:  # pragma: no cover
         ).grid(row=0, column=1, sticky="e", padx=(0, 12), pady=(10, 2))
         ctk.CTkLabel(
             destructive_options,
-            text="Enable only after reviewing risk and consequence.",
+            text="Only applied when you click Repair. Review the latest audit summary before enabling them.",
             font=self._font(11),
             text_color="#8F3A3A",
-        ).grid(row=1, column=0, sticky="w", padx=12, pady=(0, 4))
-        ctk.CTkLabel(
-            destructive_options,
-            text="Repair is executed with the Repair button, not with a toggle.",
-            font=self._font(11),
-            text_color="#8F3A3A",
-        ).grid(row=2, column=0, sticky="w", padx=12, pady=(0, 4))
+        ).grid(row=1, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 8))
 
         self._rewrite_paths_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Rewrite personal paths (opt-in, uses replace-text in history)",
+            text="Rewrite Personal Paths In History",
             variable=self.rewrite_personal_paths_var,
             font=self._font(12),
             text_color="#1E293B",
         )
-        self._rewrite_paths_checkbox.grid(row=3, column=0, sticky="w", padx=12, pady=4)
-        self._make_info_badge(
+        self._rewrite_paths_checkbox.grid(row=2, column=0, sticky="w", padx=12, pady=(0, 4))
+        ctk.CTkLabel(
             destructive_options,
-            "Rewrites detected personal paths in tracked content/history via git-filter-repo --replace-text.",
-        ).grid(row=3, column=1, sticky="e", padx=(0, 12), pady=4)
+            text="Uses reviewed replace-text rules during repair to rewrite detected personal paths.",
+            font=self._font(11),
+            text_color="#8F3A3A",
+        ).grid(row=3, column=0, columnspan=2, sticky="w", padx=36, pady=(0, 6))
 
         ctk.CTkLabel(
             destructive_options,
-            text="Explicit replace-text file (optional)",
+            text="Additional Replace-Text Rules",
             font=self._font(12),
             text_color="#1E293B",
         ).grid(row=4, column=0, sticky="w", padx=12, pady=(4, 0))
@@ -5044,7 +5025,7 @@ class GuiApp:  # pragma: no cover
         ).grid(row=0, column=0, sticky="we", padx=(0, 8))
         ctk.CTkButton(
             replace_text_row,
-            text="Browse...",
+            text="Browse…",
             width=92,
             height=32,
             corner_radius=8,
@@ -5055,44 +5036,38 @@ class GuiApp:  # pragma: no cover
                 filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
             ),
         ).grid(row=0, column=1)
-        self._make_info_badge(
+        ctk.CTkLabel(
             destructive_options,
-            "Optional file with literal OLD==>NEW rules for operator-reviewed replacements.",
-        ).grid(row=4, column=1, sticky="e", padx=(0, 12), pady=(4, 0))
+            text="Optional operator-reviewed literal replacements for cleanup the tool cannot infer safely.",
+            font=self._font(11),
+            text_color="#8F3A3A",
+        ).grid(row=6, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
 
         self._push_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Force push remote (--force-with-lease)",
+            text="Push Rewritten History To Origin",
             variable=self.push_var,
             font=self._font(12),
             text_color="#1E293B",
         )
-        self._push_checkbox.grid(row=6, column=0, sticky="w", padx=12, pady=4)
-        self._make_info_badge(
-            destructive_options,
-            "Publishes the rewritten history to origin/<branch> with --force-with-lease.",
-        ).grid(row=6, column=1, sticky="e", padx=(0, 12), pady=4)
+        self._push_checkbox.grid(row=7, column=0, sticky="w", padx=12, pady=(0, 4))
 
         self._allow_non_owner_push_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Bypass owner guardrail (--allow-non-owner-push)",
+            text="Bypass Owner Guardrail",
             variable=self.allow_non_owner_push_var,
             command=self._on_allow_non_owner_push_toggled,
             font=self._font(12),
             text_color="#1E293B",
         )
-        self._allow_non_owner_push_checkbox.grid(row=7, column=0, sticky="w", padx=12, pady=4)
-        self._make_info_badge(
-            destructive_options,
-            "Allows push even when the origin owner does not match the allowlist. Unsafe.",
-        ).grid(row=7, column=1, sticky="e", padx=(0, 12), pady=4)
+        self._allow_non_owner_push_checkbox.grid(row=8, column=0, sticky="w", padx=12, pady=4)
 
         ctk.CTkLabel(
             destructive_options,
-            text="Allowed push owner(s) comma (--allow-remote-owner)",
+            text="Allowed Push Owners",
             font=self._font(12),
             text_color="#1E293B",
-        ).grid(row=8, column=0, sticky="w", padx=12, pady=(4, 0))
+        ).grid(row=9, column=0, sticky="w", padx=12, pady=(4, 0))
         self._allowed_remote_owner_entry = ctk.CTkEntry(
             destructive_options,
             textvariable=self.allowed_remote_owners_var,
@@ -5100,41 +5075,45 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
         )
         self._allowed_remote_owner_entry.grid(
-            row=9,
+            row=10,
             column=0,
             columnspan=2,
             sticky="we",
             padx=12,
             pady=(2, 4),
         )
+        ctk.CTkLabel(
+            destructive_options,
+            text="Use a comma-separated allowlist. Leave bypass off to keep owner verification active.",
+            font=self._font(11),
+            text_color="#8F3A3A",
+        ).grid(row=11, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
 
         self._purge_safe_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Purge SAFE (gitignore + untrack + purge safe candidates)",
+            text="Purge Safe Secret File Candidates",
             variable=self.purge_detected_secret_files_var,
             command=self._on_purge_safe_toggled,
             font=self._font(12),
             text_color="#1E293B",
         )
-        self._purge_safe_checkbox.grid(row=10, column=0, sticky="w", padx=12, pady=4)
-        self._make_info_badge(
-            destructive_options,
-            "Purges only low-risk automatic candidates and leaves manual-review items untouched.",
-        ).grid(row=10, column=1, sticky="e", padx=(0, 12), pady=4)
+        self._purge_safe_checkbox.grid(row=12, column=0, sticky="w", padx=12, pady=(0, 4))
 
         self._purge_risky_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Purge RISKY (includes manual-review candidates)",
+            text="Purge Risky Manual-Review Candidates Too",
             variable=self.purge_all_detected_secret_files_var,
             command=self._on_purge_risky_toggled,
             font=self._font(12),
             text_color="#1E293B",
         )
-        self._purge_risky_checkbox.grid(row=11, column=0, sticky="w", padx=12, pady=4)
-        self._make_info_badge(
+        self._purge_risky_checkbox.grid(row=13, column=0, sticky="w", padx=12, pady=4)
+        ctk.CTkLabel(
             destructive_options,
-            "Aggressive mode: also purges candidates that require manual review.",
-        ).grid(row=11, column=1, sticky="e", padx=(0, 12), pady=4)
+            text="Safe mode skips ambiguous files. Risky mode also includes candidates that still need manual judgment.",
+            font=self._font(11),
+            text_color="#8F3A3A",
+        ).grid(row=14, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 10))
         self._sync_purge_mode_controls()
         self._sync_push_guardrail_controls()
 
@@ -5152,6 +5131,16 @@ class GuiApp:  # pragma: no cover
             font=self._font(14, bold=True),
             text_color="#7B1E1E",
         ).pack(anchor="w", padx=14, pady=(10, 4))
+        self._repair_status_label = ctk.CTkLabel(
+            repair_actions_card,
+            text="No audit results in this session yet. Run Audit first, then review the summary before applying write actions.",
+            justify="left",
+            anchor="w",
+            wraplength=1180,
+            font=self._font(12),
+            text_color="#5C6F82",
+        )
+        self._repair_status_label.pack(fill="x", padx=14, pady=(0, 4))
         repair_controls = ctk.CTkFrame(repair_actions_card, fg_color="transparent")
         repair_controls.pack(fill="x", padx=14, pady=(0, 10))
         self._repair_button = ctk.CTkButton(
@@ -5259,24 +5248,50 @@ class GuiApp:  # pragma: no cover
         repos_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=0)
         repos_card.grid_columnconfigure(0, weight=1)
         repos_card.grid_columnconfigure(1, weight=0)
-        repos_card.grid_rowconfigure(1, weight=1)
+        repos_card.grid_rowconfigure(2, weight=1)
         self._repos_card = repos_card
+        repo_header = ctk.CTkFrame(repos_card, fg_color="transparent")
+        repo_header.grid(row=0, column=0, columnspan=2, sticky="we", padx=14, pady=(12, 6))
+        repo_header.grid_columnconfigure(0, weight=1)
+        repo_header.grid_columnconfigure(1, weight=0)
         ctk.CTkLabel(
-            repos_card,
+            repo_header,
             text="Repositories",
             font=self._font(16, bold=True),
             text_color="#113150",
-        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
+        ).grid(row=0, column=0, sticky="w")
+        repo_actions = ctk.CTkFrame(repo_header, fg_color="transparent")
+        repo_actions.grid(row=0, column=1, sticky="e")
+        self._audit_button = ctk.CTkButton(
+            repo_actions,
+            text="Run Audit",
+            command=lambda: self.run_clicked(run_fix=False),
+            width=130,
+            height=34,
+            corner_radius=8,
+            fg_color=self._primary_button_fg,
+            hover_color=self._primary_button_hover,
+        )
+        self._audit_button.pack(side="left", padx=(0, 8))
         ctk.CTkButton(
-            repos_card,
-            text="Refresh Repositories",
-            height=32,
-            width=190,
+            repo_actions,
+            text="Refresh",
+            height=34,
+            width=120,
             corner_radius=8,
             command=self.refresh_repos,
             fg_color=self._support_button_fg,
             hover_color=self._support_button_hover,
-        ).grid(row=0, column=1, sticky="e", padx=14, pady=(12, 8))
+        ).pack(side="left")
+        self._repo_summary_label = ctk.CTkLabel(
+            repos_card,
+            text="Select one or more repositories. Leave the selection empty to audit every repository shown under Root.",
+            justify="left",
+            anchor="w",
+            font=self._font(11),
+            text_color="#4A6076",
+        )
+        self._repo_summary_label.grid(row=1, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 8))
 
         list_shell = ctk.CTkFrame(
             repos_card,
@@ -5285,7 +5300,7 @@ class GuiApp:  # pragma: no cover
             border_width=1,
             border_color="#D1DDEA",
         )
-        list_shell.grid(row=1, column=0, sticky="nsew", padx=14, pady=(0, 8))
+        list_shell.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=14, pady=(0, 8))
         list_shell.grid_columnconfigure(0, weight=1)
         list_shell.grid_rowconfigure(0, weight=1)
 
@@ -5306,9 +5321,19 @@ class GuiApp:  # pragma: no cover
         repo_scroll = ctk.CTkScrollbar(list_shell, orientation="vertical", command=self.repo_list.yview)
         repo_scroll.grid(row=0, column=1, sticky="ns", padx=(8, 10), pady=10)
         self.repo_list.configure(yscrollcommand=repo_scroll.set)
+        self.repo_list.bind("<<ListboxSelect>>", self._on_repo_selection_changed)
+        self._repo_empty_state = ctk.CTkLabel(
+            list_shell,
+            text="No repositories found under the current Root yet.",
+            justify="center",
+            anchor="center",
+            font=self._font(12),
+            text_color="#526679",
+            wraplength=360,
+        )
 
         run_controls = ctk.CTkFrame(repos_card, fg_color="transparent")
-        run_controls.grid(row=2, column=0, sticky="w", padx=14, pady=(4, 12))
+        run_controls.grid(row=3, column=0, columnspan=2, sticky="w", padx=14, pady=(4, 12))
         ctk.CTkButton(
             run_controls,
             text="Select All",
@@ -5450,7 +5475,7 @@ class GuiApp:  # pragma: no cover
         )
         self.ctk.CTkButton(
             parent,
-            text="Browse...",
+            text="Browse…",
             width=92,
             height=32,
             corner_radius=8,
@@ -5484,7 +5509,7 @@ class GuiApp:  # pragma: no cover
         )
         self.ctk.CTkButton(
             parent,
-            text="Browse...",
+            text="Browse…",
             width=92,
             height=32,
             corner_radius=8,
@@ -5519,7 +5544,7 @@ class GuiApp:  # pragma: no cover
         )
         self.ctk.CTkButton(
             parent,
-            text="Save As...",
+            text="Save As…",
             width=92,
             height=32,
             corner_radius=8,
@@ -5653,6 +5678,76 @@ class GuiApp:  # pragma: no cover
             self._flow_tabs.set(tab_name)
         except Exception:
             pass
+
+    def _set_repair_status(self, message: str, *, text_color: str = "#5C6F82") -> None:
+        repair_status_label = getattr(self, "_repair_status_label", None)
+        if repair_status_label is None:
+            return
+        repair_status_label.configure(text=message, text_color=text_color)
+
+    def _set_repo_empty_state(self, visible: bool, message: str | None = None) -> None:
+        repo_empty_state = getattr(self, "_repo_empty_state", None)
+        if repo_empty_state is None:
+            return
+        if not visible:
+            repo_empty_state.place_forget()
+            return
+        if message:
+            repo_empty_state.configure(text=message)
+        repo_empty_state.place(relx=0.5, rely=0.5, anchor="center")
+
+    def _update_repo_summary(self) -> None:
+        repo_summary_label = getattr(self, "_repo_summary_label", None)
+        if repo_summary_label is None:
+            return
+
+        total = len(self._repo_items)
+        selected = len(self.repo_list.curselection())
+        includes_current_root = any(value == "." for _label, value in self._repo_items)
+
+        if total == 0:
+            repo_summary_label.configure(
+                text="Choose a Root folder that contains one or more git repositories."
+            )
+            return
+
+        repo_word = "repository" if total == 1 else "repositories"
+        selected_text = (
+            "No repositories selected."
+            if selected == 0
+            else f"{selected} selected."
+        )
+        root_hint = " Current Root is available in the list." if includes_current_root else ""
+        repo_summary_label.configure(
+            text=(
+                f"Showing {total} {repo_word} under Root. {selected_text} "
+                "Leave the selection empty to audit every repository shown."
+                f"{root_hint}"
+            )
+        )
+
+    def _build_repair_status_summary(self, reports_payload: list[dict[str, object]]) -> str:
+        total = len(reports_payload)
+        if total == 0:
+            return "No audit results in this session yet. Run Audit first, then review the summary before applying write actions."
+
+        passed = sum(1 for item in reports_payload if item.get("status") == "PASS")
+        failed = sum(1 for item in reports_payload if item.get("status") == "FAIL")
+        names = [str(item.get("name")) for item in reports_payload[:3] if item.get("name")]
+        label = ", ".join(names)
+        if total > len(names):
+            label += f", +{total - len(names)} more"
+
+        if failed:
+            return (
+                f"Last audit: {label}. {failed} FAIL / {passed} PASS. "
+                "Review the findings and confirm every write action before Repair."
+            )
+
+        return (
+            f"Last audit: {label}. All selected repositories passed. "
+            "Repair is optional; use it only if you still want to apply reviewed cleanup actions."
+        )
 
     def _set_repair_tab_visual_lock(self, locked: bool, reason: str | None = None) -> None:
         if self._repair_tab_block_overlay is None:
@@ -5822,6 +5917,12 @@ class GuiApp:  # pragma: no cover
         self._repair_ready = False
         self._repair_cooldown_remaining = 0
         self._repair_button_text = reason
+        self._set_repair_status(
+            "No audit results in this session yet. Run Audit first, then review the summary before applying write actions."
+            if reason == "Repair (run audit first)"
+            else f"{reason}. Run Audit again before applying more write actions.",
+            text_color="#5C6F82",
+        )
         self._set_repair_tab_visual_lock(True, reason)
         self._update_run_buttons_state()
 
@@ -5841,6 +5942,11 @@ class GuiApp:  # pragma: no cover
         self._repair_ready = False
         self._repair_cooldown_remaining = self._repair_cooldown_seconds
         self._repair_button_text = f"Repair (wait {self._repair_cooldown_remaining}s)"
+        self._set_repair_status(
+            self._build_repair_status_summary(reports_payload)
+            + " Repair unlocks after the review window completes.",
+            text_color="#7A4B13",
+        )
         self._set_repair_tab_visual_lock(False)
         self._update_run_buttons_state()
         self.log(
@@ -5854,12 +5960,22 @@ class GuiApp:  # pragma: no cover
             self._repair_ready = True
             self._repair_cooldown_remaining = 0
             self._repair_button_text = "Repair"
+            self._set_repair_status(
+                self._build_repair_status_summary(self._last_audit_reports_payload)
+                + " Repair is now available if you still want to apply reviewed cleanup actions.",
+                text_color="#7B1E1E",
+            )
             self._update_run_buttons_state()
             self.log("[INFO] Repair unlocked.")
             return
 
         self._repair_cooldown_remaining -= 1
         self._repair_button_text = f"Repair (wait {self._repair_cooldown_remaining}s)"
+        self._set_repair_status(
+            self._build_repair_status_summary(self._last_audit_reports_payload)
+            + f" Repair unlocks in {self._repair_cooldown_remaining}s.",
+            text_color="#7A4B13",
+        )
         self._update_run_buttons_state()
         self._repair_cooldown_after_id = self.root.after(1000, self._tick_repair_cooldown)
 
@@ -6020,21 +6136,46 @@ class GuiApp:  # pragma: no cover
 
     def clear_selection(self) -> None:
         self.repo_list.selection_clear(0, "end")
+        self._update_repo_summary()
 
     def select_all(self) -> None:
         self.repo_list.select_set(0, "end")
+        self._update_repo_summary()
+
+    def _on_repo_selection_changed(self, _event=None) -> None:
+        self._update_repo_summary()
 
     def refresh_repos(self) -> None:
         self.repo_list.delete(0, "end")
+        self._repo_items = []
         root = Path(self.root_var.get())
         if not root.exists():
+            self._set_repo_empty_state(
+                True,
+                "The selected Root folder does not exist.\nChoose a valid directory to load repositories.",
+            )
+            self._update_repo_summary()
             return
+        if (root / ".git").exists():
+            self._repo_items.append((f"{root.name} (Current Root)", "."))
         for child in sorted(root.iterdir()):
             if child.is_dir() and (child / ".git").exists():
-                self.repo_list.insert("end", child.name)
+                self._repo_items.append((child.name, child.name))
+
+        for label, _value in self._repo_items:
+            self.repo_list.insert("end", label)
+
+        if len(self._repo_items) == 1:
+            self.repo_list.selection_set(0)
+
+        self._set_repo_empty_state(
+            not self._repo_items,
+            "No git repositories were found under the selected Root.",
+        )
+        self._update_repo_summary()
 
     def _selected_repo_names(self) -> list[str]:
-        return [self.repo_list.get(i) for i in self.repo_list.curselection()]
+        return [self._repo_items[i][1] for i in self.repo_list.curselection() if i < len(self._repo_items)]
 
     def _read_identity_inputs(self) -> tuple[str, str]:
         user_name = self.git_user_name_var.get().strip()

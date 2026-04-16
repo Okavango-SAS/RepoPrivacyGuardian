@@ -1,59 +1,77 @@
 # UX/UI Audit
 
-Audit date: 2026-04-15
+Audit date: 2026-04-16
 
-Scope reviewed:
+## Scope
 
-- Main Audit view on desktop
-- Repair tab locked state on desktop
-- Compact desktop layout around the minimum supported GUI width
+Screens audited in the running GUI:
 
-Method:
+- Audit view on desktop with default state
+- Audit view on desktop with the current repository selected
+- Repair tab while the staged repair gate is still locked
+- Audit view after running an audit and waiting for the repair gate summary
+- Compact desktop width around the minimum supported GUI size
+
+## Method
 
 - Launched the real `customtkinter` GUI locally from `main`
-- Captured before screenshots from the rendered application
-- Improved layout, interaction clarity, and visual affordance in the shipped GUI
-- Captured after screenshots from the same states to validate the result
+- Walked the main Audit and Repair flows in the running app
+- Captured before screenshots from the rendered interface
+- Applied UX, layout, and copy fixes in the shipped GUI
+- Re-ran the GUI and captured after screenshots from the same states
 
-## Key Findings
+## Main Findings
 
-1. Flow affordance was weak.
-   The `Audit` / `Repair` tabs were visually tiny and easy to miss, so the staged workflow looked less intentional than the product behavior actually is.
+1. The default launch state could look broken.
+   When the selected root was itself the target repository, the list stayed empty because only child repositories were shown. The app opened in a state that looked like missing data instead of a valid starting point.
 
-2. Secondary actions looked disabled.
-   Browse buttons, read-only actions, and repository utility actions used a muted fill that made active controls look unavailable.
+2. The main action was too far from the decision point.
+   `Audit` lived outside the repositories section, so the core flow of pick repo then run audit was visually fragmented and harder to scan.
 
-3. The Git identity block spent too much vertical space.
-   On wide desktop layouts the identity action buttons still wrapped into two rows, pushing the repository list and execution log further below the fold.
+3. Repository feedback was too weak.
+   The screen did not clearly explain whether the root was valid, whether anything was selected, or why the repo list was empty.
 
-4. The locked `Repair` state felt unfinished.
-   The tab mostly showed empty space with a short message and a small CTA, which made the flow feel harsher and less informative than intended.
+4. Repair gating was technically correct but visually under-explained.
+   After an audit, the repair state relied too much on logs and internal wording. Users had little high-signal summary about what passed, what failed, and when write actions would unlock.
 
-5. The GUI default for opening the HTML report was too eager.
-   Keeping report auto-open enabled by default created unnecessary surprise for users who only wanted to inspect the GUI workflow.
+5. The write-actions area felt heavier than necessary.
+   Several labels were long, repetitive, and oriented around CLI flags instead of human intent. The section looked noisier than its actual function.
 
-## Corrections Implemented
+## Corrections Applied
 
-- Promoted the staged flow visually by relabeling the tabs to `1. Audit` and `2. Repair`.
-- Restyled secondary buttons so they remain obviously interactive without competing with primary actions.
-- Reflowed the Git identity action row to a single line on wide layouts and a wrapped layout only when needed.
-- Reworked the locked `Repair` state into a centered instruction card with clearer next steps.
-- Shortened the always-visible GitHub email privacy helper copy to reduce density while preserving the link-out action.
-- Made `Open HTML report automatically` opt-in in the GUI instead of enabled by default.
+- Included the current root repository in the GUI list whenever the selected root is itself a git repository.
+- Auto-selected the only available repository when the list contains exactly one valid target.
+- Added repository summary feedback so the screen explains current selection and whether the current root is part of the target set.
+- Added an explicit empty state message for invalid or empty roots instead of leaving the list visually blank.
+- Moved the main `Run Audit` action into the repositories header so repo choice and execution are grouped in the same visual area.
+- Tightened the top spacing so the repositories block becomes discoverable earlier on desktop.
+- Added a visible repair status summary that reports the latest audit outcome, pass/fail counts, and unlock timing during the staged cooldown.
+- Simplified copy in the write-actions card and replaced repeated warning badges with shorter contextual helper text.
+- Renamed several GUI labels to be more product-facing and less CLI-flag-centric.
 
 ## Screenshots
 
-### Audit View, Desktop
+### Audit View, Desktop Default State
 
 Before:
 
-![Audit desktop before](ux-audit/before/audit-desktop-before.png)
+![Audit default desktop before](ux-audit/before/audit-default-desktop-before.png)
 
 After:
 
-![Audit desktop after](ux-audit/after/audit-desktop-after.png)
+![Audit default desktop after](ux-audit/after/audit-default-desktop-after.png)
 
-### Repair Locked State, Desktop
+### Audit View, Current Root Selected
+
+Before:
+
+![Audit selected desktop before](ux-audit/before/audit-selected-desktop-before.png)
+
+After:
+
+![Audit selected desktop after](ux-audit/after/audit-selected-desktop-after.png)
+
+### Repair Locked State
 
 Before:
 
@@ -63,7 +81,17 @@ After:
 
 ![Repair locked after](ux-audit/after/repair-locked-desktop-after.png)
 
-### Audit View, Compact Desktop
+### Post-Audit State With Repair Summary
+
+Before:
+
+![Audit post-run before](ux-audit/before/audit-post-run-before.png)
+
+After:
+
+![Audit post-run after](ux-audit/after/audit-post-run-after.png)
+
+### Compact Desktop Layout
 
 Before:
 
@@ -78,9 +106,9 @@ After:
 - `python tests/release_smoke_gui.py`
 - `python tests/release_smoke_cli.py`
 - `python -m pytest -q`
-- `python -m build`
+- Manual GUI walkthrough with fresh screenshots after the fixes
 
 ## Remaining Limits
 
-- The GUI remains a desktop-first companion to the CLI, not a fully separate product surface.
-- There is still no full automated visual regression suite; the screenshots captured here are a manual audit artifact, not a pixel-diff test pipeline.
+- The GUI remains desktop-first; compact widths are improved but still denser than the primary desktop layout.
+- There is still no automated visual regression suite. The screenshots in `docs/ux-audit/` remain the current audit artifact for UI review.

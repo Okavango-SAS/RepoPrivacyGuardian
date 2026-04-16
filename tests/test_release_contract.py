@@ -635,6 +635,79 @@ def test_gui_lock_default_text_is_english() -> None:
     assert app._repair_button_text == "Repair (run audit first)"
 
 
+def test_refresh_repos_includes_current_root_and_autoselects_single_repo(tmp_path: Path) -> None:
+    class DummyVar:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
+    class DummyListbox:
+        def __init__(self) -> None:
+            self.items: list[str] = []
+            self.selected: set[int] = set()
+
+        def delete(self, _start, _end) -> None:
+            self.items = []
+            self.selected.clear()
+
+        def insert(self, _index, value: str) -> None:
+            self.items.append(value)
+
+        def selection_set(self, index: int) -> None:
+            self.selected.add(index)
+
+        def curselection(self) -> tuple[int, ...]:
+            return tuple(sorted(self.selected))
+
+    class DummyLabel:
+        def __init__(self) -> None:
+            self.text = ""
+            self.kwargs: dict[str, str] = {}
+
+        def configure(self, **kwargs) -> None:
+            self.kwargs.update(kwargs)
+            if "text" in kwargs:
+                self.text = kwargs["text"]
+
+        def place(self, **kwargs) -> None:
+            self.kwargs.update(kwargs)
+
+        def place_forget(self) -> None:
+            self.kwargs["hidden"] = "1"
+
+    root_repo = tmp_path / "repo-a"
+    (root_repo / ".git").mkdir(parents=True)
+
+    app = object.__new__(rpg.GuiApp)
+    app.root_var = DummyVar(str(root_repo))
+    app.repo_list = DummyListbox()
+    app._repo_items = []
+    app._repo_summary_label = DummyLabel()
+    app._repo_empty_state = DummyLabel()
+
+    app.refresh_repos()
+
+    assert app.repo_list.items == [f"{root_repo.name} (Current Root)"]
+    assert app._selected_repo_names() == ["."]
+    assert "Current Root is available in the list." in app._repo_summary_label.text
+
+
+def test_build_repair_status_summary_mentions_pass_fail_counts() -> None:
+    app = object.__new__(rpg.GuiApp)
+
+    summary = app._build_repair_status_summary(
+        [
+            {"name": "repo-a", "status": "FAIL"},
+            {"name": "repo-b", "status": "PASS"},
+        ]
+    )
+
+    assert "1 FAIL / 1 PASS" in summary
+    assert "repo-a, repo-b" in summary
+
+
 def test_gui_browse_helpers_update_variables(tmp_path: Path) -> None:
     class DummyVar:
         def __init__(self, value: str):
