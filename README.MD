@@ -92,6 +92,13 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - `--audit-github-hardening` performs read-only GitHub REST API requests against GitHub remotes to inspect repository settings. Admin-only checks require `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN`.
 - The default CLI/GUI paths do not upload repository contents, reports, or telemetry to a remote service.
 
+## 🔒 Local Security Posture
+
+- Run artifacts are kept local and are written with private file permissions where the platform supports them.
+- Generated rewrite inputs such as temporary `mailmap` and `replace-text` files are removed after use instead of being left behind in temp storage.
+- Tracked-file scanners skip symlinked files and oversized text candidates to reduce accidental local file disclosure and unbounded memory reads.
+- Report/export writes and `.gitignore` remediation refuse symlinked target paths instead of following them.
+
 ## 🧰 Tooling Readiness
 
 - `--check-tooling` verifies the local tools needed for the selected mode before you start a run.

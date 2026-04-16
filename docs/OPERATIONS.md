@@ -38,7 +38,7 @@ By default the script:
 - runs CLI and GUI smoke scripts
 - verifies module help and direct-script help
 - builds the `wheel` and `sdist`
-- installs both artifacts in isolated virtual environments and verifies the console entry point plus module execution
+- installs both artifacts in isolated virtual environments, runs `pip check`, and verifies the console entry point plus module execution
 - runs a final self-audit when the worktree is clean
 
 Useful flags:
@@ -70,6 +70,12 @@ Operational outputs remain local by default:
 - rewrite safety bundle: `<repo>-pre-publication-fix-<timestamp>.bundle`
 
 Treat audit artifacts and backup bundles as sensitive local outputs even when report content is redacted.
+
+The tool also applies a few local-safety defaults during normal operation:
+
+- report and export writes avoid symlink targets
+- run artifacts are created with private directory/file permissions where the platform supports them
+- generated rewrite helper files are temporary and removed after the rewrite step finishes
 
 ## Recovery and rollback
 

@@ -59,6 +59,7 @@ The harness currently validates:
 - module and direct-script help paths
 - `wheel` and `sdist` builds
 - install smoke for both built artifacts
+- `pip check` inside each isolated install-smoke environment
 - final self-audit when the worktree is clean
 
 ## 4. Repository map

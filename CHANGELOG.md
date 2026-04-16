@@ -11,6 +11,7 @@ Repository consolidation and developer-experience cleanup.
 - Aligned the default `.gitignore` baseline, policy docs, and smoke fixtures so tracked `.env.example` files are supported without creating tracked-but-ignored drift.
 - Added `.env.example` plus `docs/LOCAL_DEVELOPMENT.md` to make optional auth variables, local setup, validation loops, and repository navigation explicit.
 - Tightened the release harness with an explicit CLI tooling preflight and clearer step boundaries before the build/install validation path.
+- Hardened local file handling so reports and exports refuse symlink targets, rewrite helper files are removed after use, and tracked-file scans skip symlinked or oversized text files.
 
 ## [1.2.2] - 2026-04-15
 

@@ -147,6 +147,7 @@ def install_smoke_for_artifact(repo_root: Path, artifact: Path) -> None:
         py = venv_python(venv_dir)
         run_command([py, "-m", "pip", "install", "--upgrade", "pip"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["install"])
         run_command([py, "-m", "pip", "install", str(artifact)], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["install"])
+        run_command([py, "-m", "pip", "check"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["quick"])
         run_command([venv_console(venv_dir, "repo-privacy-guardian"), "--help"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["quick"])
         run_command([py, "-m", "Repo_Privacy_Guardian", "--help"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["quick"])
         run_command(

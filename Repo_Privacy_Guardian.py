@@ -90,7 +90,8 @@ LITELLM_INCIDENT_ID = "litellm-2026-03"
 EXFIL_INDICATOR_MODE = "advisory"
 GITHUB_HARDENING_MODE = "advisory"
 REDACTED_EMAIL = "<redacted-email>"
-REDACTED_SECRET = "<redacted-secret>"
+# Redaction placeholder, not a credential.
+REDACTED_SECRET = "<redacted-secret>"  # nosec B105
 REDACTED_PATH = "<redacted-path>"
 EMAIL_NOISE_DOMAINS = {
     "example.com",
@@ -129,6 +130,7 @@ DEFAULT_IGNORE_BASELINE = [
     "Thumbs.db",
     "desktop.ini",
 ]
+MAX_TRACKED_TEXT_SCAN_BYTES = 5 * 1024 * 1024
 
 # Allow committed template files such as `.env.example` while keeping real
 # environment files and local variants sensitive by default.
@@ -216,6 +218,115 @@ def render_ignore_baseline(patterns: list[str] | None = None) -> str:
     baseline = DEFAULT_IGNORE_BASELINE if patterns is None else patterns
     return "\n".join(baseline) + "\n"
 
+
+def _path_has_existing_symlink_ancestor(path: Path) -> bool:
+    current = path
+    while True:
+        try:
+            if current.is_symlink():
+                return True
+        except OSError:
+            return True
+        parent = current.parent
+        if parent == current:
+            return False
+        current = parent
+
+
+def _apply_private_permissions(path: Path, mode: int) -> None:
+    if os.name == "nt":
+        return
+    try:
+        path.chmod(mode)
+    except OSError:
+        pass
+
+
+def ensure_private_directory(path: Path) -> None:
+    if _path_has_existing_symlink_ancestor(path):
+        raise RuntimeError(f"Refusing to use symlinked directory path: {path}")
+    path.mkdir(parents=True, exist_ok=True)
+    if not path.is_dir():
+        raise RuntimeError(f"Expected a directory path: {path}")
+    _apply_private_permissions(path, 0o700)
+
+
+def write_private_text_file(path: Path, content: str) -> None:
+    ensure_private_directory(path.parent)
+    if path.is_symlink():
+        raise RuntimeError(f"Refusing to write through symlinked file path: {path}")
+
+    fd, temp_name = tempfile.mkstemp(
+        prefix=f".{path.name}.tmp-",
+        dir=str(path.parent),
+        text=True,
+    )
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+            fh.write(content)
+        _apply_private_permissions(temp_path, 0o600)
+        os.replace(temp_path, path)
+        _apply_private_permissions(path, 0o600)
+    finally:
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+
+
+def append_private_text_file(path: Path, content: str) -> None:
+    ensure_private_directory(path.parent)
+    if path.is_symlink():
+        raise RuntimeError(f"Refusing to append through symlinked file path: {path}")
+
+    flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(str(path), flags, 0o600)
+    with os.fdopen(fd, "a", encoding="utf-8", newline="") as fh:
+        fh.write(content)
+    _apply_private_permissions(path, 0o600)
+
+
+def create_private_temp_text_file(prefix: str, filename: str, content: str) -> Path:
+    temp_dir = Path(tempfile.mkdtemp(prefix=prefix))
+    ensure_private_directory(temp_dir)
+    out_path = temp_dir / filename
+    write_private_text_file(out_path, content)
+    return out_path
+
+
+def cleanup_private_temp_text_file(path: Path | None) -> None:
+    if path is None:
+        return
+    try:
+        if path.exists() or path.is_symlink():
+            path.unlink()
+    except OSError:
+        pass
+    temp_dir = path.parent
+    try:
+        if temp_dir.exists() and temp_dir.name.startswith("repo-publication-guard-"):
+            temp_dir.rmdir()
+    except OSError:
+        pass
+
+
+def read_text_file_for_scan(path: Path, *, max_bytes: int = MAX_TRACKED_TEXT_SCAN_BYTES) -> str | None:
+    try:
+        if path.is_symlink():
+            return None
+        if path.stat().st_size > max_bytes:
+            return None
+        data = path.read_bytes()
+    except OSError:
+        return None
+    if b"\x00" in data:
+        return None
+    return data.decode("utf-8", errors="replace")
+
 EXFIL_CODE_RE = re.compile(
     r"Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|HttpClient|WebClient|"
     r"requests\.|httpx|aiohttp|urllib|urlopen|websockets|socket\.|"
@@ -253,6 +364,7 @@ SUPPLY_CHAIN_CANDIDATE_FILENAMES = {
 }
 
 GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)(?:\.git)?$", re.IGNORECASE)
+ALLOWED_GITHUB_API_HOSTS = {"api.github.com"}
 
 CODE_EXTENSIONS = {
     ".py",
@@ -329,8 +441,8 @@ class RunLogger:
     def __init__(self, log_path: Path, sink: Callable[[str], None] | None = None) -> None:
         self.log_path = log_path
         self.sink = sink
-        self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        self.log_path.write_text("", encoding="utf-8")
+        ensure_private_directory(self.log_path.parent)
+        write_private_text_file(self.log_path, "")
 
     def __call__(self, msg: str) -> None:
         # Keep persisted artifacts privacy-safe by redacting common sensitive tokens.
@@ -347,8 +459,7 @@ class RunLogger:
                 self.sink(safe_text)
         stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         line = f"[{stamp}] {text}\n"
-        with self.log_path.open("a", encoding="utf-8") as fh:
-            fh.write(line)
+        append_private_text_file(self.log_path, line)
 
 
 def _missing_executable_message(executable: str) -> str:
@@ -1418,13 +1529,9 @@ class RepoPublicationGuard:  # pragma: no cover
                 continue
             if only_code_files and file_path.suffix.lower() not in CODE_EXTENSIONS:
                 continue
-            try:
-                data = file_path.read_bytes()
-            except OSError:
+            text = read_text_file_for_scan(file_path)
+            if text is None:
                 continue
-            if b"\x00" in data:
-                continue
-            text = data.decode("utf-8", errors="replace")
             for idx, line in enumerate(text.splitlines(), start=1):
                 if regex.search(line):
                     matches.append(f"{rel}:{idx}:{line.strip()[:240]}")
@@ -1529,8 +1636,10 @@ class RepoPublicationGuard:  # pragma: no cover
         )
         matches: list[str] = []
         try:
-            assert proc.stdout is not None
-            for idx, line in enumerate(proc.stdout, start=1):
+            stream = proc.stdout
+            if stream is None:
+                return matches
+            for idx, line in enumerate(stream, start=1):
                 if regex.search(line):
                     matches.append(f"L{idx}:{line.strip()[:240]}")
                     if len(matches) >= self.max_matches:
@@ -1562,8 +1671,10 @@ class RepoPublicationGuard:  # pragma: no cover
         matches: list[str] = []
         current_file: str | None = None
         try:
-            assert proc.stdout is not None
-            for idx, line in enumerate(proc.stdout, start=1):
+            stream = proc.stdout
+            if stream is None:
+                return matches
+            for idx, line in enumerate(stream, start=1):
                 if line.startswith("diff --git "):
                     match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
                     current_file = match.group(2) if match else None
@@ -1589,13 +1700,9 @@ class RepoPublicationGuard:  # pragma: no cover
         matches: list[str] = []
         for file_path in self._iter_tracked_files(repo):
             rel = file_path.relative_to(repo).as_posix()
-            try:
-                data = file_path.read_bytes()
-            except OSError:
+            text = read_text_file_for_scan(file_path)
+            if text is None:
                 continue
-            if b"\x00" in data:
-                continue
-            text = data.decode("utf-8", errors="replace")
             for idx, line in enumerate(text.splitlines(), start=1):
                 emails = [
                     email
@@ -1636,8 +1743,10 @@ class RepoPublicationGuard:  # pragma: no cover
         current_file: str | None = None
 
         try:
-            assert proc.stdout is not None
-            for line in proc.stdout:
+            stream = proc.stdout
+            if stream is None:
+                return files
+            for line in stream:
                 if line.startswith("diff --git "):
                     match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
                     if match:
@@ -1710,6 +1819,8 @@ class RepoPublicationGuard:  # pragma: no cover
             return False
 
         gitignore = repo / ".gitignore"
+        if gitignore.is_symlink():
+            raise RuntimeError(f"Refusing to update symlinked .gitignore: {gitignore}")
         existing_text = gitignore.read_text(encoding="utf-8", errors="replace") if gitignore.exists() else ""
         existing_lines = {
             line.strip()
@@ -1722,7 +1833,7 @@ class RepoPublicationGuard:  # pragma: no cover
 
         block = ["", f"# {header}"] + missing
         new_text = existing_text.rstrip() + "\n" + "\n".join(block) + "\n"
-        gitignore.write_text(new_text, encoding="utf-8")
+        write_private_text_file(gitignore, new_text)
         return True
 
     def _history_file_matches(self, repo: Path, diff_filter: str) -> list[str]:
@@ -1905,9 +2016,11 @@ class RepoPublicationGuard:  # pragma: no cover
         if not lines:
             return None
 
-        tmp = Path(tempfile.mkdtemp(prefix="repo-publication-guard-")) / "mailmap.txt"
-        tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        return tmp
+        return create_private_temp_text_file(
+            "repo-publication-guard-",
+            "mailmap.txt",
+            "\n".join(lines) + "\n",
+        )
 
     def _write_replace_text_file(self, report: RepoReport) -> Path | None:
         replacement_map: dict[str, str] = {}
@@ -1967,9 +2080,11 @@ class RepoPublicationGuard:  # pragma: no cover
         lines = [f"literal:{src}==>{dst}" for src, dst in sorted(replacement_map.items())]
         lines.extend(extra_replace_lines)
         lines = list(dict.fromkeys(lines))
-        tmp = Path(tempfile.mkdtemp(prefix="repo-publication-guard-")) / "replace-text.txt"
-        tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        return tmp
+        return create_private_temp_text_file(
+            "repo-publication-guard-",
+            "replace-text.txt",
+            "\n".join(lines) + "\n",
+        )
 
     def _append_missing_gitignore_patterns(self, repo: Path, missing: list[str]) -> bool:
         return self._append_gitignore_lines(
@@ -2133,33 +2248,37 @@ class RepoPublicationGuard:  # pragma: no cover
                 report.fix_actions.append("[dry-run] sensitive filename signal purge regex enabled")
             return
 
-        self._ensure_git_filter_repo()
+        try:
+            self._ensure_git_filter_repo()
 
-        cmd = [sys.executable, "-m", "git_filter_repo", "--force"]
-        if mailmap:
-            cmd.extend(["--mailmap", str(mailmap)])
-        if replace_text:
-            cmd.extend(["--replace-text", str(replace_text)])
+            cmd = [sys.executable, "-m", "git_filter_repo", "--force"]
+            if mailmap:
+                cmd.extend(["--mailmap", str(mailmap)])
+            if replace_text:
+                cmd.extend(["--replace-text", str(replace_text)])
 
-        if needs_history_purge:
-            for purge_path in purge_paths:
-                cmd.extend(["--path", purge_path])
+            if needs_history_purge:
+                for purge_path in purge_paths:
+                    cmd.extend(["--path", purge_path])
 
-            if purge_by_filename_signals:
-                # Purge common sensitive/local artifacts from whole history.
-                cmd.extend(
-                    [
-                        "--path-regex",
-                        r"(^|.*/)__pycache__/.*|.*\.pyc$|(^|.*/)\.env(\..*)?$|"
-                        r".*\.(pem|key|p12|pfx|kdbx)$|(^|.*/)id_rsa$",
-                    ]
-                )
+                if purge_by_filename_signals:
+                    # Purge common sensitive/local artifacts from whole history.
+                    cmd.extend(
+                        [
+                            "--path-regex",
+                            r"(^|.*/)__pycache__/.*|.*\.pyc$|(^|.*/)\.env(\..*)?$|"
+                            r".*\.(pem|key|p12|pfx|kdbx)$|(^|.*/)id_rsa$",
+                        ]
+                    )
 
-            cmd.append("--invert-paths")
+                cmd.append("--invert-paths")
 
-        self._run_checked(cmd, cwd=repo, input_text="y\n")
-        self._restore_remotes(repo, remotes)
-        report.fix_actions.append("history rewritten with git-filter-repo")
+            self._run_checked(cmd, cwd=repo, input_text="y\n")
+            self._restore_remotes(repo, remotes)
+            report.fix_actions.append("history rewritten with git-filter-repo")
+        finally:
+            cleanup_private_temp_text_file(mailmap)
+            cleanup_private_temp_text_file(replace_text)
 
     def _make_backup_bundle(self, repo: Path) -> Path:
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -2167,6 +2286,7 @@ class RepoPublicationGuard:  # pragma: no cover
         if self.dry_run:
             return bundle
         self._git_checked(repo, "bundle", "create", str(bundle), "--all")
+        _apply_private_permissions(bundle, 0o600)
         return bundle
 
     def _commit_if_needed(self, repo: Path, message: str) -> str:
@@ -2383,14 +2503,17 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
 
 
 def create_run_artifacts(base_dir: Path) -> RunArtifacts:
-    base_dir.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(base_dir)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = base_dir / stamp
     suffix = 1
     while run_dir.exists():
         run_dir = base_dir / f"{stamp}-{suffix:02d}"
         suffix += 1
+    if _path_has_existing_symlink_ancestor(run_dir):
+        raise RuntimeError(f"Refusing to create run artifacts under symlinked path: {run_dir}")
     run_dir.mkdir(parents=True, exist_ok=False)
+    _apply_private_permissions(run_dir, 0o700)
     started = datetime.now()
     return RunArtifacts(
         run_id=run_dir.name,
@@ -2424,12 +2547,12 @@ def resolve_optional_json_export_path(raw_value: str | None, default_name: str) 
     raw = Path(raw_value)
     raw_text = str(raw_value)
     if raw_text.endswith("/") or raw_text.endswith("\\") or (raw.exists() and raw.is_dir()):
-        raw.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(raw)
         return raw / default_name
     if raw.suffix.lower() != ".json":
-        raw.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(raw)
         return raw / default_name
-    raw.parent.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(raw.parent)
     return raw
 
 
@@ -2470,13 +2593,28 @@ def parse_github_remote_slug(remote_url: str) -> tuple[str, str] | None:
     return match.group(1), match.group(2)
 
 
+def validate_outbound_https_url(url: str, allowed_hosts: set[str]) -> str:
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not host:
+        raise ValueError(f"Outbound request blocked: only HTTPS URLs are allowed ({url}).")
+    if host not in {item.lower() for item in allowed_hosts}:
+        raise ValueError(
+            f"Outbound request blocked: host '{host}' is not in the allowlist."
+        )
+    return url
+
+
 def is_public_github_remote(remote_url: str) -> tuple[bool | None, str]:
     slug = parse_github_remote_slug(remote_url)
     if not slug:
         return None, "not_github"
 
     owner, repo = slug
-    url = GITHUB_REPO_API_URL.format(owner=owner, repo=repo)
+    url = validate_outbound_https_url(
+        GITHUB_REPO_API_URL.format(owner=owner, repo=repo),
+        ALLOWED_GITHUB_API_HOSTS,
+    )
     request = urllib.request.Request(
         url,
         headers={
@@ -2486,8 +2624,12 @@ def is_public_github_remote(remote_url: str) -> tuple[bool | None, str]:
     )
 
     try:
+        # URL validated against the HTTPS GitHub API allowlist.
+        # nosec B310
         with urllib.request.urlopen(request, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8", errors="replace"))
+    except ValueError:
+        return None, "invalid_request_url"
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             # 404 is returned for private repos without auth and also missing repos.
@@ -2530,14 +2672,19 @@ def build_github_api_headers(token: str | None = None) -> dict[str, str]:
 
 
 def github_api_get_json(url: str, token: str | None = None) -> tuple[object | None, str]:
+    url = validate_outbound_https_url(url, ALLOWED_GITHUB_API_HOSTS)
     request = urllib.request.Request(url, headers=build_github_api_headers(token))
 
     try:
+        # URL validated against the HTTPS GitHub API allowlist.
+        # nosec B310
         with urllib.request.urlopen(request, timeout=8) as response:
             payload = response.read().decode("utf-8", errors="replace").strip()
             if not payload:
                 return {}, f"http_{getattr(response, 'status', 200)}"
             return json.loads(payload), f"http_{getattr(response, 'status', 200)}"
+    except ValueError:
+        return None, "invalid_request_url"
     except urllib.error.HTTPError as exc:
         return None, f"http_{exc.code}"
     except (TimeoutError, OSError, json.JSONDecodeError):
@@ -2545,11 +2692,16 @@ def github_api_get_json(url: str, token: str | None = None) -> tuple[object | No
 
 
 def github_api_probe_enabled(url: str, token: str | None = None) -> tuple[bool | None, str]:
+    url = validate_outbound_https_url(url, ALLOWED_GITHUB_API_HOSTS)
     request = urllib.request.Request(url, headers=build_github_api_headers(token))
 
     try:
+        # URL validated against the HTTPS GitHub API allowlist.
+        # nosec B310
         with urllib.request.urlopen(request, timeout=8) as response:
             return True, f"http_{getattr(response, 'status', 200)}"
+    except ValueError:
+        return None, "invalid_request_url"
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             return False, "http_404"
@@ -3777,7 +3929,8 @@ def persist_run_outputs(
 ) -> None:
     finished_at = datetime.now()
     payload = [sanitize_report_for_export(rep) for rep in reports]
-    artifacts.json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    payload_json = json.dumps(payload, indent=2)
+    write_private_text_file(artifacts.json_path, payload_json)
     logger(f"[INFO] JSON report written to {artifacts.json_path}")
 
     html_report = render_html_report(
@@ -3789,13 +3942,13 @@ def persist_run_outputs(
         finished_at=finished_at,
         optional_supply_chain_payload=optional_supply_chain_payload,
     )
-    artifacts.html_path.write_text(html_report, encoding="utf-8")
+    write_private_text_file(artifacts.html_path, html_report)
     logger(f"[INFO] HTML report written to {artifacts.html_path}")
     logger(f"[INFO] LOG report written to {artifacts.log_path}")
 
     export_path = resolve_optional_json_export_path(optional_json_export, artifacts.json_path.name)
     if export_path:
-        export_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        write_private_text_file(export_path, payload_json)
         logger(f"[INFO] Extra JSON export written to {export_path}")
 
     if any(report_contains_sensitive_findings(rep) for rep in reports):
@@ -3914,7 +4067,7 @@ def execute_guard_pipeline(
     if config.purge_all_detected_secret_files and not config.purge_detected_secret_files:
         logger("[WARN] --purge-all-detected-secret-files implies --purge-detected-secret-files")
         guard.purge_detected_secret_files = True
-        run_settings["purge_detected_secret_files"] = "True"
+        run_settings["purge_detected_secret_files"] = str(True)
 
     try:
         repos = guard.discover_repositories(config.repos, public_only=config.public_only)
@@ -4464,7 +4617,7 @@ def persist_litellm_supply_chain_output(
     if not payload:
         return
     out_path = artifacts.run_dir / "supply_chain_litellm.json"
-    out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    write_private_text_file(out_path, json.dumps(payload, indent=2))
     logger(f"[INFO] Supply-chain report written to {out_path}")
 
 

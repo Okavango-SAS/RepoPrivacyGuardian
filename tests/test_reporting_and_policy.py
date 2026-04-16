@@ -156,6 +156,29 @@ def test_run_logger_falls_back_when_sink_cannot_encode_text(tmp_path: Path, monk
     assert "\ufeffprefix line" in (tmp_path / "run.log").read_text(encoding="utf-8")
 
 
+def test_read_text_file_for_scan_skips_symlinked_path(tmp_path: Path, monkeypatch) -> None:
+    candidate = tmp_path / "tracked.txt"
+    candidate.write_text("ghp_" + ("A" * 36), encoding="utf-8")
+
+    original_is_symlink = Path.is_symlink
+
+    def fake_is_symlink(self: Path) -> bool:
+        if self == candidate:
+            return True
+        return original_is_symlink(self)
+
+    monkeypatch.setattr(Path, "is_symlink", fake_is_symlink)
+
+    assert rpg.read_text_file_for_scan(candidate) is None
+
+
+def test_read_text_file_for_scan_skips_oversized_path(tmp_path: Path) -> None:
+    candidate = tmp_path / "tracked.txt"
+    candidate.write_bytes(b"a" * (rpg.MAX_TRACKED_TEXT_SCAN_BYTES + 1))
+
+    assert rpg.read_text_file_for_scan(candidate) is None
+
+
 def test_probe_command_available_handles_missing_binary() -> None:
     def missing_runner(*args, **kwargs):  # type: ignore[no-untyped-def]
         del args, kwargs
@@ -691,6 +714,22 @@ def test_parse_github_remote_slug_helper() -> None:
     assert rpg.parse_github_remote_slug("https://github.com/example/repo.git") == ("example", "repo")
     assert rpg.parse_github_remote_slug("git@github.com:example/repo.git") == ("example", "repo")
     assert rpg.parse_github_remote_slug("https://gitlab.com/example/repo.git") is None
+
+
+def test_validate_outbound_https_url_allows_only_expected_hosts() -> None:
+    assert (
+        rpg.validate_outbound_https_url(
+            "https://api.github.com/repos/example/repo",
+            {"api.github.com"},
+        )
+        == "https://api.github.com/repos/example/repo"
+    )
+
+    with pytest.raises(ValueError, match="only HTTPS URLs are allowed"):
+        rpg.validate_outbound_https_url("http://api.github.com/repos/example/repo", {"api.github.com"})
+
+    with pytest.raises(ValueError, match="not in the allowlist"):
+        rpg.validate_outbound_https_url("https://example.com/repos/example/repo", {"api.github.com"})
 
 
 def test_resolve_github_hardening_token_prefers_tool_specific_env() -> None:
@@ -1389,6 +1428,24 @@ def test_write_replace_text_file_accepts_utf8_bom_explicit_file(
     assert contents.splitlines()[0] == "literal:fixture-token==>redacted-fixture-token"
 
 
+def test_append_gitignore_lines_rejects_symlinked_target(tmp_path: Path, monkeypatch) -> None:
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    gitignore = tmp_path / ".gitignore"
+    gitignore.write_text("*.pyc\n", encoding="utf-8")
+
+    original_is_symlink = Path.is_symlink
+
+    def fake_is_symlink(self: Path) -> bool:
+        if self == gitignore:
+            return True
+        return original_is_symlink(self)
+
+    monkeypatch.setattr(Path, "is_symlink", fake_is_symlink)
+
+    with pytest.raises(RuntimeError, match="symlinked \\.gitignore"):
+        guard._append_gitignore_lines(tmp_path, ["secrets.env"], "header")
+
+
 def test_rewrite_history_auto_confirms_git_filter_repo_continuation(tmp_path: Path) -> None:
     guard = object.__new__(rpg.RepoPublicationGuard)
     guard.dry_run = False
@@ -1427,6 +1484,8 @@ def test_rewrite_history_auto_confirms_git_filter_repo_continuation(tmp_path: Pa
     assert captured["cwd"] == tmp_path
     assert captured["input_text"] == "y\n"
     assert "--mailmap" in captured["cmd"]
+    mailmap_path = Path(captured["cmd"][captured["cmd"].index("--mailmap") + 1])
+    assert mailmap_path.exists() is False
     assert "history rewritten with git-filter-repo" in report.fix_actions
 
 
