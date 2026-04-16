@@ -129,6 +129,22 @@ def test_policy_parser_keeps_negated_baseline_after_env_wildcard(tmp_path: Path)
     assert guard.required_ignore_patterns.index(".env.*") < guard.required_ignore_patterns.index("!.env.example")
 
 
+def test_env_example_is_allowed_as_tracked_template_file(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "env-template")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / ".env.example", "API_BASE_URL=https://example.invalid\n")
+    _write(repo / "README.md", "template repo\n")
+    _commit_all(repo, "add env template")
+
+    guard = _make_guard(tmp_path)
+    report = guard.audit_repo(repo)
+
+    assert report.status == "PASS"
+    assert report.tracked_but_ignored == []
+    assert report.secret_file_candidates == []
+    assert report.history_sensitive_added == []
+
+
 def test_private_commit_metadata_blocks_when_owner_cannot_be_inferred(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path, "metadata-no-origin", user_email="owner.real@privacy.dev")
     _write(repo / ".gitignore", DEFAULT_BASELINE)

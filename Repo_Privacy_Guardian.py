@@ -130,8 +130,13 @@ DEFAULT_IGNORE_BASELINE = [
     "desktop.ini",
 ]
 
+# Allow committed template files such as `.env.example` while keeping real
+# environment files and local variants sensitive by default.
+ENV_SENSITIVE_FILENAME_RE = r"(^|/)\.env(?:\.(?!example$)[^/]+)?$"
+
 SENSITIVE_FILENAME_RE = re.compile(
-    r"(^|/)\.env(\..*)?$|"
+    ENV_SENSITIVE_FILENAME_RE
+    + r"|"
     r"\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|"
     r"(^|/)id_rsa$|"
     r"(^|/)(secrets?|credentials?|token)([._-]|$)|"
@@ -151,7 +156,8 @@ SECRET_CONTENT_RE = re.compile(
 )
 
 SECRET_REMEDIATE_FILENAME_RE = re.compile(
-    r"(^|/)\.env(\..*)?$|"
+    ENV_SENSITIVE_FILENAME_RE
+    + r"|"
     r"\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|"
     r"(^|/)id_rsa$|"
     r"(^|/)(secret|credential|token|password|passwd|api[_-]?key)([._-]|$)",
