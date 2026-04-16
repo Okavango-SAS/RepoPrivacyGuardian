@@ -2,6 +2,16 @@
 
 All notable public-release changes to this project are documented here.
 
+## [Unreleased]
+
+Repository consolidation and developer-experience cleanup.
+
+### Highlights
+
+- Aligned the default `.gitignore` baseline, policy docs, and smoke fixtures so tracked `.env.example` files are supported without creating tracked-but-ignored drift.
+- Added `.env.example` plus `docs/LOCAL_DEVELOPMENT.md` to make optional auth variables, local setup, validation loops, and repository navigation explicit.
+- Tightened the release harness with an explicit CLI tooling preflight and clearer step boundaries before the build/install validation path.
+
 ## [1.2.2] - 2026-04-15
 
 Operations/readiness runbook update.

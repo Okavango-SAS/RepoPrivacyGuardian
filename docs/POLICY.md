@@ -175,6 +175,7 @@ Minimum baseline:
 - .ruff_cache/
 - .env
 - .env.*
+- !.env.example
 - wsa-config.local.yaml
 - Audit_Results/
 - sessions/*

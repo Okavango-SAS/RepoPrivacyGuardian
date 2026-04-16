@@ -1,67 +1,109 @@
 # ARCHITECTURE
 
-## Overview
+Repo Privacy Guardian is still intentionally centered on one Python module: `Repo_Privacy_Guardian.py`.
 
-Repo Privacy Guardian is a local-first auditing and remediation utility.
+That is a tradeoff, not an accident. The repository optimizes for a self-contained CLI/Desktop tool with a small packaging surface. Maintainability depends on keeping clear section boundaries inside that file and documenting where each concern lives.
 
-It has two execution surfaces:
-- CLI entrypoint for scripted and repeatable runs.
-- Simple GUI wrapper for interactive operation.
+## Runtime surfaces
 
-GUI interaction is phase-based: operators run `Audit` first, and `Repair` is visually locked until audit state is valid and actionable.
+The project exposes three practical entry paths:
 
-Local-first remains the default execution model. The only built-in network lookup in the normal audit path is the optional `--public-only` GitHub visibility check, which performs a read-only unauthenticated request against the GitHub repository API for GitHub remotes.
+- installed console script: `repo-privacy-guardian`
+- module execution: `python -m Repo_Privacy_Guardian`
+- direct compatibility path: `python Repo_Privacy_Guardian.py`
 
-## Main components
+All of them converge on the same parser and shared execution pipeline.
 
-1. Repository discovery
-- Enumerates git repositories under a root path.
-- Supports explicit repo filters.
+## Code map inside `Repo_Privacy_Guardian.py`
 
-2. Audit engine
-- Scans tracked content and history patches.
-- Detects secret patterns, personal paths, email leakage, and ignore drift.
-- Produces normalized report model per repository.
+Read the file in this order when orienting yourself:
 
-3. Remediation planner
-- Converts findings into actionable fix candidates.
-- Classifies secret file candidates into safe auto-purge and manual review.
+1. Defaults and policy constants
+- default paths, ignore baseline, network/auth constants, and core regex rules
 
-4. Fix executor
-- Applies selected remediations:
-  - .gitignore updates
-  - stop tracking ignored/sensitive files
-  - optional history rewrite via git-filter-repo
-- Creates backup bundles before destructive operations.
+2. Tooling readiness and install helpers
+- `ToolingCheck`
+- `build_cli_tooling_checks()`
+- `build_gui_tooling_checks()`
+- install/bootstrap helpers for Git, `git-filter-repo`, `gh`, and Windows `winget`
 
-5. Reporting layer
-- Prints human-readable summary.
-- Persists machine-readable JSON report.
+3. Core report and runtime models
+- `CommandResult`
+- `RunArtifacts`
+- `GuardRunConfig`
+- `RunLogger`
+- `RepoReport`
 
-6. GUI interaction layer
-- Separates audit and remediation actions into `Audit` and `Repair` tabs.
-- Applies a visual lock overlay in `Repair` until audit context allows safe remediation actions.
+4. Audit and remediation engine
+- `RepoPublicationGuard`
+- repository discovery
+- content/history scanning
+- `.gitignore` baseline enforcement
+- remediation planning and execution
 
-## Data flow
+5. Reporting and export layer
+- CLI summaries
+- JSON sanitization
+- HTML report rendering
+- run artifact persistence
 
-1. Input arguments (CLI/GUI) define scope and behavior.
-2. If `--public-only` is enabled, discovery performs a read-only GitHub visibility lookup for GitHub remotes before a repository is included.
-3. In GUI mode, `Audit` establishes audit context before remediation is available.
-4. Auditor builds `RepoReport` objects.
-5. Optional fixer mutates repository state based on explicit flags.
-6. Re-audit confirms resulting state.
-7. JSON output is written for traceability.
+6. Shared execution pipeline
+- `build_guard_run_config()`
+- `execute_guard_pipeline()`
 
-## Safety model
+7. Optional GUI wrapper
+- `GuiApp`
+- GUI state management, audit/repair staging, and parity wiring
 
-- Explicit opt-in for destructive actions.
-- Dry-run support for planning.
-- Conservative defaults.
-- Backup-first strategy.
+8. CLI/parser entrypoint
+- `make_parser()`
+- `run_cli()`
+- `main()`
 
-## Extension points
+## Responsibility boundaries
 
-- New detection patterns (regex-based).
-- Additional policy profiles.
-- Alternate output formats (HTML/CSV).
-- Test harness and CI gate integration.
+Keep these boundaries intact when editing:
+
+- Detection logic should stay separate from presentation logic.
+- Shared runtime/config normalization should happen before CLI and GUI diverge.
+- GUI behavior should call the same pipeline used by CLI instead of re-implementing audit/fix logic.
+- Policy defaults should be expressed once in code and reused by smoke tests or fixtures where possible.
+
+## Execution flow
+
+Normal CLI flow:
+
+1. parser builds arguments
+2. arguments normalize into `GuardRunConfig`
+3. tooling preflight runs when requested
+4. run artifacts are created under `Audit_Results/<run_id>/`
+5. `execute_guard_pipeline()` instantiates `RepoPublicationGuard`
+6. repositories are discovered and audited
+7. optional fix path executes only when explicitly requested
+8. reports are persisted and optionally opened
+
+GUI flow uses the same backend pipeline, but keeps the visible staged contract:
+
+1. `Audit`
+2. review findings and plan
+3. `Repair` only after audit context unlocks it
+
+## Operationally important files outside the main module
+
+- `tests/`: tracked regression and release smoke coverage
+- `scripts/release_readiness.py`: repository-owned end-to-end local validation harness
+- `docs/POLICY.md`: source-of-truth policy document in the repo
+- `repo_privacy_guardian_resources/POLICY.md`: packaged copy of the policy for installed builds
+- `config/requirements/`: compatibility requirement manifests for users who prefer requirements files over extras
+
+## Design constraints worth preserving
+
+- Local-first behavior is the default.
+- Network access stays opt-in and documented.
+- Destructive operations require explicit flags.
+- Reports are treated as sensitive local artifacts.
+- CLI remains the primary contract; GUI is a parity wrapper, not a separate product surface.
+
+## Current technical debt
+
+The largest structural debt is still the single-file implementation. That is acceptable for the current scope, but future refactors should only extract modules when they improve clarity without splitting tightly coupled policy/runtime logic across too many files.

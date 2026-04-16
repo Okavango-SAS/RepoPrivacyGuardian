@@ -1,61 +1,40 @@
 # ROADMAP
 
-## Vision
+This roadmap reflects the current stable `1.2.x` stage of the repository instead of the early pre-`1.0` milestone labels that no longer describe reality.
 
-Provide a safe, repeatable, and auditable workflow to prepare repositories for public release.
+## Current baseline
 
-## Guiding priorities
+The repository is already stable in these areas:
 
-- Safety first: no destructive operation without explicit opt-in.
-- Reproducibility: the same input should produce the same findings.
-- Auditability: keep machine-readable outputs and clear operator actions.
-- Portability: keep defaults generic and avoid personal hardcoded values.
+- CLI-first audit and remediation workflow
+- optional GUI parity on the shared execution pipeline
+- tracked regression suite plus release smoke scripts
+- package build and install smoke for `wheel` and `sdist`
+- local tooling readiness checks and optional install helpers
+- local release harness and operator runbooks
+- documented versioning, release checklist, and public changelog
 
-## Milestone 0.1 - Stabilization
+## Near-term improvements with real value
 
-- Keep CLI and GUI parity for core audit and fix options.
-- Align GUI interaction flow with parity safety gates (`Audit` -> `Repair`, with `Repair` visually locked until valid audit context).
-- Improve report readability and failure grouping.
-- Expand documentation and release checklist.
-- Harden defaults around local policy and local result directory.
+These are the next improvements that still fit the current product scope:
 
-## Milestone 0.2 - Secret remediation hardening
+- expand synthetic integration coverage for rewrite-planning and redaction edge cases
+- keep docs, help text, packaged policy, and smoke fixtures aligned as defaults evolve
+- improve internal code navigation further if the single-file module grows materially
+- add a stable lint/static gate only when it is quiet enough to improve signal instead of adding release noise
 
-- Improve secret-file classification (safe vs manual review).
-- Add preview of candidate files and remediation plan in reports.
-- Add optional confirmation gates for high-risk purge actions.
-- Add clearer guidance for credential rotation after history rewrite.
+## Deprioritized for this repository phase
 
-## Milestone 1.0 - Stable public release
+These ideas may still be useful later, but they are not the current focus:
 
-Current baseline in repo:
+- organization-scoped allowlists or suppression profiles
+- batched fleet execution profiles for many repositories at once
+- broader GUI redesign beyond the current staged desktop wrapper
+- provider-specific secret rotation integrations
 
-- tracked pytest coverage for publication-gate regressions
-- CLI CI on Windows, Linux, and macOS
-- Python 3.10 through 3.13 validated in CI
-- package build plus `wheel` and `sdist` install smoke in CI
-- Windows GUI smoke in CI
-- tooling readiness checks plus optional local dependency installation paths
-- repository-owned local release-readiness harness and basic operator runbooks
-- lightweight versioning policy and release notes template in docs
-- public `CHANGELOG.md` and stable `1.x` metadata
+## Out of scope
 
-Next hardening steps:
-
-- expand synthetic integration coverage for rewrite planning and artifact redaction edge cases
-- keep `1.x` release notes and support claims aligned with validated behavior
-- keep additive GitHub hardening checks and playbooks aligned with the real remote settings they document
-- add optional lint/static checks once they are stable enough to avoid release noise
-
-## Milestone 0.4 - Advanced operations
-
-- Add scoped suppression/allowlist support for known safe matches.
-- Add batched execution profiles for large repository fleets.
-- Add optional HTML summary report.
-- Add optional policy profiles per organization.
-
-## Out of scope (for now)
-
-- Automatic secret rotation against external providers.
-- Hosted backend service.
-- Cross-platform GUI redesign beyond the current simple desktop interface.
+- hosted backend service
+- automatic secret rotation against third-party providers
+- remote telemetry as a default behavior
+- making the GUI the primary product surface

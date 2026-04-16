@@ -21,6 +21,7 @@ dist/
 # Local environment and secrets
 .env
 .env.*
+!.env.example
 wsa-config.local.yaml
 
 # Logs and temporary files

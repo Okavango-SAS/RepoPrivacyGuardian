@@ -34,6 +34,7 @@ ROOT_LAYOUT_OFFENDERS = [
 
 ROOT_LAYOUT_REQUIRED = [
     "CHANGELOG.md",
+    ".env.example",
     "Repo_Privacy_Guardian.py",
     "README.MD",
     "config/requirements/requirements.txt",
@@ -50,6 +51,7 @@ ROOT_LAYOUT_REQUIRED = [
 ]
 
 RELEASE_DOCS_REQUIRED = [
+    "docs/LOCAL_DEVELOPMENT.md",
     "docs/OPERATIONS.md",
     "docs/TROUBLESHOOTING.md",
     "docs/VERSIONING.md",
@@ -124,11 +126,16 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
 
 def test_operational_docs_cover_release_harness_env_and_recovery() -> None:
     root = _repo_root()
+    local_development = (root / "docs" / "LOCAL_DEVELOPMENT.md").read_text(encoding="utf-8")
     operations = (root / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
     troubleshooting = (root / "docs" / "TROUBLESHOOTING.md").read_text(encoding="utf-8")
 
+    assert ".env.example" in local_development
+    assert "python -m pytest -q" in local_development
+    assert "There is no separate repo-owned lint or typecheck command yet." in local_development
     assert "python scripts/release_readiness.py" in operations
     assert "Repo Privacy Guardian does not auto-load a `.env` file." in operations
+    assert "The tracked `.env.example` file is only a reference template" in operations
     assert "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN" in operations
     assert "git clone path/to/<repo>-pre-publication-fix-<timestamp>.bundle recovered-repo" in operations
     assert "Release harness skips the self-audit" in troubleshooting
@@ -147,6 +154,7 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
     assert "winget" in readme
     assert "GitHub MCP is not a prerequisite" in readme
     assert "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN" in readme
+    assert ".env.example" in readme
     assert "--audit-github-hardening" in agents
     assert "--check-tooling" in agents
     assert "winget" in agents
@@ -228,6 +236,7 @@ def test_repo_gitignore_covers_local_packaging_and_backup_artifacts() -> None:
     gitignore = (_repo_root() / ".gitignore").read_text(encoding="utf-8")
 
     assert ".pkg-venv/" in gitignore
+    assert "!.env.example" in gitignore
     assert "*-pre-publication-fix-*.bundle" in gitignore
 
 

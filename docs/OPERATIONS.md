@@ -19,6 +19,8 @@ repo-privacy-guardian --check-tooling --install-missing-tools
 
 Use `--install-missing-tools` only when you want the tool to attempt local installation for supported prerequisites.
 
+If you are working from this repository checkout instead of a packaged install, [LOCAL_DEVELOPMENT](LOCAL_DEVELOPMENT.md) is the shortest maintained setup guide.
+
 ## Preferred local release validation
 
 Run the repository-owned release harness before tagging or publishing package artifacts:
@@ -29,6 +31,7 @@ python scripts/release_readiness.py
 
 By default the script:
 
+- runs the CLI tooling preflight first
 - removes stale `dist/`, `build/`, and `*.egg-info/` outputs before the final build
 - byte-compiles `Repo_Privacy_Guardian.py`
 - runs tracked `pytest`
@@ -47,6 +50,8 @@ Useful flags:
 ## Environment variables
 
 Repo Privacy Guardian does not auto-load a `.env` file. Configure environment variables explicitly in the shell or execution environment.
+
+The tracked `.env.example` file is only a reference template for the optional variables below.
 
 Supported GitHub hardening auth variables:
 

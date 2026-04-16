@@ -9,35 +9,13 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+import Repo_Privacy_Guardian as rpg
 
 
-BASELINE = "\n".join(
-    [
-        ".venv/",
-        ".pkg-venv/",
-        "__pycache__/",
-        ".pytest_cache/",
-        ".mypy_cache/",
-        ".ruff_cache/",
-        ".env",
-        ".env.*",
-        "wsa-config.local.yaml",
-        "Audit_Results/",
-        "sessions/*",
-        "artifacts/",
-        "exports/",
-        "*.log",
-        "*.tmp",
-        "*.bak",
-        "*-pre-publication-fix-*.bundle",
-        ".vscode/",
-        ".idea/",
-        ".DS_Store",
-        "Thumbs.db",
-        "desktop.ini",
-        "",
-    ]
-)
+BASELINE = rpg.render_ignore_baseline()
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:

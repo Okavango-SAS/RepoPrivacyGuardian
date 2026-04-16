@@ -50,6 +50,22 @@ def test_main_without_args_prints_help_and_does_not_launch_gui(
     assert not cli_calls
 
 
+def test_parser_help_mentions_common_cli_flow() -> None:
+    help_text = rpg.make_parser().format_help()
+
+    assert "Common CLI flow:" in help_text
+    assert "repo-privacy-guardian --check-tooling" in help_text
+    assert "repo-privacy-guardian --gui" in help_text
+
+
+def test_render_ignore_baseline_keeps_env_example_exception_after_env_wildcard() -> None:
+    baseline = rpg.render_ignore_baseline().splitlines()
+
+    assert ".env.*" in baseline
+    assert "!.env.example" in baseline
+    assert baseline.index(".env.*") < baseline.index("!.env.example")
+
+
 def test_main_gui_runtime_error_reports_clean_message(monkeypatch, capsys) -> None:
     monkeypatch.setattr(rpg, "GuiApp", lambda: (_ for _ in ()).throw(RuntimeError("GUI mode requires a desktop session")))
 

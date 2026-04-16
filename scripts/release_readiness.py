@@ -85,6 +85,18 @@ def run_command(
         raise SystemExit(proc.returncode)
 
 
+def run_named_command(
+    name: str,
+    cmd: list[str],
+    *,
+    cwd: Path,
+    timeout: int,
+    env: dict[str, str] | None = None,
+) -> None:
+    log(name)
+    run_command(cmd, cwd=cwd, timeout=timeout, env=env)
+
+
 def is_clean_worktree(repo_root: Path) -> bool:
     proc = subprocess.run(
         ["git", "status", "--short"],
@@ -156,6 +168,60 @@ def latest_artifact(repo_root: Path, pattern: str) -> Path:
     return matches[-1]
 
 
+def run_release_verification_steps(repo_root: Path, args: argparse.Namespace) -> None:
+    run_named_command(
+        "CLI tooling preflight",
+        [sys.executable, "-m", "Repo_Privacy_Guardian", "--check-tooling"],
+        cwd=repo_root,
+        timeout=DEFAULT_TIMEOUTS["quick"],
+    )
+    run_named_command(
+        "Byte-compiling the main module",
+        [sys.executable, "-m", "py_compile", "Repo_Privacy_Guardian.py"],
+        cwd=repo_root,
+        timeout=DEFAULT_TIMEOUTS["quick"],
+    )
+    run_named_command(
+        "Running tracked pytest suite",
+        [sys.executable, "-m", "pytest", "-q"],
+        cwd=repo_root,
+        timeout=DEFAULT_TIMEOUTS["test"],
+    )
+    run_named_command(
+        "Running CLI smoke test",
+        [sys.executable, "tests/release_smoke_cli.py"],
+        cwd=repo_root,
+        timeout=DEFAULT_TIMEOUTS["quick"],
+    )
+    if args.skip_gui_smoke:
+        log("Skipping GUI smoke by request.")
+    else:
+        run_named_command(
+            "Running GUI smoke test",
+            [sys.executable, "tests/release_smoke_gui.py"],
+            cwd=repo_root,
+            timeout=DEFAULT_TIMEOUTS["quick"],
+        )
+    run_named_command(
+        "Checking module help",
+        [sys.executable, "-m", "Repo_Privacy_Guardian", "--help"],
+        cwd=repo_root,
+        timeout=DEFAULT_TIMEOUTS["quick"],
+    )
+    run_named_command(
+        "Checking direct script help",
+        [sys.executable, "Repo_Privacy_Guardian.py", "--help"],
+        cwd=repo_root,
+        timeout=DEFAULT_TIMEOUTS["quick"],
+    )
+    run_named_command(
+        "Building wheel and sdist",
+        [sys.executable, "-m", "build"],
+        cwd=repo_root,
+        timeout=DEFAULT_TIMEOUTS["build"],
+    )
+
+
 def maybe_run_self_audit(repo_root: Path, args: argparse.Namespace) -> None:
     if args.skip_self_audit:
         log("Skipping self-audit by request.")
@@ -195,17 +261,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_clean_build_artifacts:
         remove_stale_build_outputs(repo_root)
 
-    run_command([sys.executable, "-m", "py_compile", "Repo_Privacy_Guardian.py"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["quick"])
-    run_command([sys.executable, "-m", "pytest", "-q"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["test"])
-    run_command([sys.executable, "tests/release_smoke_cli.py"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["quick"])
-    if args.skip_gui_smoke:
-        log("Skipping GUI smoke by request.")
-    else:
-        run_command([sys.executable, "tests/release_smoke_gui.py"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["quick"])
-
-    run_command([sys.executable, "-m", "Repo_Privacy_Guardian", "--help"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["quick"])
-    run_command([sys.executable, "Repo_Privacy_Guardian.py", "--help"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["quick"])
-    run_command([sys.executable, "-m", "build"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["build"])
+    run_release_verification_steps(repo_root, args)
 
     install_smoke_for_artifact(repo_root, latest_artifact(repo_root, "*.whl"))
     install_smoke_for_artifact(repo_root, latest_artifact(repo_root, "*.tar.gz"))

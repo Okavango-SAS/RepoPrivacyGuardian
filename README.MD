@@ -18,6 +18,14 @@ It is designed for repeatable CLI execution first, with an optional desktop GUI 
 
 **GUI is optional.** The core product value is the reproducible CLI audit and remediation workflow.
 
+## 🧭 Start Here
+
+Choose the path that matches what you need right now:
+
+- First-time operator: read `--help`, run `--check-tooling`, then do a dry-run audit.
+- Contributor working from a checkout: use [LOCAL_DEVELOPMENT](docs/LOCAL_DEVELOPMENT.md) for setup, validation loops, and repo map.
+- Maintainer preparing a release: use [OPERATIONS](docs/OPERATIONS.md), [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md), and `python scripts/release_readiness.py`.
+
 ## 🧭 Support Matrix
 
 - Windows CLI: supported and CI-validated
@@ -93,6 +101,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - In the GUI, enabling GitHub hardening also offers optional installation/repair of `gh`, and on Windows it can bootstrap App Installer / `winget` from the official Microsoft bundle when possible.
 - For GitHub hardening admin checks, the supported helpers are token environment variables or an authenticated GitHub CLI (`gh auth login`).
 - GitHub MCP is not a prerequisite for the standalone CLI/Desktop tool and is not required for end-user installations.
+- `.env.example` is tracked as a reference for optional GitHub auth variables, but the tool does not auto-load it.
 
 ## 🖥️ CLI-First Behavior
 
@@ -144,6 +153,10 @@ Developer environment:
 python -m pip install ".[dev]"
 ```
 
+Optional environment reference:
+
+- `.env.example`: tracked reference for optional GitHub auth variables used by `--audit-github-hardening`
+
 Compatibility requirement files:
 
 - `config/requirements/requirements.txt`: base CLI has no extra Python runtime dependencies
@@ -161,6 +174,20 @@ External requirements:
 Recommended support target:
 
 - Python `3.10` through `3.13`
+
+## 🛠️ Local Developer Flow
+
+From a repository checkout:
+
+```sh
+python -m pip install ".[dev]"
+python -m Repo_Privacy_Guardian --help
+python -m Repo_Privacy_Guardian --check-tooling
+python -m pytest -q
+python scripts/release_readiness.py --skip-self-audit
+```
+
+Use [LOCAL_DEVELOPMENT](docs/LOCAL_DEVELOPMENT.md) for the maintained contributor workflow, repository map, and validation variants.
 
 ## 🚀 Quick Start
 
@@ -404,6 +431,8 @@ Pytest collection is restricted to tracked test files so local ignored test file
 ## 📚 Release Engineering Docs
 
 - [CHANGELOG](CHANGELOG.md): shipped release notes and public version history
+- [LOCAL_DEVELOPMENT](docs/LOCAL_DEVELOPMENT.md): contributor setup, validation loops, and repository map
+- [ARCHITECTURE](docs/ARCHITECTURE.md): code navigation and subsystem boundaries inside the single-file implementation
 - [VERSIONING](docs/VERSIONING.md): versioning policy, stable-baseline notes, and `1.x` release discipline
 - [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md): pre-tag release checklist
 - [OPERATIONS](docs/OPERATIONS.md): local runbook for preflight, release validation, and recovery

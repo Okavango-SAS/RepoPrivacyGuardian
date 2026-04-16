@@ -113,6 +113,7 @@ DEFAULT_IGNORE_BASELINE = [
     ".ruff_cache/",
     ".env",
     ".env.*",
+    "!.env.example",
     "wsa-config.local.yaml",
     "Audit_Results/",
     "sessions/*",
@@ -203,6 +204,11 @@ POLICY_MINIMUM_BASELINE_END_RE = re.compile(
     r"^(check currently ignored sensitive paths|comprobar ignored)\b",
     re.IGNORECASE,
 )
+
+
+def render_ignore_baseline(patterns: list[str] | None = None) -> str:
+    baseline = DEFAULT_IGNORE_BASELINE if patterns is None else patterns
+    return "\n".join(baseline) + "\n"
 
 EXFIL_CODE_RE = re.compile(
     r"Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|HttpClient|WebClient|"
@@ -1301,7 +1307,7 @@ class RepoPublicationGuard:  # pragma: no cover
     def _load_required_ignore_patterns(self) -> list[str]:
         patterns = list(DEFAULT_IGNORE_BASELINE)
         if not self.policy_path.exists():
-            return sorted(set(patterns))
+            return list(dict.fromkeys(patterns))
 
         raw = self._read_text(self.policy_path)
         in_block = False
@@ -1315,12 +1321,11 @@ class RepoPublicationGuard:  # pragma: no cover
                 break
             if in_block and stripped.startswith("- "):
                 candidate = stripped[2:].strip()
-                if re.match(r"^[A-Za-z0-9_.*\-/]+$", candidate):
+                if re.match(r"^[!A-Za-z0-9_.*\-/]+$", candidate):
                     extracted.append(candidate)
 
         patterns.extend(extracted)
-        unique = sorted(set(patterns))
-        return unique
+        return list(dict.fromkeys(patterns))
 
     def discover_repositories(
         self,
@@ -6302,6 +6307,14 @@ def make_parser() -> argparse.ArgumentParser:
             "Audit/fix repository public-release safety based on docs/POLICY.md. "
             "Outbound/exfil indicators remain advisory/manual-review by default."
         ),
+        epilog=(
+            "Common CLI flow:\n"
+            "  repo-privacy-guardian --check-tooling\n"
+            "  repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes\n"
+            "  repo-privacy-guardian --root /path/to/repos --repos MyRepo --fix --dry-run --yes\n"
+            "  repo-privacy-guardian --gui"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--root", default=str(default_root_dir()), help="Root folder containing repositories")
     parser.add_argument("--policy", default=str(DEFAULT_POLICY), help="Policy markdown path")

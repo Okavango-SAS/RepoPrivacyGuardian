@@ -10,33 +10,7 @@ from pathlib import Path
 import Repo_Privacy_Guardian as rpg
 
 
-DEFAULT_BASELINE = "\n".join(
-    [
-        ".venv/",
-        ".pkg-venv/",
-        "__pycache__/",
-        ".pytest_cache/",
-        ".mypy_cache/",
-        ".ruff_cache/",
-        ".env",
-        ".env.*",
-        "wsa-config.local.yaml",
-        "Audit_Results/",
-        "sessions/*",
-        "artifacts/",
-        "exports/",
-        "*.log",
-        "*.tmp",
-        "*.bak",
-        "*-pre-publication-fix-*.bundle",
-        ".vscode/",
-        ".idea/",
-        ".DS_Store",
-        "Thumbs.db",
-        "desktop.ini",
-        "",
-    ]
-)
+DEFAULT_BASELINE = rpg.render_ignore_baseline()
 
 
 def _run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -134,6 +108,25 @@ def test_policy_parser_reads_english_minimum_baseline(tmp_path: Path) -> None:
     guard = _make_guard(tmp_path, policy_path=policy)
 
     assert "local-only/" in guard.required_ignore_patterns
+
+
+def test_policy_parser_keeps_negated_baseline_after_env_wildcard(tmp_path: Path) -> None:
+    policy = tmp_path / "POLICY.md"
+    policy.write_text(
+        "# Policy\n\n"
+        "Minimum baseline:\n\n"
+        "- .env\n"
+        "- .env.*\n"
+        "- !.env.example\n\n"
+        "Check currently ignored sensitive paths:\n",
+        encoding="utf-8",
+    )
+
+    guard = _make_guard(tmp_path, policy_path=policy)
+
+    assert ".env.*" in guard.required_ignore_patterns
+    assert "!.env.example" in guard.required_ignore_patterns
+    assert guard.required_ignore_patterns.index(".env.*") < guard.required_ignore_patterns.index("!.env.example")
 
 
 def test_private_commit_metadata_blocks_when_owner_cannot_be_inferred(tmp_path: Path) -> None:
