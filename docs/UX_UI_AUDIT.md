@@ -49,51 +49,51 @@ Screens audited in the running GUI:
 
 Before:
 
-![Audit default desktop before](/<redacted-path>)
+![Audit default desktop before](ux-audit/before/audit-default-desktop-before.png)
 
 After:
 
-![Audit default desktop after](/<redacted-path>)
+![Audit default desktop after](ux-audit/after/audit-default-desktop-after.png)
 
 ### Audit View, Invalid Root State
 
 Before:
 
-![Audit invalid root before](/<redacted-path>)
+![Audit invalid root before](ux-audit/before/audit-invalid-root-before.png)
 
 After:
 
-![Audit invalid root after](/<redacted-path>)
+![Audit invalid root after](ux-audit/after/audit-invalid-root-after.png)
 
 ### Repair Locked State
 
 Before:
 
-![Repair locked before](/<redacted-path>)
+![Repair locked before](ux-audit/before/repair-locked-desktop-before.png)
 
 After:
 
-![Repair locked after](/<redacted-path>)
+![Repair locked after](ux-audit/after/repair-locked-desktop-after.png)
 
 ### Repair State After Audit
 
 Before:
 
-![Repair post-audit before](/<redacted-path>)
+![Repair post-audit before](ux-audit/before/repair-post-audit-before.png)
 
 After:
 
-![Repair post-audit after](/<redacted-path>)
+![Repair post-audit after](ux-audit/after/repair-post-audit-after.png)
 
 ### Compact Desktop Layout
 
 Before:
 
-![Audit compact before](/<redacted-path>)
+![Audit compact before](ux-audit/before/audit-compact-before.png)
 
 After:
 
-![Audit compact after](/<redacted-path>)
+![Audit compact after](ux-audit/after/audit-compact-after.png)
 
 ## Validation
 

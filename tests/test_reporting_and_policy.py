@@ -662,6 +662,106 @@ def test_create_run_artifacts_handles_collision(tmp_path: Path, monkeypatch) -> 
     assert artifacts.json_path.name == "report.json"
     assert artifacts.log_path.name == "run.log"
     assert artifacts.html_path.name == "report.html"
+    assert artifacts.state_path.name == "run_state.json"
+
+
+def test_run_state_tracker_persists_phase_updates(tmp_path: Path) -> None:
+    artifacts = rpg.create_run_artifacts(tmp_path / "Audit_Results")
+    config = _make_run_config(root=tmp_path, policy=tmp_path / "POLICY.md")
+
+    tracker = rpg.RunStateTracker(artifacts.state_path, artifacts=artifacts, config=config)
+    tracker.update(phase="auditing", current_repository="repo-a", total_repositories=1)
+
+    payload = json.loads(artifacts.state_path.read_text(encoding="utf-8"))
+    assert payload["status"] == "running"
+    assert payload["phase"] == "auditing"
+    assert payload["current_repository"] == "repo-a"
+    assert payload["total_repositories"] == 1
+
+
+def test_repo_execution_lock_blocks_overlap(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+    monkeypatch.setattr(rpg, "REPO_LOCK_WAIT_SECONDS", 0.0)
+    monkeypatch.setattr(rpg, "REPO_LOCK_RETRY_SECONDS", 0.0)
+
+    guard = rpg.RepoPublicationGuard(
+        root=tmp_path,
+        policy_path=tmp_path / "POLICY.md",
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        owner_name="Owner",
+        owner_emails=[],
+        redact_third_party=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        low_confidence_email_mode="informational",
+        push=False,
+        dry_run=False,
+        max_matches=50,
+        audit_litellm_incident=False,
+        audit_github_hardening=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=[],
+        replace_text_file=None,
+        logger=lambda _msg: None,
+    )
+    monkeypatch.setattr(guard, "_git", lambda _repo, *_args: rpg.CommandResult(1, "", ""))
+
+    first_lock = guard.acquire_repo_lock(repo)
+    try:
+        with pytest.raises(RuntimeError, match="repository execution lock is busy"):
+            guard.acquire_repo_lock(repo)
+    finally:
+        guard.release_repo_lock(first_lock)
+
+    assert not (repo / ".git" / rpg.REPO_LOCK_FILENAME).exists()
+
+
+def test_repo_execution_lock_reclaims_stale_lock(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    git_dir = repo / ".git"
+    git_dir.mkdir(parents=True)
+    stale_lock = git_dir / rpg.REPO_LOCK_FILENAME
+    rpg.write_private_json_file(
+        stale_lock,
+        {
+            "owner_token": "stale-holder",
+            "acquired_at": "2000-01-01T00:00:00",
+        },
+    )
+    monkeypatch.setattr(rpg, "REPO_LOCK_WAIT_SECONDS", 0.0)
+    monkeypatch.setattr(rpg, "REPO_LOCK_RETRY_SECONDS", 0.0)
+
+    guard = rpg.RepoPublicationGuard(
+        root=tmp_path,
+        policy_path=tmp_path / "POLICY.md",
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        owner_name="Owner",
+        owner_emails=[],
+        redact_third_party=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        low_confidence_email_mode="informational",
+        push=False,
+        dry_run=False,
+        max_matches=50,
+        audit_litellm_incident=False,
+        audit_github_hardening=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=[],
+        replace_text_file=None,
+        logger=lambda _msg: None,
+    )
+    monkeypatch.setattr(guard, "_git", lambda _repo, *_args: rpg.CommandResult(1, "", ""))
+
+    repo_lock = guard.acquire_repo_lock(repo)
+    try:
+        payload = json.loads(stale_lock.read_text(encoding="utf-8"))
+        assert payload["owner_token"] != "stale-holder"
+    finally:
+        guard.release_repo_lock(repo_lock)
 
 
 def test_enforce_results_dir_variants(tmp_path: Path) -> None:
@@ -708,6 +808,14 @@ def test_identity_and_remote_owner_helpers() -> None:
     assert rpg.parse_github_remote_owner("https://github.com/example/repo.git") == "example"
     assert rpg.parse_github_remote_owner("redacted-contributor@example.invalid:example/repo.git") == "example"
     assert rpg.parse_github_remote_owner("https://gitlab.com/example/repo.git") is None
+
+
+def test_repo_display_name_handles_named_and_current_root_paths(tmp_path: Path, monkeypatch) -> None:
+    named_repo = tmp_path / "repo-a"
+    assert rpg.repo_display_name(named_repo) == "repo-a"
+
+    monkeypatch.chdir(tmp_path)
+    assert rpg.repo_display_name(Path(".")) == tmp_path.name
 
 
 def test_parse_github_remote_slug_helper() -> None:
@@ -2199,9 +2307,6 @@ def test_execute_guard_pipeline_handles_runtime_error(tmp_path: Path, monkeypatc
             pass
 
         def discover_repositories(self, repo_filters, public_only: bool):
-            return [Path("C:/repos/repo-a")]
-
-        def audit_repo(self, repo: Path):
             raise RuntimeError("boom")
 
     monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
@@ -2218,6 +2323,194 @@ def test_execute_guard_pipeline_handles_runtime_error(tmp_path: Path, monkeypatc
 
     assert exit_code == 3
     assert any("Unhandled runtime error: boom" in msg for msg in messages)
+
+
+def test_execute_guard_pipeline_isolates_repo_execution_failures(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class DummyGuard:
+        def __init__(
+            self,
+            root: Path,
+            policy_path: Path,
+            noreply_email: str,
+            placeholder_email: str,
+            owner_name: str,
+            owner_emails: list[str],
+            redact_third_party: bool,
+            purge_detected_secret_files: bool,
+            purge_all_detected_secret_files: bool,
+            low_confidence_email_mode: str,
+            push: bool,
+            dry_run: bool,
+            max_matches: int,
+            allow_non_owner_push: bool,
+            allowed_remote_owners: list[str],
+            logger,
+        ) -> None:
+            pass
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            return [Path("C:/repos/repo-a"), Path("C:/repos/repo-b")]
+
+        def acquire_repo_lock(self, repo: Path):
+            return None
+
+        def release_repo_lock(self, repo_lock) -> None:
+            del repo_lock
+
+        def audit_repo(self, repo: Path):
+            if repo.name == "repo-a":
+                raise RuntimeError("simulated audit failure")
+            report = _make_report(repo.name)
+            report.finalize()
+            return report
+
+    def fake_persist(
+        reports,
+        artifacts,
+        root_path,
+        policy_path,
+        run_settings,
+        logger,
+        optional_json_export=None,
+        optional_supply_chain_payload=None,
+    ) -> None:
+        del artifacts, root_path, policy_path, run_settings, logger, optional_json_export, optional_supply_chain_payload
+        captured["reports"] = reports
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", fake_persist)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    exit_code = rpg.execute_guard_pipeline(
+        config=_make_run_config(),
+        artifacts=artifacts,
+        logger=lambda _msg: None,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == 2
+    reports = captured["reports"]
+    assert len(reports) == 2
+    assert reports[0].status == "FAIL"
+    assert reports[0].execution_errors == ["simulated audit failure"]
+    assert reports[1].status == "PASS"
+
+
+def test_execute_guard_pipeline_writes_fail_summary_and_run_state(tmp_path: Path, monkeypatch) -> None:
+    messages: list[str] = []
+
+    class DummyGuard:
+        def __init__(
+            self,
+            root: Path,
+            policy_path: Path,
+            noreply_email: str,
+            placeholder_email: str,
+            owner_name: str,
+            owner_emails: list[str],
+            redact_third_party: bool,
+            purge_detected_secret_files: bool,
+            purge_all_detected_secret_files: bool,
+            low_confidence_email_mode: str,
+            push: bool,
+            dry_run: bool,
+            max_matches: int,
+            allow_non_owner_push: bool,
+            allowed_remote_owners: list[str],
+            logger,
+        ) -> None:
+            pass
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            return [Path("C:/repos/repo-a")]
+
+        def acquire_repo_lock(self, repo: Path):
+            return None
+
+        def release_repo_lock(self, repo_lock) -> None:
+            del repo_lock
+
+        def audit_repo(self, repo: Path):
+            report = _make_report(repo.name)
+            report.tracked_path_matches = [f"README.md:1:{_fixture_win_user_path_slash('private')}"]
+            report.finalize()
+            return report
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    exit_code = rpg.execute_guard_pipeline(
+        config=_make_run_config(),
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+    )
+
+    state_payload = json.loads(artifacts.state_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 2
+    assert any("[SUMMARY] FAIL 1/1" in msg for msg in messages)
+    assert state_payload["status"] == "failed"
+    assert state_payload["phase"] == "finished"
+    assert state_payload["exit_code"] == 2
+    assert state_payload["fail_count"] == 1
+
+
+def test_apply_fixes_restores_local_identity_even_on_failure(tmp_path: Path, monkeypatch) -> None:
+    restored: list[dict[str, str | None]] = []
+
+    guard = rpg.RepoPublicationGuard(
+        root=tmp_path,
+        policy_path=tmp_path / "POLICY.md",
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        owner_name="Owner",
+        owner_emails=[],
+        redact_third_party=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        low_confidence_email_mode="informational",
+        push=False,
+        dry_run=False,
+        max_matches=50,
+        audit_litellm_incident=False,
+        audit_github_hardening=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=[],
+        replace_text_file=None,
+        logger=lambda _msg: None,
+    )
+    monkeypatch.setattr(guard, "_capture_local_identity", lambda repo: {"user.name": "Previous", "user.email": "123+old@users.noreply.github.com"})
+    monkeypatch.setattr(guard, "_restore_local_identity", lambda repo, original_identity: restored.append(original_identity))
+    monkeypatch.setattr(guard, "_make_backup_bundle", lambda repo: repo / "backup.bundle")
+    monkeypatch.setattr(guard, "_set_local_identity", lambda repo: None)
+    monkeypatch.setattr(guard, "_apply_secret_file_remediation", lambda repo, report: None)
+    monkeypatch.setattr(guard, "_remove_tracked_ignored", lambda repo: [])
+    monkeypatch.setattr(guard, "_commit_if_needed", lambda repo, message: "none")
+    monkeypatch.setattr(guard, "_push_if_requested", lambda repo, report: None)
+    monkeypatch.setattr(guard, "_rewrite_history", lambda repo, report: (_ for _ in ()).throw(RuntimeError("rewrite failed")))
+
+    report = _make_report("repo-a")
+    guard.apply_fixes(tmp_path / "repo-a", report)
+
+    assert restored == [{"user.name": "Previous", "user.email": "123+old@users.noreply.github.com"}]
+    assert any("rewrite failed" in error for error in report.fix_errors)
+    assert "restored local git identity" in report.fix_actions
+
+
+def test_run_git_command_reports_timeout(monkeypatch) -> None:
+    def timed_out(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise rpg.subprocess.TimeoutExpired(args[0], timeout=1)
+
+    monkeypatch.setattr(rpg.subprocess, "run", timed_out)
+
+    result = rpg.run_git_command(["status"])
+
+    assert result.returncode == 124
+    assert "timed out" in result.stderr
 
 
 def test_is_github_noreply_email_variants() -> None:

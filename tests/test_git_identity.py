@@ -26,8 +26,8 @@ def test_apply_git_identity_global(mock_run):
     success, msg = apply_git_identity_config("global", "Alice", "12345+alice@users.noreply.github.com")
     assert success is True
     assert "Applied GLOBAL git identity" in msg
-    mock_run.assert_any_call(["git", "config", "--global", "user.name", "Alice"], cwd=None, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    mock_run.assert_any_call(["git", "config", "--global", "user.email", "12345+alice@users.noreply.github.com"], cwd=None, capture_output=True, text=True, encoding="utf-8", errors="replace")  
+    mock_run.assert_any_call(["git", "config", "--global", "user.name", "Alice"], cwd=None, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+    mock_run.assert_any_call(["git", "config", "--global", "user.email", "12345+alice@users.noreply.github.com"], cwd=None, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)  
 
 @mock.patch("subprocess.run")
 def test_apply_git_identity_global_fail(mock_run):

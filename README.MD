@@ -95,9 +95,11 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 ## 🔒 Local Security Posture
 
 - Run artifacts are kept local and are written with private file permissions where the platform supports them.
+- Each run writes a local `run_state.json` manifest so a partial or interrupted execution still leaves phase/exit diagnostics behind.
 - Generated rewrite inputs such as temporary `mailmap` and `replace-text` files are removed after use instead of being left behind in temp storage.
 - Tracked-file scanners skip symlinked files and oversized text candidates to reduce accidental local file disclosure and unbounded memory reads.
 - Report/export writes and `.gitignore` remediation refuse symlinked target paths instead of following them.
+- Repository execution is serialized with a local lock in the Git metadata directory so overlapping audits/fixes do not mutate the same checkout concurrently.
 
 ## 🧰 Tooling Readiness
 
@@ -336,6 +338,7 @@ Each run writes local artifacts under `Audit_Results/<run_id>/`:
 - `report.json`
 - `report.html`
 - `run.log`
+- `run_state.json`
 
 Artifacts are redacted, but they still contain operational security context and should be treated as sensitive local outputs.
 

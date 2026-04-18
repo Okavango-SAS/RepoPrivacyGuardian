@@ -29,6 +29,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import traceback
 import urllib.error
 import urllib.parse
@@ -131,6 +132,13 @@ DEFAULT_IGNORE_BASELINE = [
     "desktop.ini",
 ]
 MAX_TRACKED_TEXT_SCAN_BYTES = 5 * 1024 * 1024
+DEFAULT_SUBPROCESS_TIMEOUT_SECONDS = 300
+DEFAULT_GIT_STREAM_TIMEOUT_SECONDS = 300
+REPO_LOCK_FILENAME = "repo-privacy-guardian.lock"
+REPO_LOCK_WAIT_SECONDS = 10.0
+REPO_LOCK_RETRY_SECONDS = 0.2
+REPO_LOCK_STALE_SECONDS = 4 * 60 * 60
+RUN_STATE_FILENAME = "run_state.json"
 
 # Allow committed template files such as `.env.example` while keeping real
 # environment files and local variants sensitive by default.
@@ -219,6 +227,17 @@ def render_ignore_baseline(patterns: list[str] | None = None) -> str:
     return "\n".join(baseline) + "\n"
 
 
+def repo_display_name(repo: Path) -> str:
+    name = repo.name.strip()
+    if name:
+        return name
+    try:
+        resolved_name = repo.resolve().name.strip()
+    except OSError:
+        resolved_name = ""
+    return resolved_name or "."
+
+
 def _path_has_existing_symlink_ancestor(path: Path) -> bool:
     current = path
     while True:
@@ -265,6 +284,8 @@ def write_private_text_file(path: Path, content: str) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
             fh.write(content)
+            fh.flush()
+            os.fsync(fh.fileno())
         _apply_private_permissions(temp_path, 0o600)
         os.replace(temp_path, path)
         _apply_private_permissions(path, 0o600)
@@ -287,7 +308,16 @@ def append_private_text_file(path: Path, content: str) -> None:
     fd = os.open(str(path), flags, 0o600)
     with os.fdopen(fd, "a", encoding="utf-8", newline="") as fh:
         fh.write(content)
+        fh.flush()
+        os.fsync(fh.fileno())
     _apply_private_permissions(path, 0o600)
+
+
+def write_private_json_file(path: Path, payload: dict[str, object]) -> None:
+    write_private_text_file(
+        path,
+        json.dumps(payload, indent=2, sort_keys=True),
+    )
 
 
 def create_private_temp_text_file(prefix: str, filename: str, content: str) -> Path:
@@ -394,7 +424,16 @@ class RunArtifacts:
     json_path: Path
     log_path: Path
     html_path: Path
+    state_path: Path
     started_at: datetime
+
+
+@dataclass
+class RepoExecutionLock:
+    repo: Path
+    lock_path: Path
+    owner_token: str
+    acquired_at: datetime
 
 
 @dataclass
@@ -441,25 +480,61 @@ class RunLogger:
     def __init__(self, log_path: Path, sink: Callable[[str], None] | None = None) -> None:
         self.log_path = log_path
         self.sink = sink
+        self._lock = threading.Lock()
         ensure_private_directory(self.log_path.parent)
         write_private_text_file(self.log_path, "")
 
     def __call__(self, msg: str) -> None:
         # Keep persisted artifacts privacy-safe by redacting common sensitive tokens.
         text = redact_sensitive_text(str(msg))
-        if self.sink:
-            try:
-                self.sink(text)
-            except UnicodeEncodeError:
-                encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-                safe_text = text.encode(encoding, errors="replace").decode(
-                    encoding,
-                    errors="replace",
-                )
-                self.sink(safe_text)
-        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        line = f"[{stamp}] {text}\n"
-        append_private_text_file(self.log_path, line)
+        with self._lock:
+            if self.sink:
+                try:
+                    self.sink(text)
+                except UnicodeEncodeError:
+                    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+                    safe_text = text.encode(encoding, errors="replace").decode(
+                        encoding,
+                        errors="replace",
+                    )
+                    self.sink(safe_text)
+            stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            line = f"[{stamp}] {text}\n"
+            append_private_text_file(self.log_path, line)
+
+
+class RunStateTracker:
+    def __init__(self, path: Path, *, artifacts: RunArtifacts, config: GuardRunConfig) -> None:
+        self.path = path
+        self._lock = threading.Lock()
+        self._state: dict[str, object] = {
+            "status": "running",
+            "phase": "starting",
+            "run_id": artifacts.run_id,
+            "started_at": artifacts.started_at.isoformat(timespec="seconds"),
+            "last_update": artifacts.started_at.isoformat(timespec="seconds"),
+            "mode": config.mode,
+            "pid": os.getpid(),
+            "root": str(config.root),
+            "policy": str(config.policy),
+            "requested_repositories": list(config.repos or []),
+            "completed_repositories": 0,
+            "total_repositories": 0,
+            "current_repository": "",
+            "exit_code": None,
+        }
+        self.update()
+
+    def update(self, **fields: object) -> None:
+        with self._lock:
+            if fields:
+                self._state.update(fields)
+            self._state["last_update"] = datetime.now().isoformat(timespec="seconds")
+            write_private_json_file(self.path, self._state)
+
+    def snapshot(self) -> dict[str, object]:
+        with self._lock:
+            return dict(self._state)
 
 
 def _missing_executable_message(executable: str) -> str:
@@ -479,9 +554,12 @@ def probe_git_available(
             text=True,
             encoding="utf-8",
             errors="replace",
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
         return False, _missing_executable_message("git")
+    except subprocess.TimeoutExpired:
+        return False, "Git executable probe timed out."
     except Exception as exc:
         return False, f"Unable to execute git --version: {exc}"
 
@@ -504,9 +582,12 @@ def probe_command_available(
             text=True,
             encoding="utf-8",
             errors="replace",
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
         return False, _missing_executable_message(executable)
+    except subprocess.TimeoutExpired:
+        return False, f"{executable} probe timed out."
     except Exception as exc:
         return False, f"Unable to execute {executable} {' '.join(version_args)}: {exc}"
 
@@ -869,7 +950,11 @@ def install_missing_tooling(
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
             )
+        except subprocess.TimeoutExpired:
+            logger(f"[TOOLING] Install timed out for {check.name}.")
+            continue
         except Exception as exc:
             logger(f"[TOOLING] Install attempt failed for {check.name}: {exc}")
             continue
@@ -1269,6 +1354,7 @@ class RepoReport:
     backups_created: list[str] = field(default_factory=list)
     fix_actions: list[str] = field(default_factory=list)
     fix_errors: list[str] = field(default_factory=list)
+    execution_errors: list[str] = field(default_factory=list)
 
     status: str = "PASS"
     failures: list[str] = field(default_factory=list)
@@ -1313,6 +1399,7 @@ class RepoReport:
                 "LiteLLM supply-chain incident indicators detected",
             ),
             (bool(self.fix_errors), "fix execution errors occurred"),
+            (bool(self.execution_errors), "repository execution errors occurred"),
         ]
         self.failures = [reason for bad, reason in checks if bad]
         self.status = "FAIL" if self.failures else "PASS"
@@ -1391,9 +1478,16 @@ class RepoPublicationGuard:  # pragma: no cover
                 encoding="utf-8",
                 errors="replace",
                 input=input_text,
+                timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
             )
         except FileNotFoundError:
             return CommandResult(127, "", _missing_executable_message(cmd[0]))
+        except subprocess.TimeoutExpired:
+            return CommandResult(
+                124,
+                "",
+                f"Command timed out after {DEFAULT_SUBPROCESS_TIMEOUT_SECONDS}s: {shlex.join(cmd)}",
+            )
         except Exception as exc:
             return CommandResult(1, "", f"Unable to execute {shlex.join(cmd)}: {exc}")
         return CommandResult(proc.returncode, proc.stdout, proc.stderr)
@@ -1444,6 +1538,137 @@ class RepoPublicationGuard:  # pragma: no cover
         patterns.extend(extracted)
         return list(dict.fromkeys(patterns))
 
+    def _resolve_git_dir(self, repo: Path) -> Path:
+        result = self._git(repo, "rev-parse", "--absolute-git-dir")
+        if result.returncode == 0 and result.stdout.strip():
+            git_dir = Path(result.stdout.strip())
+            return git_dir if git_dir.is_absolute() else (repo / git_dir)
+        return repo / ".git"
+
+    def _read_lock_metadata(self, lock_path: Path) -> dict[str, object] | None:
+        try:
+            return json.loads(lock_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+
+    def _repo_lock_is_stale(self, lock_path: Path, metadata: dict[str, object] | None) -> bool:
+        if not lock_path.exists():
+            return False
+
+        acquired_at_raw = str((metadata or {}).get("acquired_at") or "").strip()
+        if acquired_at_raw:
+            try:
+                acquired_at = datetime.fromisoformat(acquired_at_raw)
+                return (datetime.now() - acquired_at).total_seconds() > REPO_LOCK_STALE_SECONDS
+            except ValueError:
+                pass
+
+        try:
+            age_seconds = time.time() - lock_path.stat().st_mtime
+        except OSError:
+            return False
+        return age_seconds > REPO_LOCK_STALE_SECONDS
+
+    def acquire_repo_lock(self, repo: Path) -> RepoExecutionLock:
+        git_dir = self._resolve_git_dir(repo)
+        lock_parent = git_dir if git_dir.is_dir() else repo
+        ensure_private_directory(lock_parent)
+        lock_path = lock_parent / REPO_LOCK_FILENAME
+        owner_token = f"{os.getpid()}-{threading.get_ident()}-{time.time_ns()}"
+        deadline = time.monotonic() + REPO_LOCK_WAIT_SECONDS
+        waiting_logged = False
+
+        while True:
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+
+            try:
+                fd = os.open(str(lock_path), flags, 0o600)
+            except FileExistsError:
+                metadata = self._read_lock_metadata(lock_path)
+                if self._repo_lock_is_stale(lock_path, metadata):
+                    try:
+                        lock_path.unlink()
+                        self.log(f"[WARN] {repo_display_name(repo)}: reclaimed stale execution lock at {lock_path}")
+                    except OSError:
+                        pass
+                    continue
+
+                if time.monotonic() >= deadline:
+                    holder = str((metadata or {}).get("owner_token") or "unknown holder")
+                    raise RuntimeError(
+                        f"repository execution lock is busy ({holder}); retry after the active run finishes"
+                    )
+                if not waiting_logged:
+                    self.log(f"[INFO] {repo_display_name(repo)}: waiting for repository execution lock")
+                    waiting_logged = True
+                time.sleep(REPO_LOCK_RETRY_SECONDS)
+                continue
+
+            acquired_at = datetime.now()
+            payload = {
+                "repo": str(repo),
+                "owner_token": owner_token,
+                "pid": os.getpid(),
+                "thread_id": threading.get_ident(),
+                "acquired_at": acquired_at.isoformat(timespec="seconds"),
+            }
+            with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+                json.dump(payload, fh, indent=2, sort_keys=True)
+                fh.flush()
+                os.fsync(fh.fileno())
+            _apply_private_permissions(lock_path, 0o600)
+            self.log(f"[INFO] {repo_display_name(repo)}: acquired repository execution lock")
+            return RepoExecutionLock(
+                repo=repo,
+                lock_path=lock_path,
+                owner_token=owner_token,
+                acquired_at=acquired_at,
+            )
+
+    def release_repo_lock(self, repo_lock: RepoExecutionLock | None) -> None:
+        if repo_lock is None:
+            return
+
+        metadata = self._read_lock_metadata(repo_lock.lock_path)
+        if metadata and str(metadata.get("owner_token") or "") not in {"", repo_lock.owner_token}:
+            self.log(
+                f"[WARN] {repo_display_name(repo_lock.repo)}: repository execution lock owner changed before release; keeping lock file"
+            )
+            return
+
+        try:
+            repo_lock.lock_path.unlink()
+            self.log(f"[INFO] {repo_display_name(repo_lock.repo)}: released repository execution lock")
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            self.log(f"[WARN] {repo_display_name(repo_lock.repo)}: could not release repository execution lock: {exc}")
+
+    def _read_local_git_config(self, repo: Path, key: str) -> str | None:
+        result = self._git(repo, "config", "--local", "--get", key)
+        if result.returncode != 0:
+            return None
+        value = result.stdout.strip()
+        return value if value else None
+
+    def _capture_local_identity(self, repo: Path) -> dict[str, str | None]:
+        return {
+            "user.name": self._read_local_git_config(repo, "user.name"),
+            "user.email": self._read_local_git_config(repo, "user.email"),
+        }
+
+    def _restore_local_identity(self, repo: Path, original_identity: dict[str, str | None]) -> None:
+        if self.dry_run:
+            return
+
+        for key, original_value in original_identity.items():
+            if original_value is None:
+                self._git(repo, "config", "--local", "--unset-all", key)
+                continue
+            self._git_checked(repo, "config", "--local", key, original_value)
+
     def discover_repositories(
         self,
         repo_filters: list[str] | None,
@@ -1471,12 +1696,12 @@ class RepoPublicationGuard:  # pragma: no cover
             for repo in repos:
                 origin = self._git(repo, "remote", "get-url", "origin")
                 if origin.returncode != 0:
-                    self.log(f"[WARN] {repo.name}: origin remote unavailable; excluded by public-only filter")
+                    self.log(f"[WARN] {repo_display_name(repo)}: origin remote unavailable; excluded by public-only filter")
                     continue
 
                 remote_url = origin.stdout.strip()
                 if not remote_url:
-                    self.log(f"[WARN] {repo.name}: empty origin remote; excluded by public-only filter")
+                    self.log(f"[WARN] {repo_display_name(repo)}: empty origin remote; excluded by public-only filter")
                     continue
 
                 if remote_url not in visibility_cache:
@@ -1489,15 +1714,15 @@ class RepoPublicationGuard:  # pragma: no cover
 
                 if reason == "not_github":
                     self.log(
-                        f"[INFO] {repo.name}: origin is not a GitHub remote; excluded by public-only filter"
+                        f"[INFO] {repo_display_name(repo)}: origin is not a GitHub remote; excluded by public-only filter"
                     )
                 elif reason in {"private", "private_or_not_found"}:
                     self.log(
-                        f"[INFO] {repo.name}: origin appears private (or not publicly accessible); excluded"
+                        f"[INFO] {repo_display_name(repo)}: origin appears private (or not publicly accessible); excluded"
                     )
                 else:
                     self.log(
-                        f"[WARN] {repo.name}: unable to verify public visibility ({reason}); excluded"
+                        f"[WARN] {repo_display_name(repo)}: unable to verify public visibility ({reason}); excluded"
                     )
 
             repos = filtered
@@ -1586,7 +1811,11 @@ class RepoPublicationGuard:  # pragma: no cover
         report.github_hardening_findings = findings[: self.max_matches]
         report.github_hardening_warnings = warnings[: self.max_matches]
 
-    def _finalize_git_stream_process(self, proc: subprocess.Popen[str], timeout: int = 10) -> None:
+    def _finalize_git_stream_process(
+        self,
+        proc: subprocess.Popen[str],
+        timeout: int = DEFAULT_GIT_STREAM_TIMEOUT_SECONDS,
+    ) -> None:
         try:
             proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -1635,11 +1864,18 @@ class RepoPublicationGuard:  # pragma: no cover
             errors="replace",
         )
         matches: list[str] = []
+        deadline = time.monotonic() + DEFAULT_GIT_STREAM_TIMEOUT_SECONDS
         try:
             stream = proc.stdout
             if stream is None:
                 return matches
             for idx, line in enumerate(stream, start=1):
+                if time.monotonic() >= deadline:
+                    self.log(
+                        f"[WARN] {repo_display_name(repo)}: history patch scan timed out after {DEFAULT_GIT_STREAM_TIMEOUT_SECONDS}s"
+                    )
+                    self._terminate_process_if_running(proc)
+                    break
                 if regex.search(line):
                     matches.append(f"L{idx}:{line.strip()[:240]}")
                     if len(matches) >= self.max_matches:
@@ -1670,11 +1906,18 @@ class RepoPublicationGuard:  # pragma: no cover
         )
         matches: list[str] = []
         current_file: str | None = None
+        deadline = time.monotonic() + DEFAULT_GIT_STREAM_TIMEOUT_SECONDS
         try:
             stream = proc.stdout
             if stream is None:
                 return matches
             for idx, line in enumerate(stream, start=1):
+                if time.monotonic() >= deadline:
+                    self.log(
+                        f"[WARN] {repo_display_name(repo)}: history email scan timed out after {DEFAULT_GIT_STREAM_TIMEOUT_SECONDS}s"
+                    )
+                    self._terminate_process_if_running(proc)
+                    break
                 if line.startswith("diff --git "):
                     match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
                     current_file = match.group(2) if match else None
@@ -1741,12 +1984,19 @@ class RepoPublicationGuard:  # pragma: no cover
         files: list[str] = []
         seen: set[str] = set()
         current_file: str | None = None
+        deadline = time.monotonic() + DEFAULT_GIT_STREAM_TIMEOUT_SECONDS
 
         try:
             stream = proc.stdout
             if stream is None:
                 return files
             for line in stream:
+                if time.monotonic() >= deadline:
+                    self.log(
+                        f"[WARN] {repo_display_name(repo)}: history secret-file scan timed out after {DEFAULT_GIT_STREAM_TIMEOUT_SECONDS}s"
+                    )
+                    self._terminate_process_if_running(proc)
+                    break
                 if line.startswith("diff --git "):
                     match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
                     if match:
@@ -1885,7 +2135,7 @@ class RepoPublicationGuard:  # pragma: no cover
         return False
 
     def audit_repo(self, repo: Path) -> RepoReport:
-        report = RepoReport(name=repo.name, path=str(repo))
+        report = RepoReport(name=repo_display_name(repo), path=str(repo))
         report.low_confidence_email_mode = self.low_confidence_email_mode
 
         report.origin_url = self._git(repo, "remote", "get-url", "origin").stdout.strip() or None
@@ -2282,7 +2532,7 @@ class RepoPublicationGuard:  # pragma: no cover
 
     def _make_backup_bundle(self, repo: Path) -> Path:
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        bundle = self.root / f"{repo.name}-pre-publication-fix-{stamp}.bundle"
+        bundle = self.root / f"{repo_display_name(repo)}-pre-publication-fix-{stamp}.bundle"
         if self.dry_run:
             return bundle
         self._git_checked(repo, "bundle", "create", str(bundle), "--all")
@@ -2346,8 +2596,9 @@ class RepoPublicationGuard:  # pragma: no cover
         self._git(repo, "branch", "--set-upstream-to", f"origin/{branch}", branch)
 
     def apply_fixes(self, repo: Path, report: RepoReport) -> RepoReport:
+        original_identity = self._capture_local_identity(repo)
         try:
-            self.log(f"[FIX] {repo.name}: creating backup bundle")
+            self.log(f"[FIX] {repo_display_name(repo)}: creating backup bundle")
             bundle = self._make_backup_bundle(repo)
             report.backups_created.append(str(bundle))
 
@@ -2381,7 +2632,7 @@ class RepoPublicationGuard:  # pragma: no cover
             elif commit_state == "committed":
                 report.fix_actions.append("committed ignore-hygiene changes")
 
-            self.log(f"[FIX] {repo.name}: rewriting history (emails + sensitive artifacts)")
+            self.log(f"[FIX] {repo_display_name(repo)}: rewriting history (emails + sensitive artifacts)")
             self._rewrite_history(repo, report)
 
             if not self.dry_run:
@@ -2395,6 +2646,13 @@ class RepoPublicationGuard:  # pragma: no cover
 
         except Exception as exc:
             report.fix_errors.append(str(exc))
+        finally:
+            try:
+                self._restore_local_identity(repo, original_identity)
+                if not self.dry_run:
+                    report.fix_actions.append("restored local git identity")
+            except Exception as exc:
+                report.fix_errors.append(f"failed to restore local git identity: {exc}")
 
         return report
 
@@ -2453,6 +2711,7 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"litellm_compromised_reference_hits: {len(report.litellm_compromised_reference_hits)}")
     logger(f"litellm_install_command_hits: {len(report.litellm_install_command_hits)}")
     logger(f"litellm_ioc_hits: {len(report.litellm_ioc_hits)}")
+    logger(f"execution_errors: {len(report.execution_errors)}")
 
     if report.litellm_compromised_reference_hits:
         logger("litellm_compromised_reference_samples:")
@@ -2500,19 +2759,27 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
         logger("fix_errors:")
         for err in report.fix_errors:
             logger(f"  - {err}")
+    if report.execution_errors:
+        logger("execution_errors:")
+        for err in report.execution_errors:
+            logger(f"  - {err}")
 
 
 def create_run_artifacts(base_dir: Path) -> RunArtifacts:
     ensure_private_directory(base_dir)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_dir = base_dir / stamp
-    suffix = 1
-    while run_dir.exists():
-        run_dir = base_dir / f"{stamp}-{suffix:02d}"
-        suffix += 1
-    if _path_has_existing_symlink_ancestor(run_dir):
-        raise RuntimeError(f"Refusing to create run artifacts under symlinked path: {run_dir}")
-    run_dir.mkdir(parents=True, exist_ok=False)
+    suffix = 0
+    while True:
+        run_name = stamp if suffix == 0 else f"{stamp}-{suffix:02d}"
+        run_dir = base_dir / run_name
+        if _path_has_existing_symlink_ancestor(run_dir):
+            raise RuntimeError(f"Refusing to create run artifacts under symlinked path: {run_dir}")
+        try:
+            run_dir.mkdir(parents=True, exist_ok=False)
+            break
+        except FileExistsError:
+            suffix += 1
+            continue
     _apply_private_permissions(run_dir, 0o700)
     started = datetime.now()
     return RunArtifacts(
@@ -2521,6 +2788,7 @@ def create_run_artifacts(base_dir: Path) -> RunArtifacts:
         json_path=run_dir / "report.json",
         log_path=run_dir / "run.log",
         html_path=run_dir / "report.html",
+        state_path=run_dir / RUN_STATE_FILENAME,
         started_at=started,
     )
 
@@ -3059,6 +3327,7 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload["backups_created"] = _redact_text_list(report.backups_created)
     payload["fix_actions"] = _redact_text_list(report.fix_actions)
     payload["fix_errors"] = _redact_text_list(report.fix_errors)
+    payload["execution_errors"] = _redact_text_list(report.execution_errors)
     payload["fsck_output"] = _redact_text_list(report.fsck_output)
     return payload
 
@@ -3135,6 +3404,14 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
     low_blocking = report.low_confidence_email_mode == "blocking"
     litellm_severity = classify_litellm_incident_severity(report)
     worktree_dirty = len((report.clean_status or "").splitlines()) > 1
+
+    if report.execution_errors:
+        return (
+            "IMMEDIATE",
+            "Repository execution failed before the audit/fix flow completed.",
+            "Possible consequence: results may be incomplete, stale, or skipped for this repository.",
+            "Suggestion: review execution_errors for lock, timeout, or git/runtime failures, then re-run once the repository is stable.",
+        )
 
     if report.fix_errors:
         return (
@@ -3252,6 +3529,9 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     litellm_severity = classify_litellm_incident_severity(report)
     worktree_dirty = len((report.clean_status or "").splitlines()) > 1
 
+    if report.execution_errors:
+        score = max(score, 85)
+        highlights.append("Repository execution failed or was blocked")
     if report.fix_errors:
         score = max(score, 80)
         highlights.append("Remediation execution failed")
@@ -3361,6 +3641,7 @@ def build_detected_findings_preview(report: RepoReport) -> list[str]:
     add("litellm reference", report.litellm_reference_hits)
     add("litellm compromised", report.litellm_compromised_reference_hits)
     add("litellm ioc", report.litellm_ioc_hits)
+    add("execution error", report.execution_errors)
     return findings
 
 
@@ -3620,6 +3901,7 @@ def render_html_report(
             f"<tr><td>litellm_compromised_reference_hits</td><td class=\"num\">{len(rep.litellm_compromised_reference_hits)}</td></tr>"
             f"<tr><td>litellm_install_command_hits</td><td class=\"num\">{len(rep.litellm_install_command_hits)}</td></tr>"
             f"<tr><td>litellm_ioc_hits</td><td class=\"num\">{len(rep.litellm_ioc_hits)}</td></tr>"
+            f"<tr><td>execution_errors</td><td class=\"num\">{len(rep.execution_errors)}</td></tr>"
             "</table>"
         )
 
@@ -3715,6 +3997,14 @@ def render_html_report(
             "<div class=\"detail-grid\">"
             "<section><h5>Ignore and history filename issues</h5>"
             f"{render_lines(rep.gitignore_missing_patterns + rep.history_sensitive_added + rep.history_sensitive_deleted)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>Execution errors</h5>"
+            f"{render_lines(rep.execution_errors)}"
+            "</section>"
+            "<section><h5>Fix errors</h5>"
+            f"{render_lines(rep.fix_errors)}"
             "</section>"
             "</div>"
             "<section><h5>Metrics snapshot</h5>"
@@ -4018,11 +4308,8 @@ def execute_guard_pipeline(
     reports: list[RepoReport] = []
     supply_chain_payload: dict[str, object] | None = None
     exit_code = 0
-
-    git_ok, git_error = probe_git_available()
-    if not git_ok:
-        logger(f"[ERROR] {git_error}")
-        return 3
+    total_repositories = 0
+    state_tracker = RunStateTracker(artifacts.state_path, artifacts=artifacts, config=config)
 
     guard_kwargs: dict[str, object] = {
         "root": config.root,
@@ -4055,69 +4342,122 @@ def execute_guard_pipeline(
     guard = RepoPublicationGuard(**guard_kwargs)
     guard.rewrite_personal_paths = config.rewrite_personal_paths
 
-    if config.low_confidence_email_mode == "blocking":
-        logger("[INFO] Email policy: low-confidence findings are blocking.")
-    else:
-        logger("[INFO] Email policy: low-confidence findings are informational.")
-    if config.audit_github_hardening:
-        logger(
-            "[INFO] GitHub hardening audit enabled: advisory/manual-review only by default."
-        )
-
-    if config.purge_all_detected_secret_files and not config.purge_detected_secret_files:
-        logger("[WARN] --purge-all-detected-secret-files implies --purge-detected-secret-files")
-        guard.purge_detected_secret_files = True
-        run_settings["purge_detected_secret_files"] = str(True)
-
     try:
-        repos = guard.discover_repositories(config.repos, public_only=config.public_only)
-        if not repos:
-            logger("[INFO] No repositories matched. Nothing to do.")
-            logger("\n[SUMMARY] PASS 0/0")
+        state_tracker.update(phase="preflight")
+        git_ok, git_error = probe_git_available()
+        if not git_ok:
+            logger(f"[ERROR] {git_error}")
+            exit_code = 3
         else:
-            if config.fix:
-                for line in build_fix_preflight_summary(config, repos):
-                    logger(line)
+            if config.low_confidence_email_mode == "blocking":
+                logger("[INFO] Email policy: low-confidence findings are blocking.")
+            else:
+                logger("[INFO] Email policy: low-confidence findings are informational.")
+            if config.audit_github_hardening:
+                logger(
+                    "[INFO] GitHub hardening audit enabled: advisory/manual-review only by default."
+                )
 
-            if config.fix and config.push and require_confirmation:
-                confirmed = confirm_callback() if confirm_callback else False
-                if not confirmed:
-                    logger("[INFO] Run aborted by user confirmation gate.")
-                    logger("\n[SUMMARY] PASS 0/0")
-                    exit_code = 1
-                    repos = []
+            if config.purge_all_detected_secret_files and not config.purge_detected_secret_files:
+                logger("[WARN] --purge-all-detected-secret-files implies --purge-detected-secret-files")
+                guard.purge_detected_secret_files = True
+                run_settings["purge_detected_secret_files"] = str(True)
 
-            for index, repo in enumerate(repos, start=1):
-                logger(f"[AUDIT] {repo.name}")
-                report = guard.audit_repo(repo)
-
+            repos = guard.discover_repositories(config.repos, public_only=config.public_only)
+            total_repositories = len(repos)
+            state_tracker.update(
+                phase="discovered",
+                total_repositories=total_repositories,
+                completed_repositories=0,
+                current_repository="",
+            )
+            if not repos:
+                logger("[INFO] No repositories matched. Nothing to do.")
+                logger("\n[SUMMARY] PASS 0/0")
+            else:
                 if config.fix:
-                    run_fix = True
-                    if config.confirm_each_repo_fix and confirm_repo_fix_callback:
-                        run_fix = bool(confirm_repo_fix_callback(repo, index, len(repos)))
+                    for line in build_fix_preflight_summary(config, repos):
+                        logger(line)
 
-                    if run_fix:
-                        logger(f"[FIX] {repo.name}")
-                        fixed = guard.apply_fixes(repo, report)
-                        logger(f"[RE-AUDIT] {repo.name}")
+                if config.fix and config.push and require_confirmation:
+                    confirmed = confirm_callback() if confirm_callback else False
+                    if not confirmed:
+                        logger("[INFO] Run aborted by user confirmation gate.")
+                        logger("\n[SUMMARY] PASS 0/0")
+                        exit_code = 1
+                        repos = []
+                        total_repositories = 0
+                        state_tracker.update(
+                            phase="aborted",
+                            total_repositories=0,
+                            completed_repositories=0,
+                            current_repository="",
+                        )
+
+                for index, repo in enumerate(repos, start=1):
+                    repo_name = repo_display_name(repo)
+                    state_tracker.update(
+                        phase="fixing" if config.fix else "auditing",
+                        current_repository=repo_name,
+                        completed_repositories=index - 1,
+                        total_repositories=len(repos),
+                    )
+                    repo_lock: RepoExecutionLock | None = None
+                    report = RepoReport(name=repo_name, path=str(repo))
+                    report.low_confidence_email_mode = config.low_confidence_email_mode
+
+                    try:
+                        acquire_repo_lock = getattr(guard, "acquire_repo_lock", None)
+                        if callable(acquire_repo_lock):
+                            repo_lock = acquire_repo_lock(repo)
+                        logger(f"[AUDIT] {repo_name}")
                         report = guard.audit_repo(repo)
-                        report.backups_created = fixed.backups_created
-                        report.fix_actions = fixed.fix_actions
-                        report.fix_errors = fixed.fix_errors
-                        report.finalize()
-                    else:
-                        report.fix_actions.append("fix skipped by per-repository confirmation gate")
 
-                reports.append(report)
-                print_report(report, logger)
+                        if config.fix:
+                            run_fix = True
+                            if config.confirm_each_repo_fix and confirm_repo_fix_callback:
+                                run_fix = bool(confirm_repo_fix_callback(repo, index, len(repos)))
 
-            if repos:
-                passed = sum(1 for rep in reports if rep.status == "PASS")
-                logger(f"\n[SUMMARY] PASS {passed}/{len(reports)}")
-                if exit_code == 0 and reports:
-                    exit_code = 0 if passed == len(reports) else 2
+                            if run_fix:
+                                logger(f"[FIX] {repo_name}")
+                                fixed = guard.apply_fixes(repo, report)
+                                logger(f"[RE-AUDIT] {repo_name}")
+                                report = guard.audit_repo(repo)
+                                report.backups_created = fixed.backups_created
+                                report.fix_actions = fixed.fix_actions
+                                report.fix_errors = fixed.fix_errors
+                            else:
+                                report.fix_actions.append("fix skipped by per-repository confirmation gate")
+                    except Exception as exc:
+                        report.execution_errors.append(str(exc))
+                        logger(f"[ERROR] {repo_name}: repository execution failed: {exc}")
+                        logger(traceback.format_exc())
+                    finally:
+                        release_repo_lock = getattr(guard, "release_repo_lock", None)
+                        if callable(release_repo_lock):
+                            release_repo_lock(repo_lock)
 
-        if config.audit_litellm_incident:
+                    report.finalize()
+                    reports.append(report)
+                    print_report(report, logger)
+                    state_tracker.update(
+                        phase="fixing" if config.fix else "auditing",
+                        current_repository="",
+                        completed_repositories=len(reports),
+                        total_repositories=len(repos),
+                    )
+
+                if repos:
+                    passed = sum(1 for rep in reports if rep.status == "PASS")
+                    failed = len(reports) - passed
+                    summary_status = "PASS" if failed == 0 else "FAIL"
+                    summary_count = passed if failed == 0 else failed
+                    logger(f"\n[SUMMARY] {summary_status} {summary_count}/{len(reports)}")
+                    if exit_code == 0 and reports:
+                        exit_code = 0 if failed == 0 else 2
+
+        if config.audit_litellm_incident and exit_code != 3:
+            state_tracker.update(phase="supply-chain")
             supply_chain_payload = run_litellm_global_supply_chain_scan(
                 root=config.root,
                 repo_filters=config.repos,
@@ -4136,29 +4476,60 @@ def execute_guard_pipeline(
         logger(traceback.format_exc())
         exit_code = 3
     finally:
-        persist_kwargs: dict[str, object] = {
-            "reports": reports,
-            "artifacts": artifacts,
-            "root_path": config.root,
-            "policy_path": config.policy,
-            "run_settings": run_settings,
-            "logger": logger,
-            "optional_json_export": config.report_json,
-            "optional_supply_chain_payload": supply_chain_payload,
-        }
-
-        persist_params = inspect.signature(persist_run_outputs).parameters
-        if "optional_supply_chain_payload" not in persist_params:
-            persist_kwargs.pop("optional_supply_chain_payload", None)
-        persist_run_outputs(**persist_kwargs)
-        if config.audit_litellm_incident and supply_chain_payload is not None:
-            persist_litellm_supply_chain_output(
-                artifacts=artifacts,
-                payload=supply_chain_payload,
-                logger=logger,
+        try:
+            state_tracker.update(
+                phase="persisting",
+                current_repository="",
+                completed_repositories=len(reports),
+                total_repositories=max(total_repositories, len(reports)),
             )
-        if config.open_report:
-            open_html_report_in_browser(artifacts.html_path, logger)
+        except Exception:
+            pass
+
+        try:
+            persist_kwargs: dict[str, object] = {
+                "reports": reports,
+                "artifacts": artifacts,
+                "root_path": config.root,
+                "policy_path": config.policy,
+                "run_settings": run_settings,
+                "logger": logger,
+                "optional_json_export": config.report_json,
+                "optional_supply_chain_payload": supply_chain_payload,
+            }
+
+            persist_params = inspect.signature(persist_run_outputs).parameters
+            if "optional_supply_chain_payload" not in persist_params:
+                persist_kwargs.pop("optional_supply_chain_payload", None)
+            persist_run_outputs(**persist_kwargs)
+            if config.audit_litellm_incident and supply_chain_payload is not None:
+                persist_litellm_supply_chain_output(
+                    artifacts=artifacts,
+                    payload=supply_chain_payload,
+                    logger=logger,
+                )
+            if config.open_report:
+                open_html_report_in_browser(artifacts.html_path, logger)
+        except Exception as exc:
+            logger(f"[ERROR] Failed to finalize run artifacts: {exc}")
+            logger(traceback.format_exc())
+            exit_code = 3
+        finally:
+            passed = sum(1 for rep in reports if rep.status == "PASS")
+            failed = len(reports) - passed
+            try:
+                state_tracker.update(
+                    status="completed" if exit_code == 0 else "failed",
+                    phase="finished",
+                    current_repository="",
+                    completed_repositories=len(reports),
+                    total_repositories=max(total_repositories, len(reports)),
+                    pass_count=passed,
+                    fail_count=failed,
+                    exit_code=exit_code,
+                )
+            except Exception:
+                pass
 
     return exit_code
 
@@ -4210,9 +4581,12 @@ def run_git_command(args: list[str], cwd: Path | None = None) -> CommandResult:
             text=True,
             encoding="utf-8",
             errors="replace",
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
         return CommandResult(127, "", _missing_executable_message("git"))
+    except subprocess.TimeoutExpired:
+        return CommandResult(124, "", f"git command timed out after {DEFAULT_SUBPROCESS_TIMEOUT_SECONDS}s")
     except Exception as exc:
         return CommandResult(1, "", f"Unable to execute git {' '.join(args)}: {exc}")
     return CommandResult(proc.returncode, proc.stdout.strip(), proc.stderr.strip())
@@ -6691,6 +7065,7 @@ class GuiApp:  # pragma: no cover
                     f"[WARN] report-dir was forced to {default_results_dir()} to comply with mandatory Audit_Results policy"
                 )
             gui_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
+            gui_logger(f"[INFO] Run state manifest: {artifacts.state_path}")
             gui_logger(f"[INFO] GUI action: {'repair' if run_fix else 'audit'}")
 
             config = build_guard_run_config(
@@ -6733,7 +7108,7 @@ class GuiApp:  # pragma: no cover
                         result["value"] = bool(
                             self.messagebox.askyesno(
                                 "Confirm Repair for This Repository",
-                                f"Repository {index}/{total}: {repo.name}\n\n"
+                                f"Repository {index}/{total}: {repo_display_name(repo)}\n\n"
                                 "Apply Repair to this repository?\n"
                                 "You can answer No to skip only this repository.",
                             )
@@ -6977,6 +7352,7 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
             f"[WARN] report-dir was forced to {default_results_dir()} to comply with mandatory Audit_Results policy"
         )
     cli_logger(f"[INFO] Run artifacts directory: {artifacts.run_dir}")
+    cli_logger(f"[INFO] Run state manifest: {artifacts.state_path}")
     if args.no_open_report:
         cli_logger(
             "[INFO] --no-open-report is accepted for compatibility. "
@@ -7000,7 +7376,7 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         return answer in {"y", "yes"}
 
     def confirm_repo_fix(repo: Path, index: int, total: int) -> bool:
-        print(f"[CONFIRM] Repository {index}/{total}: {repo.name}")
+        print(f"[CONFIRM] Repository {index}/{total}: {repo_display_name(repo)}")
         print("Applying fixes may modify tracked files and rewrite history.")
         answer = input("Apply fixes for this repository? [y/N]: ").strip().lower()
         return answer in {"y", "yes"}

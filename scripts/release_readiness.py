@@ -24,6 +24,8 @@ DEFAULT_TIMEOUTS = {
     "install": 900,
     "audit": 900,
 }
+RELEASE_PYTEST_BASETEMP = ".pytest_tmp_release"
+RELEASE_COVERAGE_BASENAME = ".coverage.release-readiness"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -110,17 +112,43 @@ def is_clean_worktree(repo_root: Path) -> bool:
     return proc.returncode == 0 and not proc.stdout.strip()
 
 
+def _validate_cleanup_target(repo_root: Path, target: Path) -> Path:
+    resolved_root = repo_root.resolve()
+    resolved_target = target.resolve(strict=False)
+    try:
+        resolved_target.relative_to(resolved_root)
+    except ValueError as exc:
+        raise RuntimeError(f"Refusing to clean path outside repository root: {target}") from exc
+    return resolved_target
+
+
+def _remove_tree_if_present(repo_root: Path, target: Path) -> None:
+    if not target.exists():
+        return
+    validated = _validate_cleanup_target(repo_root, target)
+    if validated.is_symlink():
+        raise RuntimeError(f"Refusing to recursively remove symlinked path: {validated}")
+    log(f"Removing stale build output: {validated}")
+    shutil.rmtree(validated, ignore_errors=False)
+
+
+def remove_stale_coverage_outputs(repo_root: Path, coverage_basename: str = RELEASE_COVERAGE_BASENAME) -> None:
+    for coverage_file in repo_root.glob(f"{coverage_basename}*"):
+        validated = _validate_cleanup_target(repo_root, coverage_file)
+        if validated.is_dir():
+            raise RuntimeError(f"Refusing to remove unexpected coverage directory: {validated}")
+        if validated.exists():
+            log(f"Removing stale coverage output: {validated}")
+            validated.unlink()
+
+
 def remove_stale_build_outputs(repo_root: Path) -> None:
     for rel in ("dist", "build"):
         target = repo_root / rel
-        if target.exists():
-            log(f"Removing stale build output: {target}")
-            shutil.rmtree(target, ignore_errors=True)
+        _remove_tree_if_present(repo_root, target)
 
     for egg_info in repo_root.glob("*.egg-info"):
-        if egg_info.exists():
-            log(f"Removing stale egg-info output: {egg_info}")
-            shutil.rmtree(egg_info, ignore_errors=True)
+        _remove_tree_if_present(repo_root, egg_info)
 
 
 def venv_python(venv_dir: Path) -> Path:
@@ -184,9 +212,13 @@ def run_release_verification_steps(repo_root: Path, args: argparse.Namespace) ->
     )
     run_named_command(
         "Running tracked pytest suite",
-        [sys.executable, "-m", "pytest", "-q"],
+        [sys.executable, "-m", "pytest", "-q", "--basetemp", RELEASE_PYTEST_BASETEMP],
         cwd=repo_root,
         timeout=DEFAULT_TIMEOUTS["test"],
+        env={
+            **os.environ,
+            "COVERAGE_FILE": str(repo_root / RELEASE_COVERAGE_BASENAME),
+        },
     )
     run_named_command(
         "Running CLI smoke test",
@@ -261,6 +293,7 @@ def main(argv: list[str] | None = None) -> int:
     log(f"Repository root: {repo_root}")
     if not args.skip_clean_build_artifacts:
         remove_stale_build_outputs(repo_root)
+    remove_stale_coverage_outputs(repo_root)
 
     run_release_verification_steps(repo_root, args)
 

@@ -66,6 +66,7 @@ These variables are optional unless you want fuller admin visibility for `--audi
 Operational outputs remain local by default:
 
 - audit reports: `Audit_Results/<run_id>/report.json`, `report.html`, `run.log`
+- execution state manifest: `Audit_Results/<run_id>/run_state.json`
 - build outputs: `dist/`
 - rewrite safety bundle: `<repo>-pre-publication-fix-<timestamp>.bundle`
 
@@ -75,6 +76,7 @@ The tool also applies a few local-safety defaults during normal operation:
 
 - report and export writes avoid symlink targets
 - run artifacts are created with private directory/file permissions where the platform supports them
+- repository execution is guarded by a local lock in the Git metadata directory to prevent overlapping runs on the same checkout
 - generated rewrite helper files are temporary and removed after the rewrite step finishes
 
 ## Recovery and rollback

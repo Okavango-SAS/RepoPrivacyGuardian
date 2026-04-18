@@ -143,6 +143,14 @@ def test_operational_docs_cover_release_harness_env_and_recovery() -> None:
     assert "Recovering after a bad rewrite" in troubleshooting
 
 
+def test_ux_audit_doc_avoids_absolute_local_asset_paths() -> None:
+    ux_audit = (_repo_root() / "docs" / "UX_UI_AUDIT.md").read_text(encoding="utf-8")
+
+    assert "/C:/Users/" not in ux_audit
+    assert "ux-audit/before/" in ux_audit
+    assert "ux-audit/after/" in ux_audit
+
+
 def test_docs_cover_optional_github_hardening_audit() -> None:
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
     agents = (_repo_root() / "AGENTS.MD").read_text(encoding="utf-8")
