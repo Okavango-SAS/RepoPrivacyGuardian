@@ -478,11 +478,63 @@ def read_text_file_for_scan(path: Path, *, max_bytes: int = MAX_TRACKED_TEXT_SCA
         return None
     return data.decode("utf-8", errors="replace")
 
-EXFIL_CODE_RE = re.compile(
-    r"Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|HttpClient|WebClient|"
-    r"requests\.|httpx|aiohttp|urllib|urlopen|websockets|socket\.|"
-    r"\bupload\b|\bwebhook\b|\btelemetry\b|\banalytics\b"
+EXFIL_ACTIVE_CODE_RE = re.compile(
+    r"(?i)"
+    r"Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|"
+    r"requests\.(?:get|post|put|patch|delete|head|options|request|Session)|"
+    r"httpx\.(?:get|post|put|patch|delete|head|options|request|Client|AsyncClient)|"
+    r"aiohttp\.(?:request|ClientSession)|"
+    r"urllib\.request\.urlopen|"
+    r"\burlopen\s*\(|"
+    r"websockets\.connect|"
+    r"socket\.(?:socket|create_connection)|"
+    r"\bfetch\s*\(|"
+    r"axios\.(?:get|post|put|patch|delete|head|options|request|create)|"
+    r"navigator\.sendBeacon|"
+    r"new\s+WebSocket\s*\(|"
+    r"XMLHttpRequest"
 )
+EXFIL_REVIEW_TERM_RE = re.compile(r"(?i)\b(upload|webhook|telemetry|analytics)\b")
+EXFIL_REVIEW_CONTEXT_RE = re.compile(
+    r"(?i)"
+    r"https?://|"
+    r"\b(send|post|get|put|patch|delete|emit|publish|push|export|beacon|track|ingest|collector|endpoint)\b"
+)
+EXFIL_IMPORT_LINE_RE = re.compile(r"^\s*(?:from\s+\S+\s+import\s+.+|import\s+.+)$")
+EXFIL_META_LINE_RE = re.compile(
+    r"\b(?:line_has_exfil_indicator|is_exfil_indicator_noise|exfil_code_indicators|EXFIL_[A-Z_]+)\b"
+)
+EXFIL_PATTERN_LITERAL_RE = re.compile(r"^\s*r?[\"'][A-Za-z0-9_.\\|?*+()[\]-]+[\"']\s*,?\s*$")
+EXFIL_TEST_FIXTURE_WRITE_RE = re.compile(r"\b(?:_write|write_text|write_bytes)\s*\(")
+
+
+def is_exfil_indicator_noise(line: str, *, rel_path: str | None = None) -> bool:
+    stripped = line.strip()
+    normalized_rel = (rel_path or "").replace("\\", "/").lower()
+    if not stripped:
+        return True
+    if stripped.startswith(("#", "//", "/*", "*", "*/")):
+        return True
+    if EXFIL_IMPORT_LINE_RE.match(stripped):
+        return True
+    if EXFIL_META_LINE_RE.search(stripped):
+        return True
+    if EXFIL_PATTERN_LITERAL_RE.match(stripped):
+        return True
+    if normalized_rel.startswith("tests/") and EXFIL_TEST_FIXTURE_WRITE_RE.search(stripped) and "\\n" in stripped:
+        return True
+    return False
+
+
+def line_has_exfil_indicator(line: str, *, rel_path: str | None = None) -> bool:
+    stripped = line.strip()
+    if is_exfil_indicator_noise(stripped, rel_path=rel_path):
+        return False
+    if EXFIL_ACTIVE_CODE_RE.search(stripped):
+        return True
+    if EXFIL_REVIEW_TERM_RE.search(stripped) and EXFIL_REVIEW_CONTEXT_RE.search(stripped):
+        return True
+    return False
 
 LITELLM_REFERENCE_RE = re.compile(r"(?i)\blitellm\b")
 LITELLM_COMPROMISED_VERSION_RE = re.compile(r"(?i)\blitellm\b[^\n]{0,64}\b1\.82\.(?:7|8)\b")
@@ -1964,7 +2016,7 @@ class RepoPublicationGuard:  # pragma: no cover
             if text is None:
                 continue
             for idx, line in enumerate(text.splitlines(), start=1):
-                if EXFIL_CODE_RE.search(line):
+                if line_has_exfil_indicator(line, rel_path=rel):
                     matches.append(f"{rel}:{idx}:{line.strip()[:240]}")
                     if len(matches) >= self.max_matches:
                         return matches

@@ -711,6 +711,23 @@ def test_process_exists_handles_current_and_invalid_pid() -> None:
     assert rpg.process_exists(-1) is False
 
 
+def test_subprocess_and_locking_helpers_cover_non_interactive_defaults(tmp_path: Path) -> None:
+    assert rpg.subprocess_stdin() == subprocess.DEVNULL
+    assert rpg.subprocess_stdin("y\n") == subprocess.PIPE
+    assert rpg.streaming_popen_kwargs()["start_new_session"] is True
+
+    rpg._close_fd_safely(None)
+
+    fd, raw_path = os.open(str(tmp_path / "lock.json"), os.O_RDWR | os.O_CREAT, 0o600), tmp_path / "lock.json"
+    try:
+        os.write(fd, b"{not-json")
+        os.fsync(fd)
+        assert rpg._read_json_from_locked_fd(fd) is None
+    finally:
+        rpg._close_fd_safely(fd)
+        raw_path.unlink(missing_ok=True)
+
+
 def test_process_exists_windows_error_code_paths(monkeypatch) -> None:
     import ctypes
 

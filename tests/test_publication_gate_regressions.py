@@ -268,6 +268,72 @@ def test_exfil_indicators_remain_advisory_by_default(tmp_path: Path) -> None:
     assert severity == "OK"
     assert any("advisory" in item.lower() for item in highlights)
 
+
+def test_exfil_indicator_filters_ignore_imports_and_detector_scaffolding() -> None:
+    assert rpg.is_exfil_indicator_noise("import urllib.request") is True
+    assert rpg.line_has_exfil_indicator("import urllib.request") is False
+    assert (
+        rpg.line_has_exfil_indicator(
+            'r"requests\\.|httpx|aiohttp|urllib|urlopen|websockets|socket\\.|"'
+        )
+        is False
+    )
+    assert rpg.line_has_exfil_indicator('r"XMLHttpRequest"') is False
+    assert rpg.line_has_exfil_indicator(
+        'assert rpg.line_has_exfil_indicator(\'requests.post(endpoint, json=payload)\') is True'
+    ) is False
+    assert rpg.line_has_exfil_indicator("urllib.request.Request(url)") is False
+
+
+def test_exfil_indicator_keeps_active_network_sinks_and_contextual_terms() -> None:
+    assert rpg.line_has_exfil_indicator('urllib.request.urlopen("https://collector.example")') is True
+    assert rpg.line_has_exfil_indicator('requests.post(endpoint, json=payload)') is True
+    assert rpg.line_has_exfil_indicator('const send = fetch("https://collector.example")') is True
+    assert rpg.line_has_exfil_indicator('webhook = "https://collector.example/hooks/release"') is True
+    assert rpg.line_has_exfil_indicator("analytics_enabled = True") is False
+
+
+def test_exfil_indicator_audit_ignores_library_import_noise_in_repo_code(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "exfil-noise")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(
+        repo / "main.py",
+        (
+            "import urllib.request\n"
+            "EXFIL_CODE_RE = re.compile(\n"
+            '    r"requests\\\\.|httpx|aiohttp|urllib|urlopen|websockets|socket\\\\.|"\n'
+            ")\n"
+            "parsed = urllib.request.Request(url)\n"
+        ),
+    )
+    _commit_all(repo, "add exfil noise only")
+
+    guard = _make_guard(tmp_path)
+    report = guard.audit_repo(repo)
+
+    assert report.exfil_code_indicators == []
+
+
+def test_exfil_indicator_audit_ignores_detector_meta_and_test_fixtures(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "exfil-test-meta")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(
+        repo / "tests" / "test_meta.py",
+        (
+            "def test_meta():\n"
+            "    _write(repo / 'main.py', 'import urllib.request\\nurllib.request.urlopen(\"https://collector.example\")\\n')\n"
+            "    assert rpg.line_has_exfil_indicator('requests.post(endpoint, json=payload)') is True\n"
+            "    report.exfil_code_indicators = ['main.py:2:urllib.request.urlopen(\"https://collector.example\")']\n"
+        ),
+    )
+    _commit_all(repo, "add exfil detector meta only")
+
+    guard = _make_guard(tmp_path)
+    report = guard.audit_repo(repo)
+
+    assert report.exfil_code_indicators == []
+
+
 def test_persisted_artifacts_redact_sensitive_values(tmp_path: Path) -> None:
     artifacts = rpg.create_run_artifacts(tmp_path / "Audit_Results")
     logger = rpg.RunLogger(artifacts.log_path)
