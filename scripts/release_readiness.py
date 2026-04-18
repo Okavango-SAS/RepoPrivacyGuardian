@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -24,8 +26,8 @@ DEFAULT_TIMEOUTS = {
     "install": 900,
     "audit": 900,
 }
-RELEASE_PYTEST_BASETEMP = ".pytest_tmp_release"
-RELEASE_COVERAGE_BASENAME = ".coverage.release-readiness"
+BUILD_ARTIFACT_CLEANUP_ATTEMPTS = 5
+BUILD_ARTIFACT_CLEANUP_RETRY_SECONDS = 1.0
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -82,6 +84,7 @@ def run_command(
         cwd=str(cwd),
         timeout=timeout,
         env=env,
+        stdin=subprocess.DEVNULL,
     )
     if proc.returncode != 0:
         raise SystemExit(proc.returncode)
@@ -107,6 +110,7 @@ def is_clean_worktree(repo_root: Path) -> bool:
         text=True,
         encoding="utf-8",
         errors="replace",
+        stdin=subprocess.DEVNULL,
         timeout=DEFAULT_TIMEOUTS["quick"],
     )
     return proc.returncode == 0 and not proc.stdout.strip()
@@ -129,17 +133,28 @@ def _remove_tree_if_present(repo_root: Path, target: Path) -> None:
     if validated.is_symlink():
         raise RuntimeError(f"Refusing to recursively remove symlinked path: {validated}")
     log(f"Removing stale build output: {validated}")
-    shutil.rmtree(validated, ignore_errors=False)
+    last_exc: OSError | None = None
+    for attempt in range(1, BUILD_ARTIFACT_CLEANUP_ATTEMPTS + 1):
+        try:
+            shutil.rmtree(validated, ignore_errors=False)
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError as exc:
+            last_exc = exc
+        except OSError as exc:
+            if getattr(exc, "errno", None) not in {errno.EACCES, errno.EPERM, errno.EBUSY}:
+                raise
+            last_exc = exc
 
+        if attempt >= BUILD_ARTIFACT_CLEANUP_ATTEMPTS:
+            break
+        log(
+            f"Retrying stale build output cleanup ({attempt}/{BUILD_ARTIFACT_CLEANUP_ATTEMPTS}) after: {last_exc}"
+        )
+        time.sleep(BUILD_ARTIFACT_CLEANUP_RETRY_SECONDS)
 
-def remove_stale_coverage_outputs(repo_root: Path, coverage_basename: str = RELEASE_COVERAGE_BASENAME) -> None:
-    for coverage_file in repo_root.glob(f"{coverage_basename}*"):
-        validated = _validate_cleanup_target(repo_root, coverage_file)
-        if validated.is_dir():
-            raise RuntimeError(f"Refusing to remove unexpected coverage directory: {validated}")
-        if validated.exists():
-            log(f"Removing stale coverage output: {validated}")
-            validated.unlink()
+    raise RuntimeError(f"Unable to remove stale build output after retries: {validated}") from last_exc
 
 
 def remove_stale_build_outputs(repo_root: Path) -> None:
@@ -197,7 +212,23 @@ def latest_artifact(repo_root: Path, pattern: str) -> Path:
     return matches[-1]
 
 
-def run_release_verification_steps(repo_root: Path, args: argparse.Namespace) -> None:
+def create_release_runtime_workspace() -> Path:
+    runtime_dir = Path(tempfile.mkdtemp(prefix="rpg-release-runtime-"))
+    log(f"Release runtime workspace: {runtime_dir}")
+    return runtime_dir
+
+
+def build_release_pytest_artifact_paths(runtime_dir: Path) -> tuple[Path, Path]:
+    return runtime_dir / "pytest", runtime_dir / ".coverage"
+
+
+def run_release_verification_steps(
+    repo_root: Path,
+    args: argparse.Namespace,
+    *,
+    runtime_dir: Path,
+) -> None:
+    pytest_base_temp, coverage_file = build_release_pytest_artifact_paths(runtime_dir)
     run_named_command(
         "CLI tooling preflight",
         [sys.executable, "-m", "Repo_Privacy_Guardian", "--check-tooling"],
@@ -212,12 +243,20 @@ def run_release_verification_steps(repo_root: Path, args: argparse.Namespace) ->
     )
     run_named_command(
         "Running tracked pytest suite",
-        [sys.executable, "-m", "pytest", "-q", "--basetemp", RELEASE_PYTEST_BASETEMP],
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "--basetemp",
+            str(pytest_base_temp),
+            f"--cov-report=xml:{runtime_dir / 'coverage.xml'}",
+        ],
         cwd=repo_root,
         timeout=DEFAULT_TIMEOUTS["test"],
         env={
             **os.environ,
-            "COVERAGE_FILE": str(repo_root / RELEASE_COVERAGE_BASENAME),
+            "COVERAGE_FILE": str(coverage_file),
         },
     )
     run_named_command(
@@ -293,13 +332,14 @@ def main(argv: list[str] | None = None) -> int:
     log(f"Repository root: {repo_root}")
     if not args.skip_clean_build_artifacts:
         remove_stale_build_outputs(repo_root)
-    remove_stale_coverage_outputs(repo_root)
-
-    run_release_verification_steps(repo_root, args)
-
-    install_smoke_for_artifact(repo_root, latest_artifact(repo_root, "*.whl"))
-    install_smoke_for_artifact(repo_root, latest_artifact(repo_root, "*.tar.gz"))
-    maybe_run_self_audit(repo_root, args)
+    runtime_dir = create_release_runtime_workspace()
+    try:
+        run_release_verification_steps(repo_root, args, runtime_dir=runtime_dir)
+        install_smoke_for_artifact(repo_root, latest_artifact(repo_root, "*.whl"))
+        install_smoke_for_artifact(repo_root, latest_artifact(repo_root, "*.tar.gz"))
+        maybe_run_self_audit(repo_root, args)
+    finally:
+        shutil.rmtree(runtime_dir, ignore_errors=True)
     log("Release-readiness checks completed successfully.")
     return 0
 

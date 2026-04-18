@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
+import subprocess
 import sys
 import types
 from datetime import datetime
@@ -92,6 +94,30 @@ def _make_run_config(**overrides) -> rpg.GuardRunConfig:
     }
     base.update(overrides)
     return rpg.GuardRunConfig(**base)
+
+
+def _make_guard(root: Path, logger=None) -> rpg.RepoPublicationGuard:
+    return rpg.RepoPublicationGuard(
+        root=root,
+        policy_path=root / "POLICY.md",
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        owner_name="Owner",
+        owner_emails=[],
+        redact_third_party=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        low_confidence_email_mode="informational",
+        push=False,
+        dry_run=False,
+        max_matches=50,
+        audit_litellm_incident=False,
+        audit_github_hardening=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=[],
+        replace_text_file=None,
+        logger=(logger or (lambda _msg: None)),
+    )
 
 
 def test_run_logger_writes_file_and_calls_sink(tmp_path: Path) -> None:
@@ -728,182 +754,114 @@ def test_process_exists_posix_signal_paths(monkeypatch) -> None:
     assert rpg.process_exists(1234) is True
 
 
-def test_repo_execution_lock_blocks_overlap(tmp_path: Path, monkeypatch) -> None:
+def test_repo_execution_lock_blocks_overlap_across_processes(tmp_path: Path, monkeypatch) -> None:
     repo = tmp_path / "repo-a"
     (repo / ".git").mkdir(parents=True)
     monkeypatch.setattr(rpg, "REPO_LOCK_WAIT_SECONDS", 0.0)
     monkeypatch.setattr(rpg, "REPO_LOCK_RETRY_SECONDS", 0.0)
 
-    guard = rpg.RepoPublicationGuard(
-        root=tmp_path,
-        policy_path=tmp_path / "POLICY.md",
-        noreply_email=rpg.DEFAULT_NOREPLY,
-        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
-        owner_name="Owner",
-        owner_emails=[],
-        redact_third_party=False,
-        purge_detected_secret_files=False,
-        purge_all_detected_secret_files=False,
-        low_confidence_email_mode="informational",
-        push=False,
-        dry_run=False,
-        max_matches=50,
-        audit_litellm_incident=False,
-        audit_github_hardening=False,
-        allow_non_owner_push=False,
-        allowed_remote_owners=[],
-        replace_text_file=None,
-        logger=lambda _msg: None,
-    )
-    monkeypatch.setattr(guard, "_git", lambda _repo, *_args: rpg.CommandResult(1, "", ""))
+    child_script = """
+import sys
+import time
+from pathlib import Path
+import Repo_Privacy_Guardian as rpg
 
-    first_lock = guard.acquire_repo_lock(repo)
+repo = Path(sys.argv[1])
+guard = rpg.RepoPublicationGuard(
+    root=repo.parent,
+    policy_path=repo.parent / "POLICY.md",
+    noreply_email=rpg.DEFAULT_NOREPLY,
+    placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+    owner_name="Owner",
+    owner_emails=[],
+    redact_third_party=False,
+    purge_detected_secret_files=False,
+    purge_all_detected_secret_files=False,
+    low_confidence_email_mode="informational",
+    push=False,
+    dry_run=False,
+    max_matches=50,
+    audit_litellm_incident=False,
+    audit_github_hardening=False,
+    allow_non_owner_push=False,
+    allowed_remote_owners=[],
+    replace_text_file=None,
+    logger=lambda _msg: None,
+)
+lock = guard.acquire_repo_lock(repo)
+print("acquired", flush=True)
+time.sleep(2)
+guard.release_repo_lock(lock)
+"""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", child_script, str(repo)],
+        cwd=str(Path(__file__).resolve().parents[1]),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.DEVNULL,
+    )
     try:
+        assert proc.stdout is not None
+        assert proc.stdout.readline().strip() == "acquired"
+        guard = _make_guard(tmp_path)
         with pytest.raises(RuntimeError, match="repository execution lock is busy"):
             guard.acquire_repo_lock(repo)
+        stdout, stderr = proc.communicate(timeout=10)
+        assert proc.returncode == 0, stderr or stdout
+        repo_lock = guard.acquire_repo_lock(repo)
+        guard.release_repo_lock(repo_lock)
     finally:
-        guard.release_repo_lock(first_lock)
+        if proc.poll() is None:
+            proc.kill()
+            proc.communicate(timeout=10)
 
-    assert not (repo / ".git" / rpg.REPO_LOCK_FILENAME).exists()
 
-
-def test_repo_execution_lock_reclaims_stale_lock(tmp_path: Path, monkeypatch) -> None:
+def test_repo_execution_lock_reuses_existing_metadata_file(tmp_path: Path) -> None:
     repo = tmp_path / "repo-a"
     git_dir = repo / ".git"
     git_dir.mkdir(parents=True)
-    stale_lock = git_dir / rpg.REPO_LOCK_FILENAME
+    lock_path = git_dir / rpg.REPO_LOCK_FILENAME
     rpg.write_private_json_file(
-        stale_lock,
+        lock_path,
         {
-            "owner_token": "stale-holder",
+            "owner_token": "old-holder",
             "acquired_at": "2000-01-01T00:00:00",
         },
     )
-    monkeypatch.setattr(rpg, "REPO_LOCK_WAIT_SECONDS", 0.0)
-    monkeypatch.setattr(rpg, "REPO_LOCK_RETRY_SECONDS", 0.0)
-
-    guard = rpg.RepoPublicationGuard(
-        root=tmp_path,
-        policy_path=tmp_path / "POLICY.md",
-        noreply_email=rpg.DEFAULT_NOREPLY,
-        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
-        owner_name="Owner",
-        owner_emails=[],
-        redact_third_party=False,
-        purge_detected_secret_files=False,
-        purge_all_detected_secret_files=False,
-        low_confidence_email_mode="informational",
-        push=False,
-        dry_run=False,
-        max_matches=50,
-        audit_litellm_incident=False,
-        audit_github_hardening=False,
-        allow_non_owner_push=False,
-        allowed_remote_owners=[],
-        replace_text_file=None,
-        logger=lambda _msg: None,
-    )
-    monkeypatch.setattr(guard, "_git", lambda _repo, *_args: rpg.CommandResult(1, "", ""))
+    guard = _make_guard(tmp_path)
 
     repo_lock = guard.acquire_repo_lock(repo)
     try:
-        payload = json.loads(stale_lock.read_text(encoding="utf-8"))
-        assert payload["owner_token"] != "stale-holder"
+        payload = rpg._read_json_from_locked_fd(repo_lock.lock_fd)
+        assert payload is not None
+        assert payload["owner_token"] == repo_lock.owner_token
+        assert payload["lock_kind"] == "os-advisory-file-lock"
     finally:
         guard.release_repo_lock(repo_lock)
 
+    released_payload = json.loads(lock_path.read_text(encoding="utf-8"))
+    assert released_payload["status"] == "released"
+    assert released_payload["previous_owner_token"] == repo_lock.owner_token
 
-def test_repo_execution_lock_reclaims_dead_pid_without_waiting_for_age(tmp_path: Path, monkeypatch) -> None:
+
+def test_release_repo_lock_owner_change_still_releases_os_lock(tmp_path: Path) -> None:
     repo = tmp_path / "repo-a"
     git_dir = repo / ".git"
     git_dir.mkdir(parents=True)
-    stale_lock = git_dir / rpg.REPO_LOCK_FILENAME
-    rpg.write_private_json_file(
-        stale_lock,
-        {
-            "owner_token": "dead-holder",
-            "pid": 99999999,
-            "acquired_at": datetime.now().isoformat(timespec="seconds"),
-        },
-    )
-    monkeypatch.setattr(rpg, "REPO_LOCK_WAIT_SECONDS", 0.0)
-    monkeypatch.setattr(rpg, "REPO_LOCK_RETRY_SECONDS", 0.0)
-
-    guard = rpg.RepoPublicationGuard(
-        root=tmp_path,
-        policy_path=tmp_path / "POLICY.md",
-        noreply_email=rpg.DEFAULT_NOREPLY,
-        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
-        owner_name="Owner",
-        owner_emails=[],
-        redact_third_party=False,
-        purge_detected_secret_files=False,
-        purge_all_detected_secret_files=False,
-        low_confidence_email_mode="informational",
-        push=False,
-        dry_run=False,
-        max_matches=50,
-        audit_litellm_incident=False,
-        audit_github_hardening=False,
-        allow_non_owner_push=False,
-        allowed_remote_owners=[],
-        replace_text_file=None,
-        logger=lambda _msg: None,
-    )
-    monkeypatch.setattr(guard, "_git", lambda _repo, *_args: rpg.CommandResult(1, "", ""))
+    messages: list[str] = []
+    guard = _make_guard(tmp_path, logger=messages.append)
 
     repo_lock = guard.acquire_repo_lock(repo)
-    try:
-        payload = json.loads(stale_lock.read_text(encoding="utf-8"))
-        assert payload["owner_token"] != "dead-holder"
-    finally:
-        guard.release_repo_lock(repo_lock)
+    rpg._write_json_to_locked_fd(repo_lock.lock_fd, {"owner_token": "other-holder"})
+    guard.release_repo_lock(repo_lock)
 
+    assert any("owner changed before release" in message for message in messages)
 
-def test_repo_execution_lock_does_not_reclaim_live_pid(tmp_path: Path, monkeypatch) -> None:
-    repo = tmp_path / "repo-a"
-    git_dir = repo / ".git"
-    git_dir.mkdir(parents=True)
-    live_lock = git_dir / rpg.REPO_LOCK_FILENAME
-    rpg.write_private_json_file(
-        live_lock,
-        {
-            "owner_token": "live-holder",
-            "pid": os.getpid(),
-            "acquired_at": "2000-01-01T00:00:00",
-        },
-    )
-    monkeypatch.setattr(rpg, "REPO_LOCK_WAIT_SECONDS", 0.0)
-    monkeypatch.setattr(rpg, "REPO_LOCK_RETRY_SECONDS", 0.0)
-
-    guard = rpg.RepoPublicationGuard(
-        root=tmp_path,
-        policy_path=tmp_path / "POLICY.md",
-        noreply_email=rpg.DEFAULT_NOREPLY,
-        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
-        owner_name="Owner",
-        owner_emails=[],
-        redact_third_party=False,
-        purge_detected_secret_files=False,
-        purge_all_detected_secret_files=False,
-        low_confidence_email_mode="informational",
-        push=False,
-        dry_run=False,
-        max_matches=50,
-        audit_litellm_incident=False,
-        audit_github_hardening=False,
-        allow_non_owner_push=False,
-        allowed_remote_owners=[],
-        replace_text_file=None,
-        logger=lambda _msg: None,
-    )
-    monkeypatch.setattr(guard, "_git", lambda _repo, *_args: rpg.CommandResult(1, "", ""))
-
-    with pytest.raises(RuntimeError, match="repository execution lock is busy"):
-        guard.acquire_repo_lock(repo)
-
-    payload = json.loads(live_lock.read_text(encoding="utf-8"))
-    assert payload["owner_token"] == "live-holder"
+    next_lock = guard.acquire_repo_lock(repo)
+    guard.release_repo_lock(next_lock)
 
 
 def test_audit_repo_records_tracked_file_enumeration_failures(tmp_path: Path, monkeypatch) -> None:
@@ -2831,6 +2789,79 @@ def test_run_git_command_mocked_subprocess(monkeypatch) -> None:
     assert result.stdout == "ok"
     assert calls["args"][0][:2] == ["git", "config"]
     assert calls["kwargs"]["cwd"] == str(Path("C:/repos"))
+    assert calls["kwargs"]["stdin"] == subprocess.DEVNULL
+
+
+def test_guard_run_uses_non_interactive_stdin(monkeypatch, tmp_path: Path) -> None:
+    class DummyProc:
+        returncode = 0
+        stdout = "ok\n"
+        stderr = ""
+
+    captured: list[dict[str, object]] = []
+
+    def fake_run(*args, **kwargs):
+        del args
+        captured.append(dict(kwargs))
+        return DummyProc()
+
+    monkeypatch.setattr(rpg.subprocess, "run", fake_run)
+    guard = _make_guard(tmp_path)
+
+    guard._run(["git", "--version"])
+    guard._run(["git", "--version"], input_text="y\n")
+
+    assert captured[0]["stdin"] == subprocess.DEVNULL
+    assert captured[0]["input"] is None
+    assert captured[1]["stdin"] == subprocess.PIPE
+    assert captured[1]["input"] == "y\n"
+
+
+def test_history_patch_scan_starts_stream_process_isolated(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    repo.mkdir()
+    captured: dict[str, object] = {}
+
+    class DummyStream:
+        def __iter__(self):
+            return iter(())
+
+        def read(self) -> str:
+            return ""
+
+        def close(self) -> None:
+            return None
+
+    class DummyProc:
+        def __init__(self) -> None:
+            self.stdout = DummyStream()
+            self.stderr = DummyStream()
+            self.returncode = 0
+
+        def wait(self, timeout=None) -> None:
+            del timeout
+            self.returncode = 0
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 0
+
+        def kill(self) -> None:
+            self.returncode = 0
+
+    def fake_popen(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return DummyProc()
+
+    monkeypatch.setattr(rpg.subprocess, "Popen", fake_popen)
+    guard = _make_guard(tmp_path)
+
+    assert guard._scan_history_patch(repo, rpg.SECRET_CONTENT_RE) == []
+    assert captured["kwargs"]["stdin"] == subprocess.DEVNULL
+    assert captured["kwargs"]["start_new_session"] is True
 
 
 def test_validate_git_identity_inputs() -> None:

@@ -17,6 +17,7 @@ Features:
 from __future__ import annotations
 
 import argparse
+import errno
 import html
 import importlib.util
 import inspect
@@ -38,6 +39,7 @@ import webbrowser
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+import socket
 from typing import Callable
 
 
@@ -271,6 +273,88 @@ def process_exists(pid: int) -> bool | None:
     return True
 
 
+def subprocess_stdin(input_text: str | None = None) -> int:
+    return subprocess.PIPE if input_text is not None else subprocess.DEVNULL
+
+
+def streaming_popen_kwargs() -> dict[str, object]:
+    return {
+        "stdin": subprocess.DEVNULL,
+        "start_new_session": True,
+    }
+
+
+def _close_fd_safely(fd: int | None) -> None:
+    if fd is None:
+        return
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+
+
+def _write_json_to_locked_fd(fd: int, payload: dict[str, object]) -> None:
+    os.lseek(fd, 0, os.SEEK_SET)
+    os.ftruncate(fd, 0)
+    data = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
+    if data:
+        os.write(fd, data)
+    os.fsync(fd)
+
+
+def _read_json_from_locked_fd(fd: int) -> dict[str, object] | None:
+    try:
+        os.lseek(fd, 0, os.SEEK_SET)
+        size = os.fstat(fd).st_size
+        if size <= 0:
+            return None
+        raw = os.read(fd, size)
+        if not raw:
+            return None
+        return json.loads(raw.decode("utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def acquire_advisory_file_lock(fd: int) -> bool:
+    if os.name == "nt":
+        import msvcrt
+
+        try:
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError as exc:
+            if exc.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK, errno.EPERM}:
+                return False
+            raise
+        return True
+
+    import fcntl
+
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    except OSError as exc:
+        if exc.errno in {errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK}:
+            return False
+        raise
+    return True
+
+
+def release_advisory_file_lock(fd: int) -> None:
+    if os.name == "nt":
+        import msvcrt
+
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        return
+
+    import fcntl
+
+    fcntl.flock(fd, fcntl.LOCK_UN)
+
+
 def repo_has_dirty_worktree(clean_status: str | None) -> bool:
     return len((clean_status or "").splitlines()) > 1
 
@@ -471,6 +555,7 @@ class RepoExecutionLock:
     lock_path: Path
     owner_token: str
     acquired_at: datetime
+    lock_fd: int
 
 
 @dataclass
@@ -591,6 +676,7 @@ def probe_git_available(
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess_stdin(),
             timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
@@ -619,6 +705,7 @@ def probe_command_available(
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess_stdin(),
             timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
@@ -673,6 +760,7 @@ def probe_windows_winget_bootstrap_available(
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess_stdin(),
         )
     except Exception as exc:
         return False, f"Unable to probe Add-AppxPackage support: {exc}"
@@ -702,7 +790,7 @@ def build_winget_bootstrap_command(
         "if (Get-Command winget -ErrorAction SilentlyContinue) { exit 0 }; "
         f"try {{ Add-AppxPackage -RegisterByFamilyName -MainPackage '{WINGET_PACKAGE_FAMILY_NAME}' -ErrorAction Stop }} catch {{}}; "
         "if (Get-Command winget -ErrorAction SilentlyContinue) { exit 0 }; "
-        "$temp = Join-Path $env:TEMP 'RepoPrivacyGuardian-winget-bootstrap.msixbundle'; "
+        "$temp = Join-Path $env:TEMP ('RepoPrivacyGuardian-winget-bootstrap-' + [guid]::NewGuid().ToString() + '.msixbundle'); "
         f"Invoke-WebRequest -Uri '{WINGET_BOOTSTRAP_URL}' -OutFile $temp; "
         "try { Add-AppxPackage -Path $temp -ErrorAction Stop } finally { Remove-Item $temp -Force -ErrorAction SilentlyContinue }; "
         "if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { "
@@ -790,6 +878,7 @@ def ensure_windows_winget_available(
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess_stdin(),
         )
     except Exception as exc:
         logger(f"[TOOLING] winget bootstrap failed: {exc}")
@@ -822,6 +911,7 @@ def read_github_cli_token(
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess_stdin(),
         )
     except FileNotFoundError:
         return None, "missing"
@@ -987,6 +1077,7 @@ def install_missing_tooling(
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                stdin=subprocess_stdin(),
                 timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:
@@ -1527,6 +1618,7 @@ class RepoPublicationGuard:  # pragma: no cover
                 encoding="utf-8",
                 errors="replace",
                 input=input_text,
+                stdin=subprocess_stdin(input_text),
                 timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
             )
         except FileNotFoundError:
@@ -1600,31 +1692,44 @@ class RepoPublicationGuard:  # pragma: no cover
         except (OSError, json.JSONDecodeError):
             return None
 
-    def _repo_lock_is_stale(self, lock_path: Path, metadata: dict[str, object] | None) -> bool:
-        if not lock_path.exists():
-            return False
+    def _open_repo_lock_fd(self, lock_path: Path) -> int:
+        if lock_path.is_symlink():
+            raise RuntimeError(f"Refusing to use symlinked lock file path: {lock_path}")
 
-        pid_raw = (metadata or {}).get("pid")
-        if isinstance(pid_raw, int):
-            pid_state = process_exists(pid_raw)
-            if pid_state is True:
-                return False
-            if pid_state is False:
-                return True
-
-        acquired_at_raw = str((metadata or {}).get("acquired_at") or "").strip()
-        if acquired_at_raw:
-            try:
-                acquired_at = datetime.fromisoformat(acquired_at_raw)
-                return (datetime.now() - acquired_at).total_seconds() > REPO_LOCK_STALE_SECONDS
-            except ValueError:
-                pass
-
+        flags = os.O_RDWR | os.O_CREAT
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
         try:
-            age_seconds = time.time() - lock_path.stat().st_mtime
-        except OSError:
-            return False
-        return age_seconds > REPO_LOCK_STALE_SECONDS
+            fd = os.open(str(lock_path), flags, 0o600)
+        except OSError as exc:
+            if getattr(exc, "errno", None) == errno.ELOOP:
+                raise RuntimeError(f"Refusing to use symlinked lock file path: {lock_path}") from exc
+            raise
+        _apply_private_permissions(lock_path, 0o600)
+        return fd
+
+    def _format_repo_lock_holder(self, metadata: dict[str, object] | None) -> str:
+        if not metadata:
+            return "unknown holder"
+
+        details: list[str] = []
+        owner_token = str(metadata.get("owner_token") or "").strip()
+        if owner_token:
+            details.append(owner_token)
+
+        host = str(metadata.get("host") or "").strip()
+        if host:
+            details.append(f"host={host}")
+
+        pid_raw = metadata.get("pid")
+        if isinstance(pid_raw, int):
+            details.append(f"pid={pid_raw}")
+
+        acquired_at = str(metadata.get("acquired_at") or "").strip()
+        if acquired_at:
+            details.append(f"acquired_at={acquired_at}")
+
+        return ", ".join(details) if details else "unknown holder"
 
     def acquire_repo_lock(self, repo: Path) -> RepoExecutionLock:
         git_dir = self._resolve_git_dir(repo)
@@ -1636,24 +1741,23 @@ class RepoPublicationGuard:  # pragma: no cover
         waiting_logged = False
 
         while True:
-            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-            if hasattr(os, "O_NOFOLLOW"):
-                flags |= os.O_NOFOLLOW
-
+            fd: int | None = None
+            acquired = False
             try:
-                fd = os.open(str(lock_path), flags, 0o600)
-            except FileExistsError:
-                metadata = self._read_lock_metadata(lock_path)
-                if self._repo_lock_is_stale(lock_path, metadata):
-                    try:
-                        lock_path.unlink()
-                        self.log(f"[WARN] {repo_display_name(repo)}: reclaimed stale execution lock at {lock_path}")
-                    except OSError:
-                        pass
-                    continue
+                fd = self._open_repo_lock_fd(lock_path)
+                acquired = acquire_advisory_file_lock(fd)
+            except RuntimeError:
+                raise
+            except OSError as exc:
+                raise RuntimeError(
+                    f"Unable to open repository execution lock at {lock_path}: {exc}"
+                ) from exc
 
+            if not acquired:
+                _close_fd_safely(fd)
+                metadata = self._read_lock_metadata(lock_path)
                 if time.monotonic() >= deadline:
-                    holder = str((metadata or {}).get("owner_token") or "unknown holder")
+                    holder = self._format_repo_lock_holder(metadata)
                     raise RuntimeError(
                         f"repository execution lock is busy ({holder}); retry after the active run finishes"
                     )
@@ -1669,39 +1773,64 @@ class RepoPublicationGuard:  # pragma: no cover
                 "owner_token": owner_token,
                 "pid": os.getpid(),
                 "thread_id": threading.get_ident(),
+                "host": socket.gethostname(),
+                "python_executable": sys.executable,
+                "lock_kind": "os-advisory-file-lock",
                 "acquired_at": acquired_at.isoformat(timespec="seconds"),
             }
-            with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
-                json.dump(payload, fh, indent=2, sort_keys=True)
-                fh.flush()
-                os.fsync(fh.fileno())
-            _apply_private_permissions(lock_path, 0o600)
+            try:
+                _write_json_to_locked_fd(fd, payload)
+            except OSError:
+                try:
+                    release_advisory_file_lock(fd)
+                except OSError:
+                    pass
+                _close_fd_safely(fd)
+                raise
             self.log(f"[INFO] {repo_display_name(repo)}: acquired repository execution lock")
             return RepoExecutionLock(
                 repo=repo,
                 lock_path=lock_path,
                 owner_token=owner_token,
                 acquired_at=acquired_at,
+                lock_fd=fd,
             )
 
     def release_repo_lock(self, repo_lock: RepoExecutionLock | None) -> None:
         if repo_lock is None:
             return
 
-        metadata = self._read_lock_metadata(repo_lock.lock_path)
-        if metadata and str(metadata.get("owner_token") or "") not in {"", repo_lock.owner_token}:
+        metadata = _read_json_from_locked_fd(repo_lock.lock_fd) or self._read_lock_metadata(repo_lock.lock_path)
+        owner_changed = (
+            metadata is not None
+            and str(metadata.get("owner_token") or "").strip()
+            not in {"", repo_lock.owner_token}
+        )
+        if owner_changed:
             self.log(
-                f"[WARN] {repo_display_name(repo_lock.repo)}: repository execution lock owner changed before release; keeping lock file"
+                f"[WARN] {repo_display_name(repo_lock.repo)}: repository execution lock owner changed before release; releasing OS lock only"
             )
-            return
+        try:
+            release_payload = {
+                "status": "released",
+                "released_at": datetime.now().isoformat(timespec="seconds"),
+                "previous_owner_token": repo_lock.owner_token,
+                "pid": os.getpid(),
+                "host": socket.gethostname(),
+            }
+            _write_json_to_locked_fd(repo_lock.lock_fd, release_payload)
+        except OSError as exc:
+            self.log(
+                f"[WARN] {repo_display_name(repo_lock.repo)}: could not update repository execution lock metadata: {exc}"
+            )
 
         try:
-            repo_lock.lock_path.unlink()
+            release_advisory_file_lock(repo_lock.lock_fd)
             self.log(f"[INFO] {repo_display_name(repo_lock.repo)}: released repository execution lock")
-        except FileNotFoundError:
-            return
         except OSError as exc:
             self.log(f"[WARN] {repo_display_name(repo_lock.repo)}: could not release repository execution lock: {exc}")
+        finally:
+            _close_fd_safely(repo_lock.lock_fd)
 
     def _read_local_git_config(self, repo: Path, key: str) -> str | None:
         result = self._git(repo, "config", "--local", "--get", key)
@@ -1825,6 +1954,22 @@ class RepoPublicationGuard:  # pragma: no cover
                         return matches
         return matches
 
+    def _scan_exfil_code_indicators(self, repo: Path) -> list[str]:
+        matches: list[str] = []
+        for file_path in self._iter_tracked_files(repo):
+            rel = file_path.relative_to(repo).as_posix()
+            if file_path.suffix.lower() not in CODE_EXTENSIONS:
+                continue
+            text = read_text_file_for_scan(file_path)
+            if text is None:
+                continue
+            for idx, line in enumerate(text.splitlines(), start=1):
+                if EXFIL_CODE_RE.search(line):
+                    matches.append(f"{rel}:{idx}:{line.strip()[:240]}")
+                    if len(matches) >= self.max_matches:
+                        return matches
+        return matches
+
     def _is_supply_chain_candidate_path(self, rel_path: str) -> bool:
         normalized = rel_path.replace("\\", "/").strip().lower()
         file_name = Path(normalized).name
@@ -1908,6 +2053,12 @@ class RepoPublicationGuard:  # pragma: no cover
         if proc.poll() is not None:
             return
         try:
+            proc.terminate()
+            proc.wait(timeout=2)
+            return
+        except Exception:
+            pass
+        try:
             proc.kill()
         except Exception:
             pass
@@ -1931,6 +2082,7 @@ class RepoPublicationGuard:  # pragma: no cover
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                **streaming_popen_kwargs(),
             )
         except FileNotFoundError:
             self._record_repo_runtime_issue("history patch scan failed to start: Git executable not found")
@@ -1993,6 +2145,7 @@ class RepoPublicationGuard:  # pragma: no cover
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                **streaming_popen_kwargs(),
             )
         except FileNotFoundError:
             self._record_repo_runtime_issue("history email scan failed to start: Git executable not found")
@@ -2090,6 +2243,7 @@ class RepoPublicationGuard:  # pragma: no cover
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                **streaming_popen_kwargs(),
             )
         except FileNotFoundError:
             self._record_repo_runtime_issue("history secret-file scan failed to start: Git executable not found")
@@ -2328,11 +2482,7 @@ class RepoPublicationGuard:  # pragma: no cover
                 line.strip() for line in ignored.stdout.splitlines() if line.strip()
             ][: self.max_matches]
 
-        report.exfil_code_indicators = self._scan_tracked_content(
-            repo,
-            EXFIL_CODE_RE,
-            only_code_files=True,
-        )
+        report.exfil_code_indicators = self._scan_exfil_code_indicators(repo)
 
         if self.audit_github_hardening:
             self._scan_github_hardening(repo, report)
@@ -4733,6 +4883,7 @@ def run_git_command(args: list[str], cwd: Path | None = None) -> CommandResult:
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess_stdin(),
             timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
@@ -5017,6 +5168,7 @@ def probe_litellm_installation(python_executable: Path) -> dict[str, object]:
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess_stdin(),
             timeout=12,
         )
     except Exception as exc:
@@ -5053,6 +5205,7 @@ def probe_litellm_pip_cache_hits(python_executable: Path, max_matches: int) -> l
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess_stdin(),
             timeout=12,
         )
     except Exception:

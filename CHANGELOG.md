@@ -14,7 +14,9 @@ Repository consolidation and developer-experience cleanup.
 - Hardened local file handling so reports and exports refuse symlink targets, rewrite helper files are removed after use, and tracked-file scans skip symlinked or oversized text files.
 - Added checkout bootstrap in `tests/conftest.py` so `pytest -q` and `python -m pytest -q` behave the same from a repository checkout.
 - Hardened automatic fix preconditions so dirty worktrees, `git fsck` failures, or incomplete audits fail closed instead of mutating a repository mid-recovery.
-- Tightened repository execution locking and runtime diagnostics so stale locks respect live owner PIDs and partial history-scan failures surface as blocking `execution_errors`.
+- Replaced PID/timestamp stale-lock reclamation with OS-backed repository execution locks, disabled inherited stdin on repo-owned subprocesses, and isolated release-readiness temp/coverage artifacts per run.
+- Reduced `exfil_code_indicators` advisory noise by preferring active outbound sinks and contextual review terms while ignoring detector scaffolding, import-only lines, and test-meta fixture content.
+- Tightened Windows lock release diagnostics to read owner metadata from the active lock FD, and made release-readiness cleanup retry transient `dist/`/build artifact removal failures instead of aborting on the first file-handle race.
 
 ## [1.2.2] - 2026-04-15
 

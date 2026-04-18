@@ -26,6 +26,7 @@ def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[
         capture_output=True,
         encoding="utf-8",
         errors="replace",
+        stdin=subprocess.DEVNULL,
     )
     if proc.returncode != 0:
         raise SystemExit(
@@ -58,11 +59,16 @@ def resolve_cli_command(
     return [sys.executable, "-m", "Repo_Privacy_Guardian"]
 
 
+def create_smoke_results_dir(workspace: Path) -> Path:
+    results_root = workspace / "Audit_Results"
+    results_root.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix="ci-smoke-", dir=str(results_root)))
+
+
 def main() -> int:
     workspace = Path.cwd()
     root = Path(tempfile.mkdtemp(prefix="rpg-smoke-"))
-    results = workspace / "Audit_Results" / "ci-smoke"
-    shutil.rmtree(results, ignore_errors=True)
+    results = create_smoke_results_dir(workspace)
     try:
         repo = root / "smoke-repo"
         run(["git", "init", "-b", "main", str(repo)])
@@ -98,6 +104,7 @@ def main() -> int:
             capture_output=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess.DEVNULL,
         )
         if proc.returncode != 0:
             raise SystemExit(

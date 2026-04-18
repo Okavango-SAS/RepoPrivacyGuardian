@@ -268,7 +268,6 @@ def test_exfil_indicators_remain_advisory_by_default(tmp_path: Path) -> None:
     assert severity == "OK"
     assert any("advisory" in item.lower() for item in highlights)
 
-
 def test_persisted_artifacts_redact_sensitive_values(tmp_path: Path) -> None:
     artifacts = rpg.create_run_artifacts(tmp_path / "Audit_Results")
     logger = rpg.RunLogger(artifacts.log_path)

@@ -68,7 +68,7 @@ repo_privacy_guardian_resources = ["POLICY.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=80"
+addopts = "-q --cov=. --cov-report=term-missing --cov-fail-under=80"
 
 [tool.coverage.run]
 branch = false

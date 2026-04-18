@@ -79,7 +79,7 @@ Normal CLI flow:
 4. run artifacts are created under `Audit_Results/<run_id>/`
    a local `run_state.json` manifest is updated as phases progress so interrupted runs still leave diagnosable state
 5. `execute_guard_pipeline()` instantiates `RepoPublicationGuard`
-6. repositories are discovered, execution-locked one at a time, and audited
+6. repositories are discovered, execution-locked one at a time with an OS-backed lock file, and audited
 7. optional fix path executes only when explicitly requested
 8. reports are persisted and optionally opened
 

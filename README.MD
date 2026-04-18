@@ -99,7 +99,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - Generated rewrite inputs such as temporary `mailmap` and `replace-text` files are removed after use instead of being left behind in temp storage.
 - Tracked-file scanners skip symlinked files and oversized text candidates to reduce accidental local file disclosure and unbounded memory reads.
 - Report/export writes and `.gitignore` remediation refuse symlinked target paths instead of following them.
-- Repository execution is serialized with a local lock in the Git metadata directory so overlapping audits/fixes do not mutate the same checkout concurrently.
+- Repository execution is serialized with an OS-backed lock file in the Git metadata directory so overlapping audits/fixes do not mutate the same checkout concurrently, and crashed owners do not need PID/timestamp stale-lock reclamation.
 
 ## 🧰 Tooling Readiness
 

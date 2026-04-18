@@ -56,6 +56,7 @@ python scripts/release_readiness.py --skip-self-audit
 The harness currently validates:
 
 - CLI tooling preflight
+- isolated pytest temp/coverage artifacts per release-readiness run
 - byte-compilation of the main module
 - tracked pytest suite
 - CLI and GUI smoke scripts
