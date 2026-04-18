@@ -496,6 +496,38 @@ def test_module_wrapper_runs_help_without_launching_gui() -> None:
     assert "usage:" in proc.stdout
 
 
+def test_checkout_conftest_bootstraps_repo_root_for_imports(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import importlib.util, pathlib; "
+                f"repo_root = pathlib.Path(r'{repo_root}'); "
+                "conftest_path = repo_root / 'tests' / 'conftest.py'; "
+                "spec = importlib.util.spec_from_file_location('checkout_conftest', conftest_path); "
+                "module = importlib.util.module_from_spec(spec); "
+                "assert spec is not None and spec.loader is not None; "
+                "spec.loader.exec_module(module); "
+                "import Repo_Privacy_Guardian; "
+                "print('ok')"
+            ),
+        ],
+        cwd=str(tmp_path),
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert "ok" in proc.stdout
+
+
 def test_release_readiness_script_exposes_help() -> None:
     proc = subprocess.run(
         [sys.executable, "scripts/release_readiness.py", "--help"],

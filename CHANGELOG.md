@@ -12,6 +12,9 @@ Repository consolidation and developer-experience cleanup.
 - Added `.env.example` plus `docs/LOCAL_DEVELOPMENT.md` to make optional auth variables, local setup, validation loops, and repository navigation explicit.
 - Tightened the release harness with an explicit CLI tooling preflight and clearer step boundaries before the build/install validation path.
 - Hardened local file handling so reports and exports refuse symlink targets, rewrite helper files are removed after use, and tracked-file scans skip symlinked or oversized text files.
+- Added checkout bootstrap in `tests/conftest.py` so `pytest -q` and `python -m pytest -q` behave the same from a repository checkout.
+- Hardened automatic fix preconditions so dirty worktrees, `git fsck` failures, or incomplete audits fail closed instead of mutating a repository mid-recovery.
+- Tightened repository execution locking and runtime diagnostics so stale locks respect live owner PIDs and partial history-scan failures surface as blocking `execution_errors`.
 
 ## [1.2.2] - 2026-04-15
 

@@ -77,6 +77,8 @@ The tool also applies a few local-safety defaults during normal operation:
 - report and export writes avoid symlink targets
 - run artifacts are created with private directory/file permissions where the platform supports them
 - repository execution is guarded by a local lock in the Git metadata directory to prevent overlapping runs on the same checkout
+- automatic `--fix` refuses to mutate a repository when the worktree is dirty, `git fsck` has already failed, or the audit recorded runtime/timeout errors
+- history scan startup failures and stream timeouts are promoted into `execution_errors` so partial scans do not look like a clean PASS
 - generated rewrite helper files are temporary and removed after the rewrite step finishes
 
 ## Recovery and rollback

@@ -24,10 +24,13 @@ Optional GitHub hardening auth variables are documented in the tracked `.env.exa
 Useful commands during day-to-day work:
 
 ```sh
+pytest -q
 python -m pytest -q
 python tests/release_smoke_cli.py
 python -m Repo_Privacy_Guardian --help
 ```
+
+Both `pytest -q` and `python -m pytest -q` are supported from a repository checkout.
 
 Use the GUI smoke path only when a desktop session is available:
 

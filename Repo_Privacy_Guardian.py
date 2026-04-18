@@ -238,6 +238,43 @@ def repo_display_name(repo: Path) -> str:
     return resolved_name or "."
 
 
+def process_exists(pid: int) -> bool | None:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        try:
+            import ctypes
+
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if handle:
+                kernel32.CloseHandle(handle)
+                return True
+            error_code = ctypes.get_last_error()
+        except Exception:
+            return None
+
+        if error_code == 5:
+            return True
+        if error_code == 87:
+            return False
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return None
+    return True
+
+
+def repo_has_dirty_worktree(clean_status: str | None) -> bool:
+    return len((clean_status or "").splitlines()) > 1
+
+
 def _path_has_existing_symlink_ancestor(path: Path) -> bool:
     current = path
     while True:
@@ -1372,7 +1409,7 @@ class RepoReport:
         )
         low_confidence_emails = self.tracked_email_low_confidence + self.history_email_low_confidence
         low_confidence_blocking = self.low_confidence_email_mode == "blocking"
-        worktree_dirty = len((self.clean_status or "").splitlines()) > 1
+        worktree_dirty = repo_has_dirty_worktree(self.clean_status)
 
         checks = [
             (worktree_dirty, "working tree is not clean"),
@@ -1456,12 +1493,24 @@ class RepoPublicationGuard:  # pragma: no cover
         self.replace_text_file = replace_text_file
         self.rewrite_personal_paths = False
         self.log = logger
+        self._repo_runtime_issues: list[str] = []
 
         inferred_owner = infer_github_username_from_noreply(self.noreply_email)
         if inferred_owner:
             self.allowed_remote_owners.add(inferred_owner.lower())
 
         self.required_ignore_patterns = self._load_required_ignore_patterns()
+
+    def _record_repo_runtime_issue(self, issue: str) -> None:
+        normalized = issue.strip()
+        if not normalized:
+            return
+        self._repo_runtime_issues.append(normalized)
+
+    def _flush_repo_runtime_issues(self) -> list[str]:
+        issues = normalize_text_values(self._repo_runtime_issues)
+        self._repo_runtime_issues = []
+        return issues
 
     def _run(
         self,
@@ -1554,6 +1603,14 @@ class RepoPublicationGuard:  # pragma: no cover
     def _repo_lock_is_stale(self, lock_path: Path, metadata: dict[str, object] | None) -> bool:
         if not lock_path.exists():
             return False
+
+        pid_raw = (metadata or {}).get("pid")
+        if isinstance(pid_raw, int):
+            pid_state = process_exists(pid_raw)
+            if pid_state is True:
+                return False
+            if pid_state is False:
+                return True
 
         acquired_at_raw = str((metadata or {}).get("acquired_at") or "").strip()
         if acquired_at_raw:
@@ -1732,6 +1789,10 @@ class RepoPublicationGuard:  # pragma: no cover
     def _iter_tracked_files(self, repo: Path) -> list[Path]:
         result = self._git(repo, "ls-files", "-z")
         if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip() or "unknown git ls-files failure"
+            self._record_repo_runtime_issue(
+                f"tracked-file enumeration failed: {detail}"
+            )
             return []
         files: list[Path] = []
         for chunk in result.stdout.split("\x00"):
@@ -1815,7 +1876,8 @@ class RepoPublicationGuard:  # pragma: no cover
         self,
         proc: subprocess.Popen[str],
         timeout: int = DEFAULT_GIT_STREAM_TIMEOUT_SECONDS,
-    ) -> None:
+    ) -> tuple[int | None, str]:
+        stderr_text = ""
         try:
             proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -1825,6 +1887,11 @@ class RepoPublicationGuard:  # pragma: no cover
             except subprocess.TimeoutExpired:
                 pass
         finally:
+            if proc.stderr is not None:
+                try:
+                    stderr_text = proc.stderr.read()
+                except Exception:
+                    stderr_text = ""
             if proc.stdout is not None:
                 try:
                     proc.stdout.close()
@@ -1835,6 +1902,7 @@ class RepoPublicationGuard:  # pragma: no cover
                     proc.stderr.close()
                 except Exception:
                     pass
+        return proc.returncode, stderr_text
 
     def _terminate_process_if_running(self, proc: subprocess.Popen[str]) -> None:
         if proc.poll() is not None:
@@ -1855,16 +1923,25 @@ class RepoPublicationGuard:  # pragma: no cover
             "--no-color",
             "--pretty=format:",
         ]
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except FileNotFoundError:
+            self._record_repo_runtime_issue("history patch scan failed to start: Git executable not found")
+            return []
+        except Exception as exc:
+            self._record_repo_runtime_issue(f"history patch scan failed to start: {exc}")
+            return []
         matches: list[str] = []
         deadline = time.monotonic() + DEFAULT_GIT_STREAM_TIMEOUT_SECONDS
+        timed_out = False
+        terminated_early = False
         try:
             stream = proc.stdout
             if stream is None:
@@ -1875,14 +1952,26 @@ class RepoPublicationGuard:  # pragma: no cover
                         f"[WARN] {repo_display_name(repo)}: history patch scan timed out after {DEFAULT_GIT_STREAM_TIMEOUT_SECONDS}s"
                     )
                     self._terminate_process_if_running(proc)
+                    timed_out = True
                     break
                 if regex.search(line):
                     matches.append(f"L{idx}:{line.strip()[:240]}")
                     if len(matches) >= self.max_matches:
                         self._terminate_process_if_running(proc)
+                        terminated_early = True
                         break
         finally:
-            self._finalize_git_stream_process(proc)
+            returncode, stderr_text = self._finalize_git_stream_process(proc)
+        if timed_out:
+            self._record_repo_runtime_issue(
+                f"history patch scan timed out after {DEFAULT_GIT_STREAM_TIMEOUT_SECONDS}s"
+            )
+        elif not terminated_early and returncode not in {0, None}:
+            detail = (stderr_text or "").strip()[:240]
+            suffix = f": {detail}" if detail else ""
+            self._record_repo_runtime_issue(
+                f"history patch scan failed with exit code {returncode}{suffix}"
+            )
         return matches
 
     def _scan_history_non_allowed_emails(self, repo: Path) -> list[str]:
@@ -1896,17 +1985,26 @@ class RepoPublicationGuard:  # pragma: no cover
             "--no-color",
             "--pretty=format:",
         ]
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except FileNotFoundError:
+            self._record_repo_runtime_issue("history email scan failed to start: Git executable not found")
+            return []
+        except Exception as exc:
+            self._record_repo_runtime_issue(f"history email scan failed to start: {exc}")
+            return []
         matches: list[str] = []
         current_file: str | None = None
         deadline = time.monotonic() + DEFAULT_GIT_STREAM_TIMEOUT_SECONDS
+        timed_out = False
+        terminated_early = False
         try:
             stream = proc.stdout
             if stream is None:
@@ -1917,6 +2015,7 @@ class RepoPublicationGuard:  # pragma: no cover
                         f"[WARN] {repo_display_name(repo)}: history email scan timed out after {DEFAULT_GIT_STREAM_TIMEOUT_SECONDS}s"
                     )
                     self._terminate_process_if_running(proc)
+                    timed_out = True
                     break
                 if line.startswith("diff --git "):
                     match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
@@ -1934,9 +2033,20 @@ class RepoPublicationGuard:  # pragma: no cover
                     matches.append(f"L{idx}:{rel_path}:{uniq}:{line.strip()[:200]}")
                     if len(matches) >= self.max_matches:
                         self._terminate_process_if_running(proc)
+                        terminated_early = True
                         break
         finally:
-            self._finalize_git_stream_process(proc)
+            returncode, stderr_text = self._finalize_git_stream_process(proc)
+        if timed_out:
+            self._record_repo_runtime_issue(
+                f"history email scan timed out after {DEFAULT_GIT_STREAM_TIMEOUT_SECONDS}s"
+            )
+        elif not terminated_early and returncode not in {0, None}:
+            detail = (stderr_text or "").strip()[:240]
+            suffix = f": {detail}" if detail else ""
+            self._record_repo_runtime_issue(
+                f"history email scan failed with exit code {returncode}{suffix}"
+            )
         return matches
 
     def _scan_tracked_non_allowed_emails(self, repo: Path) -> list[str]:
@@ -1972,19 +2082,28 @@ class RepoPublicationGuard:  # pragma: no cover
             "--no-color",
             "--pretty=format:",
         ]
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except FileNotFoundError:
+            self._record_repo_runtime_issue("history secret-file scan failed to start: Git executable not found")
+            return []
+        except Exception as exc:
+            self._record_repo_runtime_issue(f"history secret-file scan failed to start: {exc}")
+            return []
 
         files: list[str] = []
         seen: set[str] = set()
         current_file: str | None = None
         deadline = time.monotonic() + DEFAULT_GIT_STREAM_TIMEOUT_SECONDS
+        timed_out = False
+        terminated_early = False
 
         try:
             stream = proc.stdout
@@ -1996,6 +2115,7 @@ class RepoPublicationGuard:  # pragma: no cover
                         f"[WARN] {repo_display_name(repo)}: history secret-file scan timed out after {DEFAULT_GIT_STREAM_TIMEOUT_SECONDS}s"
                     )
                     self._terminate_process_if_running(proc)
+                    timed_out = True
                     break
                 if line.startswith("diff --git "):
                     match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
@@ -2019,9 +2139,20 @@ class RepoPublicationGuard:  # pragma: no cover
                     files.append(current_file)
                     if len(files) >= self.max_matches:
                         self._terminate_process_if_running(proc)
+                        terminated_early = True
                         break
         finally:
-            self._finalize_git_stream_process(proc)
+            returncode, stderr_text = self._finalize_git_stream_process(proc)
+        if timed_out:
+            self._record_repo_runtime_issue(
+                f"history secret-file scan timed out after {DEFAULT_GIT_STREAM_TIMEOUT_SECONDS}s"
+            )
+        elif not terminated_early and returncode not in {0, None}:
+            detail = (stderr_text or "").strip()[:240]
+            suffix = f": {detail}" if detail else ""
+            self._record_repo_runtime_issue(
+                f"history secret-file scan failed with exit code {returncode}{suffix}"
+            )
 
         return files
 
@@ -2137,6 +2268,7 @@ class RepoPublicationGuard:  # pragma: no cover
     def audit_repo(self, repo: Path) -> RepoReport:
         report = RepoReport(name=repo_display_name(repo), path=str(repo))
         report.low_confidence_email_mode = self.low_confidence_email_mode
+        self._repo_runtime_issues = []
 
         report.origin_url = self._git(repo, "remote", "get-url", "origin").stdout.strip() or None
         report.upstream_url = self._git(repo, "remote", "get-url", "upstream").stdout.strip() or None
@@ -2221,6 +2353,7 @@ class RepoPublicationGuard:  # pragma: no cover
         else:
             report.gitignore_missing_patterns = list(self.required_ignore_patterns)
 
+        report.execution_errors.extend(self._flush_repo_runtime_issues())
         report.finalize()
         return report
 
@@ -2596,6 +2729,10 @@ class RepoPublicationGuard:  # pragma: no cover
         self._git(repo, "branch", "--set-upstream-to", f"origin/{branch}", branch)
 
     def apply_fixes(self, repo: Path, report: RepoReport) -> RepoReport:
+        report.fix_errors.extend(validate_fix_preconditions(report))
+        if report.fix_errors:
+            return report
+
         original_identity = self._capture_local_identity(repo)
         try:
             self.log(f"[FIX] {repo_display_name(repo)}: creating backup bundle")
@@ -3332,6 +3469,21 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     return payload
 
 
+def validate_fix_preconditions(report: RepoReport) -> list[str]:
+    issues: list[str] = []
+    if repo_has_dirty_worktree(report.clean_status):
+        issues.append(
+            "automatic fix blocked: working tree is not clean; commit, stash, or discard local edits before remediation"
+        )
+    if not report.fsck_ok:
+        issues.append("automatic fix blocked: git fsck failed; resolve repository integrity issues first")
+    if report.execution_errors:
+        issues.append(
+            "automatic fix blocked: audit completed with execution errors; re-run after resolving lock, timeout, or git/runtime failures"
+        )
+    return issues
+
+
 def build_fix_preflight_summary(config: GuardRunConfig, repos: list[Path]) -> list[str]:
     if not config.fix:
         return []
@@ -3403,7 +3555,7 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
     owned_unexpected, _third_party_unexpected, high_conf, low_conf = email_decision_context(report)
     low_blocking = report.low_confidence_email_mode == "blocking"
     litellm_severity = classify_litellm_incident_severity(report)
-    worktree_dirty = len((report.clean_status or "").splitlines()) > 1
+    worktree_dirty = repo_has_dirty_worktree(report.clean_status)
 
     if report.execution_errors:
         return (
@@ -3527,7 +3679,7 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     )
     low_confidence_blocking = report.low_confidence_email_mode == "blocking"
     litellm_severity = classify_litellm_incident_severity(report)
-    worktree_dirty = len((report.clean_status or "").splitlines()) > 1
+    worktree_dirty = repo_has_dirty_worktree(report.clean_status)
 
     if report.execution_errors:
         score = max(score, 85)

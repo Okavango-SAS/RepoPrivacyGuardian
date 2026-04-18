@@ -66,6 +66,19 @@ What to do:
 - rerun the script after `git status --short` is empty
 - if you intentionally want to validate only the build/test path while still editing, use `--skip-self-audit`
 
+## Automatic fix is blocked before making changes
+
+Symptoms:
+
+- `fix_errors` mention a dirty worktree, `git fsck`, or earlier execution/runtime failures
+- the audit re-runs, but no rewrite/untrack/commit step was attempted
+
+What to do:
+
+- make the repository clean first with `git status --short`
+- resolve repository integrity issues if `git fsck --full` is already failing
+- rerun a plain dry-run audit and review any `execution_errors` for lock, timeout, or git/runtime failures before trying `--fix` again
+
 ## Build artifacts look stale
 
 Symptoms:

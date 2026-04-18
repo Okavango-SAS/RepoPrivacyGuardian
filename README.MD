@@ -358,6 +358,7 @@ It does not:
 
 - rotate leaked credentials for you
 - make outbound review decisions automatically
+- mutate a dirty or diagnostically incomplete repository before the operator stabilizes it
 - bypass destructive safeguards by default
 
 ## 🚫 What It Does Not Try To Be

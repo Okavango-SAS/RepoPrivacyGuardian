@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import types
 from datetime import datetime
@@ -679,6 +680,54 @@ def test_run_state_tracker_persists_phase_updates(tmp_path: Path) -> None:
     assert payload["total_repositories"] == 1
 
 
+def test_process_exists_handles_current_and_invalid_pid() -> None:
+    assert rpg.process_exists(os.getpid()) is True
+    assert rpg.process_exists(-1) is False
+
+
+def test_process_exists_windows_error_code_paths(monkeypatch) -> None:
+    import ctypes
+
+    class DummyKernel:
+        def OpenProcess(self, _access, _inherit, _pid):
+            return 0
+
+    monkeypatch.setattr(rpg.os, "name", "nt", raising=False)
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *_args, **_kwargs: DummyKernel())
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 87)
+    assert rpg.process_exists(1234) is False
+
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 5)
+    assert rpg.process_exists(1234) is True
+
+
+def test_process_exists_posix_signal_paths(monkeypatch) -> None:
+    monkeypatch.setattr(rpg.os, "name", "posix", raising=False)
+    monkeypatch.setattr(
+        rpg.os,
+        "kill",
+        lambda _pid, _signal: (_ for _ in ()).throw(ProcessLookupError()),
+    )
+    assert rpg.process_exists(1234) is False
+
+    monkeypatch.setattr(
+        rpg.os,
+        "kill",
+        lambda _pid, _signal: (_ for _ in ()).throw(PermissionError()),
+    )
+    assert rpg.process_exists(1234) is True
+
+    monkeypatch.setattr(
+        rpg.os,
+        "kill",
+        lambda _pid, _signal: (_ for _ in ()).throw(OSError()),
+    )
+    assert rpg.process_exists(1234) is None
+
+    monkeypatch.setattr(rpg.os, "kill", lambda _pid, _signal: None)
+    assert rpg.process_exists(1234) is True
+
+
 def test_repo_execution_lock_blocks_overlap(tmp_path: Path, monkeypatch) -> None:
     repo = tmp_path / "repo-a"
     (repo / ".git").mkdir(parents=True)
@@ -762,6 +811,185 @@ def test_repo_execution_lock_reclaims_stale_lock(tmp_path: Path, monkeypatch) ->
         assert payload["owner_token"] != "stale-holder"
     finally:
         guard.release_repo_lock(repo_lock)
+
+
+def test_repo_execution_lock_reclaims_dead_pid_without_waiting_for_age(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    git_dir = repo / ".git"
+    git_dir.mkdir(parents=True)
+    stale_lock = git_dir / rpg.REPO_LOCK_FILENAME
+    rpg.write_private_json_file(
+        stale_lock,
+        {
+            "owner_token": "dead-holder",
+            "pid": 99999999,
+            "acquired_at": datetime.now().isoformat(timespec="seconds"),
+        },
+    )
+    monkeypatch.setattr(rpg, "REPO_LOCK_WAIT_SECONDS", 0.0)
+    monkeypatch.setattr(rpg, "REPO_LOCK_RETRY_SECONDS", 0.0)
+
+    guard = rpg.RepoPublicationGuard(
+        root=tmp_path,
+        policy_path=tmp_path / "POLICY.md",
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        owner_name="Owner",
+        owner_emails=[],
+        redact_third_party=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        low_confidence_email_mode="informational",
+        push=False,
+        dry_run=False,
+        max_matches=50,
+        audit_litellm_incident=False,
+        audit_github_hardening=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=[],
+        replace_text_file=None,
+        logger=lambda _msg: None,
+    )
+    monkeypatch.setattr(guard, "_git", lambda _repo, *_args: rpg.CommandResult(1, "", ""))
+
+    repo_lock = guard.acquire_repo_lock(repo)
+    try:
+        payload = json.loads(stale_lock.read_text(encoding="utf-8"))
+        assert payload["owner_token"] != "dead-holder"
+    finally:
+        guard.release_repo_lock(repo_lock)
+
+
+def test_repo_execution_lock_does_not_reclaim_live_pid(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    git_dir = repo / ".git"
+    git_dir.mkdir(parents=True)
+    live_lock = git_dir / rpg.REPO_LOCK_FILENAME
+    rpg.write_private_json_file(
+        live_lock,
+        {
+            "owner_token": "live-holder",
+            "pid": os.getpid(),
+            "acquired_at": "2000-01-01T00:00:00",
+        },
+    )
+    monkeypatch.setattr(rpg, "REPO_LOCK_WAIT_SECONDS", 0.0)
+    monkeypatch.setattr(rpg, "REPO_LOCK_RETRY_SECONDS", 0.0)
+
+    guard = rpg.RepoPublicationGuard(
+        root=tmp_path,
+        policy_path=tmp_path / "POLICY.md",
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        owner_name="Owner",
+        owner_emails=[],
+        redact_third_party=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        low_confidence_email_mode="informational",
+        push=False,
+        dry_run=False,
+        max_matches=50,
+        audit_litellm_incident=False,
+        audit_github_hardening=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=[],
+        replace_text_file=None,
+        logger=lambda _msg: None,
+    )
+    monkeypatch.setattr(guard, "_git", lambda _repo, *_args: rpg.CommandResult(1, "", ""))
+
+    with pytest.raises(RuntimeError, match="repository execution lock is busy"):
+        guard.acquire_repo_lock(repo)
+
+    payload = json.loads(live_lock.read_text(encoding="utf-8"))
+    assert payload["owner_token"] == "live-holder"
+
+
+def test_audit_repo_records_tracked_file_enumeration_failures(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    repo.mkdir(parents=True)
+
+    guard = rpg.RepoPublicationGuard(
+        root=tmp_path,
+        policy_path=tmp_path / "POLICY.md",
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        owner_name="Owner",
+        owner_emails=[],
+        redact_third_party=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        low_confidence_email_mode="informational",
+        push=False,
+        dry_run=False,
+        max_matches=50,
+        audit_litellm_incident=False,
+        audit_github_hardening=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=[],
+        replace_text_file=None,
+        logger=lambda _msg: None,
+    )
+
+    def wrapped_git(target_repo: Path, *args: str) -> rpg.CommandResult:
+        assert target_repo == repo
+        responses = {
+            ("remote", "get-url", "origin"): rpg.CommandResult(
+                0,
+                "https://github.com/example/repo-a.git",
+                "",
+            ),
+            ("remote", "get-url", "upstream"): rpg.CommandResult(1, "", ""),
+            ("branch", "--show-current"): rpg.CommandResult(0, "main", ""),
+            ("rev-parse", "--short", "HEAD"): rpg.CommandResult(0, "abc1234", ""),
+            (
+                "rev-parse",
+                "--abbrev-ref",
+                "--symbolic-full-name",
+                "@{upstream}",
+            ): rpg.CommandResult(1, "", ""),
+            ("status", "--short", "--branch"): rpg.CommandResult(0, "## main...origin/main", ""),
+            ("fsck", "--full"): rpg.CommandResult(0, "", ""),
+            ("log", "--all", "--pretty=format:%ae"): rpg.CommandResult(
+                0,
+                "12345+repoowner@users.noreply.github.com\n",
+                "",
+            ),
+            ("log", "--all", "--pretty=format:%ce"): rpg.CommandResult(
+                0,
+                "12345+repoowner@users.noreply.github.com\n",
+                "",
+            ),
+            ("ls-files", "-z"): rpg.CommandResult(1, "", "fatal: simulated ls-files failure"),
+            ("ls-files", "-ci", "--exclude-standard"): rpg.CommandResult(0, "", ""),
+            ("log", "--all", "--diff-filter=A", "--name-only", "--pretty=format:"): rpg.CommandResult(
+                0,
+                "",
+                "",
+            ),
+            ("log", "--all", "--diff-filter=D", "--name-only", "--pretty=format:"): rpg.CommandResult(
+                0,
+                "",
+                "",
+            ),
+        }
+        try:
+            return responses[args]
+        except KeyError as exc:
+            raise AssertionError(f"unexpected git call: {args}") from exc
+
+    monkeypatch.setattr(guard, "_git", wrapped_git)
+    monkeypatch.setattr(guard, "_scan_history_patch", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(guard, "_scan_history_non_allowed_emails", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(guard, "_scan_history_secret_files", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(guard, "_history_file_matches", lambda *_args, **_kwargs: [])
+
+    report = guard.audit_repo(repo)
+
+    assert report.status == "FAIL"
+    assert any("tracked-file enumeration failed" in issue for issue in report.execution_errors)
+    assert "repository execution errors occurred" in report.failures
 
 
 def test_enforce_results_dir_variants(tmp_path: Path) -> None:
@@ -2499,6 +2727,68 @@ def test_apply_fixes_restores_local_identity_even_on_failure(tmp_path: Path, mon
     assert restored == [{"user.name": "Previous", "user.email": "123+old@users.noreply.github.com"}]
     assert any("rewrite failed" in error for error in report.fix_errors)
     assert "restored local git identity" in report.fix_actions
+
+
+def test_validate_fix_preconditions_blocks_dirty_fsck_and_execution_errors() -> None:
+    report = _make_report("repo-a")
+    report.clean_status = "## main...origin/main\n M README.md"
+    report.fsck_ok = False
+    report.execution_errors = ["history patch scan timed out after 300s"]
+
+    issues = rpg.validate_fix_preconditions(report)
+
+    assert any("working tree is not clean" in issue for issue in issues)
+    assert any("git fsck failed" in issue for issue in issues)
+    assert any("audit completed with execution errors" in issue for issue in issues)
+
+
+def test_validate_fix_preconditions_clean_repo_is_empty() -> None:
+    report = _make_report("repo-a")
+    assert rpg.validate_fix_preconditions(report) == []
+
+
+def test_repo_has_dirty_worktree_variants() -> None:
+    assert rpg.repo_has_dirty_worktree("## main...origin/main") is False
+    assert rpg.repo_has_dirty_worktree("## main...origin/main\n M README.md") is True
+    assert rpg.repo_has_dirty_worktree(None) is False
+
+
+def test_apply_fixes_refuses_when_fix_preconditions_fail(tmp_path: Path, monkeypatch) -> None:
+    guard = rpg.RepoPublicationGuard(
+        root=tmp_path,
+        policy_path=tmp_path / "POLICY.md",
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        owner_name="Owner",
+        owner_emails=[],
+        redact_third_party=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        low_confidence_email_mode="informational",
+        push=False,
+        dry_run=False,
+        max_matches=50,
+        audit_litellm_incident=False,
+        audit_github_hardening=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=[],
+        replace_text_file=None,
+        logger=lambda _msg: None,
+    )
+    monkeypatch.setattr(
+        guard,
+        "_make_backup_bundle",
+        lambda repo: (_ for _ in ()).throw(AssertionError("fix should abort before mutating the repo")),
+    )
+
+    report = _make_report("repo-a")
+    report.clean_status = "## main...origin/main\n M README.md"
+
+    result = guard.apply_fixes(tmp_path / "repo-a", report)
+
+    assert result is report
+    assert any("working tree is not clean" in error for error in report.fix_errors)
+    assert report.backups_created == []
 
 
 def test_run_git_command_reports_timeout(monkeypatch) -> None:
