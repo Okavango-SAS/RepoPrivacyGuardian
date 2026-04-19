@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   lint:
-    name: Ruff (ubuntu-latest, py3.13)
+    name: Ruff + Pyright (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -32,6 +32,9 @@ jobs:
 
       - name: Run ruff
         run: python -m ruff check .
+
+      - name: Run pyright
+        run: pyright -p pyrightconfig.json
 
   test:
     name: CLI / pytest (${{ matrix.os }}, py${{ matrix.python-version }})

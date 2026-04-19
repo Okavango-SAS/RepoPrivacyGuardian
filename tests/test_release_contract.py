@@ -234,8 +234,10 @@ def test_run_cli_does_not_open_report_by_default(tmp_path: Path, monkeypatch) ->
     captured: dict[str, object] = {}
 
     def fake_execute_guard_pipeline(*, config, artifacts, logger, results_dir, **kwargs):  # type: ignore[no-untyped-def]
-        del artifacts, logger, results_dir, kwargs
+        del artifacts, logger, results_dir
         captured["config"] = config
+        cancel_callback = kwargs.get("cancel_callback")
+        captured["cancel_requested"] = bool(cancel_callback and cancel_callback())
         return 0
 
     monkeypatch.setattr(rpg, "execute_guard_pipeline", fake_execute_guard_pipeline)
@@ -261,8 +263,10 @@ def test_run_cli_open_report_is_opt_in(tmp_path: Path, monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def fake_execute_guard_pipeline(*, config, artifacts, logger, results_dir, **kwargs):  # type: ignore[no-untyped-def]
-        del artifacts, logger, results_dir, kwargs
+        del artifacts, logger, results_dir
         captured["config"] = config
+        cancel_callback = kwargs.get("cancel_callback")
+        captured["cancel_requested"] = bool(cancel_callback and cancel_callback())
         return 0
 
     monkeypatch.setattr(rpg, "execute_guard_pipeline", fake_execute_guard_pipeline)
@@ -289,8 +293,10 @@ def test_run_cli_passes_audit_github_hardening_flag_to_config(tmp_path: Path, mo
     captured: dict[str, object] = {}
 
     def fake_execute_guard_pipeline(*, config, artifacts, logger, results_dir, **kwargs):  # type: ignore[no-untyped-def]
-        del artifacts, logger, results_dir, kwargs
+        del artifacts, logger, results_dir
         captured["config"] = config
+        cancel_callback = kwargs.get("cancel_callback")
+        captured["cancel_requested"] = bool(cancel_callback and cancel_callback())
         return 0
 
     monkeypatch.setattr(rpg, "execute_guard_pipeline", fake_execute_guard_pipeline)
@@ -595,8 +601,10 @@ def test_gui_run_worker_passes_replace_text_file_for_repair(tmp_path: Path, monk
     captured: dict[str, object] = {}
 
     def fake_execute_guard_pipeline(*, config, artifacts, logger, results_dir, **kwargs):  # type: ignore[no-untyped-def]
-        del artifacts, logger, results_dir, kwargs
+        del artifacts, logger, results_dir
         captured["config"] = config
+        cancel_callback = kwargs.get("cancel_callback")
+        captured["cancel_requested"] = bool(cancel_callback and cancel_callback())
         return 0
 
     monkeypatch.setattr(rpg, "execute_guard_pipeline", fake_execute_guard_pipeline)
@@ -630,6 +638,8 @@ def test_gui_run_worker_passes_replace_text_file_for_repair(tmp_path: Path, monk
     app.noreply_var = DummyVar(rpg.DEFAULT_NOREPLY)
     app.placeholder_var = DummyVar(rpg.DEFAULT_PLACEHOLDER)
     app.max_matches_var = DummyVar("50")
+    app._active_cancel_token = rpg.CancellationToken()
+    app._active_cancel_token.request_cancel()
     app.log = lambda _msg: None
     app._on_gui_run_finished = lambda *args, **kwargs: None
 
@@ -637,6 +647,49 @@ def test_gui_run_worker_passes_replace_text_file_for_repair(tmp_path: Path, monk
 
     assert captured["config"].replace_text_file == "ops/replace-text.txt"
     assert captured["config"].audit_github_hardening is True
+    assert captured["cancel_requested"] is True
+
+
+def test_gui_cancel_run_clicked_marks_token_and_logs() -> None:
+    logged: list[str] = []
+    states: list[str] = []
+
+    app = object.__new__(rpg.GuiApp)
+    app._run_in_progress = True
+    app._active_cancel_token = rpg.CancellationToken()
+    app.log = logged.append
+    app._update_run_buttons_state = lambda: states.append("updated")
+
+    app.cancel_run_clicked()
+
+    assert app._active_cancel_token.is_cancelled() is True
+    assert states == ["updated"]
+    assert any("Cancellation requested" in msg for msg in logged)
+
+
+def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
+    seen: list[tuple[str, str]] = []
+
+    app = object.__new__(rpg.GuiApp)
+    app._run_in_progress = True
+    app._active_cancel_token = rpg.CancellationToken()
+    app._lock_repair_until_next_audit = lambda reason: seen.append(("lock", reason))
+    app._set_active_flow_tab = lambda tab: seen.append(("tab", tab))
+    app._start_repair_cooldown = lambda reports_payload, selection_signature: seen.append(  # type: ignore[assignment]
+        ("cooldown", str((reports_payload, selection_signature)))
+    )
+    app.log = lambda message: seen.append(("log", message))
+    app._audit_tab_name = "1. Audit"
+    app._repair_tab_name = "2. Repair"
+
+    app._on_gui_run_finished(False, ("repo-a",), [], rpg.EXIT_ABORTED)
+
+    assert app._run_in_progress is False
+    assert app._active_cancel_token is None
+    assert ("lock", "Repair (audit cancelled)") in seen
+    assert ("tab", "1. Audit") in seen
+    assert any(item == ("log", "[INFO] Flow: audit cancelled. Run Audit again when you are ready to continue.") for item in seen)
+    assert not any(kind == "cooldown" for kind, _value in seen)
 
 
 def test_choose_gui_font_family_prefers_available_candidates() -> None:

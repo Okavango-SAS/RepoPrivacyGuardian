@@ -1043,6 +1043,89 @@ def test_validate_outbound_https_url_allows_only_expected_hosts() -> None:
         rpg.validate_outbound_https_url("https://example.com/repos/example/repo", {"api.github.com"})
 
 
+def test_is_public_github_remote_maps_visibility_and_http_failures(monkeypatch) -> None:
+    class DummyResponse:
+        def __init__(self, payload: dict[str, object], *, status: int = 200) -> None:
+            self._payload = payload
+            self.status = status
+
+        def read(self) -> bytes:
+            return json.dumps(self._payload).encode("utf-8")
+
+        def __enter__(self) -> "DummyResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            del exc_type, exc, tb
+            return False
+
+    monkeypatch.setattr(
+        rpg.urllib.request,
+        "urlopen",
+        lambda request, timeout=8: DummyResponse({"private": True}),  # type: ignore[no-untyped-def]
+    )
+    assert rpg.is_public_github_remote("https://github.com/example/private-repo.git") == (
+        False,
+        "private",
+    )
+
+    def forbidden(request, timeout=8):  # type: ignore[no-untyped-def]
+        del request, timeout
+        raise rpg.urllib.error.HTTPError(
+            "https://api.github.com/repos/example/private-repo",
+            403,
+            "forbidden",
+            hdrs=None,
+            fp=None,
+        )
+
+    monkeypatch.setattr(rpg.urllib.request, "urlopen", forbidden)
+    assert rpg.is_public_github_remote("https://github.com/example/private-repo.git") == (
+        None,
+        "forbidden_or_rate_limited",
+    )
+
+
+def test_github_api_helpers_map_empty_payloads_and_transport_failures(monkeypatch) -> None:
+    class EmptyResponse:
+        status = 204
+
+        def read(self) -> bytes:
+            return b""
+
+        def __enter__(self) -> "EmptyResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            del exc_type, exc, tb
+            return False
+
+    monkeypatch.setattr(
+        rpg.urllib.request,
+        "urlopen",
+        lambda request, timeout=8: EmptyResponse(),  # type: ignore[no-untyped-def]
+    )
+    assert rpg.github_api_get_json("https://api.github.com/repos/example/repo") == ({}, "http_204")
+    assert rpg.github_api_probe_enabled("https://api.github.com/repos/example/repo/vulnerability-alerts") == (
+        True,
+        "http_204",
+    )
+
+    def timed_out(request, timeout=8):  # type: ignore[no-untyped-def]
+        del request, timeout
+        raise TimeoutError("network timed out")
+
+    monkeypatch.setattr(rpg.urllib.request, "urlopen", timed_out)
+    assert rpg.github_api_get_json("https://api.github.com/repos/example/repo") == (
+        None,
+        "request_failed",
+    )
+    assert rpg.github_api_probe_enabled("https://api.github.com/repos/example/repo/vulnerability-alerts") == (
+        None,
+        "request_failed",
+    )
+
+
 def test_resolve_github_hardening_token_prefers_tool_specific_env() -> None:
     env = {
         "GH_TOKEN": "gh-token",
@@ -2420,7 +2503,61 @@ def test_execute_guard_pipeline_confirmation_abort(tmp_path: Path, monkeypatch) 
 
     assert exit_code == 1
     assert any("Run aborted by user confirmation gate." in msg for msg in messages)
+    assert any("[SUMMARY] ABORTED 0/0" in msg for msg in messages)
     assert instances[0].audit_calls == 0
+    state_payload = json.loads(artifacts.state_path.read_text(encoding="utf-8"))
+    assert state_payload["status"] == "aborted"
+    assert state_payload["exit_code"] == 1
+
+
+def test_execute_guard_pipeline_cancel_callback_stops_before_next_repository(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    messages: list[str] = []
+    audited: list[str] = []
+
+    class DummyGuard:
+        def __init__(self, **kwargs) -> None:
+            del kwargs
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            del repo_filters, public_only
+            return [Path("C:/repos/repo-a"), Path("C:/repos/repo-b")]
+
+        def acquire_repo_lock(self, repo: Path):
+            del repo
+            return None
+
+        def release_repo_lock(self, repo_lock) -> None:
+            del repo_lock
+
+        def audit_repo(self, repo: Path) -> rpg.RepoReport:
+            audited.append(repo.name)
+            report = _make_report(repo.name)
+            report.finalize()
+            return report
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    exit_code = rpg.execute_guard_pipeline(
+        config=_make_run_config(repos=None),
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+        cancel_callback=lambda: len(audited) >= 1,
+    )
+
+    assert exit_code == 1
+    assert audited == ["repo-a"]
+    assert any("[SUMMARY] ABORTED 1/2" in msg for msg in messages)
+    assert not any("[SUMMARY] PASS 1/1" in msg for msg in messages)
+    state_payload = json.loads(artifacts.state_path.read_text(encoding="utf-8"))
+    assert state_payload["status"] == "aborted"
+    assert state_payload["completed_repositories"] == 1
+    assert state_payload["total_repositories"] == 2
 
 
 def test_execute_guard_pipeline_fix_reaudit_flow(tmp_path: Path, monkeypatch) -> None:

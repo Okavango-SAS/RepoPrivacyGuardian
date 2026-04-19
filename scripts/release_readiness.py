@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import errno
 import os
+from os import PathLike
 import shutil
 import subprocess
 import sys
@@ -72,7 +73,7 @@ def log(message: str) -> None:
 
 
 def run_command(
-    cmd: list[str],
+    cmd: list[str | PathLike[str]],
     *,
     cwd: Path,
     timeout: int,
@@ -92,7 +93,7 @@ def run_command(
 
 def run_named_command(
     name: str,
-    cmd: list[str],
+    cmd: list[str | PathLike[str]],
     *,
     cwd: Path,
     timeout: int,
@@ -237,13 +238,19 @@ def run_release_verification_steps(
     )
     run_named_command(
         "Byte-compiling the main module",
-        [sys.executable, "-m", "py_compile", "Repo_Privacy_Guardian.py"],
+        [sys.executable, "-m", "py_compile", "Repo_Privacy_Guardian.py", "repo_privacy_guardian_runtime.py"],
         cwd=repo_root,
         timeout=DEFAULT_TIMEOUTS["quick"],
     )
     run_named_command(
         "Running ruff check",
         [sys.executable, "-m", "ruff", "check", "."],
+        cwd=repo_root,
+        timeout=DEFAULT_TIMEOUTS["quick"],
+    )
+    run_named_command(
+        "Running pyright",
+        ["pyright", "-p", "pyrightconfig.json"],
         cwd=repo_root,
         timeout=DEFAULT_TIMEOUTS["quick"],
     )

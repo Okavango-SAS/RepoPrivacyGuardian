@@ -42,6 +42,18 @@ from pathlib import Path
 import socket
 from typing import Callable
 
+import repo_privacy_guardian_runtime as runtime
+from repo_privacy_guardian_runtime import (
+    CancellationToken,
+    EXIT_ABORTED,
+    EXIT_OK,
+    EXIT_POLICY_FAILED,
+    EXIT_RUNTIME_ERROR,
+    discover_repository_targets,
+    resolve_run_status,
+    validate_repository_root,
+)
+
 
 def default_root_dir() -> Path:
     return Path.cwd()
@@ -223,6 +235,8 @@ POLICY_MINIMUM_BASELINE_END_RE = re.compile(
     re.IGNORECASE,
 )
 
+is_git_repository = runtime.is_git_repository
+
 
 def render_ignore_baseline(patterns: list[str] | None = None) -> str:
     baseline = DEFAULT_IGNORE_BASELINE if patterns is None else patterns
@@ -238,53 +252,6 @@ def repo_display_name(repo: Path) -> str:
     except OSError:
         resolved_name = ""
     return resolved_name or "."
-
-
-def is_git_repository(path: Path) -> bool:
-    return (path / ".git").exists()
-
-
-def validate_repository_root(root: Path) -> str | None:
-    try:
-        if not root.exists():
-            return f"Root folder does not exist: {root}"
-        if not root.is_dir():
-            return f"Root path is not a directory: {root}"
-    except OSError as exc:
-        return f"Root folder is not accessible: {root} ({exc})"
-    return None
-
-
-def discover_repository_targets(root: Path, repo_filters: list[str] | None) -> tuple[list[Path], list[str], str | None]:
-    root_error = validate_repository_root(root)
-    if root_error:
-        return [], [], root_error
-
-    repos: list[Path] = []
-    skipped: list[str] = []
-
-    if repo_filters:
-        for item in repo_filters:
-            candidate = Path(item)
-            if not candidate.is_absolute():
-                candidate = root / candidate
-            if is_git_repository(candidate):
-                repos.append(candidate)
-            else:
-                skipped.append(str(candidate))
-        return repos, skipped, None
-
-    if is_git_repository(root):
-        repos.append(root)
-
-    try:
-        for child in sorted(root.iterdir()):
-            if child.is_dir() and is_git_repository(child):
-                repos.append(child)
-    except OSError as exc:
-        return [], skipped, f"Root folder is not accessible: {root} ({exc})"
-
-    return repos, skipped, None
 
 
 def process_exists(pid: int) -> bool | None:
@@ -4695,11 +4662,12 @@ def execute_guard_pipeline(
     require_confirmation: bool = False,
     confirm_callback: Callable[[], bool] | None = None,
     confirm_repo_fix_callback: Callable[[Path, int, int], bool] | None = None,
+    cancel_callback: Callable[[], bool] | None = None,
 ) -> int:
     run_settings = build_run_settings(config, results_dir)
     reports: list[RepoReport] = []
     supply_chain_payload: dict[str, object] | None = None
-    exit_code = 0
+    exit_code = EXIT_OK
     total_repositories = 0
     state_tracker = RunStateTracker(artifacts.state_path, artifacts=artifacts, config=config)
 
@@ -4734,12 +4702,32 @@ def execute_guard_pipeline(
     guard = RepoPublicationGuard(**guard_kwargs)
     guard.rewrite_personal_paths = config.rewrite_personal_paths
 
+    def cancellation_requested() -> bool:
+        if cancel_callback is None:
+            return False
+        try:
+            return bool(cancel_callback())
+        except Exception:
+            return False
+
+    def mark_aborted(message: str, *, phase: str, completed: int, total: int) -> None:
+        nonlocal exit_code
+        logger(f"[INFO] {message}")
+        logger(f"\n[SUMMARY] ABORTED {completed}/{total}")
+        exit_code = EXIT_ABORTED
+        state_tracker.update(
+            phase=phase,
+            total_repositories=total,
+            completed_repositories=completed,
+            current_repository="",
+        )
+
     try:
         state_tracker.update(phase="preflight")
         git_ok, git_error = probe_git_available()
         if not git_ok:
             logger(f"[ERROR] {git_error}")
-            exit_code = 3
+            exit_code = EXIT_RUNTIME_ERROR
         else:
             if config.low_confidence_email_mode == "blocking":
                 logger("[INFO] Email policy: low-confidence findings are blocking.")
@@ -4755,50 +4743,59 @@ def execute_guard_pipeline(
                 guard.purge_detected_secret_files = True
                 run_settings["purge_detected_secret_files"] = str(True)
 
-            root_error = validate_repository_root(config.root)
-            if root_error:
-                logger(f"[ERROR] {root_error}")
-                logger("\n[SUMMARY] ERROR 0/0")
-                exit_code = 3
-                repos = []
-                state_tracker.update(
-                    phase="invalid-config",
-                    total_repositories=0,
-                    completed_repositories=0,
-                    current_repository="",
+            repos: list[Path] = []
+            if cancellation_requested():
+                mark_aborted(
+                    "Run cancelled by operator before repository discovery.",
+                    phase="aborted",
+                    completed=0,
+                    total=0,
                 )
             else:
-                try:
-                    repos = guard.discover_repositories(config.repos, public_only=config.public_only)
-                except RuntimeError as exc:
-                    if not str(exc).startswith("Root "):
-                        raise
-                    logger(f"[ERROR] {exc}")
+                root_error = validate_repository_root(config.root)
+                if root_error:
+                    logger(f"[ERROR] {root_error}")
                     logger("\n[SUMMARY] ERROR 0/0")
-                    exit_code = 3
-                    repos = []
+                    exit_code = EXIT_RUNTIME_ERROR
                     state_tracker.update(
                         phase="invalid-config",
                         total_repositories=0,
                         completed_repositories=0,
                         current_repository="",
                     )
+                else:
+                    try:
+                        repos = guard.discover_repositories(config.repos, public_only=config.public_only)
+                    except RuntimeError as exc:
+                        if not str(exc).startswith("Root "):
+                            raise
+                        logger(f"[ERROR] {exc}")
+                        logger("\n[SUMMARY] ERROR 0/0")
+                        exit_code = EXIT_RUNTIME_ERROR
+                        repos = []
+                        state_tracker.update(
+                            phase="invalid-config",
+                            total_repositories=0,
+                            completed_repositories=0,
+                            current_repository="",
+                        )
             total_repositories = len(repos)
-            state_tracker.update(
-                phase="discovered",
-                total_repositories=total_repositories,
-                completed_repositories=0,
-                current_repository="",
-            )
+            if exit_code == EXIT_OK:
+                state_tracker.update(
+                    phase="discovered",
+                    total_repositories=total_repositories,
+                    completed_repositories=0,
+                    current_repository="",
+                )
             if not repos:
-                if exit_code != 0:
+                if exit_code != EXIT_OK:
                     pass
                 elif config.repos:
                     requested = ", ".join(config.repos)
                     logger(f"[ERROR] No target repositories matched the requested filters: {requested}")
                     logger("[ERROR] Check --root/--repos and verify each selected path is a git repository.")
                     logger("\n[SUMMARY] ERROR 0/0")
-                    exit_code = 3
+                    exit_code = EXIT_RUNTIME_ERROR
                 else:
                     logger("[INFO] No repositories matched. Nothing to do.")
                     logger("\n[SUMMARY] PASS 0/0")
@@ -4810,19 +4807,25 @@ def execute_guard_pipeline(
                 if config.fix and config.push and require_confirmation:
                     confirmed = confirm_callback() if confirm_callback else False
                     if not confirmed:
-                        logger("[INFO] Run aborted by user confirmation gate.")
-                        logger("\n[SUMMARY] PASS 0/0")
-                        exit_code = 1
+                        mark_aborted(
+                            "Run aborted by user confirmation gate.",
+                            phase="aborted",
+                            completed=0,
+                            total=0,
+                        )
                         repos = []
                         total_repositories = 0
-                        state_tracker.update(
-                            phase="aborted",
-                            total_repositories=0,
-                            completed_repositories=0,
-                            current_repository="",
-                        )
 
                 for index, repo in enumerate(repos, start=1):
+                    if cancellation_requested():
+                        mark_aborted(
+                            "Run cancelled by operator before the next repository started.",
+                            phase="aborted",
+                            completed=len(reports),
+                            total=len(repos),
+                        )
+                        break
+
                     repo_name = repo_display_name(repo)
                     state_tracker.update(
                         phase="fixing" if config.fix else "auditing",
@@ -4846,7 +4849,12 @@ def execute_guard_pipeline(
                             if config.confirm_each_repo_fix and confirm_repo_fix_callback:
                                 run_fix = bool(confirm_repo_fix_callback(repo, index, len(repos)))
 
-                            if run_fix:
+                            if cancellation_requested():
+                                logger(
+                                    f"[INFO] {repo_name}: repair skipped because the run was cancelled."
+                                )
+                                report.fix_actions.append("repair skipped because the run was cancelled")
+                            elif run_fix:
                                 logger(f"[FIX] {repo_name}")
                                 fixed = guard.apply_fixes(repo, report)
                                 logger(f"[RE-AUDIT] {repo_name}")
@@ -4875,34 +4883,50 @@ def execute_guard_pipeline(
                         total_repositories=len(repos),
                     )
 
-                if repos:
+                if repos and exit_code == EXIT_OK and cancellation_requested():
+                    mark_aborted(
+                        "Run cancelled by operator after the active repository finished.",
+                        phase="aborted",
+                        completed=len(reports),
+                        total=len(repos),
+                    )
+
+                if repos and exit_code != EXIT_ABORTED:
                     passed = sum(1 for rep in reports if rep.status == "PASS")
                     failed = len(reports) - passed
                     summary_status = "PASS" if failed == 0 else "FAIL"
                     summary_count = passed if failed == 0 else failed
                     logger(f"\n[SUMMARY] {summary_status} {summary_count}/{len(reports)}")
-                    if exit_code == 0 and reports:
-                        exit_code = 0 if failed == 0 else 2
+                    if exit_code == EXIT_OK and reports:
+                        exit_code = EXIT_OK if failed == 0 else EXIT_POLICY_FAILED
 
-        if config.audit_litellm_incident and exit_code != 3:
-            state_tracker.update(phase="supply-chain")
-            supply_chain_payload = run_litellm_global_supply_chain_scan(
-                root=config.root,
-                repo_filters=config.repos,
-                max_matches=config.max_matches,
-                logger=logger,
-            )
-            global_severity = str(supply_chain_payload.get("severity", "NONE")).upper()
-            if global_severity in {"CRITICAL", "HIGH"} and exit_code == 0:
-                logger(
-                    "[SUPPLY-CHAIN] Global incident severity is HIGH/CRITICAL. "
-                    "Run marked as FAIL-equivalent for operator action."
+        if config.audit_litellm_incident and exit_code not in {EXIT_ABORTED, EXIT_RUNTIME_ERROR}:
+            if cancellation_requested():
+                mark_aborted(
+                    "Run cancelled by operator before the supply-chain audit started.",
+                    phase="aborted",
+                    completed=len(reports),
+                    total=max(total_repositories, len(reports)),
                 )
-                exit_code = 2
+            else:
+                state_tracker.update(phase="supply-chain")
+                supply_chain_payload = run_litellm_global_supply_chain_scan(
+                    root=config.root,
+                    repo_filters=config.repos,
+                    max_matches=config.max_matches,
+                    logger=logger,
+                )
+                global_severity = str(supply_chain_payload.get("severity", "NONE")).upper()
+                if global_severity in {"CRITICAL", "HIGH"} and exit_code == EXIT_OK:
+                    logger(
+                        "[SUPPLY-CHAIN] Global incident severity is HIGH/CRITICAL. "
+                        "Run marked as FAIL-equivalent for operator action."
+                    )
+                    exit_code = EXIT_POLICY_FAILED
     except Exception as exc:
         logger(f"[ERROR] Unhandled runtime error: {exc}")
         logger(traceback.format_exc())
-        exit_code = 3
+        exit_code = EXIT_RUNTIME_ERROR
     finally:
         try:
             state_tracker.update(
@@ -4941,13 +4965,13 @@ def execute_guard_pipeline(
         except Exception as exc:
             logger(f"[ERROR] Failed to finalize run artifacts: {exc}")
             logger(traceback.format_exc())
-            exit_code = 3
+            exit_code = EXIT_RUNTIME_ERROR
         finally:
             passed = sum(1 for rep in reports if rep.status == "PASS")
             failed = len(reports) - passed
             try:
                 state_tracker.update(
-                    status="completed" if exit_code == 0 else "failed",
+                    status=resolve_run_status(exit_code),
                     phase="finished",
                     current_repository="",
                     completed_repositories=len(reports),
@@ -5513,8 +5537,10 @@ class GuiApp:  # pragma: no cover
         self._purge_risky_checkbox = None
         self._allowed_remote_owner_entry = None
         self._audit_button = None
+        self._cancel_button = None
         self._repair_button = None
         self._run_in_progress = False
+        self._active_cancel_token: CancellationToken | None = None
         self._repair_ready = False
         self._repair_button_text = "Repair (run audit first)"
         self._repair_cooldown_seconds = 10
@@ -6271,6 +6297,16 @@ class GuiApp:  # pragma: no cover
             hover_color=self._primary_button_hover,
         )
         self._audit_button.pack(side="left", padx=(0, 8))
+        self._cancel_button = ctk.CTkButton(
+            repo_actions,
+            text="Cancel Run",
+            command=self.cancel_run_clicked,
+            width=120,
+            height=34,
+            corner_radius=8,
+            **self._secondary_button_options(),
+        )
+        self._cancel_button.pack(side="left", padx=(0, 8))
         ctk.CTkButton(
             repo_actions,
             text="Refresh",
@@ -7012,6 +7048,16 @@ class GuiApp:  # pragma: no cover
                 state="disabled" if (self._run_in_progress or not has_targets) else "normal",
             )
 
+        cancel_button = getattr(self, "_cancel_button", None)
+        if cancel_button is not None:
+            cancel_requested = bool(
+                self._active_cancel_token and self._active_cancel_token.is_cancelled()
+            )
+            cancel_button.configure(
+                text="Cancelling..." if cancel_requested else "Cancel Run",
+                state="normal" if (self._run_in_progress and not cancel_requested) else "disabled",
+            )
+
         self._update_repo_selection_controls()
 
         repair_button = getattr(self, "_repair_button", None)
@@ -7022,7 +7068,13 @@ class GuiApp:  # pragma: no cover
         repair_button.configure(state=state, text=self._repair_button_text)
 
     def _update_repo_selection_controls(self) -> None:
-        state = "normal" if getattr(self, "_repo_items", []) else "disabled"
+        state = "normal" if (getattr(self, "_repo_items", []) and not getattr(self, "_run_in_progress", False)) else "disabled"
+        repo_list = getattr(self, "repo_list", None)
+        if repo_list is not None:
+            try:
+                repo_list.configure(state=state)
+            except Exception:
+                pass
         for button in (
             getattr(self, "_select_all_button", None),
             getattr(self, "_clear_selection_button", None),
@@ -7251,11 +7303,25 @@ class GuiApp:  # pragma: no cover
         run_fix: bool,
         selection_signature: tuple[str, ...] | None,
         reports_payload: list[dict[str, object]],
+        exit_code: int,
     ) -> None:
         self._run_in_progress = False
+        self._active_cancel_token = None
         if run_fix:
             self._lock_repair_until_next_audit("Repair (run audit again)")
             self._set_active_flow_tab(self._repair_tab_name)
+            return
+
+        if exit_code == EXIT_ABORTED:
+            self._lock_repair_until_next_audit("Repair (audit cancelled)")
+            self._set_active_flow_tab(self._audit_tab_name)
+            self.log("[INFO] Flow: audit cancelled. Run Audit again when you are ready to continue.")
+            return
+
+        if exit_code == EXIT_RUNTIME_ERROR:
+            self._lock_repair_until_next_audit("Repair (audit failed)")
+            self._set_active_flow_tab(self._audit_tab_name)
+            self.log("[INFO] Flow: audit ended with an operational error. Repair remains locked.")
             return
 
         self._start_repair_cooldown(reports_payload, selection_signature)
@@ -7268,6 +7334,18 @@ class GuiApp:  # pragma: no cover
 
     def clear_output(self) -> None:
         self.output.delete("1.0", "end")
+
+    def cancel_run_clicked(self) -> None:
+        token = self._active_cancel_token
+        if not self._run_in_progress or token is None:
+            return
+        if token.is_cancelled():
+            return
+        token.request_cancel()
+        self.log(
+            "[INFO] Cancellation requested. The current repository step will finish before the run stops."
+        )
+        self._update_run_buttons_state()
 
     def clear_selection(self) -> None:
         if not self._repo_items:
@@ -7473,6 +7551,7 @@ class GuiApp:  # pragma: no cover
             self._lock_repair_until_next_audit("Repair (audit in progress)")
 
         self._run_in_progress = True
+        self._active_cancel_token = CancellationToken()
         self._update_run_buttons_state()
 
         thread = threading.Thread(
@@ -7580,6 +7659,9 @@ class GuiApp:  # pragma: no cover
                 confirm_repo_fix_callback=(
                     _confirm_repo_fix if run_fix and config.confirm_each_repo_fix else None
                 ),
+                cancel_callback=(
+                    self._active_cancel_token.is_cancelled if self._active_cancel_token is not None else None
+                ),
             )
 
             reports_payload: list[dict[str, object]] = []
@@ -7592,7 +7674,7 @@ class GuiApp:  # pragma: no cover
                     reports_payload = []
 
             def _finish_ui() -> None:
-                self._on_gui_run_finished(run_fix, selection_signature, reports_payload)
+                self._on_gui_run_finished(run_fix, selection_signature, reports_payload, exit_code)
                 if exit_code != 0:
                     self.log(f"[INFO] Run finished with exit code: {exit_code}")
 
@@ -7603,7 +7685,7 @@ class GuiApp:  # pragma: no cover
             def _finish_ui_error() -> None:
                 self.log("[ERROR] GUI worker failed unexpectedly.")
                 self.log(error_trace)
-                self._on_gui_run_finished(run_fix, selection_signature, [])
+                self._on_gui_run_finished(run_fix, selection_signature, [], EXIT_RUNTIME_ERROR)
 
             self.root.after(0, _finish_ui_error)
 
@@ -7792,7 +7874,7 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
 
     if args.check_tooling:
         blocking_failures, _warnings = summarize_tooling_checks(tooling_checks, print, include_ready=True)
-        return 2 if blocking_failures else 0
+        return EXIT_POLICY_FAILED if blocking_failures else EXIT_OK
 
     enforced_results_dir, forced = enforce_results_dir(Path(args.report_dir))
     artifacts = create_run_artifacts(enforced_results_dir)
@@ -7816,7 +7898,7 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
             cli_logger(
                 "[ERROR] Required tooling is missing. Re-run with --check-tooling or --install-missing-tools."
             )
-        return 3
+        return EXIT_RUNTIME_ERROR
     if warnings and not args.install_missing_tools:
         cli_logger("[INFO] Optional tooling warnings detected. Re-run with --check-tooling for a focused summary.")
 
@@ -7868,21 +7950,21 @@ def launch_gui(
         include_ready=check_tooling_only,
     )
     if check_tooling_only:
-        return 2 if blocking_failures else 0
+        return EXIT_POLICY_FAILED if blocking_failures else EXIT_OK
     if blocking_failures:
         print(
             "[ERROR] GUI tooling is not ready. Re-run with --gui --check-tooling "
             "or --gui --install-missing-tools.",
             file=sys.stderr,
         )
-        return 3
+        return EXIT_RUNTIME_ERROR
     try:
         app = GuiApp()
     except RuntimeError as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
-        return 3
+        return EXIT_RUNTIME_ERROR
     app.run()
-    return 0
+    return EXIT_OK
 
 
 def main(argv: list[str] | None = None) -> int:  # pragma: no cover

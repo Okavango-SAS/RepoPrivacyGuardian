@@ -27,6 +27,7 @@ Useful commands during day-to-day work:
 pytest -q
 python -m pytest -q
 python -m ruff check .
+pyright -p pyrightconfig.json
 python tests/release_smoke_cli.py
 python -m Repo_Privacy_Guardian --help
 ```
@@ -60,6 +61,7 @@ The harness currently validates:
 - isolated pytest temp/coverage artifacts per release-readiness run
 - byte-compilation of the main module
 - `ruff check`
+- `pyright -p pyrightconfig.json`
 - tracked pytest suite
 - CLI and GUI smoke scripts
 - module and direct-script help paths
@@ -94,6 +96,7 @@ Update the docs that are closest to the real behavior you changed:
 The tracked repo-owned quality gate today is intentionally practical:
 
 - `ruff check`
+- `pyright` (runtime/helper scope from `pyrightconfig.json`)
 - `pytest`
 - smoke scripts
 - packaging/build checks

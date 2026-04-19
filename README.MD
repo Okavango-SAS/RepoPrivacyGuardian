@@ -95,7 +95,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 ## 🔒 Local Security Posture
 
 - Run artifacts are kept local and are written with private file permissions where the platform supports them.
-- Each run writes a local `run_state.json` manifest so a partial or interrupted execution still leaves phase/exit diagnostics behind.
+- Each run writes a local `run_state.json` manifest so a partial, cancelled, or interrupted execution still leaves phase/exit diagnostics behind.
 - Generated rewrite inputs such as temporary `mailmap` and `replace-text` files are removed after use instead of being left behind in temp storage.
 - Tracked-file scanners skip symlinked files and oversized text candidates to reduce accidental local file disclosure and unbounded memory reads.
 - Report/export writes and `.gitignore` remediation refuse symlinked target paths instead of following them.
@@ -118,6 +118,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - Use `--gui` for the desktop interface.
 - CLI does not open a browser automatically.
 - Use `--open-report` only when you explicitly want the HTML report opened after a CLI run.
+- GUI runs can be cancelled; cancellation stops after the active repository step completes and the run is recorded as `ABORTED`.
 - In the GUI, `Open HTML report automatically` is opt-in and off by default.
 - The GUI keeps the staged `Audit -> Repair` interaction so operators cannot jump straight to write actions.
 
