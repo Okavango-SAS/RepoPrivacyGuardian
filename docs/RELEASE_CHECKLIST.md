@@ -56,6 +56,7 @@ Use this checklist before tagging a public release.
 ## 7. Release criteria
 
 - Required checks pass.
+- `python -m ruff check .` passes locally.
 - `python scripts/release_readiness.py` passes locally, or any intentionally skipped parts are documented.
 - Clean-clone validation passes: `python -m pip install .`, `repo-privacy-guardian --help`, `python -m pip install ".[test]"`, `python -m pytest`.
 - Package build succeeds (`python -m build`) and both `wheel` and `sdist` installs complete cleanly.

@@ -11,6 +11,7 @@ The repository is already stable in these areas:
 - tracked regression suite plus release smoke scripts
 - package build and install smoke for `wheel` and `sdist`
 - local tooling readiness checks and optional install helpers
+- stable repo-owned `ruff check` gate
 - local release harness and operator runbooks
 - documented versioning, release checklist, and public changelog
 
@@ -19,9 +20,9 @@ The repository is already stable in these areas:
 These are the next improvements that still fit the current product scope:
 
 - expand synthetic integration coverage for rewrite-planning and redaction edge cases
+- expand target-resolution and preflight regression coverage further as more repo-selection modes are added
 - keep docs, help text, packaged policy, and smoke fixtures aligned as defaults evolve
 - improve internal code navigation further if the single-file module grows materially
-- add a stable lint/static gate only when it is quiet enough to improve signal instead of adding release noise
 
 ## Deprioritized for this repository phase
 

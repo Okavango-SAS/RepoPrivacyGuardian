@@ -132,7 +132,8 @@ def test_operational_docs_cover_release_harness_env_and_recovery() -> None:
 
     assert ".env.example" in local_development
     assert "python -m pytest -q" in local_development
-    assert "There is no separate repo-owned lint or typecheck command yet." in local_development
+    assert "python -m ruff check ." in local_development
+    assert "There is still no separate repo-owned typecheck command." in local_development
     assert "python scripts/release_readiness.py" in operations
     assert "Repo Privacy Guardian does not auto-load a `.env` file." in operations
     assert "The tracked `.env.example` file is only a reference template" in operations
@@ -253,9 +254,9 @@ def test_ci_workflow_uses_sha_pinned_actions_and_least_privilege() -> None:
     pinned_actions = re.findall(r"uses:\s+actions/(?:checkout|setup-python)@[0-9a-f]{40}", workflow)
 
     assert re.search(r"permissions:\s+contents:\s+read", workflow)
-    assert workflow.count("timeout-minutes:") == 3
-    assert workflow.count("persist-credentials: false") == 3
-    assert len(pinned_actions) == 6
+    assert workflow.count("timeout-minutes:") == 4
+    assert workflow.count("persist-credentials: false") == 4
+    assert len(pinned_actions) == 8
     assert not re.search(r"uses:\s+actions/(?:checkout|setup-python)@v\d", workflow)
 
 

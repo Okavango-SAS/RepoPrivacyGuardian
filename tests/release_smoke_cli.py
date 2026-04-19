@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import Repo_Privacy_Guardian as rpg
+import Repo_Privacy_Guardian as rpg  # noqa: E402
 
 
 BASELINE = rpg.render_ignore_baseline()
@@ -65,6 +65,24 @@ def create_smoke_results_dir(workspace: Path) -> Path:
     return Path(tempfile.mkdtemp(prefix="ci-smoke-", dir=str(results_root)))
 
 
+def run_cli_smoke(cli_cmd: list[str], *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [*cli_cmd, *args],
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.DEVNULL,
+    )
+
+
+def load_latest_report(results_dir: Path) -> dict[str, object]:
+    run_dirs = sorted([p for p in results_dir.iterdir() if p.is_dir()])
+    if not run_dirs:
+        raise SystemExit("CLI smoke did not create a report directory.")
+    return json.loads((run_dirs[-1] / "report.json").read_text(encoding="utf-8"))[0]
+
+
 def main() -> int:
     workspace = Path.cwd()
     root = Path(tempfile.mkdtemp(prefix="rpg-smoke-"))
@@ -89,22 +107,15 @@ def main() -> int:
         run(["git", "-C", str(repo), "commit", "-m", "baseline"])
 
         cli_cmd = resolve_cli_command()
-        proc = subprocess.run(
-            [
-                *cli_cmd,
-                "--root",
-                str(root),
-                "--repos",
-                "smoke-repo",
-                "--report-dir",
-                str(results),
-                "--yes",
-            ],
-            text=True,
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            stdin=subprocess.DEVNULL,
+        proc = run_cli_smoke(
+            cli_cmd,
+            "--root",
+            str(root),
+            "--repos",
+            "smoke-repo",
+            "--report-dir",
+            str(results),
+            "--yes",
         )
         if proc.returncode != 0:
             raise SystemExit(
@@ -112,13 +123,29 @@ def main() -> int:
                 f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
             )
 
-        run_dirs = sorted([p for p in results.iterdir() if p.is_dir()])
-        if not run_dirs:
-            raise SystemExit("CLI smoke did not create a report directory.")
-
-        payload = json.loads((run_dirs[-1] / "report.json").read_text(encoding="utf-8"))[0]
+        payload = load_latest_report(results)
         if payload["status"] != "PASS":
             raise SystemExit(f"Unexpected smoke status: {payload['status']}")
+
+        current_root_proc = run_cli_smoke(
+            cli_cmd,
+            "--root",
+            str(repo),
+            "--report-dir",
+            str(results),
+            "--yes",
+        )
+        if current_root_proc.returncode != 0:
+            raise SystemExit(
+                f"CLI current-root smoke failed with exit code {current_root_proc.returncode}\n"
+                f"STDOUT:\n{current_root_proc.stdout}\nSTDERR:\n{current_root_proc.stderr}"
+            )
+
+        current_root_payload = load_latest_report(results)
+        if current_root_payload["status"] != "PASS":
+            raise SystemExit(f"Unexpected current-root smoke status: {current_root_payload['status']}")
+        if current_root_payload["name"] != "smoke-repo":
+            raise SystemExit(f"Unexpected current-root repo name: {current_root_payload['name']}")
         return 0
     finally:
         shutil.rmtree(root, ignore_errors=True)

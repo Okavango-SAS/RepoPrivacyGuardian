@@ -20,7 +20,7 @@ def bootstrap_repo_root(
 
 REPO_ROOT = bootstrap_repo_root()
 
-import Repo_Privacy_Guardian as rpg
+import Repo_Privacy_Guardian as rpg  # noqa: E402
 
 
 def main() -> int:

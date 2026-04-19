@@ -1,14 +1,10 @@
-import pytest
 import subprocess
 from unittest import mock
-from pathlib import Path
 
 from Repo_Privacy_Guardian import (
     validate_git_identity_inputs,
     apply_git_identity_config,
-    read_git_identity_config,
     open_github_email_settings,
-    resolve_identity_repo_path,
     GuiApp,
 )
 

@@ -26,6 +26,7 @@ Useful commands during day-to-day work:
 ```sh
 pytest -q
 python -m pytest -q
+python -m ruff check .
 python tests/release_smoke_cli.py
 python -m Repo_Privacy_Guardian --help
 ```
@@ -58,6 +59,7 @@ The harness currently validates:
 - CLI tooling preflight
 - isolated pytest temp/coverage artifacts per release-readiness run
 - byte-compilation of the main module
+- `ruff check`
 - tracked pytest suite
 - CLI and GUI smoke scripts
 - module and direct-script help paths
@@ -91,9 +93,10 @@ Update the docs that are closest to the real behavior you changed:
 
 The tracked repo-owned quality gate today is intentionally practical:
 
+- `ruff check`
 - `pytest`
 - smoke scripts
 - packaging/build checks
 - self-audit
 
-There is no separate repo-owned lint or typecheck command yet. If you add one in the future, keep it stable enough that it improves release confidence instead of adding noise.
+There is still no separate repo-owned typecheck command. If you add one in the future, keep it stable enough that it improves release confidence instead of adding noise.

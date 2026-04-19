@@ -8,6 +8,10 @@ Repository consolidation and developer-experience cleanup.
 
 ### Highlights
 
+- Fixed repository target resolution so CLI now audits `Current Root` when `--root` points directly at a git checkout and `--repos` is omitted.
+- Requested `--repos` targets that do not resolve now fail cleanly instead of returning a false `PASS 0/0`.
+- Invalid `--root` paths now return operator-facing validation errors without falling through to an unhandled traceback path.
+- Added a repo-owned `ruff check` gate to the development extras, release-readiness harness, and CI workflow.
 - Aligned the default `.gitignore` baseline, policy docs, and smoke fixtures so tracked `.env.example` files are supported without creating tracked-but-ignored drift.
 - Added `.env.example` plus `docs/LOCAL_DEVELOPMENT.md` to make optional auth variables, local setup, validation loops, and repository navigation explicit.
 - Tightened the release harness with an explicit CLI tooling preflight and clearer step boundaries before the build/install validation path.

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import subprocess
@@ -65,10 +64,11 @@ def _make_report(name: str) -> rpg.RepoReport:
 
 
 def _make_run_config(**overrides) -> rpg.GuardRunConfig:
+    repo_root = Path(__file__).resolve().parents[1]
     base = {
         "mode": "cli",
-        "root": Path("C:/repos"),
-        "policy": Path("C:/repos/docs/POLICY.md"),
+        "root": repo_root,
+        "policy": repo_root / "docs" / "POLICY.md",
         "repos": ["repo-a"],
         "public_only": False,
         "fix": False,
@@ -1431,6 +1431,37 @@ def test_discover_repositories_public_only_filters_private_and_non_github(tmp_pa
     assert [repo.name for repo in discovered] == ["repo-a-public"]
 
 
+def test_discover_repositories_public_only_includes_current_root(tmp_path: Path, monkeypatch) -> None:
+    current_root_repo = tmp_path
+    child_repo = tmp_path / "repo-a-public"
+    for repo in (current_root_repo, child_repo):
+        (repo / ".git").mkdir(parents=True, exist_ok=True)
+
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    guard.root = tmp_path
+    guard.log = lambda _msg: None
+
+    origin_map = {
+        str(current_root_repo): "https://github.com/example/current-root.git",
+        str(child_repo): "https://github.com/example/repo-a-public.git",
+    }
+
+    def fake_git(repo: Path, *args: str) -> rpg.CommandResult:
+        assert args == ("remote", "get-url", "origin")
+        return rpg.CommandResult(0, origin_map[str(repo)], "")
+
+    guard._git = fake_git
+
+    visibility_map = {
+        "https://github.com/example/current-root.git": (True, "public"),
+        "https://github.com/example/repo-a-public.git": (True, "public"),
+    }
+    monkeypatch.setattr(rpg, "is_public_github_remote", lambda remote: visibility_map[remote])
+
+    discovered = guard.discover_repositories(repo_filters=None, public_only=True)
+    assert discovered == [current_root_repo, child_repo]
+
+
 def test_is_relevant_email_candidate_filters_noise_domains() -> None:
     assert rpg.is_relevant_email_candidate("") is False
     assert rpg.is_relevant_email_candidate("not-an-email") is False
@@ -2083,6 +2114,44 @@ def test_normalize_repo_filters_matches_cli_default_behavior() -> None:
     assert rpg.normalize_repo_filters([]) is None
 
 
+def test_validate_repository_root_variants(tmp_path: Path) -> None:
+    missing = tmp_path / "missing"
+    assert rpg.validate_repository_root(missing) == f"Root folder does not exist: {missing}"
+
+    file_path = tmp_path / "not-a-directory.txt"
+    file_path.write_text("content", encoding="utf-8")
+    assert rpg.validate_repository_root(file_path) == f"Root path is not a directory: {file_path}"
+
+    assert rpg.validate_repository_root(tmp_path) is None
+
+
+def test_discover_repository_targets_includes_current_root_and_children(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    child_repo = tmp_path / "repo-a"
+    (child_repo / ".git").mkdir(parents=True)
+    (tmp_path / "docs").mkdir()
+
+    repos, skipped, root_error = rpg.discover_repository_targets(tmp_path, repo_filters=None)
+
+    assert root_error is None
+    assert skipped == []
+    assert repos == [tmp_path, child_repo]
+
+
+def test_discover_repository_targets_tracks_skipped_filters(tmp_path: Path) -> None:
+    repo = tmp_path / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+
+    repos, skipped, root_error = rpg.discover_repository_targets(
+        tmp_path,
+        repo_filters=["repo-a", "missing-repo"],
+    )
+
+    assert root_error is None
+    assert repos == [repo]
+    assert skipped == [str(tmp_path / "missing-repo")]
+
+
 def test_normalize_csv_values_and_text_values_helpers() -> None:
     assert rpg.normalize_csv_values("") == []
     assert rpg.normalize_csv_values(" alice@example.com, bob@example.com , alice@example.com ,, ") == [
@@ -2240,6 +2309,7 @@ def test_execute_guard_pipeline_purge_all_implies_detected(tmp_path: Path, monke
     config = _make_run_config(
         purge_all_detected_secret_files=True,
         purge_detected_secret_files=False,
+        repos=None,
     )
     exit_code = rpg.execute_guard_pipeline(
         config=config,
@@ -2285,7 +2355,7 @@ def test_execute_guard_pipeline_logs_blocking_email_policy(tmp_path: Path, monke
     monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
 
     artifacts = rpg.create_run_artifacts(tmp_path)
-    config = _make_run_config(low_confidence_email_mode="blocking")
+    config = _make_run_config(low_confidence_email_mode="blocking", repos=None)
     exit_code = rpg.execute_guard_pipeline(
         config=config,
         artifacts=artifacts,
@@ -3144,7 +3214,7 @@ def test_execute_guard_pipeline_gui_mode_no_regression(tmp_path: Path, monkeypat
     monkeypatch.setattr(rpg, "persist_run_outputs", fake_persist)
 
     artifacts = rpg.create_run_artifacts(tmp_path)
-    config = _make_run_config(mode="gui", repos=["repo-a"], low_confidence_email_mode="blocking")
+    config = _make_run_config(mode="gui", repos=None, low_confidence_email_mode="blocking")
     exit_code = rpg.execute_guard_pipeline(
         config=config,
         artifacts=artifacts,
@@ -3201,3 +3271,63 @@ def test_execute_guard_pipeline_all_repos_when_filters_none(tmp_path: Path, monk
 
     assert exit_code == 0
     assert captured["repo_filters"] is None
+
+
+def test_execute_guard_pipeline_invalid_root_reports_clean_error(tmp_path: Path, monkeypatch) -> None:
+    messages: list[str] = []
+
+    class DummyGuard:
+        def __init__(self, **kwargs) -> None:
+            del kwargs
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            raise AssertionError("discover_repositories should not run when root is invalid")
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config(mode="cli", root=tmp_path / "missing-root")
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == 3
+    assert any("Root folder does not exist" in msg for msg in messages)
+    assert any("[SUMMARY] ERROR 0/0" in msg for msg in messages)
+    assert not any("Unhandled runtime error" in msg for msg in messages)
+
+
+def test_execute_guard_pipeline_errors_when_requested_filters_match_no_repos(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    messages: list[str] = []
+
+    class DummyGuard:
+        def __init__(self, **kwargs) -> None:
+            del kwargs
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            del repo_filters, public_only
+            return []
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config(mode="cli", repos=["missing-repo"])
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == 3
+    assert any("No target repositories matched the requested filters: missing-repo" in msg for msg in messages)
+    assert any("[SUMMARY] ERROR 0/0" in msg for msg in messages)
+    assert not any("[SUMMARY] PASS 0/0" in msg for msg in messages)

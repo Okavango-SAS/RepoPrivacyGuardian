@@ -240,6 +240,53 @@ def repo_display_name(repo: Path) -> str:
     return resolved_name or "."
 
 
+def is_git_repository(path: Path) -> bool:
+    return (path / ".git").exists()
+
+
+def validate_repository_root(root: Path) -> str | None:
+    try:
+        if not root.exists():
+            return f"Root folder does not exist: {root}"
+        if not root.is_dir():
+            return f"Root path is not a directory: {root}"
+    except OSError as exc:
+        return f"Root folder is not accessible: {root} ({exc})"
+    return None
+
+
+def discover_repository_targets(root: Path, repo_filters: list[str] | None) -> tuple[list[Path], list[str], str | None]:
+    root_error = validate_repository_root(root)
+    if root_error:
+        return [], [], root_error
+
+    repos: list[Path] = []
+    skipped: list[str] = []
+
+    if repo_filters:
+        for item in repo_filters:
+            candidate = Path(item)
+            if not candidate.is_absolute():
+                candidate = root / candidate
+            if is_git_repository(candidate):
+                repos.append(candidate)
+            else:
+                skipped.append(str(candidate))
+        return repos, skipped, None
+
+    if is_git_repository(root):
+        repos.append(root)
+
+    try:
+        for child in sorted(root.iterdir()):
+            if child.is_dir() and is_git_repository(child):
+                repos.append(child)
+    except OSError as exc:
+        return [], skipped, f"Root folder is not accessible: {root} ({exc})"
+
+    return repos, skipped, None
+
+
 def process_exists(pid: int) -> bool | None:
     if pid <= 0:
         return False
@@ -1912,21 +1959,12 @@ class RepoPublicationGuard:  # pragma: no cover
         repo_filters: list[str] | None,
         public_only: bool,
     ) -> list[Path]:
-        repos: list[Path] = []
+        repos, skipped, root_error = discover_repository_targets(self.root, repo_filters)
+        if root_error:
+            raise RuntimeError(root_error)
 
-        if repo_filters:
-            for item in repo_filters:
-                p = Path(item)
-                if not p.is_absolute():
-                    p = self.root / p
-                if (p / ".git").exists():
-                    repos.append(p)
-                else:
-                    self.log(f"[WARN] Not a git repo or missing path: {p}")
-        else:
-            for child in sorted(self.root.iterdir()):
-                if child.is_dir() and (child / ".git").exists():
-                    repos.append(child)
+        for skipped_path in skipped:
+            self.log(f"[WARN] Not a git repo or missing path: {skipped_path}")
 
         if public_only:
             filtered: list[Path] = []
@@ -4717,7 +4755,34 @@ def execute_guard_pipeline(
                 guard.purge_detected_secret_files = True
                 run_settings["purge_detected_secret_files"] = str(True)
 
-            repos = guard.discover_repositories(config.repos, public_only=config.public_only)
+            root_error = validate_repository_root(config.root)
+            if root_error:
+                logger(f"[ERROR] {root_error}")
+                logger("\n[SUMMARY] ERROR 0/0")
+                exit_code = 3
+                repos = []
+                state_tracker.update(
+                    phase="invalid-config",
+                    total_repositories=0,
+                    completed_repositories=0,
+                    current_repository="",
+                )
+            else:
+                try:
+                    repos = guard.discover_repositories(config.repos, public_only=config.public_only)
+                except RuntimeError as exc:
+                    if not str(exc).startswith("Root "):
+                        raise
+                    logger(f"[ERROR] {exc}")
+                    logger("\n[SUMMARY] ERROR 0/0")
+                    exit_code = 3
+                    repos = []
+                    state_tracker.update(
+                        phase="invalid-config",
+                        total_repositories=0,
+                        completed_repositories=0,
+                        current_repository="",
+                    )
             total_repositories = len(repos)
             state_tracker.update(
                 phase="discovered",
@@ -4726,8 +4791,17 @@ def execute_guard_pipeline(
                 current_repository="",
             )
             if not repos:
-                logger("[INFO] No repositories matched. Nothing to do.")
-                logger("\n[SUMMARY] PASS 0/0")
+                if exit_code != 0:
+                    pass
+                elif config.repos:
+                    requested = ", ".join(config.repos)
+                    logger(f"[ERROR] No target repositories matched the requested filters: {requested}")
+                    logger("[ERROR] Check --root/--repos and verify each selected path is a git repository.")
+                    logger("\n[SUMMARY] ERROR 0/0")
+                    exit_code = 3
+                else:
+                    logger("[INFO] No repositories matched. Nothing to do.")
+                    logger("\n[SUMMARY] PASS 0/0")
             else:
                 if config.fix:
                     for line in build_fix_preflight_summary(config, repos):
@@ -7214,20 +7288,39 @@ class GuiApp:  # pragma: no cover
         self.repo_list.delete(0, "end")
         self._repo_items = []
         root = Path(self.root_var.get())
-        if not root.exists():
+        root_error = validate_repository_root(root)
+        if root_error:
+            if root_error.startswith("Root folder does not exist:"):
+                message = "The selected Root folder does not exist.\nChoose a valid directory to load repositories."
+            elif root_error.startswith("Root path is not a directory:"):
+                message = "The selected Root path is not a directory.\nChoose a valid directory to load repositories."
+            else:
+                message = f"{root_error}\nChoose a valid directory to load repositories."
             self._set_repo_empty_state(
                 True,
-                "The selected Root folder does not exist.\nChoose a valid directory to load repositories.",
+                message,
                 reason="invalid_root",
             )
             self._update_repo_summary()
             self._update_run_buttons_state()
             return
-        if (root / ".git").exists():
-            self._repo_items.append((f"{root.name} (Current Root)", "."))
-        for child in sorted(root.iterdir()):
-            if child.is_dir() and (child / ".git").exists():
-                self._repo_items.append((child.name, child.name))
+
+        discovered, _skipped, discovery_error = discover_repository_targets(root, repo_filters=None)
+        if discovery_error:
+            self._set_repo_empty_state(
+                True,
+                f"{discovery_error}\nChoose a valid directory to load repositories.",
+                reason="invalid_root",
+            )
+            self._update_repo_summary()
+            self._update_run_buttons_state()
+            return
+
+        for repo in discovered:
+            if repo == root:
+                self._repo_items.append((f"{root.name} (Current Root)", "."))
+            else:
+                self._repo_items.append((repo.name, repo.name))
 
         for label, _value in self._repo_items:
             self.repo_list.insert("end", label)

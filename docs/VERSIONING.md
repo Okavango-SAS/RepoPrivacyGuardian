@@ -33,6 +33,7 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 ## Stable release baseline
 
 - Tracked tests are green.
+- `python -m ruff check .` is green.
 - `python -m build` is green.
 - Installed `wheel` and `sdist` smoke paths are green.
 - Entry point, module execution, and direct script compatibility path are all verified.

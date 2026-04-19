@@ -16,7 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import Repo_Privacy_Guardian as rpg
+import Repo_Privacy_Guardian as rpg  # noqa: E402
 
 
 DEFAULT_TIMEOUTS = {
@@ -238,6 +238,12 @@ def run_release_verification_steps(
     run_named_command(
         "Byte-compiling the main module",
         [sys.executable, "-m", "py_compile", "Repo_Privacy_Guardian.py"],
+        cwd=repo_root,
+        timeout=DEFAULT_TIMEOUTS["quick"],
+    )
+    run_named_command(
+        "Running ruff check",
+        [sys.executable, "-m", "ruff", "check", "."],
         cwd=repo_root,
         timeout=DEFAULT_TIMEOUTS["quick"],
     )

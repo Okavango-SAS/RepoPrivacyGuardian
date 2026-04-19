@@ -192,6 +192,7 @@ From a repository checkout:
 python -m pip install ".[dev]"
 python -m Repo_Privacy_Guardian --help
 python -m Repo_Privacy_Guardian --check-tooling
+python -m ruff check .
 python -m pytest -q
 python scripts/release_readiness.py --skip-self-audit
 ```
@@ -254,6 +255,8 @@ Safe audit:
 ```sh
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes
 ```
+
+If `--root` already points at a git repository and `--repos` is omitted, the CLI audits that checkout as `Current Root`.
 
 Optional GitHub hardening audit for public-release settings:
 

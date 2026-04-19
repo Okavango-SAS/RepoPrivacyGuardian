@@ -67,6 +67,7 @@ Keep these boundaries intact when editing:
 - Detection logic should stay separate from presentation logic.
 - Shared runtime/config normalization should happen before CLI and GUI diverge.
 - GUI behavior should call the same pipeline used by CLI instead of re-implementing audit/fix logic.
+- Repository root validation and target discovery should stay shared between CLI and GUI to preserve `Current Root` parity and error semantics.
 - Policy defaults should be expressed once in code and reused by smoke tests or fixtures where possible.
 
 ## Execution flow

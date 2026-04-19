@@ -34,6 +34,7 @@ By default the script:
 - runs the CLI tooling preflight first
 - removes stale `dist/`, `build/`, and `*.egg-info/` outputs before the final build
 - byte-compiles `Repo_Privacy_Guardian.py`
+- runs `ruff check`
 - runs tracked `pytest`
 - runs CLI and GUI smoke scripts
 - verifies module help and direct-script help
