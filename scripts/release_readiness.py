@@ -238,7 +238,14 @@ def run_release_verification_steps(
     )
     run_named_command(
         "Byte-compiling the main module",
-        [sys.executable, "-m", "py_compile", "Repo_Privacy_Guardian.py", "repo_privacy_guardian_runtime.py"],
+        [
+            sys.executable,
+            "-m",
+            "py_compile",
+            "Repo_Privacy_Guardian.py",
+            "repo_privacy_guardian_github.py",
+            "repo_privacy_guardian_runtime.py",
+        ],
         cwd=repo_root,
         timeout=DEFAULT_TIMEOUTS["quick"],
     )

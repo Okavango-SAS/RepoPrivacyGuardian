@@ -9,9 +9,10 @@ Repository consolidation and developer-experience cleanup.
 ### Highlights
 
 - Extracted the shared root-validation/target-discovery and run-exit primitives into `repo_privacy_guardian_runtime.py` so CLI and GUI preflight contracts stay aligned without growing the main pipeline surface.
+- Extracted GitHub remote parsing, API probing, and release-hardening audit logic into `repo_privacy_guardian_github.py` while preserving the existing `Repo_Privacy_Guardian.py` API surface for callers and tests.
 - Hardened operator-facing abort semantics: confirmation denials and user cancellations now finish as explicit `ABORTED` runs with stable exit code/state tracking instead of looking like a clean `PASS 0/0`.
 - Added basic GUI cancellation so long-running audits/repairs can stop after the active repository step completes, while keeping artifacts and `run_state.json` consistent.
-- Added a low-noise repo-owned `pyright` gate for the extracted runtime helper and release-readiness harness, and wired it into local validation plus CI.
+- Added a low-noise repo-owned `pyright` gate for the extracted runtime/GitHub helpers plus the release-readiness harness, and wired it into local validation plus CI.
 - Fixed repository target resolution so CLI now audits `Current Root` when `--root` points directly at a git checkout and `--repos` is omitted.
 - Requested `--repos` targets that do not resolve now fail cleanly instead of returning a false `PASS 0/0`.
 - Invalid `--root` paths now return operator-facing validation errors without falling through to an unhandled traceback path.

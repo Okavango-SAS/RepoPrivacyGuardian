@@ -96,7 +96,7 @@ Update the docs that are closest to the real behavior you changed:
 The tracked repo-owned quality gate today is intentionally practical:
 
 - `ruff check`
-- `pyright` (runtime/helper scope from `pyrightconfig.json`)
+- `pyright` (runtime + GitHub helper scope from `pyrightconfig.json`)
 - `pytest`
 - smoke scripts
 - packaging/build checks

@@ -1,5 +1,6 @@
 {
   "include": [
+    "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_runtime.py",
     "scripts/release_readiness.py"
   ],
