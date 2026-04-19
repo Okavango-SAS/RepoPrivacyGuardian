@@ -4566,7 +4566,7 @@ def execute_guard_pipeline(
                         total_repositories=len(repos),
                     )
 
-                if repos and exit_code == EXIT_OK and cancellation_requested():
+                if repos and exit_code == EXIT_OK and cancellation_requested() and len(reports) < len(repos):
                     mark_aborted(
                         "Run cancelled by operator after the active repository finished.",
                         phase="aborted",
@@ -5253,6 +5253,7 @@ class GuiApp:  # pragma: no cover
         self._repo_items: list[tuple[str, str]] = []
         self._select_all_button = None
         self._clear_selection_button = None
+        self._refresh_button = None
         self._repair_status_label = None
         self._repair_status_panel = None
         self._repair_status_badge = None
@@ -5990,7 +5991,7 @@ class GuiApp:  # pragma: no cover
             **self._secondary_button_options(),
         )
         self._cancel_button.pack(side="left", padx=(0, 8))
-        ctk.CTkButton(
+        self._refresh_button = ctk.CTkButton(
             repo_actions,
             text="Refresh",
             height=34,
@@ -5999,7 +6000,8 @@ class GuiApp:  # pragma: no cover
             command=self.refresh_repos,
             fg_color=self._support_button_fg,
             hover_color=self._support_button_hover,
-        ).pack(side="left")
+        )
+        self._refresh_button.pack(side="left")
         self._repo_summary_label = ctk.CTkLabel(
             repos_card,
             text="Select one or more repositories. Leave the selection empty to audit every repository shown under Root.",
@@ -6761,6 +6763,7 @@ class GuiApp:  # pragma: no cover
         for button in (
             getattr(self, "_select_all_button", None),
             getattr(self, "_clear_selection_button", None),
+            getattr(self, "_refresh_button", None),
         ):
             if button is not None:
                 button.configure(state=state)
@@ -7046,6 +7049,9 @@ class GuiApp:  # pragma: no cover
         self._update_repo_summary()
 
     def refresh_repos(self) -> None:
+        if getattr(self, "_run_in_progress", False):
+            self.log("[INFO] Refresh is disabled while a run is in progress.")
+            return
         self.repo_list.delete(0, "end")
         self._repo_items = []
         root = Path(self.root_var.get())

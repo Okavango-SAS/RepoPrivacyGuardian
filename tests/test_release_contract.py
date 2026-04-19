@@ -667,6 +667,44 @@ def test_gui_cancel_run_clicked_marks_token_and_logs() -> None:
     assert any("Cancellation requested" in msg for msg in logged)
 
 
+def test_update_run_buttons_state_disables_refresh_button_while_run_is_active() -> None:
+    class DummyWidget:
+        def __init__(self) -> None:
+            self.kwargs: dict[str, str] = {}
+
+        def configure(self, **kwargs) -> None:
+            self.kwargs.update(kwargs)
+
+    class DummyListbox:
+        def __init__(self) -> None:
+            self.state = "normal"
+
+        def configure(self, **kwargs) -> None:
+            if "state" in kwargs:
+                self.state = kwargs["state"]
+
+    app = object.__new__(rpg.GuiApp)
+    app._run_in_progress = True
+    app._active_cancel_token = rpg.CancellationToken()
+    app._repo_items = [("repo-a", "repo-a")]
+    app._audit_button = DummyWidget()
+    app._cancel_button = DummyWidget()
+    app._refresh_button = DummyWidget()
+    app._select_all_button = DummyWidget()
+    app._clear_selection_button = DummyWidget()
+    app._repair_button = None
+    app.repo_list = DummyListbox()
+
+    app._update_run_buttons_state()
+
+    assert app._audit_button.kwargs["state"] == "disabled"
+    assert app._cancel_button.kwargs["state"] == "normal"
+    assert app._refresh_button.kwargs["state"] == "disabled"
+    assert app._select_all_button.kwargs["state"] == "disabled"
+    assert app._clear_selection_button.kwargs["state"] == "disabled"
+    assert app.repo_list.state == "disabled"
+
+
 def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
     seen: list[tuple[str, str]] = []
 
@@ -856,6 +894,45 @@ def test_refresh_repos_invalid_root_surfaces_empty_state_and_disables_audit(tmp_
     assert app._select_all_button.kwargs["state"] == "disabled"
     assert app._clear_selection_button.kwargs["state"] == "disabled"
     assert app.repo_list.state == "disabled"
+
+
+def test_refresh_repos_is_ignored_while_run_is_in_progress(tmp_path: Path) -> None:
+    class DummyVar:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
+    class DummyListbox:
+        def __init__(self) -> None:
+            self.items: list[str] = ["existing"]
+            self.deleted = 0
+
+        def delete(self, _start, _end) -> None:
+            self.deleted += 1
+            self.items = []
+
+        def curselection(self) -> tuple[int, ...]:
+            return ()
+
+    root_repo = tmp_path / "repo-a"
+    (root_repo / ".git").mkdir(parents=True)
+
+    app = object.__new__(rpg.GuiApp)
+    app.root_var = DummyVar(str(root_repo))
+    app.repo_list = DummyListbox()
+    app._repo_items = [("repo-a", "repo-a")]
+    app._run_in_progress = True
+    messages: list[str] = []
+    app.log = messages.append
+
+    app.refresh_repos()
+
+    assert app.repo_list.deleted == 0
+    assert app.repo_list.items == ["existing"]
+    assert app._repo_items == [("repo-a", "repo-a")]
+    assert messages == ["[INFO] Refresh is disabled while a run is in progress."]
 
 
 def test_build_repair_status_summary_mentions_pass_fail_counts() -> None:

@@ -226,7 +226,12 @@ def audit_github_release_hardening(
 
     owner, repo_name = slug
     repo_api_url = GITHUB_REPO_API_URL.format(owner=owner, repo=repo_name)
-    resolved_token = token if token is not None else (token_resolver() if token_resolver else None)
+    if token is not None:
+        resolved_token = token
+    elif token_resolver is not None:
+        resolved_token = token_resolver()
+    else:
+        resolved_token = resolve_github_hardening_token()
     repo_payload, repo_reason = json_getter(repo_api_url, resolved_token)
     if not isinstance(repo_payload, dict):
         warnings.append(

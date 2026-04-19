@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 import Repo_Privacy_Guardian as rpg
+import repo_privacy_guardian_github as rpg_github
 
 
 def _fixture_secret() -> str:
@@ -1140,6 +1141,71 @@ def test_resolve_github_hardening_token_falls_back_to_github_cli(monkeypatch) ->
     monkeypatch.setattr(rpg, "read_github_cli_token", lambda runner=None: ("gh-cli-token", "ready"))
 
     assert rpg.resolve_github_hardening_token({}) == "gh-cli-token"
+
+
+def test_github_helper_module_audit_resolves_token_by_default(tmp_path: Path, monkeypatch) -> None:
+    codeowners = tmp_path / ".github" / "CODEOWNERS"
+    codeowners.parent.mkdir(parents=True)
+    codeowners.write_text("* @owner\n", encoding="utf-8")
+    seen_tokens: list[str | None] = []
+
+    def fake_get_json(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
+        seen_tokens.append(token)
+        if url.endswith("/actions/permissions"):
+            return ({"allowed_actions": "selected", "sha_pinning_required": True}, "http_200")
+        if url.endswith("/actions/permissions/workflow"):
+            return (
+                {
+                    "default_workflow_permissions": "read",
+                    "can_approve_pull_request_reviews": False,
+                },
+                "http_200",
+            )
+        if url.endswith("/automated-security-fixes"):
+            return ({"enabled": True, "paused": False}, "http_200")
+        if "/branches/" in url and url.endswith("/protection"):
+            return (
+                {
+                    "required_pull_request_reviews": {
+                        "required_approving_review_count": 1,
+                        "require_code_owner_reviews": True,
+                        "dismiss_stale_reviews": True,
+                    },
+                    "required_conversation_resolution": {"enabled": True},
+                    "required_status_checks": {"strict": True, "contexts": ["ci"]},
+                    "allow_force_pushes": {"enabled": False},
+                    "allow_deletions": {"enabled": False},
+                },
+                "http_200",
+            )
+        return (
+            {
+                "default_branch": "main",
+                "has_wiki": False,
+                "has_projects": False,
+                "allow_auto_merge": False,
+            },
+            "http_200",
+        )
+
+    monkeypatch.setattr(
+        rpg_github,
+        "resolve_github_hardening_token",
+        lambda env=None, runner=None, read_cli_token=None: "gh-admin-token",
+    )
+
+    findings, warnings = rpg_github.audit_github_release_hardening(
+        repo=tmp_path,
+        remote_url="https://github.com/example/repo.git",
+        token=None,
+        json_getter=fake_get_json,
+        probe_enabled=lambda url, token=None: (True, "http_204"),
+    )
+
+    assert findings == []
+    assert warnings == []
+    assert seen_tokens
+    assert all(token == "gh-admin-token" for token in seen_tokens)
 
 
 def test_build_cli_tooling_checks_warns_when_rewrite_tooling_missing(monkeypatch) -> None:
@@ -2558,6 +2624,56 @@ def test_execute_guard_pipeline_cancel_callback_stops_before_next_repository(
     assert state_payload["status"] == "aborted"
     assert state_payload["completed_repositories"] == 1
     assert state_payload["total_repositories"] == 2
+
+
+def test_execute_guard_pipeline_cancel_after_last_repo_keeps_final_summary(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    messages: list[str] = []
+    audited: list[str] = []
+
+    class DummyGuard:
+        def __init__(self, **kwargs) -> None:
+            del kwargs
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            del repo_filters, public_only
+            return [Path("C:/repos/repo-a")]
+
+        def acquire_repo_lock(self, repo: Path):
+            del repo
+            return None
+
+        def release_repo_lock(self, repo_lock) -> None:
+            del repo_lock
+
+        def audit_repo(self, repo: Path) -> rpg.RepoReport:
+            audited.append(repo.name)
+            report = _make_report(repo.name)
+            report.finalize()
+            return report
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    exit_code = rpg.execute_guard_pipeline(
+        config=_make_run_config(repos=None),
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+        cancel_callback=lambda: len(audited) >= 1,
+    )
+
+    assert exit_code == 0
+    assert audited == ["repo-a"]
+    assert any("[SUMMARY] PASS 1/1" in msg for msg in messages)
+    assert not any("[SUMMARY] ABORTED 1/1" in msg for msg in messages)
+    state_payload = json.loads(artifacts.state_path.read_text(encoding="utf-8"))
+    assert state_payload["status"] == "completed"
+    assert state_payload["completed_repositories"] == 1
+    assert state_payload["total_repositories"] == 1
 
 
 def test_execute_guard_pipeline_fix_reaudit_flow(tmp_path: Path, monkeypatch) -> None:
