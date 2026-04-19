@@ -77,3 +77,33 @@ def discover_repository_targets(
         return [], skipped, f"Root folder is not accessible: {root} ({exc})"
 
     return repos, skipped, None
+
+
+def describe_no_target_resolution(
+    *,
+    root: Path,
+    repo_filters: list[str] | None,
+    public_only: bool,
+) -> tuple[str, str]:
+    if repo_filters:
+        requested = ", ".join(repo_filters)
+        if public_only:
+            return (
+                f"No target repositories matched the requested filters after applying --public-only: {requested}",
+                "[ERROR] Check --root/--repos, verify each selected path is a git repository, and confirm the matching origin is publicly accessible on GitHub.",
+            )
+        return (
+            f"No target repositories matched the requested filters: {requested}",
+            "[ERROR] Check --root/--repos and verify each selected path is a git repository.",
+        )
+
+    if public_only:
+        return (
+            f"No public GitHub repositories matched under Root: {root}",
+            "[ERROR] Check origin visibility, origin remote availability, or remove --public-only.",
+        )
+
+    return (
+        f"No git repositories were found under Root: {root}",
+        "[ERROR] Clone a repository under --root or point --root at an existing git checkout.",
+    )

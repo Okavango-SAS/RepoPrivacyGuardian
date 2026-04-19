@@ -47,6 +47,7 @@ from repo_privacy_guardian_runtime import (
     EXIT_OK,
     EXIT_POLICY_FAILED,
     EXIT_RUNTIME_ERROR,
+    describe_no_target_resolution,
     discover_repository_targets,
     resolve_run_status,
     validate_repository_root,
@@ -4473,15 +4474,22 @@ def execute_guard_pipeline(
             if not repos:
                 if exit_code != EXIT_OK:
                     pass
-                elif config.repos:
-                    requested = ", ".join(config.repos)
-                    logger(f"[ERROR] No target repositories matched the requested filters: {requested}")
-                    logger("[ERROR] Check --root/--repos and verify each selected path is a git repository.")
+                else:
+                    no_targets_error, no_targets_guidance = describe_no_target_resolution(
+                        root=config.root,
+                        repo_filters=config.repos,
+                        public_only=config.public_only,
+                    )
+                    logger(f"[ERROR] {no_targets_error}")
+                    logger(no_targets_guidance)
                     logger("\n[SUMMARY] ERROR 0/0")
                     exit_code = EXIT_RUNTIME_ERROR
-                else:
-                    logger("[INFO] No repositories matched. Nothing to do.")
-                    logger("\n[SUMMARY] PASS 0/0")
+                    state_tracker.update(
+                        phase="no-targets",
+                        total_repositories=0,
+                        completed_repositories=0,
+                        current_repository="",
+                    )
             else:
                 if config.fix:
                     for line in build_fix_preflight_summary(config, repos):

@@ -146,6 +146,32 @@ def main() -> int:
             raise SystemExit(f"Unexpected current-root smoke status: {current_root_payload['status']}")
         if current_root_payload["name"] != "smoke-repo":
             raise SystemExit(f"Unexpected current-root repo name: {current_root_payload['name']}")
+
+        empty_root = root / "empty-root"
+        empty_root.mkdir()
+        empty_root_proc = run_cli_smoke(
+            cli_cmd,
+            "--root",
+            str(empty_root),
+            "--report-dir",
+            str(results),
+            "--yes",
+        )
+        if empty_root_proc.returncode == 0:
+            raise SystemExit(
+                "CLI empty-root smoke unexpectedly passed.\n"
+                f"STDOUT:\n{empty_root_proc.stdout}\nSTDERR:\n{empty_root_proc.stderr}"
+            )
+        if "[SUMMARY] ERROR 0/0" not in empty_root_proc.stdout:
+            raise SystemExit(
+                "CLI empty-root smoke did not report ERROR 0/0.\n"
+                f"STDOUT:\n{empty_root_proc.stdout}\nSTDERR:\n{empty_root_proc.stderr}"
+            )
+        if "No git repositories were found under Root" not in empty_root_proc.stdout:
+            raise SystemExit(
+                "CLI empty-root smoke did not explain the zero-target failure.\n"
+                f"STDOUT:\n{empty_root_proc.stdout}\nSTDERR:\n{empty_root_proc.stderr}"
+            )
         return 0
     finally:
         shutil.rmtree(root, ignore_errors=True)

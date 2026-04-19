@@ -15,6 +15,7 @@ Repository consolidation and developer-experience cleanup.
 - Added a low-noise repo-owned `pyright` gate for the extracted runtime/GitHub helpers plus the release-readiness harness, and wired it into local validation plus CI.
 - Fixed repository target resolution so CLI now audits `Current Root` when `--root` points directly at a git checkout and `--repos` is omitted.
 - Requested `--repos` targets that do not resolve now fail cleanly instead of returning a false `PASS 0/0`.
+- Empty `--root` selections and `--public-only` runs that resolve to zero repositories now fail cleanly instead of returning a false `PASS 0/0`.
 - Invalid `--root` paths now return operator-facing validation errors without falling through to an unhandled traceback path.
 - Added a repo-owned `ruff check` gate to the development extras, release-readiness harness, and CI workflow.
 - Aligned the default `.gitignore` baseline, policy docs, and smoke fixtures so tracked `.env.example` files are supported without creating tracked-but-ignored drift.

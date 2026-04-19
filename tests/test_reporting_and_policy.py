@@ -2437,7 +2437,13 @@ def test_execute_guard_pipeline_purge_all_implies_detected(tmp_path: Path, monke
             self.purge_detected_secret_files = purge_detected_secret_files
 
         def discover_repositories(self, repo_filters, public_only: bool):
-            return []
+            del repo_filters, public_only
+            return [Path("C:/repos/repo-a")]
+
+        def audit_repo(self, repo: Path) -> rpg.RepoReport:
+            report = _make_report(repo.name)
+            report.finalize()
+            return report
 
     def fake_persist(
         reports,
@@ -2498,7 +2504,13 @@ def test_execute_guard_pipeline_logs_blocking_email_policy(tmp_path: Path, monke
             pass
 
         def discover_repositories(self, repo_filters, public_only: bool):
-            return []
+            del repo_filters, public_only
+            return [Path("C:/repos/repo-a")]
+
+        def audit_repo(self, repo: Path) -> rpg.RepoReport:
+            report = _make_report(repo.name)
+            report.finalize()
+            return report
 
     monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
     monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
@@ -3449,7 +3461,13 @@ def test_execute_guard_pipeline_gui_mode_no_regression(tmp_path: Path, monkeypat
             pass
 
         def discover_repositories(self, repo_filters, public_only: bool):
-            return []
+            del repo_filters, public_only
+            return [Path("C:/repos/repo-a")]
+
+        def audit_repo(self, repo: Path) -> rpg.RepoReport:
+            report = _make_report(repo.name)
+            report.finalize()
+            return report
 
     def fake_persist(
         reports,
@@ -3478,7 +3496,8 @@ def test_execute_guard_pipeline_gui_mode_no_regression(tmp_path: Path, monkeypat
     assert exit_code == 0
     assert captured["run_settings"]["mode"] == "gui"
     assert captured["run_settings"]["low_confidence_email_mode"] == "blocking"
-    assert captured["reports"] == []
+    assert len(captured["reports"]) == 1
+    assert captured["reports"][0].name == "repo-a"
 
 
 def test_execute_guard_pipeline_all_repos_when_filters_none(tmp_path: Path, monkeypatch) -> None:
@@ -3508,7 +3527,12 @@ def test_execute_guard_pipeline_all_repos_when_filters_none(tmp_path: Path, monk
 
         def discover_repositories(self, repo_filters, public_only: bool):
             captured["repo_filters"] = repo_filters
-            return []
+            return [Path("C:/repos/repo-a")]
+
+        def audit_repo(self, repo: Path) -> rpg.RepoReport:
+            report = _make_report(repo.name)
+            report.finalize()
+            return report
 
     monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
     monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
@@ -3582,5 +3606,72 @@ def test_execute_guard_pipeline_errors_when_requested_filters_match_no_repos(
 
     assert exit_code == 3
     assert any("No target repositories matched the requested filters: missing-repo" in msg for msg in messages)
+    assert any("[SUMMARY] ERROR 0/0" in msg for msg in messages)
+    assert not any("[SUMMARY] PASS 0/0" in msg for msg in messages)
+
+
+def test_execute_guard_pipeline_errors_when_root_contains_no_git_repositories(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    messages: list[str] = []
+
+    class DummyGuard:
+        def __init__(self, **kwargs) -> None:
+            del kwargs
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            del repo_filters, public_only
+            return []
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config(mode="cli", root=tmp_path, repos=None)
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == 3
+    assert any(f"No git repositories were found under Root: {tmp_path}" in msg for msg in messages)
+    assert any("point --root at an existing git checkout" in msg for msg in messages)
+    assert any("[SUMMARY] ERROR 0/0" in msg for msg in messages)
+    assert not any("[SUMMARY] PASS 0/0" in msg for msg in messages)
+
+
+def test_execute_guard_pipeline_errors_when_public_only_excludes_everything(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    messages: list[str] = []
+
+    class DummyGuard:
+        def __init__(self, **kwargs) -> None:
+            del kwargs
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            del repo_filters
+            assert public_only is True
+            return []
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    config = _make_run_config(mode="cli", root=tmp_path, repos=None, public_only=True)
+    exit_code = rpg.execute_guard_pipeline(
+        config=config,
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == 3
+    assert any(f"No public GitHub repositories matched under Root: {tmp_path}" in msg for msg in messages)
+    assert any("remove --public-only" in msg for msg in messages)
     assert any("[SUMMARY] ERROR 0/0" in msg for msg in messages)
     assert not any("[SUMMARY] PASS 0/0" in msg for msg in messages)
