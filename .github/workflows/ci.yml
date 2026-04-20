@@ -2,14 +2,69 @@ name: ci
 
 on:
   push:
-  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/ci.yml"
+      - "pyproject.toml"
+      - "Repo_Privacy_Guardian.py"
+      - "repo_privacy_guardian*.py"
+      - "repo_privacy_guardian_resources/**"
+      - "tests/release_smoke_cli.py"
+  workflow_dispatch:
+    inputs:
+      extended_checks:
+        description: Run the manual extended validation suite
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  # Cost-first policy: keep only the cheapest CLI smoke automatic.
+  smoke:
+    name: CLI smoke (ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+
+      - name: Install base package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Smoke CLI help
+        run: repo-privacy-guardian --help
+
+      - name: Smoke module help
+        run: python -m Repo_Privacy_Guardian --help
+
+      - name: Smoke direct script help
+        run: python Repo_Privacy_Guardian.py --help
+
+      - name: Smoke CLI clean repo
+        run: python tests/release_smoke_cli.py
+
   lint:
-    name: Ruff + Pyright (ubuntu-latest, py3.13)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_checks }}
+    name: Ruff + Pyright (manual, ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -37,26 +92,10 @@ jobs:
         run: pyright -p pyrightconfig.json
 
   test:
-    name: CLI / pytest (${{ matrix.os }}, py${{ matrix.python-version }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_checks }}
+    name: CLI / pytest (manual, ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            python-version: "3.10"
-          - os: ubuntu-latest
-            python-version: "3.11"
-          - os: ubuntu-latest
-            python-version: "3.12"
-          - os: ubuntu-latest
-            python-version: "3.13"
-          - os: windows-latest
-            python-version: "3.11"
-          - os: macos-latest
-            python-version: "3.11"
-
-    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -68,39 +107,21 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install base package
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .
-
-      - name: Smoke CLI help
-        run: repo-privacy-guardian --help
-
-      - name: Smoke module help
-        run: python -m Repo_Privacy_Guardian --help
-
-      - name: Smoke direct script help
-        run: python Repo_Privacy_Guardian.py --help
+          python-version: "3.13"
 
       - name: Install test extras
-        run: python -m pip install -e ".[test]"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
 
       - name: Run pytest
         run: python -m pytest
 
-      - name: Smoke CLI clean repo
-        run: python tests/release_smoke_cli.py
-
   package:
-    name: Package smoke (ubuntu-latest, py${{ matrix.python-version }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_checks }}
+    name: Package smoke (manual, ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.13"]
 
     steps:
       - name: Checkout
@@ -112,7 +133,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
 
       - name: Build sdist and wheel
         run: |
@@ -142,6 +163,8 @@ jobs:
           .pkg-venv/bin/python tests/release_smoke_cli.py
 
   gui-smoke-windows:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_checks }}
+    name: GUI smoke (manual, windows-latest, py3.11)
     runs-on: windows-latest
     timeout-minutes: 15
 
