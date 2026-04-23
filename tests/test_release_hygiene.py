@@ -37,12 +37,14 @@ ROOT_LAYOUT_REQUIRED = [
     ".env.example",
     "Repo_Privacy_Guardian.py",
     "README.MD",
+    "repo_privacy_guardian_artifacts.py",
     "config/requirements/requirements.txt",
     "config/requirements/requirements-gui.txt",
     "config/requirements/requirements-remediation.txt",
     "config/requirements/requirements-dev.txt",
     "repo_privacy_guardian_resources/__init__.py",
     "repo_privacy_guardian_resources/POLICY.md",
+    "scripts/check_release_contract.py",
     "scripts/release_readiness.py",
     "docs/prompts/01_AUDITORIA_Y_SEGUIMIENTO.prompt.md",
     "docs/prompts/02_PARIDAD_GUI_CLI.prompt.md",
@@ -131,10 +133,12 @@ def test_operational_docs_cover_release_harness_env_and_recovery() -> None:
     troubleshooting = (root / "docs" / "TROUBLESHOOTING.md").read_text(encoding="utf-8")
 
     assert ".env.example" in local_development
+    assert "python scripts/check_release_contract.py" in local_development
     assert "python -m pytest -q" in local_development
     assert "python -m ruff check ." in local_development
     assert "There is still no separate repo-owned typecheck command." in local_development
     assert "python scripts/release_readiness.py" in operations
+    assert "python scripts/check_release_contract.py" in operations
     assert "Repo Privacy Guardian does not auto-load a `.env` file." in operations
     assert "The tracked `.env.example` file is only a reference template" in operations
     assert "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN" in operations
@@ -191,6 +195,8 @@ def test_pyproject_version_matches_current_release_line() -> None:
 
     assert 'version = "1.2.2"' in pyproject
     assert "Current release line: `v1.2.x`." in readme
+    assert "`v1.2.2` is the current patch-level operations/readiness update." in readme
+    assert "`v1.2.1` is the current patch-level" not in readme
 
 
 def test_dev_pytest_floor_is_patched_against_known_alert() -> None:
@@ -215,6 +221,7 @@ def test_release_checklist_mentions_clearing_stale_build_outputs() -> None:
     assert "Clear stale local build outputs" in checklist
     assert "`dist/`, `build/`, and `*.egg-info/`" in checklist
     assert "python scripts/release_readiness.py" in checklist
+    assert "Automatic CI smoke is green." in checklist
 
 
 def test_repo_declares_single_owner_codeowners_file() -> None:
@@ -254,18 +261,42 @@ def test_ci_workflow_uses_sha_pinned_actions_and_least_privilege() -> None:
     pinned_actions = re.findall(r"uses:\s+actions/(?:checkout|setup-python)@[0-9a-f]{40}", workflow)
 
     assert re.search(r"permissions:\s+contents:\s+read", workflow)
-    assert workflow.count("timeout-minutes:") == 4
-    assert workflow.count("persist-credentials: false") == 4
-    assert len(pinned_actions) == 8
+    assert workflow.count("timeout-minutes:") == 5
+    assert workflow.count("persist-credentials: false") == 5
+    assert len(pinned_actions) == 10
     assert not re.search(r"uses:\s+actions/(?:checkout|setup-python)@v\d", workflow)
 
 
-def test_ci_workflow_covers_supported_python_versions_and_package_artifacts() -> None:
+def test_ci_workflow_matches_cost_first_validation_contract() -> None:
     workflow = (_repo_root() / CI_WORKFLOW).read_text(encoding="utf-8")
 
-    for version in ('"3.10"', '"3.11"', '"3.12"', '"3.13"'):
-        assert version in workflow
-
+    assert "Cost-first policy" in workflow
+    assert "manual extended validation suite" in workflow
+    assert 'python-version: "3.13"' in workflow
+    assert 'python-version: "3.11"' in workflow
+    assert "python scripts/check_release_contract.py" in workflow
+    for path in (
+        '"README.MD"',
+        '"docs/RELEASE_CHECKLIST.md"',
+        '"docs/VERSIONING.md"',
+        '"scripts/check_release_contract.py"',
+        '"tests/test_release_hygiene.py"',
+    ):
+        assert path in workflow
     assert "dist/*.whl" in workflow
     assert "dist/*.tar.gz" in workflow
     assert workflow.count("python tests/release_smoke_cli.py") >= 3
+
+
+def test_release_docs_describe_cost_first_validation_tiers() -> None:
+    readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
+    checklist = (_repo_root() / "docs" / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    versioning = (_repo_root() / "docs" / "VERSIONING.md").read_text(encoding="utf-8")
+
+    assert "automatic CI smoke" in readme
+    assert "manual extended CI" in readme
+    assert "python scripts/check_release_contract.py" in readme
+    assert "manual extended CI suite has been run" in checklist
+    assert "validation tiers documented in README" in checklist
+    assert "validation tiers" in versioning
+    assert "automatic CI smoke" in versioning

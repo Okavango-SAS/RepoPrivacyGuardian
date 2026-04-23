@@ -237,14 +237,22 @@ def run_release_verification_steps(
         timeout=DEFAULT_TIMEOUTS["quick"],
     )
     run_named_command(
+        "Checking release contract",
+        [sys.executable, "scripts/check_release_contract.py"],
+        cwd=repo_root,
+        timeout=DEFAULT_TIMEOUTS["quick"],
+    )
+    run_named_command(
         "Byte-compiling the main module",
         [
             sys.executable,
             "-m",
             "py_compile",
             "Repo_Privacy_Guardian.py",
+            "repo_privacy_guardian_artifacts.py",
             "repo_privacy_guardian_github.py",
             "repo_privacy_guardian_runtime.py",
+            "scripts/check_release_contract.py",
         ],
         cwd=repo_root,
         timeout=DEFAULT_TIMEOUTS["quick"],

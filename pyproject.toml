@@ -64,7 +64,7 @@ dev = [
 repo-privacy-guardian = "Repo_Privacy_Guardian:main"
 
 [tool.setuptools]
-py-modules = ["Repo_Privacy_Guardian", "repo_privacy_guardian_github", "repo_privacy_guardian_runtime"]
+py-modules = ["Repo_Privacy_Guardian", "repo_privacy_guardian_artifacts", "repo_privacy_guardian_github", "repo_privacy_guardian_runtime"]
 packages = ["repo_privacy_guardian_resources"]
 
 [tool.setuptools.package-data]

@@ -6,10 +6,15 @@ on:
       - main
     paths:
       - ".github/workflows/ci.yml"
+      - "README.MD"
+      - "docs/RELEASE_CHECKLIST.md"
+      - "docs/VERSIONING.md"
       - "pyproject.toml"
       - "Repo_Privacy_Guardian.py"
       - "repo_privacy_guardian*.py"
       - "repo_privacy_guardian_resources/**"
+      - "scripts/check_release_contract.py"
+      - "tests/test_release_hygiene.py"
       - "tests/release_smoke_cli.py"
   workflow_dispatch:
     inputs:
@@ -27,9 +32,9 @@ permissions:
   contents: read
 
 jobs:
-  # Cost-first policy: keep only the cheapest CLI smoke automatic.
+  # Cost-first policy: keep automatic CI limited to CLI smoke plus release-contract drift checks.
   smoke:
-    name: CLI smoke (ubuntu-latest, py3.13)
+    name: CLI smoke + release contract (automatic, ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
     timeout-minutes: 8
 
@@ -58,6 +63,9 @@ jobs:
 
       - name: Smoke direct script help
         run: python Repo_Privacy_Guardian.py --help
+
+      - name: Check release contract drift
+        run: python scripts/check_release_contract.py
 
       - name: Smoke CLI clean repo
         run: python tests/release_smoke_cli.py

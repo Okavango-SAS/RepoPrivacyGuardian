@@ -30,6 +30,12 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 - If a CLI flag, default, exit-code path, or report field changes in a user-visible way, call it out in release notes.
 - Keep README, CLI help, tests, changelog, and package metadata aligned in the same change set.
 
+## Validation tiers
+
+- automatic CI smoke: cheapest push-time signal for help paths, release-contract drift, and CLI smoke
+- manual extended CI: `workflow_dispatch` suite for `ruff`, `pyright`, tracked `pytest`, package smoke, and Windows GUI smoke
+- local maintainer release gate: `python scripts/release_readiness.py` before a public release
+
 ## Stable release baseline
 
 - Tracked tests are green.
@@ -37,7 +43,7 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 - `python -m build` is green.
 - Installed `wheel` and `sdist` smoke paths are green.
 - Entry point, module execution, and direct script compatibility path are all verified.
-- Public support claims remain backed by CI.
+- Public support claims remain aligned with the documented validation tiers instead of overclaiming continuous CI coverage.
 - README, release docs, and CLI help describe the real behavior without overpromising.
 - The local-first contract remains intact and network behavior stays explicitly documented.
 

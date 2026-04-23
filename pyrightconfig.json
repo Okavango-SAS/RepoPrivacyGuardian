@@ -1,7 +1,9 @@
 {
   "include": [
+    "repo_privacy_guardian_artifacts.py",
     "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_runtime.py",
+    "scripts/check_release_contract.py",
     "scripts/release_readiness.py"
   ],
   "pythonVersion": "3.10",

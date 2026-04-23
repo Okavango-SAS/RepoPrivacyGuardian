@@ -26,6 +26,7 @@ Useful commands during day-to-day work:
 ```sh
 pytest -q
 python -m pytest -q
+python scripts/check_release_contract.py
 python -m ruff check .
 pyright -p pyrightconfig.json
 python tests/release_smoke_cli.py
@@ -58,6 +59,7 @@ python scripts/release_readiness.py --skip-self-audit
 The harness currently validates:
 
 - CLI tooling preflight
+- release contract alignment via `python scripts/check_release_contract.py`
 - isolated pytest temp/coverage artifacts per release-readiness run
 - byte-compilation of the main module
 - `ruff check`
@@ -75,6 +77,7 @@ The harness currently validates:
 Start here when changing behavior:
 
 - `Repo_Privacy_Guardian.py`: main CLI, audit engine, remediation flow, reporting, and optional GUI
+- `repo_privacy_guardian_artifacts.py`: typed run-artifact and run-state helper slice extracted from the monolith
 - `tests/`: tracked regression tests plus release smoke coverage
 - `scripts/release_readiness.py`: owned end-to-end validation harness for local release readiness
 - `repo_privacy_guardian_resources/POLICY.md`: packaged policy resource used by installed builds
@@ -96,7 +99,7 @@ Update the docs that are closest to the real behavior you changed:
 The tracked repo-owned quality gate today is intentionally practical:
 
 - `ruff check`
-- `pyright` (runtime + GitHub helper scope from `pyrightconfig.json`)
+- `pyright` (runtime, artifacts, GitHub, and repo-owned support-script scope from `pyrightconfig.json`)
 - `pytest`
 - smoke scripts
 - packaging/build checks

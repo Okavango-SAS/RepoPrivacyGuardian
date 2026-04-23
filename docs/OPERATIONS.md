@@ -21,6 +21,12 @@ Use `--install-missing-tools` only when you want the tool to attempt local insta
 
 If you are working from this repository checkout instead of a packaged install, [LOCAL_DEVELOPMENT](LOCAL_DEVELOPMENT.md) is the shortest maintained setup guide.
 
+Cheap contract-drift check from a repository checkout:
+
+```sh
+python scripts/check_release_contract.py
+```
+
 ## Preferred local release validation
 
 Run the repository-owned release harness before tagging or publishing package artifacts:
@@ -32,6 +38,7 @@ python scripts/release_readiness.py
 By default the script:
 
 - runs the CLI tooling preflight first
+- checks workflow/docs/version alignment via `python scripts/check_release_contract.py`
 - removes stale `dist/`, `build/`, and `*.egg-info/` outputs before the final build
 - byte-compiles `Repo_Privacy_Guardian.py`
 - runs `ruff check`

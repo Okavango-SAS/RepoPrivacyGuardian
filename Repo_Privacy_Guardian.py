@@ -39,6 +39,7 @@ from pathlib import Path
 import socket
 from typing import Callable, Mapping
 
+import repo_privacy_guardian_artifacts as artifact_helpers
 import repo_privacy_guardian_github as github_helpers
 import repo_privacy_guardian_runtime as runtime
 from repo_privacy_guardian_runtime import (
@@ -607,17 +608,6 @@ class CommandResult:
 
 
 @dataclass
-class RunArtifacts:
-    run_id: str
-    run_dir: Path
-    json_path: Path
-    log_path: Path
-    html_path: Path
-    state_path: Path
-    started_at: datetime
-
-
-@dataclass
 class RepoExecutionLock:
     repo: Path
     lock_path: Path
@@ -666,65 +656,37 @@ class GuardRunConfig:
     report_json: str | None = None
 
 
-class RunLogger:
+RunArtifacts = artifact_helpers.RunArtifacts
+
+
+class RunLogger(artifact_helpers.RunLogger):
     def __init__(self, log_path: Path, sink: Callable[[str], None] | None = None) -> None:
-        self.log_path = log_path
-        self.sink = sink
-        self._lock = threading.Lock()
-        ensure_private_directory(self.log_path.parent)
-        write_private_text_file(self.log_path, "")
-
-    def __call__(self, msg: str) -> None:
-        # Keep persisted artifacts privacy-safe by redacting common sensitive tokens.
-        text = redact_sensitive_text(str(msg))
-        with self._lock:
-            if self.sink:
-                try:
-                    self.sink(text)
-                except UnicodeEncodeError:
-                    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-                    safe_text = text.encode(encoding, errors="replace").decode(
-                        encoding,
-                        errors="replace",
-                    )
-                    self.sink(safe_text)
-            stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            line = f"[{stamp}] {text}\n"
-            append_private_text_file(self.log_path, line)
+        super().__init__(
+            log_path,
+            sink=sink,
+            ensure_private_directory=ensure_private_directory,
+            write_private_text_file=write_private_text_file,
+            append_private_text_file=append_private_text_file,
+            redact_sensitive_text=redact_sensitive_text,
+            stdout=sys.stdout,
+            now_factory=datetime.now,
+        )
 
 
-class RunStateTracker:
+class RunStateTracker(artifact_helpers.RunStateTracker):
     def __init__(self, path: Path, *, artifacts: RunArtifacts, config: GuardRunConfig) -> None:
-        self.path = path
-        self._lock = threading.Lock()
-        self._state: dict[str, object] = {
-            "status": "running",
-            "phase": "starting",
-            "run_id": artifacts.run_id,
-            "started_at": artifacts.started_at.isoformat(timespec="seconds"),
-            "last_update": artifacts.started_at.isoformat(timespec="seconds"),
-            "mode": config.mode,
-            "pid": os.getpid(),
-            "root": str(config.root),
-            "policy": str(config.policy),
-            "requested_repositories": list(config.repos or []),
-            "completed_repositories": 0,
-            "total_repositories": 0,
-            "current_repository": "",
-            "exit_code": None,
-        }
-        self.update()
-
-    def update(self, **fields: object) -> None:
-        with self._lock:
-            if fields:
-                self._state.update(fields)
-            self._state["last_update"] = datetime.now().isoformat(timespec="seconds")
-            write_private_json_file(self.path, self._state)
-
-    def snapshot(self) -> dict[str, object]:
-        with self._lock:
-            return dict(self._state)
+        super().__init__(
+            path,
+            run_id=artifacts.run_id,
+            started_at=artifacts.started_at,
+            mode=config.mode,
+            root=config.root,
+            policy=config.policy,
+            requested_repositories=list(config.repos or []),
+            pid=os.getpid(),
+            write_private_json_file=write_private_json_file,
+            now_factory=datetime.now,
+        )
 
 
 def _missing_executable_message(executable: str) -> str:
@@ -3085,30 +3047,13 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
 
 
 def create_run_artifacts(base_dir: Path) -> RunArtifacts:
-    ensure_private_directory(base_dir)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    suffix = 0
-    while True:
-        run_name = stamp if suffix == 0 else f"{stamp}-{suffix:02d}"
-        run_dir = base_dir / run_name
-        if _path_has_existing_symlink_ancestor(run_dir):
-            raise RuntimeError(f"Refusing to create run artifacts under symlinked path: {run_dir}")
-        try:
-            run_dir.mkdir(parents=True, exist_ok=False)
-            break
-        except FileExistsError:
-            suffix += 1
-            continue
-    _apply_private_permissions(run_dir, 0o700)
-    started = datetime.now()
-    return RunArtifacts(
-        run_id=run_dir.name,
-        run_dir=run_dir,
-        json_path=run_dir / "report.json",
-        log_path=run_dir / "run.log",
-        html_path=run_dir / "report.html",
-        state_path=run_dir / RUN_STATE_FILENAME,
-        started_at=started,
+    return artifact_helpers.create_run_artifacts(
+        base_dir,
+        ensure_private_directory=ensure_private_directory,
+        path_has_existing_symlink_ancestor=_path_has_existing_symlink_ancestor,
+        apply_private_permissions=_apply_private_permissions,
+        run_state_filename=RUN_STATE_FILENAME,
+        now_factory=datetime.now,
     )
 
 
@@ -3129,18 +3074,11 @@ def enforce_results_dir(requested_dir: Path | None) -> tuple[Path, bool]:
 
 
 def resolve_optional_json_export_path(raw_value: str | None, default_name: str) -> Path | None:
-    if not raw_value:
-        return None
-    raw = Path(raw_value)
-    raw_text = str(raw_value)
-    if raw_text.endswith("/") or raw_text.endswith("\\") or (raw.exists() and raw.is_dir()):
-        ensure_private_directory(raw)
-        return raw / default_name
-    if raw.suffix.lower() != ".json":
-        ensure_private_directory(raw)
-        return raw / default_name
-    ensure_private_directory(raw.parent)
-    return raw
+    return artifact_helpers.resolve_optional_json_export_path(
+        raw_value,
+        default_name,
+        ensure_private_directory=ensure_private_directory,
+    )
 
 
 def resolve_github_hardening_token(
@@ -4260,35 +4198,22 @@ def persist_run_outputs(
     optional_json_export: str | None = None,
     optional_supply_chain_payload: dict[str, object] | None = None,
 ) -> None:
-    finished_at = datetime.now()
-    payload = [sanitize_report_for_export(rep) for rep in reports]
-    payload_json = json.dumps(payload, indent=2)
-    write_private_text_file(artifacts.json_path, payload_json)
-    logger(f"[INFO] JSON report written to {artifacts.json_path}")
-
-    html_report = render_html_report(
+    artifact_helpers.persist_run_outputs(
         reports=reports,
         artifacts=artifacts,
         root_path=root_path,
         policy_path=policy_path,
         run_settings=run_settings,
-        finished_at=finished_at,
+        logger=logger,
+        sanitize_report_for_export=sanitize_report_for_export,
+        render_html_report=render_html_report,
+        write_private_text_file=write_private_text_file,
+        report_contains_sensitive_findings=report_contains_sensitive_findings,
+        resolve_optional_json_export_path=resolve_optional_json_export_path,
+        optional_json_export=optional_json_export,
         optional_supply_chain_payload=optional_supply_chain_payload,
+        now_factory=datetime.now,
     )
-    write_private_text_file(artifacts.html_path, html_report)
-    logger(f"[INFO] HTML report written to {artifacts.html_path}")
-    logger(f"[INFO] LOG report written to {artifacts.log_path}")
-
-    export_path = resolve_optional_json_export_path(optional_json_export, artifacts.json_path.name)
-    if export_path:
-        write_private_text_file(export_path, payload_json)
-        logger(f"[INFO] Extra JSON export written to {export_path}")
-
-    if any(report_contains_sensitive_findings(rep) for rep in reports):
-        logger(
-            "[WARN] Sensitive findings were detected in this run. "
-            "After review, consider deleting the run folder in Audit_Results/ to avoid retaining recovered context."
-        )
 
 
 def open_html_report_in_browser(

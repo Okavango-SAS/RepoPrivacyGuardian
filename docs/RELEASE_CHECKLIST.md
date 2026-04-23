@@ -12,6 +12,7 @@ Use this checklist before tagging a public release.
 - Confirm the public repository keeps `main` protected with pull-request-only changes and code-owner review.
 - Confirm issues remain enabled if public issue intake is desired.
 - Confirm public support matrix in README still matches validated platforms.
+- Confirm README still distinguishes automatic CI smoke, manual extended CI, and the local release harness.
 - Review GitHub Actions workflows for least-privilege permissions, explicit timeouts, and SHA-pinned actions.
 
 ## 2. Audit run
@@ -60,8 +61,9 @@ Use this checklist before tagging a public release.
 - `python scripts/release_readiness.py` passes locally, or any intentionally skipped parts are documented.
 - Clean-clone validation passes: `python -m pip install .`, `repo-privacy-guardian --help`, `python -m pip install ".[test]"`, `python -m pytest`.
 - Package build succeeds (`python -m build`) and both `wheel` and `sdist` installs complete cleanly.
-- CI is green on the tracked CLI test suite for Windows, Linux, and macOS plus Windows GUI smoke.
-- Supported Python claims remain aligned with the Python versions that CI actually validates.
+- Automatic CI smoke is green.
+- If the release depends on broader packaging/test/platform evidence, the manual extended CI suite has been run and recorded.
+- Supported Python and platform claims remain aligned with the validation tiers documented in README.
 - Risk exceptions are documented and approved.
 - License and notice files are present and correct.
 - Final report artifacts are stored in the expected local path.

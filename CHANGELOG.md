@@ -8,11 +8,14 @@ Repository consolidation and developer-experience cleanup.
 
 ### Highlights
 
+- Re-based the release contract around the intended cost-first validation tiers: automatic CI smoke stays cheap, broader validation remains manual or local, and docs/tests no longer overclaim continuous matrix coverage.
+- Added `scripts/check_release_contract.py` and wired it into automatic CI smoke plus the local release harness so workflow/docs/version drift fails fast without enabling the full manual suite.
+- Extracted run-artifact creation, run-state persistence, and log-writing helpers into `repo_privacy_guardian_artifacts.py` while preserving the existing `Repo_Privacy_Guardian.py` surface for callers and tests.
 - Extracted the shared root-validation/target-discovery and run-exit primitives into `repo_privacy_guardian_runtime.py` so CLI and GUI preflight contracts stay aligned without growing the main pipeline surface.
 - Extracted GitHub remote parsing, API probing, and release-hardening audit logic into `repo_privacy_guardian_github.py` while preserving the existing `Repo_Privacy_Guardian.py` API surface for callers and tests.
 - Hardened operator-facing abort semantics: confirmation denials and user cancellations now finish as explicit `ABORTED` runs with stable exit code/state tracking instead of looking like a clean `PASS 0/0`.
 - Added basic GUI cancellation so long-running audits/repairs can stop after the active repository step completes, while keeping artifacts and `run_state.json` consistent.
-- Added a low-noise repo-owned `pyright` gate for the extracted runtime/GitHub helpers plus the release-readiness harness, and wired it into local validation plus CI.
+- Added a low-noise repo-owned `pyright` gate for the extracted runtime/GitHub/artifacts helpers plus repo-owned support scripts, and wired it into local validation plus CI.
 - Fixed repository target resolution so CLI now audits `Current Root` when `--root` points directly at a git checkout and `--repos` is omitted.
 - Requested `--repos` targets that do not resolve now fail cleanly instead of returning a false `PASS 0/0`.
 - Empty `--root` selections and `--public-only` runs that resolve to zero repositories now fail cleanly instead of returning a false `PASS 0/0`.

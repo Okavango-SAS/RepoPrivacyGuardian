@@ -28,10 +28,10 @@ Choose the path that matches what you need right now:
 
 ## 🧭 Support Matrix
 
-- Windows CLI: supported and CI-validated
-- Linux CLI: supported and CI-validated
-- macOS CLI: supported and CI-validated
-- Windows GUI: supported with CI smoke coverage
+- Linux CLI: supported; automatic CI smoke runs on Ubuntu with Python `3.13`
+- Windows CLI: supported target; validate through the manual extended CI suite plus local release validation before public release
+- macOS CLI: supported target; validate through local/manual release validation before public release
+- Windows GUI: supported; manual extended CI smoke runs on `windows-latest` with Python `3.11`
 - Linux GUI desktop: best-effort and depends on Tk availability plus a graphical session
 - macOS GUI: best-effort / not a release priority
 - Headless and CI environments: CLI only
@@ -42,11 +42,17 @@ Choose the path that matches what you need right now:
 - `v1.0.0` established the stable CLI, packaging, and release contract within the current local-first scope.
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
-- `v1.2.1` is the current patch-level hardening update and raises the dev/test `pytest` floor to `9.0.3` to clear the open advisory on older releases.
-- Python support claims (`3.10` to `3.13`) are backed by CI coverage.
+- `v1.2.2` is the current patch-level operations/readiness update.
+- Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
 - Stable does not mean "does everything"; it means the current publication-gate scope, defaults, and operator expectations are now intentionally stable for `1.x`.
+
+## 🧪 Validation Tiers
+
+- automatic CI smoke: push-time Ubuntu/Python `3.13` checks for help paths, `python scripts/check_release_contract.py`, and CLI smoke
+- manual extended CI: `workflow_dispatch` validation for `ruff`, `pyright`, tracked `pytest`, package smoke, and Windows GUI smoke
+- local maintainer release gate: `python scripts/release_readiness.py` before public release or tag creation
 
 ## 🔍 What It Audits
 
@@ -193,6 +199,7 @@ From a repository checkout:
 python -m pip install ".[dev]"
 python -m Repo_Privacy_Guardian --help
 python -m Repo_Privacy_Guardian --check-tooling
+python scripts/check_release_contract.py
 python -m ruff check .
 python -m pytest -q
 python scripts/release_readiness.py --skip-self-audit
@@ -441,7 +448,13 @@ Preferred local pre-tag validation for this repository:
 python scripts/release_readiness.py
 ```
 
-Pytest collection is restricted to tracked test files so local ignored test files do not change the release signal. CI additionally validates built `wheel` and `sdist` installs plus Windows GUI smoke.
+Pytest collection is restricted to tracked test files so local ignored test files do not change the release signal.
+
+Validation tiers for this repository:
+
+- automatic CI smoke: `repo-privacy-guardian --help`, module/direct-script help, `python scripts/check_release_contract.py`, and `python tests/release_smoke_cli.py`
+- manual extended CI: `ruff`, `pyright`, tracked `pytest`, package smoke for `wheel` and `sdist`, plus Windows GUI smoke
+- local maintainer release gate: `python scripts/release_readiness.py`
 
 ## 📚 Release Engineering Docs
 
@@ -458,11 +471,12 @@ Pytest collection is restricted to tracked test files so local ignored test file
 ## 🏗️ Repository Layout
 
 - `Repo_Privacy_Guardian.py`: main script, core CLI, and optional GUI implementation
+- `repo_privacy_guardian_artifacts.py`: typed run-artifact and run-state helpers shared by CLI and GUI flow
 - `repo_privacy_guardian_resources/`: packaged policy resource used by installed builds
 - `config/requirements/`: compatibility dependency manifests
 - `docs/`: policy, prompts, release docs, and engineering rationale
 - `tests/`: tracked regression, packaging, smoke coverage, and release hygiene
-- `.github/workflows/ci.yml`: cross-platform CLI/package CI plus Windows GUI smoke
+- `.github/workflows/ci.yml`: cost-first automatic CLI smoke plus manual extended validation and Windows GUI smoke
 
 Files that intentionally remain in the repository root:
 

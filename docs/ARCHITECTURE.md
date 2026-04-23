@@ -4,9 +4,10 @@ Repo Privacy Guardian is still intentionally centered on one Python module: `Rep
 
 That is a tradeoff, not an accident. The repository optimizes for a self-contained CLI/Desktop tool with a small packaging surface. Maintainability depends on keeping clear section boundaries inside that file and documenting where each concern lives.
 
-There are now two intentionally small support modules:
+There are now three intentionally small support modules:
 
 - `repo_privacy_guardian_runtime.py` for shared run-exit semantics plus root/target discovery helpers used by both CLI and GUI
+- `repo_privacy_guardian_artifacts.py` for run-artifact creation, run-state persistence, and log-writing helpers shared by CLI and GUI flow
 - `repo_privacy_guardian_github.py` for GitHub remote parsing, API access, and release-hardening audit helpers
 
 They exist to remove high-risk runtime/preflight and network helper glue from the monolith without fragmenting the core audit/remediation engine.
@@ -32,45 +33,47 @@ Read the file in this order when orienting yourself:
 - `repo_privacy_guardian_runtime.py`
 - root validation, target discovery, cancellation token, and stable exit-code/status mapping
 
-3. GitHub/network helpers
+3. Run artifact and state helpers
+- `repo_privacy_guardian_artifacts.py`
+- run directory creation, `run_state.json` persistence, and report/log export helpers
+
+4. GitHub/network helpers
 - `repo_privacy_guardian_github.py`
 - GitHub remote parsing, auth token resolution, API request helpers, and hardening audit logic
 
-4. Tooling readiness and install helpers
+5. Tooling readiness and install helpers
 - `ToolingCheck`
 - `build_cli_tooling_checks()`
 - `build_gui_tooling_checks()`
 - install/bootstrap helpers for Git, `git-filter-repo`, `gh`, and Windows `winget`
 
-5. Core report and runtime models
+6. Core report and runtime models
 - `CommandResult`
-- `RunArtifacts`
 - `GuardRunConfig`
-- `RunLogger`
 - `RepoReport`
 
-6. Audit and remediation engine
+7. Audit and remediation engine
 - `RepoPublicationGuard`
 - repository discovery
 - content/history scanning
 - `.gitignore` baseline enforcement
 - remediation planning and execution
 
-7. Reporting and export layer
+8. Reporting and export layer
 - CLI summaries
 - JSON sanitization
 - HTML report rendering
 - run artifact persistence
 
-8. Shared execution pipeline
+9. Shared execution pipeline
 - `build_guard_run_config()`
 - `execute_guard_pipeline()`
 
-9. Optional GUI wrapper
+10. Optional GUI wrapper
 - `GuiApp`
 - GUI state management, audit/repair staging, and parity wiring
 
-10. CLI/parser entrypoint
+11. CLI/parser entrypoint
 - `make_parser()`
 - `run_cli()`
 - `main()`
