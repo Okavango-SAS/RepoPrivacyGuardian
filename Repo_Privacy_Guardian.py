@@ -5916,9 +5916,9 @@ class GuiApp:  # pragma: no cover
         self._audit_button.pack(side="left", padx=(0, 8))
         self._cancel_button = ctk.CTkButton(
             repo_actions,
-            text="Cancel Run",
+            text="Stop After Current Step",
             command=self.cancel_run_clicked,
-            width=120,
+            width=172,
             height=34,
             corner_radius=8,
             **self._secondary_button_options(),
@@ -6672,7 +6672,7 @@ class GuiApp:  # pragma: no cover
                 self._active_cancel_token and self._active_cancel_token.is_cancelled()
             )
             cancel_button.configure(
-                text="Cancelling..." if cancel_requested else "Cancel Run",
+                text="Stopping after current step..." if cancel_requested else "Stop After Current Step",
                 state="normal" if (self._run_in_progress and not cancel_requested) else "disabled",
             )
 

@@ -129,6 +129,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
 def test_operational_docs_cover_release_harness_env_and_recovery() -> None:
     root = _repo_root()
     local_development = (root / "docs" / "LOCAL_DEVELOPMENT.md").read_text(encoding="utf-8")
+    known_issues = (root / "docs" / "KNOWN_ISSUES.md").read_text(encoding="utf-8")
     operations = (root / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
     troubleshooting = (root / "docs" / "TROUBLESHOOTING.md").read_text(encoding="utf-8")
 
@@ -143,8 +144,12 @@ def test_operational_docs_cover_release_harness_env_and_recovery() -> None:
     assert "The tracked `.env.example` file is only a reference template" in operations
     assert "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN" in operations
     assert "git clone path/to/<repo>-pre-publication-fix-<timestamp>.bundle recovered-repo" in operations
+    assert "GUI does not include pause/resume controls." in known_issues
+    assert "GUI supports cooperative cancellation" in known_issues
     assert "Release harness skips the self-audit" in troubleshooting
     assert "Build artifacts look stale" in troubleshooting
+    assert "GUI stop feels delayed" in troubleshooting
+    assert "Stop After Current Step" in troubleshooting
     assert "Recovering after a bad rewrite" in troubleshooting
 
 
@@ -277,7 +282,9 @@ def test_ci_workflow_matches_cost_first_validation_contract() -> None:
     assert "python scripts/check_release_contract.py" in workflow
     for path in (
         '"README.MD"',
+        '"docs/KNOWN_ISSUES.md"',
         '"docs/RELEASE_CHECKLIST.md"',
+        '"docs/TROUBLESHOOTING.md"',
         '"docs/VERSIONING.md"',
         '"scripts/check_release_contract.py"',
         '"tests/test_release_hygiene.py"',
@@ -290,13 +297,17 @@ def test_ci_workflow_matches_cost_first_validation_contract() -> None:
 
 def test_release_docs_describe_cost_first_validation_tiers() -> None:
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
+    known_issues = (_repo_root() / "docs" / "KNOWN_ISSUES.md").read_text(encoding="utf-8")
     checklist = (_repo_root() / "docs" / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    troubleshooting = (_repo_root() / "docs" / "TROUBLESHOOTING.md").read_text(encoding="utf-8")
     versioning = (_repo_root() / "docs" / "VERSIONING.md").read_text(encoding="utf-8")
 
     assert "automatic CI smoke" in readme
     assert "manual extended CI" in readme
     assert "python scripts/check_release_contract.py" in readme
+    assert "GUI supports cooperative cancellation" in known_issues
     assert "manual extended CI suite has been run" in checklist
     assert "validation tiers documented in README" in checklist
+    assert "Stopping after current step..." in troubleshooting
     assert "validation tiers" in versioning
     assert "automatic CI smoke" in versioning

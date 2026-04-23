@@ -698,11 +698,47 @@ def test_update_run_buttons_state_disables_refresh_button_while_run_is_active() 
     app._update_run_buttons_state()
 
     assert app._audit_button.kwargs["state"] == "disabled"
+    assert app._cancel_button.kwargs["text"] == "Stop After Current Step"
     assert app._cancel_button.kwargs["state"] == "normal"
     assert app._refresh_button.kwargs["state"] == "disabled"
     assert app._select_all_button.kwargs["state"] == "disabled"
     assert app._clear_selection_button.kwargs["state"] == "disabled"
     assert app.repo_list.state == "disabled"
+
+
+def test_update_run_buttons_state_reflects_pending_stop_request() -> None:
+    class DummyWidget:
+        def __init__(self) -> None:
+            self.kwargs: dict[str, str] = {}
+
+        def configure(self, **kwargs) -> None:
+            self.kwargs.update(kwargs)
+
+    class DummyListbox:
+        def __init__(self) -> None:
+            self.state = "normal"
+
+        def configure(self, **kwargs) -> None:
+            if "state" in kwargs:
+                self.state = kwargs["state"]
+
+    app = object.__new__(rpg.GuiApp)
+    app._run_in_progress = True
+    app._active_cancel_token = rpg.CancellationToken()
+    app._active_cancel_token.request_cancel()
+    app._repo_items = [("repo-a", "repo-a")]
+    app._audit_button = DummyWidget()
+    app._cancel_button = DummyWidget()
+    app._refresh_button = DummyWidget()
+    app._select_all_button = DummyWidget()
+    app._clear_selection_button = DummyWidget()
+    app._repair_button = None
+    app.repo_list = DummyListbox()
+
+    app._update_run_buttons_state()
+
+    assert app._cancel_button.kwargs["text"] == "Stopping after current step..."
+    assert app._cancel_button.kwargs["state"] == "disabled"
 
 
 def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:

@@ -27,10 +27,10 @@ Workaround: audit specific repos first with `--repos` and use staged execution.
 Impact: high.
 Workaround: always create bundle backups and coordinate with collaborators.
 
-1. GUI does not include pause/resume or cancellation controls.
+1. GUI does not include pause/resume controls.
 
 Impact: low.
-Workaround: run long operations from CLI for better control.
+Workaround: GUI supports cooperative cancellation, but it only stops after the active repository step completes. Use CLI for tighter control over long runs.
 
 1. Linux GUI support depends on optional desktop prerequisites.
 

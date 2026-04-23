@@ -91,6 +91,19 @@ What to do:
 - rerun `python scripts/release_readiness.py` without `--skip-clean-build-artifacts`
 - if you are building manually, remove `dist/`, `build/`, and `*.egg-info/` before rebuilding
 
+## GUI stop feels delayed
+
+Symptoms:
+
+- you click `Stop After Current Step` and the run does not stop immediately
+- the GUI shows `Stopping after current step...` while work is still finishing
+
+What to do:
+
+- expect cooperative cancellation: the current repository step is allowed to finish cleanly before the run ends
+- review `run.log` or `run_state.json` under `Audit_Results/<run_id>/` if you need to confirm which phase was still active
+- prefer the CLI path for long-running operations if you need tighter operator control
+
 ## Browser behavior is different between CLI and GUI
 
 Expected behavior:
