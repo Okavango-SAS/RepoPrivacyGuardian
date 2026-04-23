@@ -31,7 +31,7 @@ Final decision must be: PASS or FAIL.
 Rules:
 
 - Public commits must use a GitHub noreply email.
-- Personal/private emails must not appear in commit metadata.
+- Personal/private emails and malformed non-email identity tokens must not appear in author/committer email fields.
 
 Suggested global config:
 
@@ -66,11 +66,11 @@ No unexpected changes should exist.
 
 ### B) Commit history audit
 
-Review all historical author/committer emails:
+Review all historical author/committer email-field values:
 
 ```sh
 git shortlog -sne --all
-git log --all --pretty=format:"%h %ae %ce"
+git log --all --pretty=format:"%h %an <%ae> | %cn <%ce>"
 ```
 
 Search for secrets in patch history:

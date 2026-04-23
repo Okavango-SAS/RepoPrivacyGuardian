@@ -160,6 +160,61 @@ def test_private_commit_metadata_blocks_when_owner_cannot_be_inferred(tmp_path: 
     assert "unexpected commit metadata emails in owned repository" in report.failures
 
 
+def test_malformed_commit_identity_token_blocks_owned_repo(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "metadata-malformed-owned", user_email="owner at privacy dot dev")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "README.md", "malformed identity\n")
+    _commit_all(repo, "malformed metadata commit")
+
+    guard = _make_guard(tmp_path)
+    report = guard.audit_repo(repo)
+
+    assert report.unexpected_identity_tokens == ["owner at privacy dot dev"]
+    assert report.unexpected_identity_tokens_owned_repo == ["owner at privacy dot dev"]
+    assert report.unexpected_identity_tokens_third_party_repo == []
+    assert "unexpected commit metadata identity tokens in owned repository" in report.failures
+
+
+def test_malformed_commit_identity_token_is_informational_for_third_party_repo(tmp_path: Path) -> None:
+    repo = _init_repo(
+        tmp_path,
+        "metadata-malformed-third-party",
+        remote="https://github.com/external/example.git",
+        user_email="owner at privacy dot dev",
+    )
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "README.md", "malformed identity third-party\n")
+    _commit_all(repo, "malformed metadata commit")
+
+    guard = rpg.RepoPublicationGuard(
+        root=tmp_path,
+        policy_path=tmp_path / "POLICY.md",
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        owner_name="Repo Owner",
+        owner_emails=[],
+        redact_third_party=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        low_confidence_email_mode="informational",
+        push=False,
+        dry_run=False,
+        max_matches=50,
+        audit_litellm_incident=False,
+        audit_github_hardening=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=["axeljackal"],
+        replace_text_file=None,
+        logger=lambda _msg: None,
+    )
+    report = guard.audit_repo(repo)
+
+    assert report.unexpected_identity_tokens == ["owner at privacy dot dev"]
+    assert report.unexpected_identity_tokens_owned_repo == []
+    assert report.unexpected_identity_tokens_third_party_repo == ["owner at privacy dot dev"]
+    assert "unexpected commit metadata identity tokens in owned repository" not in report.failures
+
+
 def test_history_email_classification_keeps_readme_examples_low_confidence(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path, "history-low-confidence")
     _write(repo / ".gitignore", DEFAULT_BASELINE)

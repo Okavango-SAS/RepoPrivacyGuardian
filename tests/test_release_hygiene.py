@@ -283,6 +283,7 @@ def test_ci_workflow_matches_cost_first_validation_contract() -> None:
     for path in (
         '"README.MD"',
         '"docs/KNOWN_ISSUES.md"',
+        '"docs/POLICY.md"',
         '"docs/RELEASE_CHECKLIST.md"',
         '"docs/TROUBLESHOOTING.md"',
         '"docs/VERSIONING.md"',
@@ -311,3 +312,22 @@ def test_release_docs_describe_cost_first_validation_tiers() -> None:
     assert "Stopping after current step..." in troubleshooting
     assert "validation tiers" in versioning
     assert "automatic CI smoke" in versioning
+
+
+def test_identity_contract_docs_cover_malformed_commit_tokens() -> None:
+    readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
+    known_issues = (_repo_root() / "docs" / "KNOWN_ISSUES.md").read_text(encoding="utf-8")
+    policy = (_repo_root() / "docs" / "POLICY.md").read_text(encoding="utf-8")
+    release_contract = (_repo_root() / "scripts" / "check_release_contract.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "malformed non-email identity tokens" in readme
+    assert "rewrite commit metadata email values, including malformed non-email tokens" in readme
+    assert (
+        "Malformed/non-email author/committer email-field values are treated as suspicious commit identity tokens."
+        in known_issues
+    )
+    assert "malformed non-email identity tokens" in policy
+    assert '%h %an <%ae> | %cn <%ce>' in policy
+    assert "POLICY_REQUIREMENTS" in release_contract

@@ -71,7 +71,7 @@ Blocking checks that can change `PASS` to `FAIL`:
 
 - dirty working tree
 - Git fsck failures
-- private or unexpected commit metadata emails
+- private or unexpected commit metadata emails or malformed non-email identity tokens
 - tracked or historical secret indicators
 - tracked or historical personal path leaks
 - low-confidence email findings when configured as blocking
@@ -387,7 +387,7 @@ The tool can already remediate several classes of findings safely once you expli
 - create a mandatory backup bundle before rewrite
 - append required `.gitignore` baseline rules
 - stop tracking ignored files
-- rewrite commit metadata emails to approved noreply or placeholder addresses
+- rewrite commit metadata email values, including malformed non-email tokens, to approved noreply or placeholder addresses
 - rewrite detected personal paths when `--rewrite-personal-paths` is explicitly enabled
 - merge an explicit `--replace-text-file` for known literals that cannot be inferred safely
 - re-audit after remediation and fail the run if fix execution itself errors

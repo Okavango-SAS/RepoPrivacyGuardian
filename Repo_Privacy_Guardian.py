@@ -98,6 +98,7 @@ LITELLM_INCIDENT_ID = "litellm-2026-03"
 EXFIL_INDICATOR_MODE = "advisory"
 GITHUB_HARDENING_MODE = "advisory"
 REDACTED_EMAIL = "<redacted-email>"
+REDACTED_IDENTITY_TOKEN = "<redacted-identity-token>"
 # Redaction placeholder, not a credential.
 REDACTED_SECRET = "<redacted-secret>"  # nosec B105
 REDACTED_PATH = "<redacted-path>"
@@ -1440,9 +1441,14 @@ class RepoReport:
 
     author_emails: list[str] = field(default_factory=list)
     committer_emails: list[str] = field(default_factory=list)
+    author_identity_tokens: list[str] = field(default_factory=list)
+    committer_identity_tokens: list[str] = field(default_factory=list)
     unexpected_emails: list[str] = field(default_factory=list)
     unexpected_emails_owned_repo: list[str] = field(default_factory=list)
     unexpected_emails_third_party_repo: list[str] = field(default_factory=list)
+    unexpected_identity_tokens: list[str] = field(default_factory=list)
+    unexpected_identity_tokens_owned_repo: list[str] = field(default_factory=list)
+    unexpected_identity_tokens_third_party_repo: list[str] = field(default_factory=list)
     email_ownership_evaluated: bool = False
 
     tracked_secret_matches: list[str] = field(default_factory=list)
@@ -1496,6 +1502,11 @@ class RepoReport:
             if self.email_ownership_evaluated
             else self.unexpected_emails
         )
+        owned_unexpected_identity_tokens = (
+            self.unexpected_identity_tokens_owned_repo
+            if self.email_ownership_evaluated
+            else self.unexpected_identity_tokens
+        )
         history_email_high_confidence = (
             self.history_email_high_confidence
             if self.email_confidence_evaluated
@@ -1509,6 +1520,10 @@ class RepoReport:
             (worktree_dirty, "working tree is not clean"),
             (not self.fsck_ok, "git fsck failed"),
             (bool(owned_unexpected), "unexpected commit metadata emails in owned repository"),
+            (
+                bool(owned_unexpected_identity_tokens),
+                "unexpected commit metadata identity tokens in owned repository",
+            ),
             (bool(self.tracked_secret_matches), "secret-like patterns in tracked files"),
             (bool(self.tracked_path_matches), "personal path patterns in tracked files"),
             (bool(self.history_secret_matches), "secret-like patterns in history patches"),
@@ -2380,13 +2395,25 @@ class RepoPublicationGuard:  # pragma: no cover
                     break
         return hits
 
-    def _unique_commit_emails(self, repo: Path, field: str) -> list[str]:
+    def _unique_commit_metadata_values(self, repo: Path, field: str) -> list[str]:
         out = self._git(repo, "log", "--all", f"--pretty=format:{field}")
         if out.returncode != 0:
             return []
-        candidates = {line.strip() for line in out.stdout.splitlines() if line.strip()}
-        emails = sorted({value for value in candidates if SIMPLE_EMAIL_RE.match(value)})
-        return emails
+        return sorted({line.strip() for line in out.stdout.splitlines() if line.strip()})
+
+    def _unique_commit_emails(self, repo: Path, field: str) -> list[str]:
+        return [
+            value
+            for value in self._unique_commit_metadata_values(repo, field)
+            if SIMPLE_EMAIL_RE.match(value)
+        ]
+
+    def _unique_commit_identity_tokens(self, repo: Path, field: str) -> list[str]:
+        return [
+            value
+            for value in self._unique_commit_metadata_values(repo, field)
+            if not SIMPLE_EMAIL_RE.match(value)
+        ]
 
     def _resolve_upstream_head(self, repo: Path) -> str | None:
         upstream = self._git(
@@ -2433,14 +2460,28 @@ class RepoPublicationGuard:  # pragma: no cover
 
         report.author_emails = self._unique_commit_emails(repo, "%ae")
         report.committer_emails = self._unique_commit_emails(repo, "%ce")
+        report.author_identity_tokens = self._unique_commit_identity_tokens(repo, "%ae")
+        report.committer_identity_tokens = self._unique_commit_identity_tokens(repo, "%ce")
 
         all_emails = sorted(set(report.author_emails + report.committer_emails))
+        all_identity_tokens = sorted(
+            set(report.author_identity_tokens + report.committer_identity_tokens)
+        )
         report.unexpected_emails = [email for email in all_emails if not self._is_allowed_email(email)]
         (
             report.unexpected_emails_owned_repo,
             report.unexpected_emails_third_party_repo,
         ) = split_unexpected_emails_by_origin_ownership(
             report.unexpected_emails,
+            report.origin_url,
+            self.allowed_remote_owners,
+        )
+        report.unexpected_identity_tokens = all_identity_tokens
+        (
+            report.unexpected_identity_tokens_owned_repo,
+            report.unexpected_identity_tokens_third_party_repo,
+        ) = split_unexpected_emails_by_origin_ownership(
+            report.unexpected_identity_tokens,
             report.origin_url,
             self.allowed_remote_owners,
         )
@@ -2513,9 +2554,18 @@ class RepoPublicationGuard:  # pragma: no cover
             + (f"\nDetails: {detail}" if detail else "")
         )
 
-    def _write_mailmap(self, repo: Path, unique_emails: list[str]) -> Path | None:
+    def _write_mailmap(self, report: RepoReport) -> Path | None:
         lines: list[str] = []
+        mapped_old_values: set[str] = set()
 
+        def add_mapping(name: str, new_email: str, old_value: str) -> None:
+            normalized = old_value.strip()
+            if not normalized or normalized in mapped_old_values:
+                return
+            mapped_old_values.add(normalized)
+            lines.append(f"{name} <{new_email}> <{normalized}>")
+
+        unique_emails = sorted(set(report.author_emails + report.committer_emails))
         for email in unique_emails:
             if not email:
                 continue
@@ -2527,18 +2577,28 @@ class RepoPublicationGuard:  # pragma: no cover
                 continue
 
             if email in self.owner_emails:
-                lines.append(f"{self.owner_name} <{self.noreply_email}> <{email}>")
+                add_mapping(self.owner_name, self.noreply_email, email)
                 continue
 
             if email.endswith("@users.noreply.github.com"):
                 if self.redact_third_party:
-                    lines.append(
-                        f"Redacted Contributor <{self.placeholder_email}> <{email}>"
-                    )
+                    add_mapping("Redacted Contributor", self.placeholder_email, email)
                 continue
 
             if self.redact_third_party:
-                lines.append(f"Redacted Contributor <{self.placeholder_email}> <{email}>")
+                add_mapping("Redacted Contributor", self.placeholder_email, email)
+
+        owned_identity_tokens = (
+            report.unexpected_identity_tokens_owned_repo
+            if report.email_ownership_evaluated
+            else report.unexpected_identity_tokens
+        )
+        for token in owned_identity_tokens:
+            add_mapping(self.owner_name, self.noreply_email, token)
+
+        if self.redact_third_party:
+            for token in report.unexpected_identity_tokens_third_party_repo:
+                add_mapping("Redacted Contributor", self.placeholder_email, token)
 
         if not lines:
             return None
@@ -2748,8 +2808,7 @@ class RepoPublicationGuard:  # pragma: no cover
             )
 
     def _rewrite_history(self, repo: Path, report: RepoReport) -> None:
-        unique = sorted(set(report.author_emails + report.committer_emails))
-        mailmap = self._write_mailmap(repo, unique)
+        mailmap = self._write_mailmap(report)
         replace_text = self._write_replace_text_file(report)
 
         purge_by_filename_signals = bool(report.history_sensitive_added or report.history_sensitive_deleted)
@@ -2962,6 +3021,14 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"unexpected_emails: {len(report.unexpected_emails)}")
     logger(f"unexpected_emails_owned_repo: {len(report.unexpected_emails_owned_repo)}")
     logger(f"unexpected_emails_third_party_repo: {len(report.unexpected_emails_third_party_repo)}")
+    logger(f"unexpected_identity_tokens: {len(report.unexpected_identity_tokens)}")
+    logger(
+        f"unexpected_identity_tokens_owned_repo: {len(report.unexpected_identity_tokens_owned_repo)}"
+    )
+    logger(
+        "unexpected_identity_tokens_third_party_repo: "
+        f"{len(report.unexpected_identity_tokens_third_party_repo)}"
+    )
     logger(f"tracked_secret_matches: {len(report.tracked_secret_matches)}")
     logger(f"tracked_secret_files: {len(report.tracked_secret_files)}")
     logger(f"tracked_path_matches: {len(report.tracked_path_matches)}")
@@ -3252,6 +3319,12 @@ def _redact_email_list(emails: list[str]) -> list[str]:
     return [REDACTED_EMAIL for _ in emails]
 
 
+def _redact_identity_list(items: list[str]) -> list[str]:
+    if not items:
+        return []
+    return [REDACTED_IDENTITY_TOKEN for _ in items]
+
+
 def _redact_text_list(items: list[str]) -> list[str]:
     return [redact_sensitive_text(item) for item in items]
 
@@ -3262,10 +3335,19 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload["clean_status"] = redact_sensitive_text(report.clean_status or "")
     payload["author_emails"] = _redact_email_list(report.author_emails)
     payload["committer_emails"] = _redact_email_list(report.committer_emails)
+    payload["author_identity_tokens"] = _redact_identity_list(report.author_identity_tokens)
+    payload["committer_identity_tokens"] = _redact_identity_list(report.committer_identity_tokens)
     payload["unexpected_emails"] = _redact_email_list(report.unexpected_emails)
     payload["unexpected_emails_owned_repo"] = _redact_email_list(report.unexpected_emails_owned_repo)
     payload["unexpected_emails_third_party_repo"] = _redact_email_list(
         report.unexpected_emails_third_party_repo
+    )
+    payload["unexpected_identity_tokens"] = _redact_identity_list(report.unexpected_identity_tokens)
+    payload["unexpected_identity_tokens_owned_repo"] = _redact_identity_list(
+        report.unexpected_identity_tokens_owned_repo
+    )
+    payload["unexpected_identity_tokens_third_party_repo"] = _redact_identity_list(
+        report.unexpected_identity_tokens_third_party_repo
     )
     payload["tracked_secret_matches"] = _redact_text_list(report.tracked_secret_matches)
     payload["tracked_path_matches"] = _redact_text_list(report.tracked_path_matches)
@@ -3339,49 +3421,83 @@ def build_fix_preflight_summary(config: GuardRunConfig, repos: list[Path]) -> li
     return lines
 
 
-def email_decision_context(report: RepoReport) -> tuple[int, int, int, int]:
+def email_decision_context(report: RepoReport) -> tuple[int, int, int, int, int, int]:
     owned_unexpected = len(
         report.unexpected_emails_owned_repo
         if report.email_ownership_evaluated
         else report.unexpected_emails
     )
     third_party_unexpected = len(report.unexpected_emails_third_party_repo)
+    owned_unexpected_identity_tokens = len(
+        report.unexpected_identity_tokens_owned_repo
+        if report.email_ownership_evaluated
+        else report.unexpected_identity_tokens
+    )
+    third_party_unexpected_identity_tokens = len(report.unexpected_identity_tokens_third_party_repo)
     high_conf = len(
         report.tracked_email_high_confidence + report.history_email_high_confidence
         if report.email_confidence_evaluated
         else report.tracked_email_matches + report.history_email_matches
     )
     low_conf = len(report.tracked_email_low_confidence + report.history_email_low_confidence)
-    return owned_unexpected, third_party_unexpected, high_conf, low_conf
+    return (
+        owned_unexpected,
+        third_party_unexpected,
+        owned_unexpected_identity_tokens,
+        third_party_unexpected_identity_tokens,
+        high_conf,
+        low_conf,
+    )
 
 
 def email_remediation_decision(report: RepoReport) -> tuple[str, str]:
-    owned_unexpected, third_party_unexpected, high_conf, low_conf = email_decision_context(report)
+    (
+        owned_unexpected,
+        third_party_unexpected,
+        owned_unexpected_identity_tokens,
+        third_party_unexpected_identity_tokens,
+        high_conf,
+        low_conf,
+    ) = email_decision_context(report)
     low_blocking = report.low_confidence_email_mode == "blocking"
 
-    if owned_unexpected or high_conf or (low_blocking and low_conf):
-        if low_blocking and low_conf and not (owned_unexpected or high_conf):
+    if (
+        owned_unexpected
+        or owned_unexpected_identity_tokens
+        or high_conf
+        or (low_blocking and low_conf)
+    ):
+        if low_blocking and low_conf and not (
+            owned_unexpected or owned_unexpected_identity_tokens or high_conf
+        ):
             return (
                 "RECOMMENDED",
                 "Blocking mode active: low-confidence email findings require explicit review/remediation.",
             )
         return (
             "RECOMMENDED",
-            "Authorize email remediation for high-confidence/owned-repo findings first.",
+            "Authorize commit identity remediation for owned-repo or malformed metadata findings first.",
         )
 
-    if low_conf or third_party_unexpected:
+    if low_conf or third_party_unexpected or third_party_unexpected_identity_tokens:
         return (
             "REVIEW",
-            "Informational email findings only; review samples before authorizing broad remediation.",
+            "Informational commit-identity findings only; review samples before authorizing broad remediation.",
         )
 
-    return ("SKIP", "No email remediation action needed for this repository.")
+    return ("SKIP", "No commit identity remediation action needed for this repository.")
 
 
 def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
     email_status, email_message = email_remediation_decision(report)
-    owned_unexpected, _third_party_unexpected, high_conf, low_conf = email_decision_context(report)
+    (
+        owned_unexpected,
+        _third_party_unexpected,
+        owned_unexpected_identity_tokens,
+        _third_party_unexpected_identity_tokens,
+        high_conf,
+        low_conf,
+    ) = email_decision_context(report)
     low_blocking = report.low_confidence_email_mode == "blocking"
     litellm_severity = classify_litellm_incident_severity(report)
     worktree_dirty = repo_has_dirty_worktree(report.clean_status)
@@ -3434,7 +3550,12 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
         or report.history_sensitive_deleted
     )
     has_path_risk = bool(report.tracked_path_matches or report.history_path_matches)
-    has_email_risk = bool(owned_unexpected or high_conf or (low_blocking and low_conf))
+    has_identity_risk = bool(
+        owned_unexpected
+        or owned_unexpected_identity_tokens
+        or high_conf
+        or (low_blocking and low_conf)
+    )
 
     if has_secret_risk:
         return (
@@ -3444,10 +3565,10 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
             "Suggestion: run fix in dry-run, review preview, then authorize secret purge/history rewrite.",
         )
 
-    if has_email_risk:
+    if has_identity_risk:
         return (
             "PRIORITY",
-            "Medium-high risk: non-owner emails are likely exposed in owned repository history/content.",
+            "Medium-high risk: non-owner or malformed commit identity values are likely exposed in owned repository history/content.",
             "Possible consequence: personal identity exposure and compliance/privacy issues.",
             f"Suggestion: {email_message}",
         )
@@ -3487,7 +3608,7 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
     if email_status == "REVIEW":
         return (
             "REVIEW",
-            "Low risk: email findings look informational/noisy.",
+            "Low risk: commit identity findings look informational/noisy.",
             "Possible consequence: alert fatigue if remediated blindly.",
             f"Suggestion: {email_message}",
         )
@@ -3503,9 +3624,14 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
 def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     score = 0
     highlights: list[str] = []
-    owned_unexpected_count, third_party_unexpected_count, high_conf_email_count, low_conf_email_count = (
-        email_decision_context(report)
-    )
+    (
+        owned_unexpected_count,
+        third_party_unexpected_count,
+        owned_unexpected_identity_token_count,
+        third_party_unexpected_identity_token_count,
+        high_conf_email_count,
+        low_conf_email_count,
+    ) = email_decision_context(report)
     low_confidence_blocking = report.low_confidence_email_mode == "blocking"
     litellm_severity = classify_litellm_incident_severity(report)
     worktree_dirty = repo_has_dirty_worktree(report.clean_status)
@@ -3541,6 +3667,9 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     if owned_unexpected_count:
         score = max(score, 75)
         highlights.append("Unexpected commit metadata emails in owned repository")
+    if owned_unexpected_identity_token_count:
+        score = max(score, 75)
+        highlights.append("Malformed commit metadata identity tokens found in owned repository")
     if high_conf_email_count:
         score = max(score, 62)
         highlights.append("High-confidence non-owner email addresses found")
@@ -3551,6 +3680,8 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
         highlights.append("Low-confidence email findings are informational")
     if third_party_unexpected_count:
         highlights.append("Unexpected commit metadata emails in third-party repositories (informational)")
+    if third_party_unexpected_identity_token_count:
+        highlights.append("Malformed commit metadata identity tokens in third-party repositories (informational)")
     if report.tracked_path_matches or report.history_path_matches:
         score = max(score, 70)
         highlights.append("Personal/local path leakage detected")
@@ -3613,6 +3744,7 @@ def build_detected_findings_preview(report: RepoReport) -> list[str]:
     add("history path", report.history_path_matches)
     add("tracked email", report.tracked_email_high_confidence)
     add("history email", report.history_email_high_confidence)
+    add("commit identity token", report.unexpected_identity_tokens)
     add("tracked but ignored", report.tracked_but_ignored)
     add("history sensitive add", report.history_sensitive_added)
     add("history sensitive delete", report.history_sensitive_deleted)
@@ -3656,6 +3788,8 @@ def report_contains_sensitive_findings(report: RepoReport) -> bool:
         report.tracked_secret_matches
         or report.history_secret_matches
         or report.secret_file_candidates
+        or report.unexpected_emails
+        or report.unexpected_identity_tokens
         or report.tracked_email_matches
         or report.history_email_matches
         or report.tracked_path_matches
@@ -3801,6 +3935,14 @@ def render_html_report(
         third_party_unexpected = (
             rep.unexpected_emails_third_party_repo if rep.email_ownership_evaluated else []
         )
+        owned_unexpected_identity_tokens = (
+            rep.unexpected_identity_tokens_owned_repo
+            if rep.email_ownership_evaluated
+            else rep.unexpected_identity_tokens
+        )
+        third_party_unexpected_identity_tokens = (
+            rep.unexpected_identity_tokens_third_party_repo if rep.email_ownership_evaluated else []
+        )
         tracked_email_high_confidence = (
             rep.tracked_email_high_confidence
             if rep.email_confidence_evaluated
@@ -3829,6 +3971,7 @@ def render_html_report(
             f"<td class=\"num\">{len(rep.tracked_secret_matches) + len(rep.history_secret_matches)}</td>"
             f"<td class=\"num\">{len(rep.secret_file_candidates)}</td>"
             f"<td class=\"num\">{len(owned_unexpected)}</td>"
+            f"<td class=\"num\">{len(owned_unexpected_identity_tokens)}</td>"
             f"<td class=\"num\">{len(rep.exfil_code_indicators)}</td>"
             f"<td class=\"num\">{len(rep.github_hardening_findings)}</td>"
             f"<td class=\"num\">{len(rep.litellm_ioc_hits)}</td>"
@@ -3858,6 +4001,9 @@ def render_html_report(
             f"<tr><td>unexpected_emails_total</td><td class=\"num\">{len(rep.unexpected_emails)}</td></tr>"
             f"<tr><td>unexpected_emails_owned_repo</td><td class=\"num\">{len(owned_unexpected)}</td></tr>"
             f"<tr><td>unexpected_emails_third_party_repo</td><td class=\"num\">{len(third_party_unexpected)}</td></tr>"
+            f"<tr><td>unexpected_identity_tokens_total</td><td class=\"num\">{len(rep.unexpected_identity_tokens)}</td></tr>"
+            f"<tr><td>unexpected_identity_tokens_owned_repo</td><td class=\"num\">{len(owned_unexpected_identity_tokens)}</td></tr>"
+            f"<tr><td>unexpected_identity_tokens_third_party_repo</td><td class=\"num\">{len(third_party_unexpected_identity_tokens)}</td></tr>"
             f"<tr><td>tracked_secret_matches</td><td class=\"num\">{len(rep.tracked_secret_matches)}</td></tr>"
             f"<tr><td>history_secret_matches</td><td class=\"num\">{len(rep.history_secret_matches)}</td></tr>"
             f"<tr><td>secret_file_candidates</td><td class=\"num\">{len(rep.secret_file_candidates)}</td></tr>"
@@ -3936,8 +4082,16 @@ def render_html_report(
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
+            "<section><h5>Malformed commit identity tokens (owned repositories)</h5>"
+            f"{render_lines(owned_unexpected_identity_tokens)}"
+            "</section>"
             "<section><h5>Unexpected commit emails (third-party repositories)</h5>"
             f"{render_lines(third_party_unexpected)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>Malformed commit identity tokens (third-party repositories)</h5>"
+            f"{render_lines(third_party_unexpected_identity_tokens)}"
             "</section>"
             "<section><h5>Exfil indicators (advisory sample)</h5>"
             f"{render_lines(rep.exfil_code_indicators)}"
@@ -4168,6 +4322,7 @@ def render_html_report(
             <th class=\"num\">Secret matches</th>
             <th class=\"num\">Secret file candidates</th>
             <th class=\"num\">Unexpected emails (owned repo)</th>
+            <th class=\"num\">Identity tokens (owned repo)</th>
             <th class=\"num\">Exfil indicators</th>
             <th class=\"num\">GitHub findings</th>
             <th class=\"num\">LiteLLM IoCs</th>

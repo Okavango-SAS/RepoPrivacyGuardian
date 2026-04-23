@@ -10,6 +10,7 @@ README_REQUIREMENTS = [
     "automatic CI smoke",
     "manual extended CI",
     "`v1.2.2` is the current patch-level operations/readiness update",
+    "malformed non-email identity tokens",
 ]
 
 CHECKLIST_REQUIREMENTS = [
@@ -21,6 +22,13 @@ CHECKLIST_REQUIREMENTS = [
 KNOWN_ISSUES_REQUIREMENTS = [
     "GUI does not include pause/resume controls.",
     "GUI supports cooperative cancellation",
+    "Malformed/non-email author/committer email-field values are treated as suspicious commit identity tokens.",
+]
+
+POLICY_REQUIREMENTS = [
+    "Public commits must use a GitHub noreply email.",
+    "malformed non-email identity tokens",
+    'git log --all --pretty=format:"%h %an <%ae> | %cn <%ce>"',
 ]
 
 TROUBLESHOOTING_REQUIREMENTS = [
@@ -42,6 +50,7 @@ WORKFLOW_REQUIREMENTS = [
     'run: python tests/release_smoke_gui.py',
     '- "README.MD"',
     '- "docs/KNOWN_ISSUES.md"',
+    '- "docs/POLICY.md"',
     '- "docs/RELEASE_CHECKLIST.md"',
     '- "docs/TROUBLESHOOTING.md"',
     '- "docs/VERSIONING.md"',
@@ -63,6 +72,7 @@ def validate_release_contract() -> list[str]:
     readme = _read("README.MD")
     checklist = _read("docs/RELEASE_CHECKLIST.md")
     known_issues = _read("docs/KNOWN_ISSUES.md")
+    policy = _read("docs/POLICY.md")
     troubleshooting = _read("docs/TROUBLESHOOTING.md")
     versioning = _read("docs/VERSIONING.md")
     workflow = _read(".github/workflows/ci.yml")
@@ -71,6 +81,7 @@ def validate_release_contract() -> list[str]:
     errors.extend(_require_contains(readme, README_REQUIREMENTS, "README.MD"))
     errors.extend(_require_contains(checklist, CHECKLIST_REQUIREMENTS, "docs/RELEASE_CHECKLIST.md"))
     errors.extend(_require_contains(known_issues, KNOWN_ISSUES_REQUIREMENTS, "docs/KNOWN_ISSUES.md"))
+    errors.extend(_require_contains(policy, POLICY_REQUIREMENTS, "docs/POLICY.md"))
     errors.extend(_require_contains(troubleshooting, TROUBLESHOOTING_REQUIREMENTS, "docs/TROUBLESHOOTING.md"))
     errors.extend(_require_contains(versioning, VERSIONING_REQUIREMENTS, "docs/VERSIONING.md"))
     errors.extend(_require_contains(workflow, WORKFLOW_REQUIREMENTS, ".github/workflows/ci.yml"))

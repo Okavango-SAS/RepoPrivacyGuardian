@@ -11,6 +11,7 @@ Repository consolidation and developer-experience cleanup.
 - Re-based the release contract around the intended cost-first validation tiers: automatic CI smoke stays cheap, broader validation remains manual or local, and docs/tests no longer overclaim continuous matrix coverage.
 - Added `scripts/check_release_contract.py` and wired it into automatic CI smoke plus the local release harness so workflow/docs/version drift fails fast without enabling the full manual suite.
 - Tightened GUI stop semantics in operator-facing UX/docs by renaming the button to `Stop After Current Step`, documenting the cooperative-stop behavior explicitly, and extending the cheap contract guard to cover that wording.
+- Commit metadata audits now also catch malformed/non-email author/committer email-field values, classify them by repo ownership, and feed them into the existing rewrite/mailmap remediation path.
 - Extracted run-artifact creation, run-state persistence, and log-writing helpers into `repo_privacy_guardian_artifacts.py` while preserving the existing `Repo_Privacy_Guardian.py` surface for callers and tests.
 - Extracted the shared root-validation/target-discovery and run-exit primitives into `repo_privacy_guardian_runtime.py` so CLI and GUI preflight contracts stay aligned without growing the main pipeline surface.
 - Extracted GitHub remote parsing, API probing, and release-hardening audit logic into `repo_privacy_guardian_github.py` while preserving the existing `Repo_Privacy_Guardian.py` API surface for callers and tests.

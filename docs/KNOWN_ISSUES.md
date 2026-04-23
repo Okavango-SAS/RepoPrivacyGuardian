@@ -42,11 +42,6 @@ Workaround: use the supported CLI path in headless or minimal Linux environments
 Impact: medium.
 Workaround: treat rotation as an external mandatory post-remediation step.
 
-1. Commit metadata checks are email-format driven and may ignore malformed non-email identity tokens.
-
-Impact: low.
-Workaround: add manual `git log --all --pretty=format:%an\ <%ae\>` review for strict identity hygiene.
-
 ## Known false-positive patterns
 
 - Email-like tokens in code comments that are not personal data.
@@ -58,6 +53,7 @@ Workaround: add manual `git log --all --pretty=format:%an\ <%ae\>` review for st
 
 - GUI uses a staged flow: run `Audit` first, then `Repair`.
 - `Repair` is intentionally visually locked until a valid audit produces actionable remediation context.
+- Malformed/non-email author/committer email-field values are treated as suspicious commit identity tokens.
 - `exfil_code_indicators` is advisory by default. It elevates review guidance, but it does not automatically fail a repository.
 - `pytest` release validation intentionally ignores untracked/local-only `tests/test_*.py` files so the release signal matches a clean clone.
 

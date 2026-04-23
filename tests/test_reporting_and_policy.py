@@ -635,6 +635,16 @@ def test_repo_report_finalize_builds_failures() -> None:
     assert "secret-like patterns in tracked files" in report.failures
 
 
+def test_repo_report_finalize_blocks_unexpected_identity_tokens() -> None:
+    report = _make_report("repo-identity-token")
+    report.unexpected_identity_tokens = ["owner at privacy dot dev"]
+
+    report.finalize()
+
+    assert report.status == "FAIL"
+    assert "unexpected commit metadata identity tokens in owned repository" in report.failures
+
+
 def test_repo_report_finalize_with_low_confidence_blocking() -> None:
     report = _make_report("repo-blocking")
     report.low_confidence_email_mode = "blocking"
@@ -1708,9 +1718,14 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     report.clean_status = "author dev@example.com"
     report.author_emails = ["dev@example.com"]
     report.committer_emails = ["ops@example.com"]
+    report.author_identity_tokens = ["owner at privacy dot dev"]
+    report.committer_identity_tokens = ["12345"]
     report.unexpected_emails = ["redacted-contributor@example.invalid"]
     report.unexpected_emails_owned_repo = ["redacted-contributor@example.invalid"]
     report.unexpected_emails_third_party_repo = ["redacted-contributor@example.invalid"]
+    report.unexpected_identity_tokens = ["owner at privacy dot dev", "12345"]
+    report.unexpected_identity_tokens_owned_repo = ["owner at privacy dot dev"]
+    report.unexpected_identity_tokens_third_party_repo = ["12345"]
     report.tracked_secret_matches = [f"secret.txt:1:{secret}"]
     report.tracked_path_matches = [f"file.txt:1:{_fixture_win_user_path_slash('Documents')}"]
     report.tracked_email_matches = ["file.txt:2:dev@example.com"]
@@ -1727,9 +1742,17 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     assert payload["path"] == "C:/Users/<redacted>/repo-a"
     assert payload["author_emails"] == [rpg.REDACTED_EMAIL]
     assert payload["committer_emails"] == [rpg.REDACTED_EMAIL]
+    assert payload["author_identity_tokens"] == [rpg.REDACTED_IDENTITY_TOKEN]
+    assert payload["committer_identity_tokens"] == [rpg.REDACTED_IDENTITY_TOKEN]
     assert payload["unexpected_emails"] == [rpg.REDACTED_EMAIL]
     assert payload["unexpected_emails_owned_repo"] == [rpg.REDACTED_EMAIL]
     assert payload["unexpected_emails_third_party_repo"] == [rpg.REDACTED_EMAIL]
+    assert payload["unexpected_identity_tokens"] == [
+        rpg.REDACTED_IDENTITY_TOKEN,
+        rpg.REDACTED_IDENTITY_TOKEN,
+    ]
+    assert payload["unexpected_identity_tokens_owned_repo"] == [rpg.REDACTED_IDENTITY_TOKEN]
+    assert payload["unexpected_identity_tokens_third_party_repo"] == [rpg.REDACTED_IDENTITY_TOKEN]
     assert rpg.REDACTED_SECRET in payload["tracked_secret_matches"][0]
     assert rpg.REDACTED_EMAIL in payload["tracked_email_matches"][0]
     assert rpg.REDACTED_EMAIL in payload["tracked_email_high_confidence"][0]
@@ -1980,6 +2003,33 @@ def test_rewrite_history_auto_confirms_git_filter_repo_continuation(tmp_path: Pa
     assert "history rewritten with git-filter-repo" in report.fix_actions
 
 
+def test_write_mailmap_maps_owned_identity_tokens_to_noreply() -> None:
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    guard.owner_name = "Owner"
+    guard.owner_emails = {"owner@example.com"}
+    guard.noreply_email = "12345+owner@users.noreply.github.com"
+    guard.placeholder_email = rpg.DEFAULT_PLACEHOLDER
+    guard.redact_third_party = True
+
+    report = _make_report("mailmap-token")
+    report.author_emails = ["owner@example.com"]
+    report.unexpected_identity_tokens = ["owner at privacy dot dev", "12345"]
+    report.unexpected_identity_tokens_owned_repo = ["owner at privacy dot dev"]
+    report.unexpected_identity_tokens_third_party_repo = ["12345"]
+    report.email_ownership_evaluated = True
+
+    mailmap = guard._write_mailmap(report)
+
+    assert mailmap is not None
+    try:
+        content = mailmap.read_text(encoding="utf-8")
+        assert "Owner <12345+owner@users.noreply.github.com> <owner@example.com>" in content
+        assert "Owner <12345+owner@users.noreply.github.com> <owner at privacy dot dev>" in content
+        assert f"Redacted Contributor <{rpg.DEFAULT_PLACEHOLDER}> <12345>" in content
+    finally:
+        rpg.cleanup_private_temp_text_file(mailmap)
+
+
 def test_classify_repo_severity_all_levels() -> None:
     high = _make_report("high")
     high.tracked_secret_matches = ["a"]
@@ -1990,6 +2040,13 @@ def test_classify_repo_severity_all_levels() -> None:
     medium.unexpected_emails = ["private@example.com"]
     medium.finalize()
     assert rpg.classify_repo_severity(medium)[0] == "MEDIUM"
+
+    medium_tokens = _make_report("medium-tokens")
+    medium_tokens.unexpected_identity_tokens = ["owner at privacy dot dev"]
+    medium_tokens.finalize()
+    sev, _, highlights = rpg.classify_repo_severity(medium_tokens)
+    assert sev == "MEDIUM"
+    assert "Malformed commit metadata identity tokens found in owned repository" in highlights
 
     medium_paths = _make_report("medium-paths")
     medium_paths.tracked_path_matches = [f"README.md:1:{_fixture_win_user_path_slash(user='example')}"]
@@ -2027,21 +2084,27 @@ def test_email_remediation_decision_variants() -> None:
     skip = _make_report("skip")
     status, message = rpg.email_remediation_decision(skip)
     assert status == "SKIP"
-    assert "No email remediation action" in message
+    assert "No commit identity remediation action" in message
 
     review = _make_report("review")
     review.email_ownership_evaluated = True
     review.unexpected_emails_third_party_repo = ["third@example.com"]
     status, message = rpg.email_remediation_decision(review)
     assert status == "REVIEW"
-    assert "Informational email findings" in message
+    assert "Informational commit-identity findings" in message
 
     recommended = _make_report("recommended")
     recommended.email_confidence_evaluated = True
     recommended.history_email_high_confidence = ["L1:redacted-contributor@example.invalid:+ email = 'redacted-contributor@example.invalid'"]
     status, message = rpg.email_remediation_decision(recommended)
     assert status == "RECOMMENDED"
-    assert "Authorize email remediation" in message
+    assert "Authorize commit identity remediation" in message
+
+    malformed = _make_report("malformed")
+    malformed.unexpected_identity_tokens = ["owner at privacy dot dev"]
+    status, message = rpg.email_remediation_decision(malformed)
+    assert status == "RECOMMENDED"
+    assert "malformed metadata findings" in message
 
     blocking_only = _make_report("blocking")
     blocking_only.low_confidence_email_mode = "blocking"
@@ -2066,9 +2129,9 @@ def test_repo_user_guidance_variants() -> None:
     email_risk.unexpected_emails_owned_repo = ["redacted-contributor@example.invalid"]
     level, risk, consequence, suggestion = rpg.repo_user_guidance(email_risk)
     assert level == "PRIORITY"
-    assert "non-owner emails" in risk.lower()
+    assert "commit identity values" in risk.lower()
     assert "identity exposure" in consequence.lower()
-    assert "authorize email remediation" in suggestion.lower()
+    assert "authorize commit identity remediation" in suggestion.lower()
 
     path_risk = _make_report("path-risk")
     path_risk.tracked_path_matches = [f"README.md:1:{_fixture_win_user_path_slash(user='dev')}"]
@@ -2082,7 +2145,7 @@ def test_repo_user_guidance_variants() -> None:
     review_only.history_email_low_confidence = ["L1:redacted-contributor@example.invalid:+ assert foo('redacted-contributor@example.invalid')"]
     level, risk, consequence, suggestion = rpg.repo_user_guidance(review_only)
     assert level == "REVIEW"
-    assert "informational/noisy" in risk.lower()
+    assert "commit identity findings" in risk.lower()
     assert "alert fatigue" in consequence.lower()
 
     github_review = _make_report("github-review")
