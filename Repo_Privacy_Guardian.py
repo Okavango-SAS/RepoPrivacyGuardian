@@ -5337,6 +5337,10 @@ class GuiApp:  # pragma: no cover
         self._workflow_strip_visible = True
         self._audit_tab_name = "1. Audit"
         self._repair_tab_name = "2. Repair"
+        self._advanced_identity_visible = False
+        self._advanced_identity_toggle_button = None
+        self._advanced_identity_hint_label = None
+        self._identity_card = None
         self._repair_tab_block_overlay = None
         self._repair_tab_block_label = None
         self._repair_tab_block_steps: list[object] = []
@@ -5415,10 +5419,11 @@ class GuiApp:  # pragma: no cover
             fg_color="#F6FBF8",
             corner_radius=14,
             segmented_button_fg_color="#DDEBE7",
-            segmented_button_selected_color=self._primary_button_fg,
-            segmented_button_selected_hover_color=self._primary_button_hover,
-            segmented_button_unselected_color="#DDEBE7",
-            segmented_button_unselected_hover_color="#CBE0DC",
+            segmented_button_selected_color="#D8F3EA",
+            segmented_button_selected_hover_color="#C6E8DE",
+            segmented_button_unselected_color="#EEF5F2",
+            segmented_button_unselected_hover_color="#DDEBE7",
+            text_color=self._text_heading,
         )
         flow_tabs.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 4))
         flow_tabs.add(self._audit_tab_name)
@@ -5453,7 +5458,36 @@ class GuiApp:  # pragma: no cover
             text_color=self._text_heading,
         ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
 
-        row = 1
+        quick_start = ctk.CTkFrame(
+            settings_card,
+            fg_color="#E7F6F1",
+            corner_radius=10,
+            border_width=1,
+            border_color="#B9DDD3",
+        )
+        quick_start.grid(row=1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 10))
+        quick_start.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(
+            quick_start,
+            text="Recommended path",
+            height=28,
+            corner_radius=14,
+            fg_color=self._primary_button_fg,
+            text_color="#F8FAFC",
+            font=self._font(11, bold=True),
+            padx=12,
+        ).grid(row=0, column=0, sticky="w", padx=10, pady=10)
+        ctk.CTkLabel(
+            quick_start,
+            text="Confirm Root -> Run Audit -> review the log/report -> open Repair only if cleanup is needed.",
+            justify="left",
+            anchor="w",
+            wraplength=820,
+            font=self._font(12),
+            text_color=self._text_body,
+        ).grid(row=0, column=1, sticky="we", padx=(0, 10), pady=10)
+
+        row = 2
         self._add_directory_field(
             settings_card,
             row=row,
@@ -5518,6 +5552,36 @@ class GuiApp:  # pragma: no cover
             font=self._font(11),
             text_color=self._text_muted,
         ).grid(row=row + 1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
+
+        advanced_identity_row = ctk.CTkFrame(
+            settings_card,
+            fg_color="#F8FCFA",
+            corner_radius=10,
+            border_width=1,
+            border_color="#D6E7E1",
+        )
+        advanced_identity_row.grid(row=row + 2, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
+        advanced_identity_row.grid_columnconfigure(0, weight=1)
+        self._advanced_identity_hint_label = ctk.CTkLabel(
+            advanced_identity_row,
+            text="Advanced identity settings are hidden for the normal audit-only path.",
+            justify="left",
+            anchor="w",
+            wraplength=760,
+            font=self._font(11),
+            text_color=self._text_muted,
+        )
+        self._advanced_identity_hint_label.grid(row=0, column=0, sticky="we", padx=12, pady=10)
+        self._advanced_identity_toggle_button = ctk.CTkButton(
+            advanced_identity_row,
+            text="Show advanced identity settings",
+            command=self._toggle_advanced_identity_settings,
+            width=230,
+            height=32,
+            corner_radius=8,
+            **self._secondary_button_options(),
+        )
+        self._advanced_identity_toggle_button.grid(row=0, column=1, sticky="e", padx=(8, 12), pady=10)
 
         profile_card = ctk.CTkFrame(
             top_row,
@@ -5716,6 +5780,8 @@ class GuiApp:  # pragma: no cover
             font=self._font(12),
             text_color=self._text_body,
         ).grid(row=4, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 12))
+        self._identity_card = identity_card
+        self._set_advanced_identity_visibility(False)
 
         options_card = ctk.CTkFrame(
             repair_tab,
@@ -6483,22 +6549,100 @@ class GuiApp:  # pragma: no cover
             return
         self._workflow_strip.grid_remove()
 
-    def _apply_top_layout(self, compact: bool) -> None:
-        if compact == self._compact_top_layout:
+    def _toggle_advanced_identity_settings(self) -> None:
+        self._set_advanced_identity_visibility(not self._advanced_identity_visible)
+
+    def _set_advanced_identity_visibility(self, visible: bool) -> None:
+        self._advanced_identity_visible = visible
+
+        toggle_button = getattr(self, "_advanced_identity_toggle_button", None)
+        if toggle_button is not None:
+            toggle_button.configure(
+                text="Hide advanced identity settings" if visible else "Show advanced identity settings"
+            )
+
+        hint_label = getattr(self, "_advanced_identity_hint_label", None)
+        if hint_label is not None:
+            hint_label.configure(
+                text=(
+                    "Advanced identity settings are visible. Use them only when Repair needs custom metadata."
+                    if visible
+                    else "Advanced identity settings are hidden for the normal audit-only path."
+                )
+            )
+
+        identity_card = getattr(self, "_identity_card", None)
+        if identity_card is not None:
+            if visible:
+                identity_card.grid(row=1, column=0, sticky="we", padx=10, pady=(10, 8))
+            else:
+                identity_card.grid_remove()
+
+        self._apply_top_layout(
+            compact=getattr(self, "_compact_top_layout", False),
+            force=True,
+        )
+
+    def _apply_top_layout(self, compact: bool, *, force: bool = False) -> None:
+        if not force and compact == self._compact_top_layout:
             return
 
         self._compact_top_layout = compact
+        advanced_visible = bool(getattr(self, "_advanced_identity_visible", True))
         if compact:
             self._top_row.grid_columnconfigure(0, weight=1)
             self._top_row.grid_columnconfigure(1, weight=1)
-            self._settings_card.grid_configure(row=0, column=0, padx=0, pady=(0, 8), sticky="we")
-            self._profile_card.grid_configure(row=1, column=0, padx=0, pady=(8, 0), sticky="we")
+            self._settings_card.grid_configure(
+                row=0,
+                column=0,
+                columnspan=2,
+                padx=0,
+                pady=(0, 8),
+                sticky="we",
+            )
+            if advanced_visible:
+                self._profile_card.grid_configure(
+                    row=1,
+                    column=0,
+                    columnspan=2,
+                    padx=0,
+                    pady=(8, 0),
+                    sticky="we",
+                )
+            else:
+                self._profile_card.grid_remove()
             return
 
         self._top_row.grid_columnconfigure(0, weight=2)
         self._top_row.grid_columnconfigure(1, weight=1)
-        self._settings_card.grid_configure(row=0, column=0, padx=(0, 8), pady=0, sticky="nsew")
-        self._profile_card.grid_configure(row=0, column=1, padx=(8, 0), pady=0, sticky="nsew")
+        if advanced_visible:
+            self._settings_card.grid_configure(
+                row=0,
+                column=0,
+                columnspan=1,
+                padx=(0, 8),
+                pady=0,
+                sticky="nsew",
+            )
+            self._profile_card.grid_configure(
+                row=0,
+                column=1,
+                columnspan=1,
+                padx=(8, 0),
+                pady=0,
+                sticky="nsew",
+            )
+            return
+
+        self._settings_card.grid_configure(
+            row=0,
+            column=0,
+            columnspan=2,
+            padx=0,
+            pady=0,
+            sticky="nsew",
+        )
+        self._profile_card.grid_remove()
 
     def _apply_identity_actions_layout(self, compact: bool) -> None:
         if compact == self._compact_identity_actions_layout:

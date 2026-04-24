@@ -768,6 +768,64 @@ def test_gui_header_flow_strip_hides_on_compact_layout() -> None:
     assert strip.actions == ["grid_remove", "grid"]
 
 
+def test_gui_advanced_identity_settings_are_collapsible() -> None:
+    class DummyWidget:
+        def __init__(self) -> None:
+            self.actions: list[str] = []
+            self.kwargs: dict[str, object] = {}
+
+        def configure(self, **kwargs: object) -> None:
+            self.kwargs.update(kwargs)
+
+        def grid(self, **kwargs: object) -> None:
+            self.actions.append("grid")
+            self.kwargs.update(kwargs)
+
+        def grid_configure(self, **kwargs: object) -> None:
+            self.actions.append("grid_configure")
+            self.kwargs.update(kwargs)
+
+        def grid_remove(self) -> None:
+            self.actions.append("grid_remove")
+
+        def grid_columnconfigure(self, *_args: object, **_kwargs: object) -> None:
+            self.actions.append("grid_columnconfigure")
+
+    top_row = DummyWidget()
+    settings_card = DummyWidget()
+    profile_card = DummyWidget()
+    identity_card = DummyWidget()
+    toggle_button = DummyWidget()
+    hint_label = DummyWidget()
+
+    app = object.__new__(rpg.GuiApp)
+    app._advanced_identity_visible = True
+    app._advanced_identity_toggle_button = toggle_button
+    app._advanced_identity_hint_label = hint_label
+    app._identity_card = identity_card
+    app._top_row = top_row
+    app._settings_card = settings_card
+    app._profile_card = profile_card
+    app._compact_top_layout = False
+
+    app._set_advanced_identity_visibility(False)
+
+    assert app._advanced_identity_visible is False
+    assert toggle_button.kwargs["text"] == "Show advanced identity settings"
+    assert "normal audit-only path" in str(hint_label.kwargs["text"])
+    assert identity_card.actions == ["grid_remove"]
+    assert profile_card.actions == ["grid_remove"]
+    assert settings_card.kwargs["columnspan"] == 2
+
+    app._toggle_advanced_identity_settings()
+
+    assert app._advanced_identity_visible is True
+    assert toggle_button.kwargs["text"] == "Hide advanced identity settings"
+    assert "visible" in str(hint_label.kwargs["text"])
+    assert identity_card.actions[-1] == "grid"
+    assert profile_card.actions[-1] == "grid_configure"
+
+
 def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
     seen: list[tuple[str, str]] = []
 
