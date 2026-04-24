@@ -42,7 +42,7 @@ Choose the path that matches what you need right now:
 - `v1.0.0` established the stable CLI, packaging, and release contract within the current local-first scope.
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
-- `v1.2.2` is the current patch-level operations/readiness update.
+- `v1.2.3` is the current patch-level public-release stabilization and GUI UX update.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -340,7 +340,7 @@ The GUI keeps the staged safety contract:
 2. review findings
 3. `Repair` only after audit context unlocks it
 
-The GUI is intentionally privacy-first for public release. This repository does not ship desktop screenshots by default to avoid publishing local paths, usernames, or internal repository lists in documentation assets.
+The GUI is intentionally privacy-first for public release. Maintained screenshots live under `docs/ux-audit/` and must use neutral visible paths so local usernames, private roots, and internal repository lists are not published in image pixels.
 
 ## 🗂️ Artifacts
 

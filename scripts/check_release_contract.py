@@ -5,11 +5,13 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+CURRENT_VERSION = "1.2.3"
+CURRENT_VERSION_DESCRIPTION = "public-release stabilization and GUI UX update"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
     "manual extended CI",
-    "`v1.2.2` is the current patch-level operations/readiness update",
+    f"`v{CURRENT_VERSION}` is the current patch-level {CURRENT_VERSION_DESCRIPTION}",
     "malformed non-email identity tokens",
 ]
 
@@ -49,6 +51,7 @@ WORKFLOW_REQUIREMENTS = [
     'run: python scripts/check_release_contract.py',
     'run: python tests/release_smoke_cli.py',
     'run: python tests/release_smoke_gui.py',
+    '- "CHANGELOG.md"',
     '- "README.MD"',
     '- "docs/KNOWN_ISSUES.md"',
     '- "docs/POLICY.md"',
@@ -78,6 +81,7 @@ def validate_release_contract() -> list[str]:
     versioning = _read("docs/VERSIONING.md")
     workflow = _read(".github/workflows/ci.yml")
     pyproject = _read("pyproject.toml")
+    changelog = _read("CHANGELOG.md")
 
     errors.extend(_require_contains(readme, README_REQUIREMENTS, "README.MD"))
     errors.extend(_require_contains(checklist, CHECKLIST_REQUIREMENTS, "docs/RELEASE_CHECKLIST.md"))
@@ -87,10 +91,12 @@ def validate_release_contract() -> list[str]:
     errors.extend(_require_contains(versioning, VERSIONING_REQUIREMENTS, "docs/VERSIONING.md"))
     errors.extend(_require_contains(workflow, WORKFLOW_REQUIREMENTS, ".github/workflows/ci.yml"))
 
-    if 'version = "1.2.2"' not in pyproject:
-        errors.append('pyproject.toml: expected `version = "1.2.2"`')
-    if "`v1.2.1` is the current patch-level" in readme:
-        errors.append("README.MD: stale current patch-level reference to v1.2.1")
+    if f'version = "{CURRENT_VERSION}"' not in pyproject:
+        errors.append(f'pyproject.toml: expected `version = "{CURRENT_VERSION}"`')
+    if f"## [{CURRENT_VERSION}]" not in changelog:
+        errors.append(f"CHANGELOG.md: missing current version section `{CURRENT_VERSION}`")
+    if "`v1.2.1` is the current patch-level" in readme or "`v1.2.2` is the current patch-level" in readme:
+        errors.append("README.MD: stale current patch-level reference")
     if "GUI does not include pause/resume or cancellation controls." in known_issues:
         errors.append("docs/KNOWN_ISSUES.md: stale claim that GUI has no cancellation support")
 

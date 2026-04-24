@@ -4,7 +4,11 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
-Repository consolidation and developer-experience cleanup.
+No public changes yet.
+
+## [1.2.3] - 2026-04-24
+
+Public-release stabilization and GUI UX update.
 
 ### Highlights
 
@@ -18,6 +22,7 @@ Repository consolidation and developer-experience cleanup.
 - Extracted GitHub remote parsing, API probing, and release-hardening audit logic into `repo_privacy_guardian_github.py` while preserving the existing `Repo_Privacy_Guardian.py` API surface for callers and tests.
 - Hardened operator-facing abort semantics: confirmation denials and user cancellations now finish as explicit `ABORTED` runs with stable exit code/state tracking instead of looking like a clean `PASS 0/0`.
 - Added basic GUI cancellation so long-running audits/repairs can stop after the active repository step completes, while keeping artifacts and `run_state.json` consistent.
+- Simplified GUI audit onboarding with a visible recommended path, collapsed advanced identity controls by default, improved `Audit` / `Repair` tab contrast, and refreshed sanitized screenshot evidence.
 - Added a low-noise repo-owned `pyright` gate for the extracted runtime/GitHub/artifacts helpers plus repo-owned support scripts, and wired it into local validation plus CI.
 - Fixed repository target resolution so CLI now audits `Current Root` when `--root` points directly at a git checkout and `--repos` is omitted.
 - Requested `--repos` targets that do not resolve now fail cleanly instead of returning a false `PASS 0/0`.
@@ -33,6 +38,16 @@ Repository consolidation and developer-experience cleanup.
 - Replaced PID/timestamp stale-lock reclamation with OS-backed repository execution locks, disabled inherited stdin on repo-owned subprocesses, and isolated release-readiness temp/coverage artifacts per run.
 - Reduced `exfil_code_indicators` advisory noise by preferring active outbound sinks and contextual review terms while ignoring detector scaffolding, import-only lines, and test-meta fixture content.
 - Tightened Windows lock release diagnostics to read owner metadata from the active lock FD, and made release-readiness cleanup retry transient `dist/`/build artifact removal failures instead of aborting on the first file-handle race.
+
+### Validation
+
+- `python scripts/release_readiness.py`
+- `python scripts/check_release_contract.py`
+- `python -m ruff check .`
+- `pyright -p pyrightconfig.json`
+- `python -m pytest -q`
+- `python tests/release_smoke_cli.py`
+- `python tests/release_smoke_gui.py`
 
 ## [1.2.2] - 2026-04-15
 
