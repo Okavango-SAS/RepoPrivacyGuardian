@@ -18,21 +18,24 @@ Screens audited in the running GUI:
 - Captured the real Tk window by HWND to avoid desktop/toast overlays in screenshots
 - Neutralized visible screenshot paths to non-user placeholder paths before saving docs assets
 - Walked the main `Audit -> review -> Repair` flow in the running app
-- Applied corrective UX/UI copy and hierarchy changes in the GUI code
+- Applied corrective UX/UI copy, hierarchy, color, and responsive-layout changes in the GUI code
 - Re-ran the app and captured after screenshots from the same states
 
 ## Main Findings
 
-1. The GUI was functionally aligned with the CLI, but the first screen still looked like a settings form before it looked like a workflow.
+1. The current GUI remained functionally aligned with the CLI and passed the automated contract tests, but the first screen still read more like a settings form than a workflow.
    A non-technical user could miss that the intended path is simply: confirm Root, run Audit, review, then Repair only if needed.
 
-2. Several labels were accurate for maintainers but too implementation-oriented for a public desktop user.
+2. Several labels were accurate for maintainers but still needed stronger visual grouping for public desktop users.
    Examples: `Artifacts Directory`, `Extra JSON Export`, `Max matches per check`, and repair options that did not clearly separate review toggles from write actions.
 
-3. Optional identity controls competed visually with the primary audit path.
-   The Git identity and owner metadata sections were useful, but they needed clearer "optional" and "repair defaults" framing.
+3. The blue-heavy release UI was readable but visually generic.
+   Primary actions, neutral support actions, review options, and destructive repair actions benefited from a more modern teal/slate/amber palette with clearer state meaning.
 
-4. The tracked screenshot artifacts contained local machine paths in visible form fields.
+4. The desktop header benefited from explicit workflow chips, but those chips consumed too much vertical space near the compact supported width.
+   The compact layout needed responsive treatment so guidance does not push the operational cards too far down.
+
+5. The tracked screenshot artifacts contained local machine paths in visible form fields in an earlier pass.
    This is not detected by the text-based self-audit because the data is embedded in PNG pixels, so the docs assets needed to be regenerated with neutral paths before public release.
 
 ## Corrections Applied
@@ -46,6 +49,10 @@ Screens audited in the running GUI:
 - Tightened destructive-option labels while preserving the same underlying CLI-equivalent settings.
 - Kept `Refresh` available when Root is invalid so users can correct the path and retry without restarting the GUI.
 - Rendered unavailable audit actions in a neutral disabled state instead of primary-button blue.
+- Updated the GUI palette from generic blue to a more deliberate teal/slate/amber system:
+  primary audit actions use teal, support actions use slate, review panels use soft teal, and repair/write-risk panels use amber.
+- Added a compact workflow strip in the desktop header: `1 Audit`, `2 Review findings`, `3 Repair if needed`, and `CLI parity: same backend`.
+- Hid the workflow strip at compact width while preserving the concise header sentence, so the compact view keeps more vertical room for the main form.
 - Regenerated all tracked UX screenshots with neutral visible paths and without external desktop overlays.
 
 ## Screenshots

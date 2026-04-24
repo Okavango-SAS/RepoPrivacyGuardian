@@ -741,6 +741,33 @@ def test_update_run_buttons_state_reflects_pending_stop_request() -> None:
     assert app._cancel_button.kwargs["state"] == "disabled"
 
 
+def test_gui_header_flow_strip_hides_on_compact_layout() -> None:
+    class DummyStrip:
+        def __init__(self) -> None:
+            self.actions: list[str] = []
+
+        def grid(self) -> None:
+            self.actions.append("grid")
+
+        def grid_remove(self) -> None:
+            self.actions.append("grid_remove")
+
+    strip = DummyStrip()
+    app = object.__new__(rpg.GuiApp)
+    app._workflow_strip = strip
+    app._workflow_strip_visible = True
+
+    app._apply_header_flow_layout(compact=True)
+
+    assert app._workflow_strip_visible is False
+    assert strip.actions == ["grid_remove"]
+
+    app._apply_header_flow_layout(compact=False)
+
+    assert app._workflow_strip_visible is True
+    assert strip.actions == ["grid_remove", "grid"]
+
+
 def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
     seen: list[tuple[str, str]] = []
 

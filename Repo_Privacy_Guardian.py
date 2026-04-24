@@ -5267,14 +5267,27 @@ class GuiApp:  # pragma: no cover
         font_options = gui_font_candidates()
         self._ui_font_family = choose_gui_font_family(font_options["ui"], available_families)
         self._mono_font_family = choose_gui_font_family(font_options["mono"], available_families)
-        self._primary_button_fg = "#0E6BA8"
-        self._primary_button_hover = "#0A5585"
-        self._support_button_fg = "#355C7D"
-        self._support_button_hover = "#274760"
-        self._secondary_button_fg = "#F3F7FB"
-        self._secondary_button_hover = "#E2ECF6"
-        self._secondary_button_border = "#9FB4C8"
-        self._secondary_button_text = "#173A5E"
+        self._page_bg = "#EEF5F2"
+        self._surface_fg = "#FBFEFC"
+        self._surface_alt = "#F5FAF8"
+        self._card_border = "#CFE0DA"
+        self._text_heading = "#0B2F32"
+        self._text_body = "#132F36"
+        self._text_muted = "#526A70"
+        self._header_fg = "#0B3D3F"
+        self._header_chip_fg = "#144F4E"
+        self._header_chip_border = "#2E7D75"
+        self._header_chip_text = "#D8FFF3"
+        self._primary_button_fg = "#0F766E"
+        self._primary_button_hover = "#0B5F59"
+        self._support_button_fg = "#334155"
+        self._support_button_hover = "#1E293B"
+        self._secondary_button_fg = "#F8FAFC"
+        self._secondary_button_hover = "#E6F0EF"
+        self._secondary_button_border = "#9AB6B2"
+        self._secondary_button_text = "#123C3F"
+        self._disabled_button_fg = "#B8C6D5"
+        self._disabled_button_text = "#64748B"
 
         self.root_var = tk.StringVar(value=str(default_root_dir()))
         self.policy_var = tk.StringVar(value=str(DEFAULT_POLICY))
@@ -5320,6 +5333,8 @@ class GuiApp:  # pragma: no cover
         self._last_audit_reports_payload: list[dict[str, object]] = []
         self._last_audit_selection_signature: tuple[str, ...] | None = None
         self._flow_tabs = None
+        self._workflow_strip = None
+        self._workflow_strip_visible = True
         self._audit_tab_name = "1. Audit"
         self._repair_tab_name = "2. Repair"
         self._repair_tab_block_overlay = None
@@ -5351,14 +5366,14 @@ class GuiApp:  # pragma: no cover
 
         app = ctk.CTkScrollableFrame(
             self.root,
-            fg_color="#E8EEF6",
+            fg_color=self._page_bg,
             corner_radius=0,
             border_width=0,
         )
         app.grid(row=0, column=0, sticky="nsew")
         app.grid_columnconfigure(0, weight=1)
 
-        header = ctk.CTkFrame(app, fg_color="#0B4F7A", corner_radius=14)
+        header = ctk.CTkFrame(app, fg_color=self._header_fg, corner_radius=18)
         header.grid(row=0, column=0, sticky="we", padx=16, pady=(10, 8))
         header.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
@@ -5371,18 +5386,39 @@ class GuiApp:  # pragma: no cover
             header,
             text="Start with Audit: choose a root, review findings, then Repair only after the safety gate unlocks.",
             font=self._font(13),
-            text_color="#D8E8F7",
-        ).grid(row=1, column=0, sticky="w", padx=18, pady=(2, 12))
+            text_color="#D8FFF3",
+        ).grid(row=1, column=0, sticky="w", padx=18, pady=(2, 8))
+
+        workflow_strip = ctk.CTkFrame(header, fg_color="transparent")
+        workflow_strip.grid(row=2, column=0, sticky="w", padx=18, pady=(0, 14))
+        self._workflow_strip = workflow_strip
+        workflow_items = [
+            "1 Audit",
+            "2 Review findings",
+            "3 Repair if needed",
+            "CLI parity: same backend",
+        ]
+        for idx, label in enumerate(workflow_items):
+            ctk.CTkLabel(
+                workflow_strip,
+                text=label,
+                height=26,
+                corner_radius=13,
+                fg_color=self._header_chip_fg,
+                text_color=self._header_chip_text,
+                font=self._font(11, bold=True),
+                padx=12,
+            ).grid(row=0, column=idx, sticky="w", padx=(0, 8))
 
         flow_tabs = ctk.CTkTabview(
             app,
-            fg_color="#F2F6FC",
+            fg_color="#F6FBF8",
             corner_radius=14,
-            segmented_button_fg_color="#D6E3F2",
-            segmented_button_selected_color="#0E6BA8",
-            segmented_button_selected_hover_color="#0A5585",
-            segmented_button_unselected_color="#D6E3F2",
-            segmented_button_unselected_hover_color="#C5D8EB",
+            segmented_button_fg_color="#DDEBE7",
+            segmented_button_selected_color=self._primary_button_fg,
+            segmented_button_selected_hover_color=self._primary_button_hover,
+            segmented_button_unselected_color="#DDEBE7",
+            segmented_button_unselected_hover_color="#CBE0DC",
         )
         flow_tabs.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 4))
         flow_tabs.add(self._audit_tab_name)
@@ -5402,10 +5438,10 @@ class GuiApp:  # pragma: no cover
 
         settings_card = ctk.CTkFrame(
             top_row,
-            fg_color="#F8FBFF",
+            fg_color=self._surface_fg,
             corner_radius=12,
             border_width=1,
-            border_color="#D1DDEA",
+            border_color=self._card_border,
         )
         settings_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         settings_card.grid_columnconfigure(1, weight=1)
@@ -5414,7 +5450,7 @@ class GuiApp:  # pragma: no cover
             settings_card,
             text="1. Audit Setup",
             font=self._font(16, bold=True),
-            text_color="#113150",
+            text_color=self._text_heading,
         ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
 
         row = 1
@@ -5480,15 +5516,15 @@ class GuiApp:  # pragma: no cover
             anchor="w",
             wraplength=760,
             font=self._font(11),
-            text_color="#4A6076",
+            text_color=self._text_muted,
         ).grid(row=row + 1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
 
         profile_card = ctk.CTkFrame(
             top_row,
-            fg_color="#F8FBFF",
+            fg_color=self._surface_fg,
             corner_radius=12,
             border_width=1,
-            border_color="#D1DDEA",
+            border_color=self._card_border,
         )
         profile_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         profile_card.grid_columnconfigure(1, weight=1)
@@ -5499,7 +5535,7 @@ class GuiApp:  # pragma: no cover
             profile_card,
             text="Owner Profile (repair defaults)",
             font=self._font(16, bold=True),
-            text_color="#113150",
+            text_color=self._text_heading,
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
         ctk.CTkLabel(
             profile_card,
@@ -5508,7 +5544,7 @@ class GuiApp:  # pragma: no cover
             anchor="w",
             wraplength=440,
             font=self._font(11),
-            text_color="#4A6076",
+            text_color=self._text_muted,
         ).grid(row=1, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 6))
 
         row = 2
@@ -5576,10 +5612,10 @@ class GuiApp:  # pragma: no cover
 
         identity_card = ctk.CTkFrame(
             audit_tab,
-            fg_color="#F8FBFF",
+            fg_color=self._surface_fg,
             corner_radius=12,
             border_width=1,
-            border_color="#D1DDEA",
+            border_color=self._card_border,
         )
         identity_card.grid(row=1, column=0, sticky="we", padx=10, pady=(10, 8))
         identity_card.grid_columnconfigure(1, weight=1)
@@ -5587,7 +5623,7 @@ class GuiApp:  # pragma: no cover
             identity_card,
             text="Optional: Git Identity & GitHub Email Privacy",
             font=self._font(16, bold=True),
-            text_color="#113150",
+            text_color=self._text_heading,
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
 
         ctk.CTkLabel(identity_card, text="git user.name", font=self._font(12), text_color="#1E293B").grid(
@@ -5678,15 +5714,15 @@ class GuiApp:  # pragma: no cover
             anchor="w",
             wraplength=1200,
             font=self._font(12),
-            text_color="#334155",
+            text_color=self._text_body,
         ).grid(row=4, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 12))
 
         options_card = ctk.CTkFrame(
             repair_tab,
-            fg_color="#F8FBFF",
+            fg_color=self._surface_fg,
             corner_radius=12,
             border_width=1,
-            border_color="#D1DDEA",
+            border_color=self._card_border,
         )
         options_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
         options_card.grid_columnconfigure(0, weight=1)
@@ -5696,15 +5732,15 @@ class GuiApp:  # pragma: no cover
             options_card,
             text="Repair Plan Options",
             font=self._font(16, bold=True),
-            text_color="#113150",
+            text_color=self._text_heading,
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
 
         safe_options = ctk.CTkFrame(
             options_card,
-            fg_color="#F3FAFF",
+            fg_color="#F2FBF8",
             corner_radius=10,
             border_width=1,
-            border_color="#C9DDEE",
+            border_color="#B9DDD3",
         )
         safe_options.grid(row=1, column=0, sticky="nsew", padx=(14, 7), pady=(0, 12))
         safe_options.grid_columnconfigure(0, weight=1)
@@ -5714,7 +5750,7 @@ class GuiApp:  # pragma: no cover
             safe_options,
             text="Review & Output Options",
             font=self._font(13, bold=True),
-            text_color="#12405E",
+            text_color="#0E4F4A",
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
         self._make_info_badge(
             safe_options,
@@ -5742,10 +5778,10 @@ class GuiApp:  # pragma: no cover
 
         destructive_options = ctk.CTkFrame(
             options_card,
-            fg_color="#FFF4F4",
+            fg_color="#FFF7ED",
             corner_radius=10,
             border_width=1,
-            border_color="#E3B8B8",
+            border_color="#F5C58B",
         )
         destructive_options.grid(row=1, column=1, sticky="nsew", padx=(7, 14), pady=(0, 12))
         destructive_options.grid_columnconfigure(0, weight=1)
@@ -5756,7 +5792,7 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text="Repair Write Actions",
             font=self._font(13, bold=True),
-            text_color="#7B1E1E",
+            text_color="#7A3E05",
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
         self._make_info_badge(
             destructive_options,
@@ -5766,7 +5802,7 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text="Only applied when you click Repair. Review the latest audit summary before enabling them.",
             font=self._font(11),
-            text_color="#8F3A3A",
+            text_color="#8A4B10",
         ).grid(row=1, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 8))
 
         self._rewrite_paths_checkbox = ctk.CTkCheckBox(
@@ -5781,7 +5817,7 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text="Uses reviewed replace-text rules during repair to rewrite detected personal paths.",
             font=self._font(11),
-            text_color="#8F3A3A",
+            text_color="#8A4B10",
         ).grid(row=3, column=0, columnspan=2, sticky="w", padx=36, pady=(0, 6))
 
         ctk.CTkLabel(
@@ -5816,7 +5852,7 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text="Optional operator-reviewed literal replacements for cleanup the tool cannot infer safely.",
             font=self._font(11),
-            text_color="#8F3A3A",
+            text_color="#8A4B10",
         ).grid(row=6, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
 
         self._push_checkbox = ctk.CTkCheckBox(
@@ -5862,7 +5898,7 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text="Use a comma-separated allowlist. Leave bypass off to keep owner verification active.",
             font=self._font(11),
-            text_color="#8F3A3A",
+            text_color="#8A4B10",
         ).grid(row=11, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
 
         self._purge_safe_checkbox = ctk.CTkCheckBox(
@@ -5888,17 +5924,17 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text="Safe mode skips ambiguous files. Risky mode also includes candidates that still need manual judgment.",
             font=self._font(11),
-            text_color="#8F3A3A",
+            text_color="#8A4B10",
         ).grid(row=14, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 10))
         self._sync_purge_mode_controls()
         self._sync_push_guardrail_controls()
 
         repair_actions_card = ctk.CTkFrame(
             repair_tab,
-            fg_color="#F8FBFF",
+            fg_color=self._surface_fg,
             corner_radius=12,
             border_width=1,
-            border_color="#D1DDEA",
+            border_color=self._card_border,
         )
         repair_actions_card.grid(row=1, column=0, sticky="we", padx=10, pady=(0, 8))
         repair_actions_card.grid_columnconfigure(0, weight=1)
@@ -5906,14 +5942,14 @@ class GuiApp:  # pragma: no cover
             repair_actions_card,
             text="Repair Flow",
             font=self._font(14, bold=True),
-            text_color="#7B1E1E",
+            text_color="#7A3E05",
         ).grid(row=0, column=0, sticky="w", padx=14, pady=(10, 4))
         self._repair_status_panel = ctk.CTkFrame(
             repair_actions_card,
-            fg_color="#F5F9FF",
+            fg_color="#F2FBF8",
             corner_radius=10,
             border_width=1,
-            border_color="#C5D8EB",
+            border_color="#B9DDD3",
         )
         self._repair_status_panel.grid(row=1, column=0, sticky="we", padx=14, pady=(0, 8))
         self._repair_status_panel.grid_columnconfigure(1, weight=1)
@@ -5922,8 +5958,8 @@ class GuiApp:  # pragma: no cover
             text="Audit required",
             height=28,
             corner_radius=14,
-            fg_color="#DDEAF7",
-            text_color="#16436E",
+            fg_color="#D8F3EA",
+            text_color="#0F766E",
             font=self._font(11, bold=True),
             padx=12,
         )
@@ -5969,10 +6005,10 @@ class GuiApp:  # pragma: no cover
 
         blocker_overlay = ctk.CTkFrame(
             repair_tab,
-            fg_color="#EEF4FB",
+            fg_color="#EEF5F2",
             corner_radius=10,
             border_width=1,
-            border_color="#C5D8EB",
+            border_color=self._card_border,
         )
         blocker_overlay.grid_columnconfigure(0, weight=1)
         blocker_overlay.grid_rowconfigure(0, weight=1)
@@ -5983,7 +6019,7 @@ class GuiApp:  # pragma: no cover
             fg_color="#FFFFFF",
             corner_radius=14,
             border_width=1,
-            border_color="#C5D8EB",
+            border_color=self._card_border,
         )
         blocker_card.grid(row=0, column=0, padx=28, pady=(28, 20), sticky="n")
         blocker_card.grid_columnconfigure(0, weight=1)
@@ -5992,14 +6028,14 @@ class GuiApp:  # pragma: no cover
             text="Repair tab locked",
             justify="center",
             font=self._font(18, bold=True),
-            text_color="#173A5E",
+            text_color=self._text_heading,
         ).grid(row=0, column=0, padx=24, pady=(22, 8), sticky="ew")
         self._repair_tab_block_label = ctk.CTkLabel(
             blocker_card,
             text="",
             justify="center",
             font=self._font(13, bold=True),
-            text_color="#1E3A5F",
+            text_color=self._text_heading,
             wraplength=620,
         )
         self._repair_tab_block_label.grid(row=1, column=0, padx=24, pady=(0, 10), sticky="ew")
@@ -6008,7 +6044,7 @@ class GuiApp:  # pragma: no cover
             text="Before Repair, do this:",
             justify="center",
             font=self._font(12, bold=True),
-            text_color="#35506D",
+            text_color=self._text_muted,
         ).grid(row=2, column=0, padx=24, pady=(0, 6), sticky="ew")
         step_texts = [
             "1. Run Audit and confirm the selected repositories are the ones you want to review.",
@@ -6048,10 +6084,10 @@ class GuiApp:  # pragma: no cover
 
         repos_card = ctk.CTkFrame(
             results_row,
-            fg_color="#F8FBFF",
+            fg_color=self._surface_fg,
             corner_radius=12,
             border_width=1,
-            border_color="#D1DDEA",
+            border_color=self._card_border,
         )
         repos_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=0)
         repos_card.grid_columnconfigure(0, weight=1)
@@ -6066,7 +6102,7 @@ class GuiApp:  # pragma: no cover
             repo_header,
             text="Repositories",
             font=self._font(16, bold=True),
-            text_color="#113150",
+            text_color=self._text_heading,
         ).grid(row=0, column=0, sticky="w")
         repo_actions = ctk.CTkFrame(repo_header, fg_color="transparent")
         repo_actions.grid(row=0, column=1, sticky="e")
@@ -6108,7 +6144,7 @@ class GuiApp:  # pragma: no cover
             justify="left",
             anchor="w",
             font=self._font(11),
-            text_color="#4A6076",
+            text_color=self._text_muted,
         )
         self._repo_summary_label.grid(row=1, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 8))
 
@@ -6117,7 +6153,7 @@ class GuiApp:  # pragma: no cover
             fg_color="#FFFFFF",
             corner_radius=10,
             border_width=1,
-            border_color="#D1DDEA",
+            border_color=self._card_border,
         )
         list_shell.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=14, pady=(0, 8))
         list_shell.grid_columnconfigure(0, weight=1)
@@ -6132,7 +6168,7 @@ class GuiApp:  # pragma: no cover
             activestyle="none",
             background="#FFFFFF",
             foreground="#0F172A",
-            selectbackground="#0B5E8E",
+            selectbackground=self._primary_button_fg,
             selectforeground="#F8FAFC",
             font=self._font(11),
         )
@@ -6143,10 +6179,10 @@ class GuiApp:  # pragma: no cover
         self.repo_list.bind("<<ListboxSelect>>", self._on_repo_selection_changed)
         self._repo_empty_state = ctk.CTkFrame(
             list_shell,
-            fg_color="#F6FAFE",
+            fg_color=self._surface_alt,
             corner_radius=12,
             border_width=1,
-            border_color="#C9DDEE",
+            border_color=self._card_border,
         )
         self._repo_empty_state.grid_columnconfigure(0, weight=1)
         self._repo_empty_state_title_label = ctk.CTkLabel(
@@ -6155,7 +6191,7 @@ class GuiApp:  # pragma: no cover
             justify="center",
             anchor="center",
             font=self._font(14, bold=True),
-            text_color="#143A5A",
+            text_color=self._text_heading,
         )
         self._repo_empty_state_title_label.grid(row=0, column=0, padx=18, pady=(16, 4), sticky="ew")
         self._repo_empty_state_body_label = ctk.CTkLabel(
@@ -6164,7 +6200,7 @@ class GuiApp:  # pragma: no cover
             justify="center",
             anchor="center",
             font=self._font(12),
-            text_color="#526679",
+            text_color=self._text_muted,
             wraplength=420,
         )
         self._repo_empty_state_body_label.grid(row=1, column=0, padx=18, pady=(0, 6), sticky="ew")
@@ -6174,7 +6210,7 @@ class GuiApp:  # pragma: no cover
             justify="center",
             anchor="center",
             font=self._font(11),
-            text_color="#6B7F93",
+            text_color=self._text_muted,
             wraplength=420,
         )
         self._repo_empty_state_hint_label.grid(row=2, column=0, padx=18, pady=(0, 16), sticky="ew")
@@ -6213,10 +6249,10 @@ class GuiApp:  # pragma: no cover
 
         output_card = ctk.CTkFrame(
             results_row,
-            fg_color="#F8FBFF",
+            fg_color=self._surface_fg,
             corner_radius=12,
             border_width=1,
-            border_color="#D1DDEA",
+            border_color=self._card_border,
         )
         output_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0), pady=0)
         output_card.grid_columnconfigure(0, weight=1)
@@ -6226,12 +6262,12 @@ class GuiApp:  # pragma: no cover
             output_card,
             text="Execution Log",
             font=self._font(16, bold=True),
-            text_color="#113150",
+            text_color=self._text_heading,
         ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
         self.output = ctk.CTkTextbox(
             output_card,
-            fg_color="#0D1B2A",
-            text_color="#E2ECF6",
+            fg_color="#0B1720",
+            text_color="#DDEDEA",
             corner_radius=10,
             border_width=0,
             wrap="word",
@@ -6308,7 +6344,7 @@ class GuiApp:  # pragma: no cover
             target_var.set(selected)
 
     def _add_directory_field(self, parent, *, row: int, label: str, variable, title: str) -> None:
-        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color="#1E293B").grid(
+        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color=self._text_body).grid(
             row=row,
             column=0,
             sticky="w",
@@ -6342,7 +6378,7 @@ class GuiApp:  # pragma: no cover
         title: str,
         filetypes,
     ) -> None:
-        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color="#1E293B").grid(
+        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color=self._text_body).grid(
             row=row,
             column=0,
             sticky="w",
@@ -6377,7 +6413,7 @@ class GuiApp:  # pragma: no cover
         default_extension: str,
         filetypes,
     ) -> None:
-        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color="#1E293B").grid(
+        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color=self._text_body).grid(
             row=row,
             column=0,
             sticky="w",
@@ -6429,10 +6465,23 @@ class GuiApp:  # pragma: no cover
 
     def _apply_responsive_layout(self) -> None:
         width = self._get_logical_window_width()
+        self._apply_header_flow_layout(compact=width <= self._top_stack_width_threshold)
         self._apply_top_layout(compact=width <= self._top_stack_width_threshold)
         self._apply_identity_actions_layout(compact=width <= self._top_stack_width_threshold)
         self._apply_options_layout(compact=width <= self._options_stack_width_threshold)
         self._apply_results_layout(compact=width <= self._results_stack_width_threshold)
+
+    def _apply_header_flow_layout(self, compact: bool) -> None:
+        if self._workflow_strip is None:
+            return
+        visible = not compact
+        if visible == self._workflow_strip_visible:
+            return
+        self._workflow_strip_visible = visible
+        if visible:
+            self._workflow_strip.grid()
+            return
+        self._workflow_strip.grid_remove()
 
     def _apply_top_layout(self, compact: bool) -> None:
         if compact == self._compact_top_layout:
@@ -6534,10 +6583,10 @@ class GuiApp:  # pragma: no cover
         *,
         text_color: str = "#5C6F82",
         badge_text: str = "Audit required",
-        panel_fg: str = "#F5F9FF",
-        panel_border: str = "#C5D8EB",
-        badge_fg: str = "#DDEAF7",
-        badge_text_color: str = "#16436E",
+        panel_fg: str = "#F2FBF8",
+        panel_border: str = "#B9DDD3",
+        badge_fg: str = "#D8F3EA",
+        badge_text_color: str = "#0F766E",
     ) -> None:
         repair_status_label = getattr(self, "_repair_status_label", None)
         if repair_status_label is None:
@@ -6698,8 +6747,8 @@ class GuiApp:  # pragma: no cover
             width=22,
             height=22,
             corner_radius=11,
-            fg_color="#DDEAF7",
-            text_color="#16436E",
+            fg_color="#D8F3EA",
+            text_color="#0F766E",
             font=self._font(12, bold=True),
         )
         self._bind_tooltip(badge, message)
@@ -6829,14 +6878,16 @@ class GuiApp:  # pragma: no cover
         if audit_button is not None:
             has_targets = bool(getattr(self, "_repo_items", []))
             audit_disabled = self._run_in_progress or not has_targets
-            primary_fg = getattr(self, "_primary_button_fg", "#0E6BA8")
-            primary_hover = getattr(self, "_primary_button_hover", "#0A5585")
+            primary_fg = getattr(self, "_primary_button_fg", "#0F766E")
+            primary_hover = getattr(self, "_primary_button_hover", "#0B5F59")
+            disabled_fg = getattr(self, "_disabled_button_fg", "#B8C6D5")
+            disabled_text = getattr(self, "_disabled_button_text", "#64748B")
             audit_button.configure(
                 text="Run Audit" if has_targets else "Audit unavailable",
                 state="disabled" if audit_disabled else "normal",
-                fg_color="#B8C6D5" if audit_disabled else primary_fg,
-                hover_color="#B8C6D5" if audit_disabled else primary_hover,
-                text_color_disabled="#64748B",
+                fg_color=disabled_fg if audit_disabled else primary_fg,
+                hover_color=disabled_fg if audit_disabled else primary_hover,
+                text_color_disabled=disabled_text,
             )
 
         cancel_button = getattr(self, "_cancel_button", None)
@@ -6878,12 +6929,14 @@ class GuiApp:  # pragma: no cover
         refresh_button = getattr(self, "_refresh_button", None)
         if refresh_button is not None:
             support_fg = getattr(self, "_support_button_fg", "#355C7D")
-            support_hover = getattr(self, "_support_button_hover", "#274760")
+            support_hover = getattr(self, "_support_button_hover", "#1E293B")
+            disabled_fg = getattr(self, "_disabled_button_fg", "#B8C6D5")
+            disabled_text = getattr(self, "_disabled_button_text", "#64748B")
             refresh_button.configure(
                 state="disabled" if run_in_progress else "normal",
-                fg_color="#B8C6D5" if run_in_progress else support_fg,
-                hover_color="#B8C6D5" if run_in_progress else support_hover,
-                text_color_disabled="#64748B",
+                fg_color=disabled_fg if run_in_progress else support_fg,
+                hover_color=disabled_fg if run_in_progress else support_hover,
+                text_color_disabled=disabled_text,
             )
 
     def _lock_repair_until_next_audit(self, reason: str = "Repair (run audit first)") -> None:
