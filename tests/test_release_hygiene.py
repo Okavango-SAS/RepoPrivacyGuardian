@@ -60,6 +60,12 @@ RELEASE_DOCS_REQUIRED = [
     "docs/RELEASE_NOTES_TEMPLATE.md",
 ]
 
+UX_SCREENSHOT_PRIVATE_TOKENS = [
+    b"C:\\Users",
+    b"Documents\\Repositorios",
+    b"RepoPrivacyGuardian\\docs\\POLICY.md",
+]
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -96,6 +102,21 @@ def test_no_capture_like_release_media_is_tracked() -> None:
             offenders.append(rel)
 
     assert not offenders, "Capture-like release media should not be tracked:\n" + "\n".join(offenders)
+
+
+def test_ux_audit_screenshots_are_sanitized_for_public_docs() -> None:
+    root = _repo_root()
+    audit_doc = (root / "docs" / "UX_UI_AUDIT.md").read_text(encoding="utf-8")
+    assert "Neutralized visible screenshot paths to non-user placeholder paths" in audit_doc
+    assert "C:\\Users" not in audit_doc
+    assert "Documents\\Repositorios" not in audit_doc
+
+    screenshots = sorted((root / "docs" / "ux-audit").glob("*/*.png"))
+    assert screenshots, "Expected maintained GUI UX screenshots under docs/ux-audit"
+    for screenshot in screenshots:
+        payload = screenshot.read_bytes()
+        offenders = [token.decode("ascii") for token in UX_SCREENSHOT_PRIVATE_TOKENS if token in payload]
+        assert not offenders, f"{screenshot.relative_to(root)} contains private path token(s): {offenders}"
 
 
 def test_support_files_are_moved_out_of_root() -> None:

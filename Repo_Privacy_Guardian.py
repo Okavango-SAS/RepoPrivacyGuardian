@@ -5369,7 +5369,7 @@ class GuiApp:  # pragma: no cover
         ).grid(row=0, column=0, sticky="w", padx=18, pady=(12, 0))
         ctk.CTkLabel(
             header,
-            text="Audit repositories, harden Git identity, and prepare safer public releases.",
+            text="Start with Audit: choose a root, review findings, then Repair only after the safety gate unlocks.",
             font=self._font(13),
             text_color="#D8E8F7",
         ).grid(row=1, column=0, sticky="w", padx=18, pady=(2, 12))
@@ -5412,7 +5412,7 @@ class GuiApp:  # pragma: no cover
         self._settings_card = settings_card
         ctk.CTkLabel(
             settings_card,
-            text="Run Configuration",
+            text="1. Audit Setup",
             font=self._font(16, bold=True),
             text_color="#113150",
         ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
@@ -5440,7 +5440,7 @@ class GuiApp:  # pragma: no cover
         self._add_directory_field(
             settings_card,
             row=row,
-            label="Artifacts Directory",
+            label="Audit Results Folder",
             variable=self.report_dir_var,
             title="Choose the base results directory",
         )
@@ -5449,7 +5449,7 @@ class GuiApp:  # pragma: no cover
         self._add_save_file_field(
             settings_card,
             row=row,
-            label="Extra JSON Export",
+            label="Optional JSON Copy",
             variable=self.report_json_var,
             title="Choose the extra JSON export path",
             default_extension=".json",
@@ -5459,7 +5459,7 @@ class GuiApp:  # pragma: no cover
         row += 1
         ctk.CTkLabel(
             settings_card,
-            text="Max matches per check",
+            text="Max findings per check",
             font=self._font(12),
             text_color="#1E293B",
         ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
@@ -5473,8 +5473,8 @@ class GuiApp:  # pragma: no cover
         ctk.CTkLabel(
             settings_card,
             text=(
-                "Choose a folder containing one or more git repositories. "
-                "If the selected Root is itself a git repository, it appears in the list as Current Root."
+                "Most users only need to confirm the Root, then click Run Audit. "
+                "Policy and output defaults are safe unless you have a custom release policy."
             ),
             justify="left",
             anchor="w",
@@ -5497,12 +5497,21 @@ class GuiApp:  # pragma: no cover
 
         ctk.CTkLabel(
             profile_card,
-            text="Owner Profile",
+            text="Owner Profile (repair defaults)",
             font=self._font(16, bold=True),
             text_color="#113150",
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
+        ctk.CTkLabel(
+            profile_card,
+            text="Used by Repair when rewriting or redacting commit identity metadata.",
+            justify="left",
+            anchor="w",
+            wraplength=440,
+            font=self._font(11),
+            text_color="#4A6076",
+        ).grid(row=1, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 6))
 
-        row = 1
+        row = 2
         ctk.CTkLabel(profile_card, text="Noreply Email", font=self._font(12), text_color="#1E293B").grid(
             row=row,
             column=0,
@@ -5553,7 +5562,7 @@ class GuiApp:  # pragma: no cover
         row += 1
         ctk.CTkLabel(
             profile_card,
-            text="Owner Private Emails (Comma)",
+            text="Private emails to replace",
             font=self._font(12),
             text_color="#1E293B",
         ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
@@ -5576,7 +5585,7 @@ class GuiApp:  # pragma: no cover
         identity_card.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(
             identity_card,
-            text="Git Identity & GitHub Email Privacy",
+            text="Optional: Git Identity & GitHub Email Privacy",
             font=self._font(16, bold=True),
             text_color="#113150",
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
@@ -5661,7 +5670,10 @@ class GuiApp:  # pragma: no cover
 
         ctk.CTkLabel(
             identity_card,
-            text=GITHUB_EMAIL_PRIVACY_HELP,
+            text=(
+                "Use this only if your local Git identity needs privacy-safe noreply settings. "
+                f"{GITHUB_EMAIL_PRIVACY_HELP}"
+            ),
             justify="left",
             anchor="w",
             wraplength=1200,
@@ -5682,7 +5694,7 @@ class GuiApp:  # pragma: no cover
         self._options_card = options_card
         ctk.CTkLabel(
             options_card,
-            text="Repair Options",
+            text="Repair Plan Options",
             font=self._font(16, bold=True),
             text_color="#113150",
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
@@ -5700,20 +5712,20 @@ class GuiApp:  # pragma: no cover
         self._safe_options_card = safe_options
         ctk.CTkLabel(
             safe_options,
-            text="Safe / Advisory",
+            text="Review & Output Options",
             font=self._font(13, bold=True),
             text_color="#12405E",
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
         self._make_info_badge(
             safe_options,
-            "Advisory options only. They do not rewrite history on their own.",
+            "CLI-equivalent run toggles. They do not rewrite history on their own.",
         ).grid(row=0, column=1, sticky="e", padx=(0, 12), pady=(10, 2))
 
         safe_items = [
-            ("Public remotes only", self.public_only_var),
-            ("Redact third-party emails", self.redact_var),
-            ("Low-confidence emails are blocking", self.low_confidence_blocking_var),
-            ("Dry run", self.dry_run_var),
+            ("Only audit public remotes", self.public_only_var),
+            ("Redact third-party emails during repair", self.redact_var),
+            ("Treat low-confidence emails as blocking", self.low_confidence_blocking_var),
+            ("Dry run / preview repair", self.dry_run_var),
             ("Audit GitHub release hardening", self.audit_github_hardening_var),
             ("Audit LiteLLM incident (Mar-2026)", self.audit_litellm_incident_var),
             ("Open HTML report automatically", self.open_report_var),
@@ -5742,7 +5754,7 @@ class GuiApp:  # pragma: no cover
         self._compact_options_layout = False
         ctk.CTkLabel(
             destructive_options,
-            text="Write Actions",
+            text="Repair Write Actions",
             font=self._font(13, bold=True),
             text_color="#7B1E1E",
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
@@ -5759,7 +5771,7 @@ class GuiApp:  # pragma: no cover
 
         self._rewrite_paths_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Rewrite Personal Paths In History",
+            text="Rewrite personal paths in history",
             variable=self.rewrite_personal_paths_var,
             font=self._font(12),
             text_color="#1E293B",
@@ -5809,7 +5821,7 @@ class GuiApp:  # pragma: no cover
 
         self._push_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Push Rewritten History To Origin",
+            text="Force-push rewritten history",
             variable=self.push_var,
             font=self._font(12),
             text_color="#1E293B",
@@ -5818,7 +5830,7 @@ class GuiApp:  # pragma: no cover
 
         self._allow_non_owner_push_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Bypass Owner Guardrail",
+            text="Bypass remote-owner guardrail",
             variable=self.allow_non_owner_push_var,
             command=self._on_allow_non_owner_push_toggled,
             font=self._font(12),
@@ -5828,7 +5840,7 @@ class GuiApp:  # pragma: no cover
 
         ctk.CTkLabel(
             destructive_options,
-            text="Allowed Push Owners",
+            text="Allowed remote owners",
             font=self._font(12),
             text_color="#1E293B",
         ).grid(row=9, column=0, sticky="w", padx=12, pady=(4, 0))
@@ -5855,7 +5867,7 @@ class GuiApp:  # pragma: no cover
 
         self._purge_safe_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Purge Safe Secret File Candidates",
+            text="Purge safe secret-file candidates",
             variable=self.purge_detected_secret_files_var,
             command=self._on_purge_safe_toggled,
             font=self._font(12),
@@ -5865,7 +5877,7 @@ class GuiApp:  # pragma: no cover
 
         self._purge_risky_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Purge Risky Manual-Review Candidates Too",
+            text="Purge risky manual-review candidates too",
             variable=self.purge_all_detected_secret_files_var,
             command=self._on_purge_risky_toggled,
             font=self._font(12),
@@ -6092,7 +6104,7 @@ class GuiApp:  # pragma: no cover
         self._refresh_button.pack(side="left")
         self._repo_summary_label = ctk.CTkLabel(
             repos_card,
-            text="Select one or more repositories. Leave the selection empty to audit every repository shown under Root.",
+            text="Step 2: select repositories, or leave the selection empty to audit every repository shown under Root.",
             justify="left",
             anchor="w",
             font=self._font(11),
@@ -6630,7 +6642,7 @@ class GuiApp:  # pragma: no cover
         root_hint = " Current Root is available in the list." if includes_current_root else ""
         repo_summary_label.configure(
             text=(
-                f"Showing {total} {repo_word} under Root. {selected_text} "
+                f"Step 2: {total} {repo_word} shown under Root. {selected_text} "
                 "Leave the selection empty to audit every repository shown."
                 f"{root_hint}"
             )
@@ -6816,9 +6828,15 @@ class GuiApp:  # pragma: no cover
         audit_button = getattr(self, "_audit_button", None)
         if audit_button is not None:
             has_targets = bool(getattr(self, "_repo_items", []))
+            audit_disabled = self._run_in_progress or not has_targets
+            primary_fg = getattr(self, "_primary_button_fg", "#0E6BA8")
+            primary_hover = getattr(self, "_primary_button_hover", "#0A5585")
             audit_button.configure(
                 text="Run Audit" if has_targets else "Audit unavailable",
-                state="disabled" if (self._run_in_progress or not has_targets) else "normal",
+                state="disabled" if audit_disabled else "normal",
+                fg_color="#B8C6D5" if audit_disabled else primary_fg,
+                hover_color="#B8C6D5" if audit_disabled else primary_hover,
+                text_color_disabled="#64748B",
             )
 
         cancel_button = getattr(self, "_cancel_button", None)
@@ -6841,20 +6859,32 @@ class GuiApp:  # pragma: no cover
         repair_button.configure(state=state, text=self._repair_button_text)
 
     def _update_repo_selection_controls(self) -> None:
-        state = "normal" if (getattr(self, "_repo_items", []) and not getattr(self, "_run_in_progress", False)) else "disabled"
+        has_targets = bool(getattr(self, "_repo_items", []))
+        run_in_progress = bool(getattr(self, "_run_in_progress", False))
+        selection_state = "normal" if (has_targets and not run_in_progress) else "disabled"
         repo_list = getattr(self, "repo_list", None)
         if repo_list is not None:
             try:
-                repo_list.configure(state=state)
+                repo_list.configure(state=selection_state)
             except Exception:
                 pass
         for button in (
             getattr(self, "_select_all_button", None),
             getattr(self, "_clear_selection_button", None),
-            getattr(self, "_refresh_button", None),
         ):
             if button is not None:
-                button.configure(state=state)
+                button.configure(state=selection_state)
+
+        refresh_button = getattr(self, "_refresh_button", None)
+        if refresh_button is not None:
+            support_fg = getattr(self, "_support_button_fg", "#355C7D")
+            support_hover = getattr(self, "_support_button_hover", "#274760")
+            refresh_button.configure(
+                state="disabled" if run_in_progress else "normal",
+                fg_color="#B8C6D5" if run_in_progress else support_fg,
+                hover_color="#B8C6D5" if run_in_progress else support_hover,
+                text_color_disabled="#64748B",
+            )
 
     def _lock_repair_until_next_audit(self, reason: str = "Repair (run audit first)") -> None:
         self._cancel_repair_cooldown()

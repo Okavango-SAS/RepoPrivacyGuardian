@@ -917,6 +917,7 @@ def test_refresh_repos_invalid_root_surfaces_empty_state_and_disables_audit(tmp_
     app._audit_button = DummyWidget()
     app._select_all_button = DummyWidget()
     app._clear_selection_button = DummyWidget()
+    app._refresh_button = DummyWidget()
     app._repair_button = None
     app._run_in_progress = False
 
@@ -929,6 +930,7 @@ def test_refresh_repos_invalid_root_surfaces_empty_state_and_disables_audit(tmp_
     assert app._audit_button.kwargs["state"] == "disabled"
     assert app._select_all_button.kwargs["state"] == "disabled"
     assert app._clear_selection_button.kwargs["state"] == "disabled"
+    assert app._refresh_button.kwargs["state"] == "normal"
     assert app.repo_list.state == "disabled"
 
 

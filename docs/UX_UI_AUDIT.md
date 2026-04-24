@@ -1,6 +1,6 @@
 # UX/UI Audit
 
-Audit date: 2026-04-16
+Audit date: 2026-04-24
 
 ## Scope
 
@@ -15,33 +15,38 @@ Screens audited in the running GUI:
 ## Method
 
 - Launched the shipped `customtkinter` GUI locally from `main`
+- Captured the real Tk window by HWND to avoid desktop/toast overlays in screenshots
+- Neutralized visible screenshot paths to non-user placeholder paths before saving docs assets
 - Walked the main `Audit -> review -> Repair` flow in the running app
-- Captured before screenshots from the rendered interface
-- Applied corrective UX/UI changes in the GUI code
+- Applied corrective UX/UI copy and hierarchy changes in the GUI code
 - Re-ran the app and captured after screenshots from the same states
 
 ## Main Findings
 
-1. Invalid or empty repo targets still looked too close to a broken blank state.
-   The list area could read like empty whitespace instead of a deliberate state with next-step guidance, and the main CTA still competed visually with that failure mode.
+1. The GUI was functionally aligned with the CLI, but the first screen still looked like a settings form before it looked like a workflow.
+   A non-technical user could miss that the intended path is simply: confirm Root, run Audit, review, then Repair only if needed.
 
-2. Compact desktop widths were stacking too aggressively.
-   The responsive breakpoints pushed the repositories panel and execution log lower than necessary, so the main workflow was harder to discover near the minimum supported width.
+2. Several labels were accurate for maintainers but too implementation-oriented for a public desktop user.
+   Examples: `Artifacts Directory`, `Extra JSON Export`, `Max matches per check`, and repair options that did not clearly separate review toggles from write actions.
 
-3. Repair status lacked hierarchy once an audit finished.
-   The cooldown and pass/fail summary existed, but the information was visually flat and easy to miss relative to the larger options cards around it.
+3. Optional identity controls competed visually with the primary audit path.
+   The Git identity and owner metadata sections were useful, but they needed clearer "optional" and "repair defaults" framing.
 
-4. The locked Repair screen used space inefficiently.
-   The blocker content sat too passively in the middle of a large blank area and did not feel anchored to the next action strongly enough.
+4. The tracked screenshot artifacts contained local machine paths in visible form fields.
+   This is not detected by the text-based self-audit because the data is embedded in PNG pixels, so the docs assets needed to be regenerated with neutral paths before public release.
 
 ## Corrections Applied
 
-- Reworked the repo empty state into a visible overlay card with separate warning and neutral treatments for invalid Root vs. no repositories found.
-- Disabled repo-selection controls when there are no available targets and changed the primary CTA copy to `Audit unavailable` in that state.
-- Tightened the responsive thresholds so desktop widths around `1280px` keep the primary cards and results area visible sooner.
-- Strengthened the `Repair Flow` section with a dedicated status panel, clearer badge states, and better hierarchy for cooldown vs. ready states.
-- Kept the staged Repair guardrail, but moved the lock card higher in the canvas so the tab feels less visually abandoned.
-- Preserved the earlier current-root inclusion and repo-summary behavior while making the visible error and empty states much easier to understand.
+- Reframed the header around the staged workflow: Audit first, Repair only after the safety gate unlocks.
+- Renamed the first setup card to `1. Audit Setup` and added simpler guidance for the default path.
+- Renamed technical fields to user-facing labels: `Audit Results Folder`, `Optional JSON Copy`, and `Max findings per check`.
+- Clarified owner metadata as `Owner Profile (repair defaults)` and explained that it is used by Repair for identity rewrite/redaction.
+- Marked Git identity controls as optional and clarified when a user should touch them.
+- Renamed Repair groups to `Review & Output Options` and `Repair Write Actions` to reduce ambiguity.
+- Tightened destructive-option labels while preserving the same underlying CLI-equivalent settings.
+- Kept `Refresh` available when Root is invalid so users can correct the path and retry without restarting the GUI.
+- Rendered unavailable audit actions in a neutral disabled state instead of primary-button blue.
+- Regenerated all tracked UX screenshots with neutral visible paths and without external desktop overlays.
 
 ## Screenshots
 
@@ -95,8 +100,18 @@ After:
 
 ![Audit compact after](ux-audit/after/audit-compact-after.png)
 
+## Parity Notes
+
+- No GUI-only execution path was added.
+- No CLI flag was removed or changed.
+- GUI controls still map into the same `build_guard_run_config()` fields used by CLI execution.
+- Audit and Repair still run through the shared `execute_guard_pipeline()` backend.
+- The staged GUI contract remains: `Audit` first, `Repair` locked until a valid audit context and review window exist.
+
 ## Validation
 
+- `python -m ruff check .`
+- `pyright -p pyrightconfig.json`
 - `python -m pytest -q`
 - `python tests/release_smoke_gui.py`
 - `python tests/release_smoke_cli.py`
@@ -104,5 +119,6 @@ After:
 
 ## Remaining Limits
 
-- The GUI is still desktop-first. The compact layout is materially clearer now, but it is naturally denser than the primary desktop width.
-- The app still does not have automated visual regression coverage; `docs/ux-audit/` remains the current screenshot artifact for UI review.
+- The GUI remains desktop-first and intentionally secondary to the CLI release contract.
+- The compact layout is clearer, but naturally denser than the primary desktop width.
+- The app still does not have automated visual regression coverage; `docs/ux-audit/` remains the maintained screenshot evidence for UI review.
