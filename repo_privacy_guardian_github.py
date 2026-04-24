@@ -20,6 +20,14 @@ GITHUB_HARDENING_TOKEN_ENV_KEYS = (
 )
 GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)(?:\.git)?$", re.IGNORECASE)
 ALLOWED_GITHUB_API_HOSTS = {"api.github.com"}
+GITHUB_ACTIONS_APP_ID = 15368
+AUTOMATIC_WORKFLOW_TRIGGERS = {
+    "push",
+    "pull_request",
+    "pull_request_target",
+    "schedule",
+    "workflow_run",
+}
 
 
 def read_github_cli_token(
@@ -204,6 +212,130 @@ def github_api_probe_enabled(url: str, token: str | None = None) -> tuple[bool |
         return None, "request_failed"
 
 
+def _strip_yaml_scalar(value: str) -> str:
+    normalized = value.strip()
+    if (
+        len(normalized) >= 2
+        and normalized[0] == normalized[-1]
+        and normalized[0] in {"'", '"'}
+    ):
+        return normalized[1:-1]
+    return normalized.split(" #", 1)[0].strip()
+
+
+def _workflow_has_automatic_trigger(workflow_text: str) -> bool:
+    inline_match = re.search(r"(?m)^on:\s*\[([^\]]+)\]\s*$", workflow_text)
+    if inline_match:
+        triggers = {
+            item.strip().strip("'\"")
+            for item in inline_match.group(1).split(",")
+            if item.strip()
+        }
+        return bool(triggers & AUTOMATIC_WORKFLOW_TRIGGERS)
+
+    scalar_match = re.search(r"(?m)^on:\s*([A-Za-z_]+)\s*$", workflow_text)
+    if scalar_match:
+        return scalar_match.group(1) in AUTOMATIC_WORKFLOW_TRIGGERS
+
+    return bool(
+        re.search(
+            r"(?m)^  (?:"
+            + "|".join(re.escape(item) for item in sorted(AUTOMATIC_WORKFLOW_TRIGGERS))
+            + r"):\s*$",
+            workflow_text,
+        )
+    )
+
+
+def _extract_automatic_workflow_check_names(workflow_text: str) -> set[str]:
+    if not _workflow_has_automatic_trigger(workflow_text):
+        return set()
+
+    names: set[str] = set()
+    lines = workflow_text.splitlines()
+    in_jobs = False
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if not in_jobs:
+            if re.match(r"^jobs:\s*(?:#.*)?$", line):
+                in_jobs = True
+            index += 1
+            continue
+
+        if line and not line.startswith(" ") and not line.lstrip().startswith("#"):
+            break
+
+        job_match = re.match(r"^  ([A-Za-z0-9_-]+):\s*(?:#.*)?$", line)
+        if not job_match:
+            index += 1
+            continue
+
+        job_id = job_match.group(1)
+        job_name = job_id
+        manual_only = False
+        index += 1
+        while index < len(lines):
+            child = lines[index]
+            if re.match(r"^  [A-Za-z0-9_-]+:\s*(?:#.*)?$", child):
+                break
+            if child and not child.startswith(" ") and not child.lstrip().startswith("#"):
+                break
+            name_match = re.match(r"^    name:\s*(.+?)\s*$", child)
+            if name_match:
+                job_name = _strip_yaml_scalar(name_match.group(1))
+            if_match = re.match(r"^    if:\s*(.+?)\s*$", child)
+            if if_match:
+                condition = if_match.group(1)
+                if "workflow_dispatch" in condition or "inputs.extended_checks" in condition:
+                    manual_only = True
+            index += 1
+
+        if not manual_only:
+            names.add(job_name)
+
+    return names
+
+
+def collect_local_automatic_workflow_check_names(repo: Path) -> set[str]:
+    workflows_dir = repo / ".github" / "workflows"
+    if not workflows_dir.exists() or not workflows_dir.is_dir():
+        return set()
+
+    names: set[str] = set()
+    for workflow in sorted(
+        list(workflows_dir.glob("*.yml")) + list(workflows_dir.glob("*.yaml"))
+    ):
+        try:
+            text = workflow.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        names.update(_extract_automatic_workflow_check_names(text))
+    return names
+
+
+def _github_actions_required_status_contexts(status_checks: dict[str, object]) -> list[str]:
+    contexts: set[str] = set()
+
+    raw_contexts = status_checks.get("contexts")
+    if isinstance(raw_contexts, list):
+        contexts.update(str(item) for item in raw_contexts if str(item).strip())
+
+    raw_checks = status_checks.get("checks")
+    if isinstance(raw_checks, list):
+        for item in raw_checks:
+            if not isinstance(item, dict):
+                continue
+            app_id = item.get("app_id")
+            if app_id not in {None, GITHUB_ACTIONS_APP_ID}:
+                continue
+            context = str(item.get("context") or "").strip()
+            if context:
+                contexts.add(context)
+
+    return sorted(contexts)
+
+
 def audit_github_release_hardening(
     repo: Path,
     remote_url: str,
@@ -305,6 +437,28 @@ def audit_github_release_hardening(
             findings.append(
                 "GitHub default branch protection: required status checks are not strict."
             )
+        else:
+            required_contexts = _github_actions_required_status_contexts(status_checks)
+            workflows_dir = repo / ".github" / "workflows"
+            if required_contexts and workflows_dir.exists():
+                automatic_check_names = collect_local_automatic_workflow_check_names(repo)
+                if automatic_check_names:
+                    stale_contexts = [
+                        context
+                        for context in required_contexts
+                        if context not in automatic_check_names
+                    ]
+                    if stale_contexts:
+                        findings.append(
+                            "GitHub default branch protection: required status checks "
+                            "include contexts not produced by local automatic workflows: "
+                            + ", ".join(stale_contexts)
+                        )
+                else:
+                    warnings.append(
+                        "GitHub default branch protection: required status check drift "
+                        "could not be audited because no local automatic workflow jobs were found."
+                    )
 
         allow_force_pushes = protection_payload.get("allow_force_pushes") or {}
         if isinstance(allow_force_pushes, dict) and allow_force_pushes.get("enabled") is True:

@@ -17,6 +17,7 @@ CHECKLIST_REQUIREMENTS = [
     "Automatic CI smoke is green.",
     "manual extended CI suite has been run",
     "validation tiers documented in README",
+    "branch protection required status checks match the current automatic CI smoke job names",
 ]
 
 KNOWN_ISSUES_REQUIREMENTS = [

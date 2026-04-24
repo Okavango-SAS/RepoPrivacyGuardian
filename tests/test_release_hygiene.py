@@ -309,6 +309,7 @@ def test_release_docs_describe_cost_first_validation_tiers() -> None:
     assert "GUI supports cooperative cancellation" in known_issues
     assert "manual extended CI suite has been run" in checklist
     assert "validation tiers documented in README" in checklist
+    assert "branch protection required status checks match the current automatic CI smoke job names" in checklist
     assert "Stopping after current step..." in troubleshooting
     assert "validation tiers" in versioning
     assert "automatic CI smoke" in versioning

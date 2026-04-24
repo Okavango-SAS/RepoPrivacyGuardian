@@ -13,6 +13,7 @@ Use this checklist before tagging a public release.
 - Confirm issues remain enabled if public issue intake is desired.
 - Confirm public support matrix in README still matches validated platforms.
 - Confirm README still distinguishes automatic CI smoke, manual extended CI, and the local release harness.
+- Confirm branch protection required status checks match the current automatic CI smoke job names.
 - Review GitHub Actions workflows for least-privilege permissions, explicit timeouts, and SHA-pinned actions.
 
 ## 2. Audit run
