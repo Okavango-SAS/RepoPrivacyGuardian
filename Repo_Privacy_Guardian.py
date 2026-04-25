@@ -147,7 +147,9 @@ DEFAULT_GIT_STREAM_TIMEOUT_SECONDS = 300
 REPO_LOCK_FILENAME = "repo-privacy-guardian.lock"
 REPO_LOCK_WAIT_SECONDS = 10.0
 REPO_LOCK_RETRY_SECONDS = 0.2
-REPO_LOCK_STALE_SECONDS = 4 * 60 * 60
+MAX_GITHUB_CLONE_JOBS = 16
+TEMP_TREE_CLEANUP_ATTEMPTS = 5
+TEMP_TREE_CLEANUP_RETRY_SECONDS = 0.2
 RUN_STATE_FILENAME = "run_state.json"
 
 # Allow committed template files such as `.env.example` while keeping real
@@ -328,12 +330,34 @@ def _close_fd_safely(fd: int | None) -> None:
         pass
 
 
+def _write_all_to_fd(fd: int, data: bytes) -> None:
+    view = memoryview(data)
+    while len(view) > 0:
+        written = os.write(fd, view)
+        if written <= 0:
+            raise OSError("short write while writing lock metadata")
+        view = view[written:]
+
+
+def _fsync_parent_directory(path: Path) -> None:
+    if os.name == "nt":
+        return
+    fd: int | None = None
+    try:
+        fd = os.open(str(path.parent), os.O_RDONLY)
+        os.fsync(fd)
+    except OSError:
+        return
+    finally:
+        _close_fd_safely(fd)
+
+
 def _write_json_to_locked_fd(fd: int, payload: dict[str, object]) -> None:
     os.lseek(fd, 0, os.SEEK_SET)
     os.ftruncate(fd, 0)
     data = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
     if data:
-        os.write(fd, data)
+        _write_all_to_fd(fd, data)
     os.fsync(fd)
 
 
@@ -445,6 +469,7 @@ def write_private_text_file(path: Path, content: str) -> None:
         _apply_private_permissions(temp_path, 0o600)
         os.replace(temp_path, path)
         _apply_private_permissions(path, 0o600)
+        _fsync_parent_directory(path)
     finally:
         if temp_path.exists():
             try:
@@ -515,15 +540,25 @@ def _make_path_writable_and_retry_remove(
 def remove_private_temp_tree(path: Path, *, required_prefix: str) -> tuple[bool, str | None]:
     if not path.name.startswith(required_prefix):
         return False, f"refusing to remove unexpected temporary directory path: {path}"
-    try:
+    if path.is_symlink():
+        return False, f"refusing to recursively remove symlinked temporary directory path: {path}"
+
+    last_error: str | None = None
+    for attempt in range(1, TEMP_TREE_CLEANUP_ATTEMPTS + 1):
+        try:
+            if not path.exists():
+                return True, None
+            shutil.rmtree(path, onerror=_make_path_writable_and_retry_remove)
+        except OSError as exc:
+            last_error = str(exc)
+
         if not path.exists():
             return True, None
-        shutil.rmtree(path, onerror=_make_path_writable_and_retry_remove)
-    except OSError as exc:
-        return False, str(exc)
-    if path.exists():
-        return False, f"temporary directory still exists after cleanup: {path}"
-    return True, None
+        last_error = f"temporary directory still exists after cleanup attempt {attempt}: {path}"
+        if attempt < TEMP_TREE_CLEANUP_ATTEMPTS:
+            time.sleep(TEMP_TREE_CLEANUP_RETRY_SECONDS)
+
+    return False, last_error
 
 
 def read_text_file_for_scan(path: Path, *, max_bytes: int = MAX_TRACKED_TEXT_SCAN_BYTES) -> str | None:
@@ -3295,7 +3330,7 @@ def clone_github_remote_repositories(
 ) -> list[GitHubCloneResult]:
     if not remotes:
         return []
-    max_workers = max(1, jobs)
+    max_workers = normalize_github_jobs(jobs)
     if max_workers == 1 or len(remotes) == 1:
         return [
             clone_github_remote_repository(remote, destination_root, fast=fast, runner=runner)
@@ -3366,7 +3401,7 @@ def prepare_github_remote_audit_repositories(
     ensure_private_directory(temp_root)
     logger(
         f"[INFO] GitHub remote audit discovered {len(remotes)} repositories for {owner}; "
-        f"cloning with {max(1, config.github_jobs)} worker(s)."
+        f"cloning with {normalize_github_jobs(config.github_jobs)} worker(s)."
     )
     clone_results = clone_github_remote_repositories(
         remotes,
@@ -5049,6 +5084,10 @@ def parse_positive_int(raw_value: str) -> int:
     return parsed
 
 
+def normalize_github_jobs(value: int) -> int:
+    return min(MAX_GITHUB_CLONE_JOBS, max(1, value))
+
+
 def is_github_noreply_email(email: str) -> bool:
     lowered = email.strip().lower()
     if not lowered:
@@ -5303,7 +5342,7 @@ def build_guard_run_config(
         github_owner=(github_owner.strip() if github_owner and github_owner.strip() else None),
         github_include_forks=github_include_forks,
         github_fast=github_fast,
-        github_jobs=max(1, github_jobs),
+        github_jobs=normalize_github_jobs(github_jobs),
     )
 
 
@@ -8223,7 +8262,7 @@ def make_parser() -> argparse.ArgumentParser:
         "--github-jobs",
         type=parse_positive_int,
         default=4,
-        help="With --github-owner, number of concurrent clone workers (default: 4)",
+        help=f"With --github-owner, number of concurrent clone workers (default: 4, max: {MAX_GITHUB_CLONE_JOBS})",
     )
 
     parser.add_argument("--owner-name", default="Owner", help="Owner display name for rewritten commits")

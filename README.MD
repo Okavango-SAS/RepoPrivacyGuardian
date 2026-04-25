@@ -43,7 +43,7 @@ Choose the path that matches what you need right now:
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
 - `v1.2.3` is the public-release stabilization and GUI UX update.
-- `v1.3.0` is the current minor release with GitHub owner audit mode and GUI/CLI parity update.
+- `v1.3.1` is the current patch release with release-readiness reliability hardening update.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -109,6 +109,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - Tracked-file scanners skip symlinked files and oversized text candidates to reduce accidental local file disclosure and unbounded memory reads.
 - Report/export writes and `.gitignore` remediation refuse symlinked target paths instead of following them.
 - Repository execution is serialized with an OS-backed lock file in the Git metadata directory so overlapping audits/fixes do not mutate the same checkout concurrently, and crashed owners do not need PID/timestamp stale-lock reclamation.
+- GitHub owner/org discovery and clone work are bounded: `gh auth token` probes use a short non-interactive timeout, paginated repository discovery fails closed at the page limit, and clone parallelism is capped.
 
 ## 🧰 Tooling Readiness
 

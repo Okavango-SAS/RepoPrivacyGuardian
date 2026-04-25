@@ -29,7 +29,15 @@ TEXT_EXTENSIONS_REQUIRING_NO_BOM = {
 
 
 def _tracked_files(repo_root: Path) -> list[Path]:
-    out = subprocess.check_output(["git", "ls-files"], cwd=repo_root, text=True, encoding="utf-8")
+    out = subprocess.check_output(
+        ["git", "ls-files"],
+        cwd=repo_root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=30,
+    )
     return [repo_root / line for line in out.splitlines() if line.strip()]
 
 

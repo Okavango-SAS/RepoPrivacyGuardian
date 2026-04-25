@@ -18,8 +18,8 @@ on:
       - "repo_privacy_guardian*.py"
       - "repo_privacy_guardian_resources/**"
       - "scripts/check_release_contract.py"
-      - "tests/test_release_hygiene.py"
-      - "tests/release_smoke_cli.py"
+      - "scripts/release_readiness.py"
+      - "tests/**"
   workflow_dispatch:
     inputs:
       extended_checks:

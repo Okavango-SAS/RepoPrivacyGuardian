@@ -17,6 +17,8 @@ GITHUB_USER_REPOS_API_URL = "https://api.github.com/users/{owner}/repos"
 GITHUB_ORG_REPOS_API_URL = "https://api.github.com/orgs/{owner}/repos"
 GITHUB_API_VERSION = "2022-11-28"
 GITHUB_REPOS_PER_PAGE = 100
+GITHUB_REPOS_MAX_PAGES = 100
+GITHUB_CLI_AUTH_TIMEOUT_SECONDS = 10
 GITHUB_HARDENING_TOKEN_ENV_KEYS = (
     "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN",
     "GITHUB_TOKEN",
@@ -66,9 +68,12 @@ def read_github_cli_token(
             encoding="utf-8",
             errors="replace",
             stdin=subprocess.DEVNULL,
+            timeout=GITHUB_CLI_AUTH_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
         return None, "missing"
+    except subprocess.TimeoutExpired:
+        return None, "timeout"
     except Exception as exc:
         return None, f"gh_error:{exc}"
 
@@ -299,7 +304,7 @@ def _fetch_github_owner_repo_pages(
 ) -> tuple[list[dict[str, object]] | None, str]:
     repos: list[dict[str, object]] = []
     page = 1
-    while True:
+    while page <= GITHUB_REPOS_MAX_PAGES:
         url = _github_owner_repos_url(owner, endpoint, page)
         payload, status = json_getter(url, token)
         if payload is None:
@@ -313,6 +318,8 @@ def _fetch_github_owner_repo_pages(
             if isinstance(item, dict):
                 repos.append(item)
         page += 1
+
+    return None, "page_limit_reached"
 
 
 def fetch_github_owner_repositories(
@@ -355,6 +362,10 @@ def fetch_github_owner_repositories(
         elif status == "http_403":
             warnings.append(
                 "GitHub repository discovery was forbidden or rate-limited; configure a token or authenticate gh."
+            )
+        elif status == "page_limit_reached":
+            warnings.append(
+                "GitHub repository discovery reached the page limit; narrow --repos or split the owner audit."
             )
         else:
             warnings.append(f"GitHub repository discovery failed: {status}.")

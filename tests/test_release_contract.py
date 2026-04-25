@@ -11,6 +11,9 @@ import pytest
 import Repo_Privacy_Guardian as rpg
 
 
+SUBPROCESS_TEST_TIMEOUT_SECONDS = 60
+
+
 def _load_support_module(module_name: str, relative_path: str):
     module_path = Path(__file__).resolve().parents[1] / relative_path
     spec = importlib.util.spec_from_file_location(module_name, module_path)
@@ -482,6 +485,8 @@ def test_module_import_does_not_require_gui_dependencies() -> None:
         text=True,
         encoding="utf-8",
         errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=SUBPROCESS_TEST_TIMEOUT_SECONDS,
     )
 
     assert proc.returncode == 0
@@ -496,6 +501,8 @@ def test_module_wrapper_runs_help_without_launching_gui() -> None:
         text=True,
         encoding="utf-8",
         errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=SUBPROCESS_TEST_TIMEOUT_SECONDS,
     )
 
     assert proc.returncode == 0
@@ -528,10 +535,32 @@ def test_checkout_conftest_bootstraps_repo_root_for_imports(tmp_path: Path) -> N
         text=True,
         encoding="utf-8",
         errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=SUBPROCESS_TEST_TIMEOUT_SECONDS,
     )
 
     assert proc.returncode == 0, proc.stderr or proc.stdout
     assert "ok" in proc.stdout
+
+
+def test_checkout_conftest_ignores_untracked_test_files_without_nested_pytest(monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    checkout_conftest = _load_support_module("checkout_conftest_direct_hook", "tests/conftest.py")
+
+    monkeypatch.setattr(
+        checkout_conftest,
+        "_tracked_test_files",
+        lambda: {"tests/test_tracked_public_signal.py"},
+    )
+
+    assert checkout_conftest.pytest_ignore_collect(
+        repo_root / "tests" / "test_local_only_ignored.py",
+        config=None,
+    ) is True
+    assert checkout_conftest.pytest_ignore_collect(
+        repo_root / "tests" / "test_tracked_public_signal.py",
+        config=None,
+    ) is False
 
 
 def test_release_readiness_script_exposes_help() -> None:
@@ -542,6 +571,8 @@ def test_release_readiness_script_exposes_help() -> None:
         text=True,
         encoding="utf-8",
         errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=SUBPROCESS_TEST_TIMEOUT_SECONDS,
     )
 
     assert proc.returncode == 0
@@ -1398,6 +1429,8 @@ def test_cli_defaults_follow_current_working_directory(tmp_path: Path) -> None:
         text=True,
         encoding="utf-8",
         errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=SUBPROCESS_TEST_TIMEOUT_SECONDS,
     )
 
     assert proc.returncode == 0

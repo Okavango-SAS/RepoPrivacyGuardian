@@ -34,6 +34,7 @@ python -m Repo_Privacy_Guardian --help
 ```
 
 Both `pytest -q` and `python -m pytest -q` are supported from a repository checkout.
+Repo-owned smoke and subprocess-backed tests run non-interactively with bounded timeouts; keep new helper scripts the same way so local validation cannot hang an agent or CI runner.
 
 Use the GUI smoke path only when a desktop session is available:
 

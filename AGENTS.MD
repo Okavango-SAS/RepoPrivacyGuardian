@@ -90,6 +90,7 @@ Notes:
 
 - Admin-only GitHub checks require `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN`.
 - GitHub owner/org audit reuses `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, or an authenticated `gh` session when private repository clones are needed.
+- Remote discovery and clone work are bounded: auth probes are non-interactive with a timeout, repository pagination fails closed at the page limit, and clone workers are capped.
 - The GitHub hardening audit inspects repository settings only; it does not push configuration changes.
 - The GUI exposes the same GitHub owner/org remote-audit controls as the CLI, but CLI remains preferred for agentic automation.
 

@@ -6,6 +6,25 @@ All notable public-release changes to this project are documented here.
 
 No public changes yet.
 
+## [1.3.1] - 2026-04-25
+
+Release-readiness reliability hardening update.
+
+### Highlights
+
+- Bounded GitHub CLI auth probing, owner/org repository pagination, and clone worker fan-out so opt-in remote audits fail closed instead of hanging or oversubscribing the host.
+- Hardened local persistence and cleanup paths with full lock-metadata writes, parent-directory fsync after atomic report writes, explicit symlink refusal for temp tree cleanup, and bounded cleanup retries.
+- Tightened repo-owned smoke/test subprocess helpers with non-interactive stdin and timeouts, and covered the tracked-test collection hook directly instead of relying on nested runner behavior.
+- Broadened CI path filters so changes to tests and release-readiness scripts still trigger the automatic smoke/release-contract signal.
+
+### Validation
+
+- `python scripts/check_release_contract.py`
+- `python -m ruff check .`
+- `pyright -p pyrightconfig.json`
+- `python -m pytest -q`
+- `python scripts/release_readiness.py --skip-self-audit`
+
 ## [1.3.0] - 2026-04-25
 
 GitHub owner audit mode and GUI/CLI parity update.

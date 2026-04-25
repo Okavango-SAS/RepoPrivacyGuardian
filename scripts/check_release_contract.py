@@ -5,13 +5,13 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.3.0"
-CURRENT_VERSION_DESCRIPTION = "GitHub owner audit mode and GUI/CLI parity update"
+CURRENT_VERSION = "1.3.1"
+CURRENT_VERSION_DESCRIPTION = "release-readiness reliability hardening update"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
     "manual extended CI",
-    f"`v{CURRENT_VERSION}` is the current minor release with {CURRENT_VERSION_DESCRIPTION}",
+    f"`v{CURRENT_VERSION}` is the current patch release with {CURRENT_VERSION_DESCRIPTION}",
     "malformed non-email identity tokens",
     "--github-owner",
 ]
@@ -61,7 +61,8 @@ WORKFLOW_REQUIREMENTS = [
     '- "docs/TROUBLESHOOTING.md"',
     '- "docs/VERSIONING.md"',
     '- "scripts/check_release_contract.py"',
-    '- "tests/test_release_hygiene.py"',
+    '- "scripts/release_readiness.py"',
+    '- "tests/**"',
 ]
 
 
@@ -101,8 +102,9 @@ def validate_release_contract() -> list[str]:
         "`v1.2.1` is the current patch-level" in readme
         or "`v1.2.2` is the current patch-level" in readme
         or "`v1.2.3` is the current patch-level" in readme
+        or "`v1.3.0` is the current minor release" in readme
     ):
-        errors.append("README.MD: stale current patch-level reference")
+        errors.append("README.MD: stale current release reference")
     if "GUI does not include pause/resume or cancellation controls." in known_issues:
         errors.append("docs/KNOWN_ISSUES.md: stale claim that GUI has no cancellation support")
 

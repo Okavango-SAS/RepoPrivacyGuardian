@@ -22,6 +22,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.3.0` is an additive minor release on top of `1.2.3`. It adds opt-in GitHub owner/org remote audit mode, expands high-confidence secret detection, and restores GUI/CLI parity for the new remote-audit inputs while preserving the local-first default path.
 
+`1.3.1` is a release-readiness hardening patch on top of `1.3.0`. It bounds GitHub CLI auth probes, owner/org discovery pagination, clone worker fan-out, temp cleanup retries, atomic report writes, and subprocess-based smoke/test helpers without changing the CLI contract.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

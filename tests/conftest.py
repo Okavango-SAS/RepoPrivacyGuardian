@@ -20,6 +20,8 @@ def _tracked_test_files() -> set[str]:
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess.DEVNULL,
+            timeout=30,
         )
     except Exception:
         return set()

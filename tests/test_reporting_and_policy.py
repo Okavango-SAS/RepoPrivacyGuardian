@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import types
@@ -210,6 +211,40 @@ def test_run_logger_falls_back_when_sink_cannot_encode_text(tmp_path: Path, monk
 
     assert seen == ["?prefix line"]
     assert "\ufeffprefix line" in (tmp_path / "run.log").read_text(encoding="utf-8")
+
+
+def test_write_private_text_file_fsyncs_parent_after_atomic_replace(tmp_path: Path, monkeypatch) -> None:
+    target = tmp_path / "nested" / "report.json"
+    fsynced: list[Path] = []
+
+    monkeypatch.setattr(rpg, "_fsync_parent_directory", fsynced.append)
+
+    rpg.write_private_text_file(target, "{}")
+
+    assert target.read_text(encoding="utf-8") == "{}"
+    assert fsynced == [target]
+
+
+def test_write_json_to_locked_fd_handles_partial_os_writes(tmp_path: Path, monkeypatch) -> None:
+    target = tmp_path / "lock.json"
+    fd = os.open(str(target), os.O_RDWR | os.O_CREAT, 0o600)
+    real_write = os.write
+    write_sizes: list[int] = []
+
+    def partial_write(raw_fd: int, data: bytes | memoryview) -> int:
+        chunk_len = max(1, len(data) // 2)
+        write_sizes.append(chunk_len)
+        return real_write(raw_fd, bytes(data[:chunk_len]))
+
+    monkeypatch.setattr(rpg.os, "write", partial_write)
+    try:
+        rpg._write_json_to_locked_fd(fd, {"payload": "x" * 200})
+    finally:
+        rpg._close_fd_safely(fd)
+
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    assert payload["payload"] == "x" * 200
+    assert len(write_sizes) > 1
 
 
 def test_read_text_file_for_scan_skips_symlinked_path(tmp_path: Path, monkeypatch) -> None:
@@ -1114,6 +1149,33 @@ def test_validate_outbound_https_url_allows_only_expected_hosts() -> None:
         rpg.validate_outbound_https_url("https://example.com/repos/example/repo", {"api.github.com"})
 
 
+def test_read_github_cli_token_uses_bounded_non_interactive_probe() -> None:
+    captured: dict[str, object] = {}
+
+    def fake_runner(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured["cmd"] = cmd
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(cmd, 0, stdout="gh-token\n", stderr="")
+
+    token, status = rpg_github.read_github_cli_token(runner=fake_runner)
+
+    assert token == "gh-token"
+    assert status == "ready"
+    assert captured["cmd"] == ["gh", "auth", "token"]
+    assert captured["stdin"] == subprocess.DEVNULL
+    assert captured["timeout"] == rpg_github.GITHUB_CLI_AUTH_TIMEOUT_SECONDS
+
+
+def test_read_github_cli_token_timeout_is_non_fatal() -> None:
+    def hanging_runner(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
+
+    token, status = rpg_github.read_github_cli_token(runner=hanging_runner)
+
+    assert token is None
+    assert status == "timeout"
+
+
 def test_is_public_github_remote_maps_visibility_and_http_failures(monkeypatch) -> None:
     class DummyResponse:
         def __init__(self, payload: dict[str, object], *, status: int = 200) -> None:
@@ -1294,6 +1356,38 @@ def test_fetch_github_owner_repositories_falls_back_to_org_endpoint() -> None:
     assert [repo.full_name for repo in repos] == ["acme-org/service"]
     assert paths[0] == "/" + "users" + "/acme-org/repos"
     assert paths[1] == "/orgs/acme-org/repos"
+
+
+def test_fetch_github_owner_repositories_fails_closed_on_page_limit() -> None:
+    seen_pages: list[int] = []
+
+    def endless_pages(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
+        del token
+        parsed = rpg.urllib.parse.urlparse(url)
+        page = int(rpg.urllib.parse.parse_qs(parsed.query)["page"][0])
+        seen_pages.append(page)
+        return (
+            [
+                {
+                    "name": f"repo-{page}",
+                    "full_name": f"acme/repo-{page}",
+                    "clone_url": f"https://github.com/acme/repo-{page}.git",
+                    "html_url": f"https://github.com/acme/repo-{page}",
+                    "private": False,
+                    "fork": False,
+                }
+            ],
+            "http_200",
+        )
+
+    repos, warnings = rpg_github.fetch_github_owner_repositories(
+        "acme",
+        json_getter=endless_pages,
+    )
+
+    assert repos == []
+    assert len(seen_pages) == rpg_github.GITHUB_REPOS_MAX_PAGES
+    assert any("page limit" in warning for warning in warnings)
 
 
 def test_resolve_github_hardening_token_prefers_tool_specific_env() -> None:
@@ -2569,6 +2663,12 @@ def test_parse_positive_int_validation() -> None:
         rpg.parse_positive_int("not-an-int")
 
 
+def test_normalize_github_jobs_bounds_parallel_clone_workers() -> None:
+    assert rpg.normalize_github_jobs(0) == 1
+    assert rpg.normalize_github_jobs(4) == 4
+    assert rpg.normalize_github_jobs(10_000) == rpg.MAX_GITHUB_CLONE_JOBS
+
+
 def test_build_run_settings_parity_keys() -> None:
     cli = _make_run_config(mode="cli", report_json="C:/tmp/export.json")
     gui = _make_run_config(mode="gui", report_json=None, low_confidence_email_mode="blocking")
@@ -2953,6 +3053,32 @@ def test_remove_private_temp_tree_removes_readonly_git_files(tmp_path: Path) -> 
     assert removed is True
     assert error is None
     assert temp_root.exists() is False
+
+
+def test_remove_private_temp_tree_retries_transient_cleanup_error(tmp_path: Path, monkeypatch) -> None:
+    temp_root = tmp_path / "repo-privacy-guardian-github-test"
+    temp_root.mkdir()
+    (temp_root / "artifact.txt").write_text("payload", encoding="utf-8")
+    real_rmtree = shutil.rmtree
+    attempts = {"count": 0}
+
+    def flaky_rmtree(path, onerror=None):  # type: ignore[no-untyped-def]
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise PermissionError("locked")
+        return real_rmtree(path, onerror=onerror)
+
+    monkeypatch.setattr(rpg.shutil, "rmtree", flaky_rmtree)
+    monkeypatch.setattr(rpg.time, "sleep", lambda _seconds: None)
+
+    removed, error = rpg.remove_private_temp_tree(
+        temp_root,
+        required_prefix="repo-privacy-guardian-github-",
+    )
+
+    assert removed is True
+    assert error is None
+    assert attempts["count"] == 2
 
 
 def test_remove_private_temp_tree_refuses_unexpected_prefix(tmp_path: Path) -> None:

@@ -16,6 +16,7 @@ import Repo_Privacy_Guardian as rpg  # noqa: E402
 
 
 BASELINE = rpg.render_ignore_baseline()
+SMOKE_TIMEOUT_SECONDS = 120
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -27,6 +28,7 @@ def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[
         encoding="utf-8",
         errors="replace",
         stdin=subprocess.DEVNULL,
+        timeout=SMOKE_TIMEOUT_SECONDS,
     )
     if proc.returncode != 0:
         raise SystemExit(
@@ -73,6 +75,7 @@ def run_cli_smoke(cli_cmd: list[str], *args: str) -> subprocess.CompletedProcess
         encoding="utf-8",
         errors="replace",
         stdin=subprocess.DEVNULL,
+        timeout=SMOKE_TIMEOUT_SECONDS,
     )
 
 

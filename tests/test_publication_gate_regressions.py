@@ -11,6 +11,7 @@ import Repo_Privacy_Guardian as rpg
 
 
 DEFAULT_BASELINE = rpg.render_ignore_baseline()
+SUBPROCESS_TEST_TIMEOUT_SECONDS = 120
 
 
 def _run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -21,6 +22,8 @@ def _run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> subproc
         text=True,
         encoding="utf-8",
         errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=SUBPROCESS_TEST_TIMEOUT_SECONDS,
     )
     if check and proc.returncode != 0:
         raise RuntimeError(f"{cmd}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
