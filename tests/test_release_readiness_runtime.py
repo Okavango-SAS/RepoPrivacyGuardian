@@ -76,3 +76,17 @@ def test_remove_tree_if_present_raises_after_retry_budget(tmp_path: Path, monkey
 
     with pytest.raises(RuntimeError, match="Unable to remove stale build output after retries"):
         module._remove_tree_if_present(tmp_path, target)
+
+
+def test_cleanup_release_runtime_workspace_removes_readonly_files(tmp_path: Path) -> None:
+    module = _load_release_readiness_module()
+    runtime_dir = tmp_path / "rpg-release-runtime-test"
+    nested = runtime_dir / "pytest" / "locked"
+    nested.mkdir(parents=True)
+    artifact = nested / "coverage.xml"
+    artifact.write_text("<coverage />", encoding="utf-8")
+    artifact.chmod(0o400)
+
+    module.cleanup_release_runtime_workspace(runtime_dir)
+
+    assert runtime_dir.exists() is False

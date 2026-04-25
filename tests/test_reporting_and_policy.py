@@ -1048,7 +1048,9 @@ def test_identity_and_remote_owner_helpers() -> None:
 
     assert rpg.parse_github_remote_owner("") is None
     assert rpg.parse_github_remote_owner("https://github.com/example/repo.git") == "example"
+    assert rpg.parse_github_remote_owner("https://github.com/example/repo.name.git") == "example"
     assert rpg.parse_github_remote_owner("redacted-contributor@example.invalid:example/repo.git") == "example"
+    assert rpg.parse_github_remote_owner("redacted-contributor@example.invalid:example/.github.git") == "example"
     assert rpg.parse_github_remote_owner("https://gitlab.com/example/repo.git") is None
 
 
@@ -1063,7 +1065,23 @@ def test_repo_display_name_handles_named_and_current_root_paths(tmp_path: Path, 
 def test_parse_github_remote_slug_helper() -> None:
     assert rpg.parse_github_remote_slug("https://github.com/example/repo.git") == ("example", "repo")
     assert rpg.parse_github_remote_slug("git@github.com:example/repo.git") == ("example", "repo")
+    assert rpg.parse_github_remote_slug("https://github.com/example/repo.name.git") == (
+        "example",
+        "repo.name",
+    )
+    assert rpg.parse_github_remote_slug("git@github.com:example/.github.git") == (
+        "example",
+        ".github",
+    )
     assert rpg.parse_github_remote_slug("https://gitlab.com/example/repo.git") is None
+
+
+def test_github_repo_api_url_quotes_path_components() -> None:
+    assert rpg.github_repo_api_url("example", "repo.name") == "https://api.github.com/repos/example/repo.name"
+    assert (
+        rpg.github_repo_api_url("owner space", ".github")
+        == "https://api.github.com/repos/owner%20space/.github"
+    )
 
 
 def test_validate_outbound_https_url_allows_only_expected_hosts() -> None:
@@ -1098,15 +1116,23 @@ def test_is_public_github_remote_maps_visibility_and_http_failures(monkeypatch) 
             del exc_type, exc, tb
             return False
 
-    monkeypatch.setattr(
-        rpg.urllib.request,
-        "urlopen",
-        lambda request, timeout=8: DummyResponse({"private": True}),  # type: ignore[no-untyped-def]
-    )
+    captured_urls: list[str] = []
+
+    def private_response(request, timeout=8):  # type: ignore[no-untyped-def]
+        del timeout
+        captured_urls.append(request.full_url)
+        return DummyResponse({"private": True})
+
+    monkeypatch.setattr(rpg.urllib.request, "urlopen", private_response)
     assert rpg.is_public_github_remote("https://github.com/example/private-repo.git") == (
         False,
         "private",
     )
+    assert rpg.is_public_github_remote("https://github.com/example/repo.name.git") == (
+        False,
+        "private",
+    )
+    assert captured_urls[-1] == "https://api.github.com/repos/example/repo.name"
 
     def forbidden(request, timeout=8):  # type: ignore[no-untyped-def]
         del request, timeout

@@ -219,6 +219,15 @@ def create_release_runtime_workspace() -> Path:
     return runtime_dir
 
 
+def cleanup_release_runtime_workspace(runtime_dir: Path) -> None:
+    removed, cleanup_error = rpg.remove_private_temp_tree(
+        runtime_dir,
+        required_prefix="rpg-release-runtime-",
+    )
+    if not removed:
+        log(f"WARNING: could not remove release runtime workspace: {cleanup_error}")
+
+
 def build_release_pytest_artifact_paths(runtime_dir: Path) -> tuple[Path, Path]:
     return runtime_dir / "pytest", runtime_dir / ".coverage"
 
@@ -367,7 +376,7 @@ def main(argv: list[str] | None = None) -> int:
         install_smoke_for_artifact(repo_root, latest_artifact(repo_root, "*.tar.gz"))
         maybe_run_self_audit(repo_root, args)
     finally:
-        shutil.rmtree(runtime_dir, ignore_errors=True)
+        cleanup_release_runtime_workspace(runtime_dir)
     log("Release-readiness checks completed successfully.")
     return 0
 

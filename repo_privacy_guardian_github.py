@@ -22,7 +22,7 @@ GITHUB_HARDENING_TOKEN_ENV_KEYS = (
     "GITHUB_TOKEN",
     "GH_TOKEN",
 )
-GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)(?:\.git)?$", re.IGNORECASE)
+GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?$", re.IGNORECASE)
 ALLOWED_GITHUB_API_HOSTS = {"api.github.com"}
 GITHUB_ACTIONS_APP_ID = 15368
 AUTOMATIC_WORKFLOW_TRIGGERS = {
@@ -87,7 +87,7 @@ def parse_github_remote_owner(remote_url: str) -> str | None:
     match = GITHUB_REMOTE_RE.search(normalized)
     if not match:
         redacted_scp = re.match(
-            r"^[^@\s]+@([^:\s]+):([^/]+)/([^/.]+)(?:\.git)?$",
+            r"^[^@\s]+@([^:\s]+):([^/\s]+)/([^/\s]+?)(?:\.git)?$",
             normalized,
             flags=re.IGNORECASE,
         )
@@ -104,6 +104,15 @@ def parse_github_remote_slug(remote_url: str) -> tuple[str, str] | None:
     if not match:
         return None
     return match.group(1), match.group(2)
+
+
+def github_repo_api_url(owner: str, repo: str) -> str:
+    owner_path = urllib.parse.quote(owner.strip(), safe="")
+    repo_path = urllib.parse.quote(repo.strip(), safe="")
+    return validate_outbound_https_url(
+        GITHUB_REPO_API_URL.format(owner=owner_path, repo=repo_path),
+        ALLOWED_GITHUB_API_HOSTS,
+    )
 
 
 def validate_outbound_https_url(url: str, allowed_hosts: set[str]) -> str:
@@ -124,10 +133,7 @@ def is_public_github_remote(remote_url: str) -> tuple[bool | None, str]:
         return None, "not_github"
 
     owner, repo = slug
-    url = validate_outbound_https_url(
-        GITHUB_REPO_API_URL.format(owner=owner, repo=repo),
-        ALLOWED_GITHUB_API_HOSTS,
-    )
+    url = github_repo_api_url(owner, repo)
     request = urllib.request.Request(
         url,
         headers={

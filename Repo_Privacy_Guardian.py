@@ -252,6 +252,7 @@ parse_github_remote_owner = github_helpers.parse_github_remote_owner
 parse_github_remote_slug = github_helpers.parse_github_remote_slug
 fetch_github_owner_repositories = github_helpers.fetch_github_owner_repositories
 validate_outbound_https_url = github_helpers.validate_outbound_https_url
+github_repo_api_url = github_helpers.github_repo_api_url
 is_public_github_remote = github_helpers.is_public_github_remote
 build_github_api_headers = github_helpers.build_github_api_headers
 github_api_get_json = github_helpers.github_api_get_json
