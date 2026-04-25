@@ -57,7 +57,7 @@ Choose the path that matches what you need right now:
 ## 🔍 What It Audits
 
 - leaked Git identity metadata
-- secrets in tracked content and history
+- secrets in tracked content and history, including high-confidence provider tokens and credentialed database URIs
 - personal or local absolute paths
 - sensitive filenames in history
 - tracked-but-ignored files and `.gitignore` drift
@@ -96,6 +96,8 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - Default audits, fix planning, and report generation operate on local Git metadata, local tracked files, and local history.
 - `--public-only` performs a read-only unauthenticated GitHub REST API request for GitHub remotes to decide whether a repository is publicly accessible.
 - `--audit-github-hardening` performs read-only GitHub REST API requests against GitHub remotes to inspect repository settings. Admin-only checks require `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN`.
+- `--github-owner` is an opt-in remote audit mode. It uses the GitHub REST API to discover repositories for a user/org, clones matches into a temporary private directory, audits those clones with the normal pipeline, and removes the clones after the run.
+- Remote GitHub auditing is audit-only: it cannot be combined with `--fix` or `--push`. Public repositories are cloned with `git`; private repositories require an authenticated GitHub CLI session for `gh repo clone` so tokens are not placed in Git remote URLs or process arguments.
 - The default CLI/GUI paths do not upload repository contents, reports, or telemetry to a remote service.
 
 ## 🔒 Local Security Posture
@@ -184,7 +186,7 @@ External requirements:
 
 - Git must be installed and available on `PATH`
 - `git-filter-repo` is required only for remediation that rewrites history
-- GitHub CLI (`gh`) is optional, but it can supply admin auth for `--audit-github-hardening` when token environment variables are not configured
+- GitHub CLI (`gh`) is optional for local audits, can supply admin auth for `--audit-github-hardening`, and is required for cloning private repositories in `--github-owner` mode
 - Linux desktop GUI use may require a Tk package such as `python3-tk`
 
 Recommended support target:
@@ -273,6 +275,19 @@ repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --aud
 ```
 
 If you want the branch-protection, Actions-permissions, and security-alert checks too, provide a repo-admin token via `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN` before running the command.
+
+Opt-in GitHub owner/org remote audit:
+
+```sh
+repo-privacy-guardian --github-owner MyOrg --dry-run --yes
+```
+
+Remote audit filters:
+
+```sh
+repo-privacy-guardian --github-owner MyOrg --repos ServiceA ServiceB --github-fast --github-jobs 4 --dry-run --yes
+repo-privacy-guardian --github-owner MyOrg --github-include-forks --public-only --dry-run --yes
+```
 
 Safe fix preview:
 

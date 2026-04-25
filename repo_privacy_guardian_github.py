@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 import os
 import re
@@ -12,7 +13,10 @@ from typing import Callable, Mapping
 
 
 GITHUB_REPO_API_URL = "https://api.github.com/repos/{owner}/{repo}"
+GITHUB_USER_REPOS_API_URL = "https://api.github.com/users/{owner}/repos"
+GITHUB_ORG_REPOS_API_URL = "https://api.github.com/orgs/{owner}/repos"
 GITHUB_API_VERSION = "2022-11-28"
+GITHUB_REPOS_PER_PAGE = 100
 GITHUB_HARDENING_TOKEN_ENV_KEYS = (
     "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN",
     "GITHUB_TOKEN",
@@ -28,6 +32,16 @@ AUTOMATIC_WORKFLOW_TRIGGERS = {
     "schedule",
     "workflow_run",
 }
+
+
+@dataclass(frozen=True)
+class GitHubRemoteRepository:
+    name: str
+    full_name: str
+    clone_url: str
+    html_url: str
+    private: bool
+    fork: bool
 
 
 def read_github_cli_token(
@@ -210,6 +224,134 @@ def github_api_probe_enabled(url: str, token: str | None = None) -> tuple[bool |
         return None, f"http_{exc.code}"
     except (TimeoutError, OSError):
         return None, "request_failed"
+
+
+def _github_owner_repos_url(owner: str, endpoint: str, page: int) -> str:
+    owner_path = urllib.parse.quote(owner.strip(), safe="")
+    query = urllib.parse.urlencode(
+        {
+            "per_page": str(GITHUB_REPOS_PER_PAGE),
+            "page": str(page),
+            "type": "all",
+        }
+    )
+    return validate_outbound_https_url(
+        endpoint.format(owner=owner_path) + f"?{query}",
+        ALLOWED_GITHUB_API_HOSTS,
+    )
+
+
+def _fetch_github_owner_repo_pages(
+    *,
+    owner: str,
+    endpoint: str,
+    token: str | None,
+    json_getter: Callable[[str, str | None], tuple[object | None, str]],
+) -> tuple[list[dict[str, object]] | None, str]:
+    repos: list[dict[str, object]] = []
+    page = 1
+    while True:
+        url = _github_owner_repos_url(owner, endpoint, page)
+        payload, status = json_getter(url, token)
+        if payload is None:
+            return None, status
+        if not isinstance(payload, list):
+            return None, f"unexpected_payload:{status}"
+        if not payload:
+            return repos, status
+
+        for item in payload:
+            if isinstance(item, dict):
+                repos.append(item)
+        page += 1
+
+
+def fetch_github_owner_repositories(
+    owner: str,
+    *,
+    token: str | None = None,
+    include_forks: bool = False,
+    public_only: bool = False,
+    repo_names: list[str] | None = None,
+    json_getter: Callable[[str, str | None], tuple[object | None, str]] = github_api_get_json,
+) -> tuple[list[GitHubRemoteRepository], list[str]]:
+    normalized_owner = owner.strip()
+    warnings: list[str] = []
+    if not normalized_owner:
+        return [], ["GitHub owner is empty."]
+
+    requested_names = {
+        item.strip().lower()
+        for item in (repo_names or [])
+        if item and item.strip()
+    }
+
+    raw_repos, status = _fetch_github_owner_repo_pages(
+        owner=normalized_owner,
+        endpoint=GITHUB_USER_REPOS_API_URL,
+        token=token,
+        json_getter=json_getter,
+    )
+    if raw_repos is None and status == "http_404":
+        raw_repos, status = _fetch_github_owner_repo_pages(
+            owner=normalized_owner,
+            endpoint=GITHUB_ORG_REPOS_API_URL,
+            token=token,
+            json_getter=json_getter,
+        )
+
+    if raw_repos is None:
+        if status == "http_404":
+            warnings.append(f"GitHub owner not found or not accessible: {normalized_owner}.")
+        elif status == "http_403":
+            warnings.append(
+                "GitHub repository discovery was forbidden or rate-limited; configure a token or authenticate gh."
+            )
+        else:
+            warnings.append(f"GitHub repository discovery failed: {status}.")
+        return [], warnings
+
+    repos: list[GitHubRemoteRepository] = []
+    seen_full_names: set[str] = set()
+    for item in raw_repos:
+        name = str(item.get("name") or "").strip()
+        full_name = str(item.get("full_name") or "").strip()
+        if not name or not full_name:
+            warnings.append("Skipped a GitHub repository record with missing name/full_name.")
+            continue
+
+        if requested_names and name.lower() not in requested_names and full_name.lower() not in requested_names:
+            continue
+
+        is_fork = bool(item.get("fork"))
+        if is_fork and not include_forks:
+            continue
+
+        is_private = bool(item.get("private"))
+        if public_only and is_private:
+            continue
+
+        clone_url = str(item.get("clone_url") or "").strip()
+        html_url = str(item.get("html_url") or "").strip()
+        if not clone_url and not html_url:
+            warnings.append(f"Skipped {full_name}: no clone URL was provided by GitHub.")
+            continue
+
+        if full_name.lower() in seen_full_names:
+            continue
+        seen_full_names.add(full_name.lower())
+        repos.append(
+            GitHubRemoteRepository(
+                name=name,
+                full_name=full_name,
+                clone_url=clone_url,
+                html_url=html_url,
+                private=is_private,
+                fork=is_fork,
+            )
+        )
+
+    return repos, warnings
 
 
 def _strip_yaml_scalar(value: str) -> str:

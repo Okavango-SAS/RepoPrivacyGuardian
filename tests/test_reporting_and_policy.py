@@ -22,6 +22,10 @@ def _fixture_aws_key() -> str:
     return "AKIA" + ("A" * 16)
 
 
+def _fixture_stripe_secret() -> str:
+    return "sk_live_" + ("A" * 24)
+
+
 def _fixture_win_user_path(*parts: str, user: str = "alice") -> str:
     return "\\".join(["C:", "Users", user, *parts])
 
@@ -119,6 +123,30 @@ def _make_guard(root: Path, logger=None) -> rpg.RepoPublicationGuard:
         replace_text_file=None,
         logger=(logger or (lambda _msg: None)),
     )
+
+
+def test_secret_content_patterns_include_specific_provider_tokens() -> None:
+    samples = [
+        "gho_" + ("A" * 36),
+        "https://hooks.slack.com/services/T" + ("A" * 8) + "/B" + ("B" * 8) + "/" + ("C" * 24),
+        _fixture_stripe_secret(),
+        "SG." + ("A" * 22) + "." + ("B" * 43),
+        "npm_" + ("A" * 36),
+        "123456789:" + ("A" * 35),
+        "M" + ("A" * 23) + "." + ("B" * 6) + "." + ("C" * 27),
+        "heroku_api_key=" + ("a" * 8) + "-" + ("b" * 4) + "-" + ("c" * 4) + "-" + ("d" * 4) + "-" + ("e" * 12),
+        "AccountKey=" + ("A" * 88),
+        "aws_secret_access_key=" + ("A" * 40),
+        "postgres://user:" + ("A" * 16) + "@db.example.invalid/app",
+    ]
+
+    for sample in samples:
+        assert rpg.SECRET_CONTENT_RE.search(sample), sample
+
+
+def test_secret_content_patterns_do_not_block_generic_assignments() -> None:
+    generic = 'password="' + ("not-a-real-secret" * 2) + '"'
+    assert rpg.SECRET_CONTENT_RE.search(generic) is None
 
 
 def test_run_logger_writes_file_and_calls_sink(tmp_path: Path) -> None:
@@ -1135,6 +1163,97 @@ def test_github_api_helpers_map_empty_payloads_and_transport_failures(monkeypatc
         None,
         "request_failed",
     )
+
+
+def test_fetch_github_owner_repositories_filters_pages_forks_private_and_names() -> None:
+    seen_tokens: list[str | None] = []
+
+    def fake_get_json(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
+        seen_tokens.append(token)
+        parsed = rpg.urllib.parse.urlparse(url)
+        page = int(rpg.urllib.parse.parse_qs(parsed.query)["page"][0])
+        assert parsed.path == "/" + "users" + "/acme/repos"
+        if page == 1:
+            return (
+                [
+                    {
+                        "name": "app",
+                        "full_name": "acme/app",
+                        "clone_url": "https://github.com/acme/app.git",
+                        "html_url": "https://github.com/acme/app",
+                        "private": False,
+                        "fork": False,
+                    },
+                    {
+                        "name": "forked",
+                        "full_name": "acme/forked",
+                        "clone_url": "https://github.com/acme/forked.git",
+                        "html_url": "https://github.com/acme/forked",
+                        "private": False,
+                        "fork": True,
+                    },
+                    {
+                        "name": "private-app",
+                        "full_name": "acme/private-app",
+                        "clone_url": "https://github.com/acme/private-app.git",
+                        "html_url": "https://github.com/acme/private-app",
+                        "private": True,
+                        "fork": False,
+                    },
+                ],
+                "http_200",
+            )
+        return ([], "http_200")
+
+    repos, warnings = rpg_github.fetch_github_owner_repositories(
+        "acme",
+        token="token-from-env",
+        include_forks=False,
+        public_only=True,
+        repo_names=["app", "private-app", "forked"],
+        json_getter=fake_get_json,
+    )
+
+    assert warnings == []
+    assert [repo.full_name for repo in repos] == ["acme/app"]
+    assert seen_tokens == ["token-from-env", "token-from-env"]
+
+
+def test_fetch_github_owner_repositories_falls_back_to_org_endpoint() -> None:
+    paths: list[str] = []
+
+    def fake_get_json(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
+        del token
+        parsed = rpg.urllib.parse.urlparse(url)
+        page = int(rpg.urllib.parse.parse_qs(parsed.query)["page"][0])
+        paths.append(parsed.path)
+        if parsed.path.startswith("/users/"):
+            return (None, "http_404")
+        if page > 1:
+            return ([], "http_200")
+        return (
+            [
+                {
+                    "name": "service",
+                    "full_name": "acme-org/service",
+                    "clone_url": "https://github.com/acme-org/service.git",
+                    "html_url": "https://github.com/acme-org/service",
+                    "private": False,
+                    "fork": False,
+                }
+            ],
+            "http_200",
+        )
+
+    repos, warnings = rpg_github.fetch_github_owner_repositories(
+        "acme-org",
+        json_getter=fake_get_json,
+    )
+
+    assert warnings == []
+    assert [repo.full_name for repo in repos] == ["acme-org/service"]
+    assert paths[0] == "/" + "users" + "/acme-org/repos"
+    assert paths[1] == "/orgs/acme-org/repos"
 
 
 def test_resolve_github_hardening_token_prefers_tool_specific_env() -> None:
@@ -2356,6 +2475,10 @@ def test_make_parser_defaults_and_flags() -> None:
     assert args.rewrite_personal_paths is False
     assert args.public_only == rpg.GUI_DEFAULT_PUBLIC_ONLY
     assert args.low_confidence_email_mode == "informational"
+    assert args.github_owner is None
+    assert args.github_include_forks is False
+    assert args.github_fast is False
+    assert args.github_jobs == 4
 
     args = parser.parse_args(["--fix", "--purge-all-detected-secret-files"])
     assert args.fix is True
@@ -2370,11 +2493,19 @@ def test_make_parser_defaults_and_flags() -> None:
     args = parser.parse_args(["--replace-text-file", "ops/replace-text.txt"])
     assert args.replace_text_file == "ops/replace-text.txt"
 
+    args = parser.parse_args(["--github-owner", "acme", "--github-include-forks", "--github-fast", "--github-jobs", "2"])
+    assert args.github_owner == "acme"
+    assert args.github_include_forks is True
+    assert args.github_fast is True
+    assert args.github_jobs == 2
+
 
 def test_make_parser_rejects_non_positive_max_matches() -> None:
     parser = rpg.make_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["--max-matches", "0"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--github-jobs", "0"])
 
 
 def test_should_launch_gui_requires_explicit_flag() -> None:
@@ -2491,6 +2622,10 @@ def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
         allowed_remote_owners=["axeljackal", "axeljackal"],
         replace_text_file="ops/replace-text.txt",
         report_json=None,
+        github_owner=" acme ",
+        github_include_forks=True,
+        github_fast=True,
+        github_jobs=0,
     )
 
     assert config.owner_emails == ["dev@example.com"]
@@ -2499,6 +2634,10 @@ def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
     assert config.audit_github_hardening is True
     assert config.open_report is False
     assert config.confirm_each_repo_fix is False
+    assert config.github_owner == "acme"
+    assert config.github_include_forks is True
+    assert config.github_fast is True
+    assert config.github_jobs == 1
 
 
 def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
@@ -2527,6 +2666,10 @@ def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
         allowed_remote_owners=["axeljackal"],
         replace_text_file="ops/replace-text.txt",
         report_json="C:/repos/Audit_Results/export.json",
+        github_owner="acme",
+        github_include_forks=True,
+        github_fast=True,
+        github_jobs=3,
     )
     cli_config = rpg.build_guard_run_config(mode="cli", **kwargs)
     gui_config = rpg.build_guard_run_config(mode="gui", **kwargs)
@@ -2559,6 +2702,10 @@ def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
         "allowed_remote_owners",
         "replace_text_file",
         "report_json",
+        "github_owner",
+        "github_include_forks",
+        "github_fast",
+        "github_jobs",
     ]
     for field in same_fields:
         assert getattr(cli_config, field) == getattr(gui_config, field)
@@ -2630,6 +2777,168 @@ def test_execute_guard_pipeline_purge_all_implies_detected(tmp_path: Path, monke
     assert exit_code == 0
     assert any("implies --purge-detected-secret-files" in msg for msg in messages)
     assert captured["run_settings"]["purge_detected_secret_files"] == "True"
+
+
+def test_execute_guard_pipeline_rejects_remote_github_fix_mode(tmp_path: Path, monkeypatch) -> None:
+    messages: list[str] = []
+
+    class DummyGuard:
+        def __init__(self, **kwargs) -> None:
+            del kwargs
+
+        def discover_repositories(self, repo_filters, public_only: bool):
+            del repo_filters, public_only
+            raise AssertionError("local discovery should not run for rejected remote mode")
+
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", lambda *args, **kwargs: None)
+
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    exit_code = rpg.execute_guard_pipeline(
+        config=_make_run_config(github_owner="acme", fix=True),
+        artifacts=artifacts,
+        logger=messages.append,
+        results_dir=tmp_path,
+    )
+
+    assert exit_code == rpg.EXIT_RUNTIME_ERROR
+    assert any("--github-owner is audit-only" in msg for msg in messages)
+    assert any("[SUMMARY] ERROR 0/0" in msg for msg in messages)
+
+
+def test_execute_guard_pipeline_remote_github_audit_cleans_temp_clones(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    temp_root = tmp_path / "remote-clones"
+    repo = temp_root / "repo-a"
+    captured: dict[str, object] = {}
+
+    def fake_prepare(config, logger):  # type: ignore[no-untyped-def]
+        del config, logger
+        (repo / ".git").mkdir(parents=True)
+        return [repo], [], temp_root, None
+
+    class DummyGuard:
+        def __init__(self, **kwargs) -> None:
+            del kwargs
+
+        def audit_repo(self, repo_path: Path) -> rpg.RepoReport:
+            report = _make_report(repo_path.name)
+            report.path = str(repo_path)
+            report.finalize()
+            return report
+
+    def fake_persist(
+        reports,
+        artifacts,
+        root_path,
+        policy_path,
+        run_settings,
+        logger,
+        optional_json_export=None,
+    ) -> None:
+        del artifacts, root_path, policy_path, logger, optional_json_export
+        captured["reports"] = reports
+        captured["run_settings"] = run_settings
+
+    monkeypatch.setattr(rpg, "prepare_github_remote_audit_repositories", fake_prepare)
+    monkeypatch.setattr(rpg, "RepoPublicationGuard", DummyGuard)
+    monkeypatch.setattr(rpg, "persist_run_outputs", fake_persist)
+
+    artifacts = rpg.create_run_artifacts(tmp_path / "Audit_Results")
+    exit_code = rpg.execute_guard_pipeline(
+        config=_make_run_config(github_owner="acme", repos=["repo-a"]),
+        artifacts=artifacts,
+        logger=lambda _msg: None,
+        results_dir=tmp_path / "Audit_Results",
+    )
+
+    assert exit_code == rpg.EXIT_OK
+    assert temp_root.exists() is False
+    assert captured["run_settings"]["github_owner"] == "acme"
+    assert [report.name for report in captured["reports"]] == ["repo-a"]
+
+
+def test_clone_github_remote_repository_public_fast_uses_git(tmp_path: Path) -> None:
+    remote = rpg_github.GitHubRemoteRepository(
+        name="repo-a",
+        full_name="acme/repo-a",
+        clone_url="https://github.com/acme/repo-a.git",
+        html_url="https://github.com/acme/repo-a",
+        private=False,
+        fork=False,
+    )
+    captured: dict[str, object] = {}
+
+    class DummyProc:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_runner(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        destination = Path(cmd[-1])
+        (destination / ".git").mkdir(parents=True)
+        return DummyProc()
+
+    result = rpg.clone_github_remote_repository(
+        remote,
+        tmp_path,
+        fast=True,
+        runner=fake_runner,
+    )
+
+    assert result.error is None
+    assert captured["cmd"][:4] == ["git", "clone", "--quiet", "--depth"]
+    assert captured["cmd"][4] == "1"
+    assert captured["cmd"][5] == remote.clone_url
+    assert captured["kwargs"]["stdin"] == subprocess.DEVNULL
+
+
+def test_clone_github_remote_repository_private_requires_gh(tmp_path: Path) -> None:
+    remote = rpg_github.GitHubRemoteRepository(
+        name="private-repo",
+        full_name="acme/private-repo",
+        clone_url="https://github.com/acme/private-repo.git",
+        html_url="https://github.com/acme/private-repo",
+        private=True,
+        fork=False,
+    )
+
+    def missing_runner(*args, **kwargs):  # type: ignore[no-untyped-def]
+        del args, kwargs
+        raise FileNotFoundError()
+
+    result = rpg.clone_github_remote_repository(
+        remote,
+        tmp_path,
+        fast=True,
+        runner=missing_runner,
+    )
+
+    assert result.error is not None
+    assert "gh unavailable" in result.error
+    assert "authenticated GitHub CLI" in result.error
+
+
+def test_build_github_clone_failure_report_marks_failure(tmp_path: Path) -> None:
+    remote = rpg_github.GitHubRemoteRepository(
+        name="repo-a",
+        full_name="acme/repo-a",
+        clone_url="https://github.com/acme/repo-a.git",
+        html_url="https://github.com/acme/repo-a",
+        private=False,
+        fork=False,
+    )
+    result = rpg.GitHubCloneResult(remote=remote, path=tmp_path / "repo-a", error="clone failed")
+
+    report = rpg.build_github_clone_failure_report(result)
+
+    assert report.status == "FAIL"
+    assert report.origin_url == remote.html_url
+    assert any("GitHub remote clone failed" in item for item in report.execution_errors)
 
 
 def test_execute_guard_pipeline_logs_blocking_email_policy(tmp_path: Path, monkeypatch) -> None:

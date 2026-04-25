@@ -17,6 +17,7 @@ Features:
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import errno
 import html
 import importlib.util
@@ -164,11 +165,21 @@ SENSITIVE_FILENAME_RE = re.compile(
 )
 
 SECRET_CONTENT_RE = re.compile(
-    r"ghp_[A-Za-z0-9]{36}|"
+    r"gh[opsru]_[A-Za-z0-9]{36,}|"
     r"github_pat_[A-Za-z0-9_]{40,}|"
     r"AKIA[0-9A-Z]{16}|"
+    r"(?i:aws[_-]?secret[_-]?access[_-]?key)\s*[=:]\s*['\"]?[A-Za-z0-9/+=]{40}['\"]?|"
     r"AIza[0-9A-Za-z\-_]{35}|"
     r"xox[baprs]-[A-Za-z0-9-]+|"
+    r"https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+|"
+    r"sk_live_[0-9A-Za-z]{24,}|"
+    r"SG\.[A-Za-z0-9\-_]{22,}\.[A-Za-z0-9\-_]{43,}|"
+    r"npm_[A-Za-z0-9]{36}|"
+    r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b|"
+    r"\b[MN][A-Za-z\d]{23,}\.[\w-]{6}\.[\w-]{27,}\b|"
+    r"(?i:heroku[_-]?api[_-]?key)\s*[=:]\s*['\"]?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}['\"]?|"
+    r"(?i:(?:AccountKey|storage[_-]?key))\s*[=:]\s*['\"]?[A-Za-z0-9+/=]{88}['\"]?|"
+    r"(?i:\b(?:mongodb(?:\+srv)?|mysql|postgres(?:ql)?|redis|amqp)://[^\s:'\"/@]+:[^\s@'\"]+@[^\s'\"]+)|"
     r"Authorization:\s*(Bearer|token)\s+[A-Za-z0-9._-]+|"
     r"BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY"
 )
@@ -238,6 +249,7 @@ read_github_cli_token = github_helpers.read_github_cli_token
 infer_github_username_from_noreply = github_helpers.infer_github_username_from_noreply
 parse_github_remote_owner = github_helpers.parse_github_remote_owner
 parse_github_remote_slug = github_helpers.parse_github_remote_slug
+fetch_github_owner_repositories = github_helpers.fetch_github_owner_repositories
 validate_outbound_https_url = github_helpers.validate_outbound_https_url
 is_public_github_remote = github_helpers.is_public_github_remote
 build_github_api_headers = github_helpers.build_github_api_headers
@@ -655,9 +667,20 @@ class GuardRunConfig:
     allowed_remote_owners: list[str] = field(default_factory=list)
     replace_text_file: str | None = None
     report_json: str | None = None
+    github_owner: str | None = None
+    github_include_forks: bool = False
+    github_fast: bool = False
+    github_jobs: int = 4
 
 
 RunArtifacts = artifact_helpers.RunArtifacts
+
+
+@dataclass
+class GitHubCloneResult:
+    remote: github_helpers.GitHubRemoteRepository
+    path: Path
+    error: str | None = None
 
 
 class RunLogger(artifact_helpers.RunLogger):
@@ -1291,7 +1314,7 @@ def build_cli_tooling_checks(config: GuardRunConfig) -> list[ToolingCheck]:
             )
         )
 
-    if config.audit_github_hardening:
+    if config.audit_github_hardening or config.github_owner:
         github_check = build_github_tooling_check()
         if (
             not winget_check_added
@@ -3175,6 +3198,166 @@ def audit_github_release_hardening(
     )
 
 
+def _github_clone_dir_name(remote: github_helpers.GitHubRemoteRepository) -> str:
+    base = remote.name.strip() or remote.full_name.replace("/", "__")
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._") or "repository"
+
+
+def clone_github_remote_repository(
+    remote: github_helpers.GitHubRemoteRepository,
+    destination_root: Path,
+    *,
+    fast: bool,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> GitHubCloneResult:
+    destination = destination_root / _github_clone_dir_name(remote)
+    if remote.private:
+        cmd = ["gh", "repo", "clone", remote.full_name, str(destination)]
+        if fast:
+            cmd.extend(["--", "--depth", "1"])
+    else:
+        clone_source = remote.clone_url or remote.html_url
+        cmd = ["git", "clone", "--quiet"]
+        if fast:
+            cmd.extend(["--depth", "1"])
+        cmd.extend([clone_source, str(destination)])
+
+    try:
+        proc = runner(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess_stdin(),
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError:
+        tool = "gh" if remote.private else "git"
+        detail = (
+            "private repository clone requires authenticated GitHub CLI (`gh repo clone`)"
+            if remote.private
+            else "Git executable not found"
+        )
+        return GitHubCloneResult(remote=remote, path=destination, error=f"{tool} unavailable: {detail}")
+    except subprocess.TimeoutExpired:
+        return GitHubCloneResult(
+            remote=remote,
+            path=destination,
+            error=f"clone timed out after {DEFAULT_SUBPROCESS_TIMEOUT_SECONDS}s",
+        )
+    except Exception as exc:
+        return GitHubCloneResult(remote=remote, path=destination, error=f"clone failed to start: {exc}")
+
+    if proc.returncode != 0:
+        detail = redact_sensitive_text((proc.stderr or proc.stdout or "unknown clone failure").strip())
+        return GitHubCloneResult(remote=remote, path=destination, error=f"clone failed: {detail[:240]}")
+    if not is_git_repository(destination):
+        return GitHubCloneResult(remote=remote, path=destination, error="clone completed but no .git directory was found")
+    return GitHubCloneResult(remote=remote, path=destination)
+
+
+def clone_github_remote_repositories(
+    remotes: list[github_helpers.GitHubRemoteRepository],
+    destination_root: Path,
+    *,
+    fast: bool,
+    jobs: int,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> list[GitHubCloneResult]:
+    if not remotes:
+        return []
+    max_workers = max(1, jobs)
+    if max_workers == 1 or len(remotes) == 1:
+        return [
+            clone_github_remote_repository(remote, destination_root, fast=fast, runner=runner)
+            for remote in remotes
+        ]
+
+    indexed: dict[int, GitHubCloneResult] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                clone_github_remote_repository,
+                remote,
+                destination_root,
+                fast=fast,
+                runner=runner,
+            ): index
+            for index, remote in enumerate(remotes)
+        }
+        for future in as_completed(futures):
+            index = futures[future]
+            try:
+                indexed[index] = future.result()
+            except Exception as exc:
+                remote = remotes[index]
+                indexed[index] = GitHubCloneResult(
+                    remote=remote,
+                    path=destination_root / _github_clone_dir_name(remote),
+                    error=f"unexpected clone worker failure: {exc}",
+                )
+    return [indexed[index] for index in sorted(indexed)]
+
+
+def build_github_clone_failure_report(result: GitHubCloneResult) -> RepoReport:
+    report = RepoReport(name=result.remote.name, path=str(result.path))
+    report.origin_url = result.remote.html_url or result.remote.clone_url or None
+    report.execution_errors.append(f"GitHub remote clone failed for {result.remote.full_name}: {result.error}")
+    report.finalize()
+    return report
+
+
+def prepare_github_remote_audit_repositories(
+    config: GuardRunConfig,
+    logger: Callable[[str], None],
+) -> tuple[list[Path], list[RepoReport], Path | None, str | None]:
+    owner = (config.github_owner or "").strip()
+    token = resolve_github_hardening_token()
+    remotes, warnings = fetch_github_owner_repositories(
+        owner,
+        token=token,
+        include_forks=config.github_include_forks,
+        public_only=config.public_only,
+        repo_names=config.repos,
+    )
+    for warning in warnings:
+        logger(f"[WARN] {warning}")
+
+    if not remotes:
+        requested = f" matching --repos {', '.join(config.repos)}" if config.repos else ""
+        public_filter = " public" if config.public_only else ""
+        return (
+            [],
+            [],
+            None,
+            f"No{public_filter} GitHub repositories{requested} were discovered for {owner}.",
+        )
+
+    temp_root = Path(tempfile.mkdtemp(prefix="repo-privacy-guardian-github-"))
+    ensure_private_directory(temp_root)
+    logger(
+        f"[INFO] GitHub remote audit discovered {len(remotes)} repositories for {owner}; "
+        f"cloning with {max(1, config.github_jobs)} worker(s)."
+    )
+    clone_results = clone_github_remote_repositories(
+        remotes,
+        temp_root,
+        fast=config.github_fast,
+        jobs=config.github_jobs,
+    )
+
+    repos: list[Path] = []
+    failure_reports: list[RepoReport] = []
+    for result in clone_results:
+        if result.error:
+            failure_reports.append(build_github_clone_failure_report(result))
+        else:
+            repos.append(result.path)
+
+    return repos, failure_reports, temp_root, None
+
+
 def is_relevant_email_candidate(email: str) -> bool:
     lowered = email.strip().lower()
     if not lowered or "@" not in lowered:
@@ -4415,6 +4598,10 @@ def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, s
         "exfil_indicator_mode": EXFIL_INDICATOR_MODE,
         "results_dir": str(results_dir),
         "report_json": str(config.report_json or ""),
+        "github_owner": str(config.github_owner or ""),
+        "github_include_forks": str(config.github_include_forks),
+        "github_fast": str(config.github_fast),
+        "github_jobs": str(config.github_jobs),
     }
 
 
@@ -4433,6 +4620,7 @@ def execute_guard_pipeline(
     supply_chain_payload: dict[str, object] | None = None
     exit_code = EXIT_OK
     total_repositories = 0
+    remote_temp_root: Path | None = None
     state_tracker = RunStateTracker(artifacts.state_path, artifacts=artifacts, config=config)
 
     guard_kwargs: dict[str, object] = {
@@ -4492,6 +4680,16 @@ def execute_guard_pipeline(
         if not git_ok:
             logger(f"[ERROR] {git_error}")
             exit_code = EXIT_RUNTIME_ERROR
+        elif config.github_owner and (config.fix or config.push):
+            logger("[ERROR] --github-owner is audit-only and cannot be combined with --fix or --push.")
+            logger("\n[SUMMARY] ERROR 0/0")
+            exit_code = EXIT_RUNTIME_ERROR
+            state_tracker.update(
+                phase="invalid-config",
+                total_repositories=0,
+                completed_repositories=0,
+                current_repository="",
+            )
         else:
             if config.low_confidence_email_mode == "blocking":
                 logger("[INFO] Email policy: low-confidence findings are blocking.")
@@ -4500,6 +4698,10 @@ def execute_guard_pipeline(
             if config.audit_github_hardening:
                 logger(
                     "[INFO] GitHub hardening audit enabled: advisory/manual-review only by default."
+                )
+            if config.github_owner:
+                logger(
+                    "[INFO] GitHub remote audit enabled: repositories are cloned into a temporary private directory."
                 )
 
             if config.purge_all_detected_secret_files and not config.purge_detected_secret_files:
@@ -4516,44 +4718,83 @@ def execute_guard_pipeline(
                     total=0,
                 )
             else:
-                root_error = validate_repository_root(config.root)
-                if root_error:
-                    logger(f"[ERROR] {root_error}")
-                    logger("\n[SUMMARY] ERROR 0/0")
-                    exit_code = EXIT_RUNTIME_ERROR
-                    state_tracker.update(
-                        phase="invalid-config",
-                        total_repositories=0,
-                        completed_repositories=0,
-                        current_repository="",
-                    )
-                else:
+                remote_no_targets_error: str | None = None
+                if config.github_owner:
+                    state_tracker.update(phase="github-discovery")
                     try:
-                        repos = guard.discover_repositories(config.repos, public_only=config.public_only)
-                    except RuntimeError as exc:
-                        if not str(exc).startswith("Root "):
-                            raise
-                        logger(f"[ERROR] {exc}")
+                        repos, clone_failure_reports, remote_temp_root, remote_no_targets_error = (
+                            prepare_github_remote_audit_repositories(config, logger)
+                        )
+                        for failure_report in clone_failure_reports:
+                            reports.append(failure_report)
+                            print_report(failure_report, logger)
+                    except Exception as exc:
+                        logger(f"[ERROR] GitHub remote audit setup failed: {exc}")
+                        logger(traceback.format_exc())
                         logger("\n[SUMMARY] ERROR 0/0")
                         exit_code = EXIT_RUNTIME_ERROR
-                        repos = []
                         state_tracker.update(
                             phase="invalid-config",
                             total_repositories=0,
                             completed_repositories=0,
                             current_repository="",
                         )
-            total_repositories = len(repos)
+                else:
+                    root_error = validate_repository_root(config.root)
+                    if root_error:
+                        logger(f"[ERROR] {root_error}")
+                        logger("\n[SUMMARY] ERROR 0/0")
+                        exit_code = EXIT_RUNTIME_ERROR
+                        state_tracker.update(
+                            phase="invalid-config",
+                            total_repositories=0,
+                            completed_repositories=0,
+                            current_repository="",
+                        )
+                    else:
+                        try:
+                            repos = guard.discover_repositories(config.repos, public_only=config.public_only)
+                        except RuntimeError as exc:
+                            if not str(exc).startswith("Root "):
+                                raise
+                            logger(f"[ERROR] {exc}")
+                            logger("\n[SUMMARY] ERROR 0/0")
+                            exit_code = EXIT_RUNTIME_ERROR
+                            repos = []
+                            state_tracker.update(
+                                phase="invalid-config",
+                                total_repositories=0,
+                                completed_repositories=0,
+                                current_repository="",
+                            )
+            total_repositories = len(repos) + len(reports)
             if exit_code == EXIT_OK:
                 state_tracker.update(
                     phase="discovered",
                     total_repositories=total_repositories,
-                    completed_repositories=0,
+                    completed_repositories=len(reports),
                     current_repository="",
                 )
             if not repos:
                 if exit_code != EXIT_OK:
                     pass
+                elif reports:
+                    failed = sum(1 for rep in reports if rep.status != "PASS")
+                    summary_status = "PASS" if failed == 0 else "FAIL"
+                    summary_count = len(reports) - failed if failed == 0 else failed
+                    logger(f"\n[SUMMARY] {summary_status} {summary_count}/{len(reports)}")
+                    exit_code = EXIT_OK if failed == 0 else EXIT_POLICY_FAILED
+                elif config.github_owner and remote_no_targets_error:
+                    logger(f"[ERROR] {remote_no_targets_error}")
+                    logger("[ERROR] Check --github-owner, auth/rate limits, --repos filters, fork filtering, or --public-only.")
+                    logger("\n[SUMMARY] ERROR 0/0")
+                    exit_code = EXIT_RUNTIME_ERROR
+                    state_tracker.update(
+                        phase="no-targets",
+                        total_repositories=0,
+                        completed_repositories=0,
+                        current_repository="",
+                    )
                 else:
                     no_targets_error, no_targets_guidance = describe_no_target_resolution(
                         root=config.root,
@@ -4587,13 +4828,14 @@ def execute_guard_pipeline(
                         repos = []
                         total_repositories = 0
 
+                completed_repo_iterations = 0
                 for index, repo in enumerate(repos, start=1):
                     if cancellation_requested():
                         mark_aborted(
                             "Run cancelled by operator before the next repository started.",
                             phase="aborted",
                             completed=len(reports),
-                            total=len(repos),
+                            total=total_repositories,
                         )
                         break
 
@@ -4601,8 +4843,8 @@ def execute_guard_pipeline(
                     state_tracker.update(
                         phase="fixing" if config.fix else "auditing",
                         current_repository=repo_name,
-                        completed_repositories=index - 1,
-                        total_repositories=len(repos),
+                        completed_repositories=len(reports),
+                        total_repositories=total_repositories,
                     )
                     repo_lock: RepoExecutionLock | None = None
                     report = RepoReport(name=repo_name, path=str(repo))
@@ -4646,20 +4888,21 @@ def execute_guard_pipeline(
 
                     report.finalize()
                     reports.append(report)
+                    completed_repo_iterations += 1
                     print_report(report, logger)
                     state_tracker.update(
                         phase="fixing" if config.fix else "auditing",
                         current_repository="",
                         completed_repositories=len(reports),
-                        total_repositories=len(repos),
+                        total_repositories=total_repositories,
                     )
 
-                if repos and exit_code == EXIT_OK and cancellation_requested() and len(reports) < len(repos):
+                if repos and exit_code == EXIT_OK and cancellation_requested() and completed_repo_iterations < len(repos):
                     mark_aborted(
                         "Run cancelled by operator after the active repository finished.",
                         phase="aborted",
                         completed=len(reports),
-                        total=len(repos),
+                        total=total_repositories,
                     )
 
                 if repos and exit_code != EXIT_ABORTED:
@@ -4681,9 +4924,11 @@ def execute_guard_pipeline(
                 )
             else:
                 state_tracker.update(phase="supply-chain")
+                supply_chain_root = remote_temp_root if config.github_owner and remote_temp_root else config.root
+                supply_chain_repo_filters = None if config.github_owner else config.repos
                 supply_chain_payload = run_litellm_global_supply_chain_scan(
-                    root=config.root,
-                    repo_filters=config.repos,
+                    root=supply_chain_root,
+                    repo_filters=supply_chain_repo_filters,
                     max_matches=config.max_matches,
                     logger=logger,
                 )
@@ -4738,6 +4983,12 @@ def execute_guard_pipeline(
             logger(traceback.format_exc())
             exit_code = EXIT_RUNTIME_ERROR
         finally:
+            if remote_temp_root is not None:
+                try:
+                    shutil.rmtree(remote_temp_root, ignore_errors=True)
+                    logger("[INFO] Removed temporary GitHub clone directory.")
+                except Exception:
+                    pass
             passed = sum(1 for rep in reports if rep.status == "PASS")
             failed = len(reports) - passed
             try:
@@ -4978,6 +5229,10 @@ def build_guard_run_config(
     allowed_remote_owners: list[str],
     replace_text_file: str | None,
     report_json: str | None,
+    github_owner: str | None = None,
+    github_include_forks: bool = False,
+    github_fast: bool = False,
+    github_jobs: int = 4,
     audit_litellm_incident: bool = False,
     audit_github_hardening: bool = False,
 ) -> GuardRunConfig:
@@ -5014,6 +5269,10 @@ def build_guard_run_config(
         allowed_remote_owners=normalized_allowed_remote_owners,
         replace_text_file=replace_text_file,
         report_json=report_json,
+        github_owner=(github_owner.strip() if github_owner and github_owner.strip() else None),
+        github_include_forks=github_include_forks,
+        github_fast=github_fast,
+        github_jobs=max(1, github_jobs),
     )
 
 
@@ -7764,6 +8023,29 @@ def make_parser() -> argparse.ArgumentParser:
             "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN."
         ),
     )
+    parser.add_argument(
+        "--github-owner",
+        help=(
+            "Opt-in remote audit: discover repositories for this GitHub user/org, "
+            "clone them into a temporary private directory, audit, then remove the clones"
+        ),
+    )
+    parser.add_argument(
+        "--github-include-forks",
+        action="store_true",
+        help="With --github-owner, include forked repositories (forks are skipped by default)",
+    )
+    parser.add_argument(
+        "--github-fast",
+        action="store_true",
+        help="With --github-owner, use shallow clones before auditing current files and available history",
+    )
+    parser.add_argument(
+        "--github-jobs",
+        type=parse_positive_int,
+        default=4,
+        help="With --github-owner, number of concurrent clone workers (default: 4)",
+    )
 
     parser.add_argument("--owner-name", default="Owner", help="Owner display name for rewritten commits")
     parser.add_argument(
@@ -7867,6 +8149,10 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         allowed_remote_owners=args.allow_remote_owner,
         replace_text_file=args.replace_text_file,
         report_json=args.report_json,
+        github_owner=args.github_owner,
+        github_include_forks=args.github_include_forks,
+        github_fast=args.github_fast,
+        github_jobs=args.github_jobs,
         audit_litellm_incident=args.audit_litellm_incident,
         audit_github_hardening=args.audit_github_hardening,
     )

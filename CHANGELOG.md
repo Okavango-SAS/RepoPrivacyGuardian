@@ -4,7 +4,11 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
-No public changes yet.
+### Highlights
+
+- Expanded high-confidence secret detection with additional provider-specific token patterns inspired by Git-Secrets, including GitHub OAuth tokens, Slack webhooks, Stripe secret keys, SendGrid, NPM, Telegram/Discord bot tokens, Heroku API keys, Azure storage keys, AWS secret-key assignments, and credentialed database URIs.
+- Added an opt-in GitHub owner/org audit mode that discovers repositories through the GitHub API, clones matching repos into a temporary private directory, audits them with the existing pipeline, and removes the clones after the run.
+- Kept remote GitHub auditing audit-only: `--github-owner` cannot be combined with `--fix` or `--push`, and default local audits remain local-first with no remote discovery.
 
 ## [1.2.3] - 2026-04-24
 

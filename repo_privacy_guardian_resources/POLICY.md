@@ -79,6 +79,8 @@ Search for secrets in patch history:
 git log --all -p --no-color | rg -n "ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z\-_]{35}|xox[baprs]-[A-Za-z0-9-]+|Authorization:\\s*(Bearer|token)\\s+[A-Za-z0-9._-]+|BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY"
 ```
 
+Repo Privacy Guardian's built-in scanner also includes additional high-confidence provider-specific patterns such as GitHub OAuth tokens, Slack webhook URLs, Stripe secret keys, SendGrid keys, NPM tokens, Telegram/Discord bot tokens, Heroku API keys, Azure storage keys, AWS secret-key assignments, and credentialed database URIs. Generic `password = "..."` style assignments are not blocking by default because they are too noisy in examples and tests.
+
 Search for personal/local paths in history:
 
 ```sh
@@ -157,6 +159,15 @@ Admin-only GitHub checks require one of these environment variables:
 - `GH_TOKEN`
 
 Without a token, Repo Privacy Guardian still audits local `CODEOWNERS` and public repository metadata, but branch protection, Actions permissions, and security-alert checks remain partial.
+
+Optional GitHub owner/org remote audit:
+
+```sh
+repo-privacy-guardian --github-owner MyOrg --dry-run --yes
+repo-privacy-guardian --github-owner MyOrg --repos ServiceA ServiceB --github-fast --github-jobs 4 --dry-run --yes
+```
+
+Remote owner/org audit mode is opt-in and audit-only. It discovers repositories through the GitHub API, clones matches into a temporary private directory, audits them with the same policy pipeline, then removes the temporary clones. It must not be combined with `--fix` or `--push`.
 
 ### F) .gitignore policy and effectiveness
 
