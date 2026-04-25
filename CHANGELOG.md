@@ -16,6 +16,7 @@ GitHub owner audit mode and GUI/CLI parity update.
 - Added an opt-in GitHub owner/org audit mode that discovers repositories through the GitHub API, clones matching repos into a temporary private directory, audits them with the existing pipeline, and removes the clones after the run.
 - Added GUI controls for the GitHub owner/org audit mode so GUI and CLI expose the same remote-audit inputs: owner/org, remote repo filters, include forks, fast shallow clone, clone workers, and public-only filtering.
 - Hardened temporary cleanup on Windows so read-only Git pack files and release-runtime artifacts do not leave stale local workspaces behind.
+- Tightened GitHub remote parsing so only real GitHub hosts or GitHub SCP-style remotes are treated as GitHub repositories, while preserving support for dotted repository names such as `repo.name` and `.github`.
 - Kept remote GitHub auditing audit-only: `--github-owner` cannot be combined with `--fix` or `--push`, and default local audits remain local-first with no remote discovery.
 
 ## [1.2.3] - 2026-04-24

@@ -1051,6 +1051,7 @@ def test_identity_and_remote_owner_helpers() -> None:
     assert rpg.parse_github_remote_owner("https://github.com/example/repo.name.git") == "example"
     assert rpg.parse_github_remote_owner("redacted-contributor@example.invalid:example/repo.git") == "example"
     assert rpg.parse_github_remote_owner("redacted-contributor@example.invalid:example/.github.git") == "example"
+    assert rpg.parse_github_remote_owner("https://example.com/github.com/example/repo.git") is None
     assert rpg.parse_github_remote_owner("https://gitlab.com/example/repo.git") is None
 
 
@@ -1065,6 +1066,10 @@ def test_repo_display_name_handles_named_and_current_root_paths(tmp_path: Path, 
 def test_parse_github_remote_slug_helper() -> None:
     assert rpg.parse_github_remote_slug("https://github.com/example/repo.git") == ("example", "repo")
     assert rpg.parse_github_remote_slug("git@github.com:example/repo.git") == ("example", "repo")
+    assert rpg.parse_github_remote_slug("ssh://git@github.com/example/repo.git") == (
+        "example",
+        "repo",
+    )
     assert rpg.parse_github_remote_slug("https://github.com/example/repo.name.git") == (
         "example",
         "repo.name",
@@ -1073,6 +1078,15 @@ def test_parse_github_remote_slug_helper() -> None:
         "example",
         ".github",
     )
+    assert rpg.parse_github_remote_slug("github.com/example/repo.git/") == ("example", "repo")
+    assert rpg.parse_github_remote_slug("https://github.com/example/repo.git?ref=main") == (
+        "example",
+        "repo",
+    )
+    assert rpg.parse_github_remote_slug("https://github.com/example/repo%2Fextra.git") is None
+    assert rpg.parse_github_remote_slug("https://github.com/owner%20space/repo.git") is None
+    assert rpg.parse_github_remote_slug("https://example.com/github.com/example/repo.git") is None
+    assert rpg.parse_github_remote_slug("https://github.com/example/repo/tree/main") is None
     assert rpg.parse_github_remote_slug("https://gitlab.com/example/repo.git") is None
 
 

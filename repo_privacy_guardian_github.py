@@ -22,7 +22,18 @@ GITHUB_HARDENING_TOKEN_ENV_KEYS = (
     "GITHUB_TOKEN",
     "GH_TOKEN",
 )
-GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?$", re.IGNORECASE)
+GITHUB_SCP_REMOTE_RE = re.compile(
+    r"^(?:[^@\s]+@)?github\.com:([^/\s]+)/([^/\s]+?)(?:\.git)?/?$",
+    re.IGNORECASE,
+)
+GITHUB_BARE_REMOTE_RE = re.compile(
+    r"^github\.com/([^/\s]+)/([^/\s]+?)(?:\.git)?/?$",
+    re.IGNORECASE,
+)
+REDACTED_SCP_REMOTE_RE = re.compile(
+    r"^[^@\s]+@([^:\s]+):([^/\s]+)/([^/\s]+?)(?:\.git)?/?$",
+    re.IGNORECASE,
+)
 ALLOWED_GITHUB_API_HOSTS = {"api.github.com"}
 GITHUB_ACTIONS_APP_ID = 15368
 AUTOMATIC_WORKFLOW_TRIGGERS = {
@@ -80,30 +91,62 @@ def infer_github_username_from_noreply(email: str) -> str | None:
 
 
 def parse_github_remote_owner(remote_url: str) -> str | None:
-    if not remote_url:
-        return None
-    normalized = remote_url.strip()
+    slug = parse_github_remote_slug(remote_url)
+    if slug:
+        return slug[0]
 
-    match = GITHUB_REMOTE_RE.search(normalized)
-    if not match:
-        redacted_scp = re.match(
-            r"^[^@\s]+@([^:\s]+):([^/\s]+)/([^/\s]+?)(?:\.git)?$",
-            normalized,
-            flags=re.IGNORECASE,
-        )
-        if redacted_scp and redacted_scp.group(1).lower().endswith(".invalid"):
-            return redacted_scp.group(2)
+    normalized = (remote_url or "").strip()
+    redacted_scp = REDACTED_SCP_REMOTE_RE.match(normalized)
+    if redacted_scp and redacted_scp.group(1).lower().endswith(".invalid"):
+        return redacted_scp.group(2)
+    return None
+
+
+def _strip_git_suffix(repo: str) -> str:
+    if repo.lower().endswith(".git"):
+        return repo[:-4]
+    return repo
+
+
+def _valid_github_slug_component(value: str) -> bool:
+    return bool(value) and "/" not in value and "\\" not in value and not any(char.isspace() for char in value)
+
+
+def _slug_from_github_path(path: str) -> tuple[str, str] | None:
+    parts = [urllib.parse.unquote(item) for item in path.strip("/").split("/") if item]
+    if len(parts) != 2:
         return None
-    return match.group(1)
+    owner, repo = parts
+    repo = _strip_git_suffix(repo)
+    if not _valid_github_slug_component(owner) or not _valid_github_slug_component(repo):
+        return None
+    return owner, repo
 
 
 def parse_github_remote_slug(remote_url: str) -> tuple[str, str] | None:
     if not remote_url:
         return None
-    match = GITHUB_REMOTE_RE.search(remote_url.strip())
-    if not match:
+    normalized = remote_url.strip()
+
+    scp_match = GITHUB_SCP_REMOTE_RE.match(normalized)
+    if scp_match:
+        owner, repo = scp_match.group(1), _strip_git_suffix(scp_match.group(2))
+        if not _valid_github_slug_component(owner) or not _valid_github_slug_component(repo):
+            return None
+        return owner, repo
+
+    bare_match = GITHUB_BARE_REMOTE_RE.match(normalized)
+    if bare_match:
+        owner, repo = bare_match.group(1), _strip_git_suffix(bare_match.group(2))
+        if not _valid_github_slug_component(owner) or not _valid_github_slug_component(repo):
+            return None
+        return owner, repo
+
+    parsed = urllib.parse.urlparse(normalized)
+    host = (parsed.hostname or "").lower()
+    if host != "github.com":
         return None
-    return match.group(1), match.group(2)
+    return _slug_from_github_path(parsed.path)
 
 
 def github_repo_api_url(owner: str, repo: str) -> str:
