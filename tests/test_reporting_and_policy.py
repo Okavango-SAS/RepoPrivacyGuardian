@@ -2810,7 +2810,7 @@ def test_execute_guard_pipeline_remote_github_audit_cleans_temp_clones(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    temp_root = tmp_path / "remote-clones"
+    temp_root = tmp_path / "repo-privacy-guardian-github-test"
     repo = temp_root / "repo-a"
     captured: dict[str, object] = {}
 
@@ -2895,6 +2895,38 @@ def test_clone_github_remote_repository_public_fast_uses_git(tmp_path: Path) -> 
     assert captured["cmd"][4] == "1"
     assert captured["cmd"][5] == remote.clone_url
     assert captured["kwargs"]["stdin"] == subprocess.DEVNULL
+
+
+def test_remove_private_temp_tree_removes_readonly_git_files(tmp_path: Path) -> None:
+    temp_root = tmp_path / "repo-privacy-guardian-github-test"
+    pack_dir = temp_root / "repo-a" / ".git" / "objects" / "pack"
+    pack_dir.mkdir(parents=True)
+    pack_file = pack_dir / "pack-test.idx"
+    pack_file.write_text("pack", encoding="utf-8")
+    pack_file.chmod(0o400)
+
+    removed, error = rpg.remove_private_temp_tree(
+        temp_root,
+        required_prefix="repo-privacy-guardian-github-",
+    )
+
+    assert removed is True
+    assert error is None
+    assert temp_root.exists() is False
+
+
+def test_remove_private_temp_tree_refuses_unexpected_prefix(tmp_path: Path) -> None:
+    temp_root = tmp_path / "not-rpg-temp"
+    temp_root.mkdir()
+
+    removed, error = rpg.remove_private_temp_tree(
+        temp_root,
+        required_prefix="repo-privacy-guardian-github-",
+    )
+
+    assert removed is False
+    assert "refusing to remove unexpected temporary directory path" in str(error)
+    assert temp_root.exists() is True
 
 
 def test_clone_github_remote_repository_private_requires_gh(tmp_path: Path) -> None:

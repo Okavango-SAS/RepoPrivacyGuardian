@@ -28,6 +28,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import stat
 import sys
 import tempfile
 import threading
@@ -496,6 +497,32 @@ def cleanup_private_temp_text_file(path: Path | None) -> None:
             temp_dir.rmdir()
     except OSError:
         pass
+
+
+def _make_path_writable_and_retry_remove(
+    remove_func: Callable[[str], None],
+    path: str,
+    _exc_info: object,
+) -> None:
+    try:
+        os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+        remove_func(path)
+    except OSError:
+        pass
+
+
+def remove_private_temp_tree(path: Path, *, required_prefix: str) -> tuple[bool, str | None]:
+    if not path.name.startswith(required_prefix):
+        return False, f"refusing to remove unexpected temporary directory path: {path}"
+    try:
+        if not path.exists():
+            return True, None
+        shutil.rmtree(path, onerror=_make_path_writable_and_retry_remove)
+    except OSError as exc:
+        return False, str(exc)
+    if path.exists():
+        return False, f"temporary directory still exists after cleanup: {path}"
+    return True, None
 
 
 def read_text_file_for_scan(path: Path, *, max_bytes: int = MAX_TRACKED_TEXT_SCAN_BYTES) -> str | None:
@@ -4984,11 +5011,14 @@ def execute_guard_pipeline(
             exit_code = EXIT_RUNTIME_ERROR
         finally:
             if remote_temp_root is not None:
-                try:
-                    shutil.rmtree(remote_temp_root, ignore_errors=True)
+                removed, cleanup_error = remove_private_temp_tree(
+                    remote_temp_root,
+                    required_prefix="repo-privacy-guardian-github-",
+                )
+                if removed:
                     logger("[INFO] Removed temporary GitHub clone directory.")
-                except Exception:
-                    pass
+                else:
+                    logger(f"[WARN] Could not remove temporary GitHub clone directory: {cleanup_error}")
             passed = sum(1 for rep in reports if rep.status == "PASS")
             failed = len(reports) - passed
             try:
