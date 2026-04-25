@@ -38,11 +38,12 @@ Choose the path that matches what you need right now:
 
 ## 📈 Release Posture
 
-- Current release line: `v1.2.x`.
+- Current release line: `v1.3.x`.
 - `v1.0.0` established the stable CLI, packaging, and release contract within the current local-first scope.
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
-- `v1.2.3` is the current patch-level public-release stabilization and GUI UX update.
+- `v1.2.3` is the public-release stabilization and GUI UX update.
+- `v1.3.0` is the current minor release with GitHub owner audit mode and GUI/CLI parity update.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -129,6 +130,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - GUI runs can be cancelled; cancellation stops after the active repository step completes and the run is recorded as `ABORTED`.
 - In the GUI, `Open HTML report automatically` is opt-in and off by default.
 - The GUI keeps the staged `Audit -> Repair` interaction so operators cannot jump straight to write actions.
+- GUI and CLI expose the same audit inputs for local repositories, GitHub owner/org remote audits, GitHub hardening, LiteLLM incident checks, report outputs, low-confidence email mode, and repair-only write options. GitHub owner/org remote audit remains audit-only in both paths.
 
 ## 📦 Installation
 
@@ -288,6 +290,8 @@ Remote audit filters:
 repo-privacy-guardian --github-owner MyOrg --repos ServiceA ServiceB --github-fast --github-jobs 4 --dry-run --yes
 repo-privacy-guardian --github-owner MyOrg --github-include-forks --public-only --dry-run --yes
 ```
+
+The GUI exposes the same GitHub owner/org fields: owner/org, comma-separated remote repo filters, include forks, fast shallow clone, clone workers, and public-only filtering.
 
 Safe fix preview:
 

@@ -169,6 +169,8 @@ repo-privacy-guardian --github-owner MyOrg --repos ServiceA ServiceB --github-fa
 
 Remote owner/org audit mode is opt-in and audit-only. It discovers repositories through the GitHub API, clones matches into a temporary private directory, audits them with the same policy pipeline, then removes the temporary clones. It must not be combined with `--fix` or `--push`.
 
+The GUI exposes the same remote-audit controls as CLI: GitHub owner/org, optional remote repository filters, include forks, shallow clone mode, clone workers, and public-only filtering.
+
 ### F) .gitignore policy and effectiveness
 
 Critical notes:

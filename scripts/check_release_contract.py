@@ -5,14 +5,15 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.2.3"
-CURRENT_VERSION_DESCRIPTION = "public-release stabilization and GUI UX update"
+CURRENT_VERSION = "1.3.0"
+CURRENT_VERSION_DESCRIPTION = "GitHub owner audit mode and GUI/CLI parity update"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
     "manual extended CI",
-    f"`v{CURRENT_VERSION}` is the current patch-level {CURRENT_VERSION_DESCRIPTION}",
+    f"`v{CURRENT_VERSION}` is the current minor release with {CURRENT_VERSION_DESCRIPTION}",
     "malformed non-email identity tokens",
+    "--github-owner",
 ]
 
 CHECKLIST_REQUIREMENTS = [
@@ -32,6 +33,7 @@ POLICY_REQUIREMENTS = [
     "Public commits must use a GitHub noreply email.",
     "malformed non-email identity tokens",
     'git log --all --pretty=format:"%h %an <%ae> | %cn <%ce>"',
+    "--github-owner",
 ]
 
 TROUBLESHOOTING_REQUIREMENTS = [
@@ -95,7 +97,11 @@ def validate_release_contract() -> list[str]:
         errors.append(f'pyproject.toml: expected `version = "{CURRENT_VERSION}"`')
     if f"## [{CURRENT_VERSION}]" not in changelog:
         errors.append(f"CHANGELOG.md: missing current version section `{CURRENT_VERSION}`")
-    if "`v1.2.1` is the current patch-level" in readme or "`v1.2.2` is the current patch-level" in readme:
+    if (
+        "`v1.2.1` is the current patch-level" in readme
+        or "`v1.2.2` is the current patch-level" in readme
+        or "`v1.2.3` is the current patch-level" in readme
+    ):
         errors.append("README.MD: stale current patch-level reference")
     if "GUI does not include pause/resume or cancellation controls." in known_issues:
         errors.append("docs/KNOWN_ISSUES.md: stale claim that GUI has no cancellation support")

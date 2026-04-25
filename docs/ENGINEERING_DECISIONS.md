@@ -73,6 +73,8 @@ This file captures key design decisions and their rationale.
 | Extra JSON export | Yes | Yes | No |
 | Report output directory selection | Yes | Yes | No |
 | Runtime pipeline implementation | Shared | Shared | No |
+| GitHub owner/org remote audit inputs | Yes | Yes | No |
+| GitHub owner/org audit-only enforcement | Yes | Yes | No |
 
 ### Implementation summary
 
@@ -88,6 +90,7 @@ This file captures key design decisions and their rationale.
   - open report toggle (`open_report` parity with CLI `--open-report`)
   - per-repository repair confirmation toggle (`confirm_each_repo_fix` parity)
   - push owner guardrail options (`allow_non_owner_push` and `allowed_remote_owners` parity)
+  - GitHub owner/org remote audit controls (`github_owner`, remote repo filters, include forks, shallow clone, clone workers, and public-only filtering parity)
 - Updated GUI interaction model with:
   - tabbed workflow (`Audit` and `Repair`) to reduce single-page overload
   - action separation (audit button in `Audit`, repair button in `Repair`)
@@ -98,6 +101,7 @@ This file captures key design decisions and their rationale.
   - Once unlocked, repair behavior preserves CLI-equivalent remediation semantics.
 - Aligned GUI `public_only` default with CLI default.
 - Aligned GUI repository scope behavior with CLI: if no repository filter is provided, run all repositories under root after explicit confirmation.
+- Aligned GUI GitHub owner/org mode with CLI: remote audits are opt-in, use the shared scanner pipeline through temporary clones, and remain audit-only with repair locked in the GUI.
 - Added parity regression tests for argument validation, defaults, confirmation gate, fix/re-audit flow, and runtime error handling.
 
 ### Residual risk and follow-up

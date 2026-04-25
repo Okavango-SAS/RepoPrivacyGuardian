@@ -5561,8 +5561,13 @@ class GuiApp:  # pragma: no cover
         self.report_json_var = tk.StringVar(value="")
         self.replace_text_file_var = tk.StringVar(value="")
         self.max_matches_var = tk.StringVar(value="50")
+        self.github_owner_var = tk.StringVar(value="")
+        self.github_repo_filters_var = tk.StringVar(value="")
+        self.github_jobs_var = tk.StringVar(value="4")
 
         self.public_only_var = tk.BooleanVar(value=GUI_DEFAULT_PUBLIC_ONLY)
+        self.github_include_forks_var = tk.BooleanVar(value=False)
+        self.github_fast_var = tk.BooleanVar(value=False)
         self.push_var = tk.BooleanVar(value=False)
         self.redact_var = tk.BooleanVar(value=False)
         self.rewrite_personal_paths_var = tk.BooleanVar(value=False)
@@ -5576,6 +5581,8 @@ class GuiApp:  # pragma: no cover
         self.confirm_each_repo_fix_var = tk.BooleanVar(value=True)
         self.allow_non_owner_push_var = tk.BooleanVar(value=False)
         self.audit_github_hardening_var.trace_add("write", self._on_audit_github_hardening_toggled)
+        self.github_owner_var.trace_add("write", self._on_github_remote_controls_changed)
+        self.github_repo_filters_var.trace_add("write", self._on_github_remote_controls_changed)
         self._purge_safe_checkbox = None
         self._purge_risky_checkbox = None
         self._allowed_remote_owner_entry = None
@@ -5784,6 +5791,71 @@ class GuiApp:  # pragma: no cover
             default_extension=".json",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
         )
+
+        row += 1
+        github_remote_card = ctk.CTkFrame(
+            settings_card,
+            fg_color="#F6FAFE",
+            corner_radius=10,
+            border_width=1,
+            border_color="#C9DDEE",
+        )
+        github_remote_card.grid(row=row, column=0, columnspan=3, sticky="we", padx=14, pady=(4, 10))
+        github_remote_card.grid_columnconfigure(1, weight=1)
+        github_remote_card.grid_columnconfigure(3, weight=1)
+        ctk.CTkLabel(
+            github_remote_card,
+            text="GitHub Owner / Org",
+            font=self._font(12),
+            text_color="#1E293B",
+        ).grid(row=0, column=0, sticky="w", padx=(12, 8), pady=(10, 4))
+        ctk.CTkEntry(
+            github_remote_card,
+            textvariable=self.github_owner_var,
+            height=32,
+            corner_radius=8,
+            placeholder_text="optional owner or organization",
+        ).grid(row=0, column=1, sticky="we", padx=(0, 12), pady=(10, 4))
+        ctk.CTkLabel(
+            github_remote_card,
+            text="Remote repo filters",
+            font=self._font(12),
+            text_color="#1E293B",
+        ).grid(row=0, column=2, sticky="w", padx=(0, 8), pady=(10, 4))
+        ctk.CTkEntry(
+            github_remote_card,
+            textvariable=self.github_repo_filters_var,
+            height=32,
+            corner_radius=8,
+            placeholder_text="repo-a, repo-b",
+        ).grid(row=0, column=3, sticky="we", padx=(0, 12), pady=(10, 4))
+        ctk.CTkLabel(
+            github_remote_card,
+            text="Clone workers",
+            font=self._font(12),
+            text_color="#1E293B",
+        ).grid(row=1, column=0, sticky="w", padx=(12, 8), pady=(4, 10))
+        ctk.CTkEntry(
+            github_remote_card,
+            textvariable=self.github_jobs_var,
+            width=90,
+            height=32,
+            corner_radius=8,
+        ).grid(row=1, column=1, sticky="w", padx=(0, 12), pady=(4, 10))
+        ctk.CTkCheckBox(
+            github_remote_card,
+            text="Include forks",
+            variable=self.github_include_forks_var,
+            font=self._font(12),
+            text_color="#1E293B",
+        ).grid(row=1, column=2, sticky="w", padx=(0, 12), pady=(4, 10))
+        ctk.CTkCheckBox(
+            github_remote_card,
+            text="Fast shallow clone",
+            variable=self.github_fast_var,
+            font=self._font(12),
+            text_color="#1E293B",
+        ).grid(row=1, column=3, sticky="w", padx=(0, 12), pady=(4, 10))
 
         row += 1
         ctk.CTkLabel(
@@ -7070,6 +7142,22 @@ class GuiApp:  # pragma: no cover
         if repo_summary_label is None:
             return
 
+        github_owner = self._github_owner_value()
+        if github_owner:
+            filters = self._github_repo_filters()
+            filter_text = (
+                "all matching repositories"
+                if filters is None
+                else f"{len(filters)} named remote repositories"
+            )
+            repo_summary_label.configure(
+                text=(
+                    f"GitHub owner/org audit is active for {github_owner}. "
+                    f"The local repository list is ignored; Audit will discover {filter_text} through GitHub."
+                )
+            )
+            return
+
         total = len(self._repo_items)
         selected = len(self.repo_list.curselection())
         includes_current_root = any(value == "." for _label, value in self._repo_items)
@@ -7262,10 +7350,35 @@ class GuiApp:  # pragma: no cover
             return
         self._offer_github_hardening_tooling_install()
 
+    def _github_owner_value(self) -> str | None:
+        variable = getattr(self, "github_owner_var", None)
+        value = variable.get().strip() if variable is not None else ""
+        return value or None
+
+    def _github_repo_filters(self) -> list[str] | None:
+        variable = getattr(self, "github_repo_filters_var", None)
+        value = variable.get() if variable is not None else ""
+        return normalize_csv_values(value) or None
+
+    def _on_github_remote_controls_changed(self, *_args: object) -> None:
+        self._update_repo_summary()
+        self._update_run_buttons_state()
+
     def _selection_signature(self, selected: list[str] | None) -> tuple[str, ...] | None:
         if selected is None:
             return None
         return tuple(sorted(selected))
+
+    def _run_selection_signature(
+        self,
+        selected: list[str] | None,
+        *,
+        github_owner: str | None,
+    ) -> tuple[str, ...] | None:
+        if not github_owner:
+            return self._selection_signature(selected)
+        filters = self._selection_signature(selected) or ()
+        return ("github-owner", github_owner.lower(), *filters)
 
     def _cancel_repair_cooldown(self) -> None:
         if self._repair_cooldown_after_id is None:
@@ -7280,13 +7393,14 @@ class GuiApp:  # pragma: no cover
         audit_button = getattr(self, "_audit_button", None)
         if audit_button is not None:
             has_targets = bool(getattr(self, "_repo_items", []))
-            audit_disabled = self._run_in_progress or not has_targets
+            has_remote_target = self._github_owner_value() is not None
+            audit_disabled = self._run_in_progress or not (has_targets or has_remote_target)
             primary_fg = getattr(self, "_primary_button_fg", "#0F766E")
             primary_hover = getattr(self, "_primary_button_hover", "#0B5F59")
             disabled_fg = getattr(self, "_disabled_button_fg", "#B8C6D5")
             disabled_text = getattr(self, "_disabled_button_text", "#64748B")
             audit_button.configure(
-                text="Run Audit" if has_targets else "Audit unavailable",
+                text="Run Audit" if (has_targets or has_remote_target) else "Audit unavailable",
                 state="disabled" if audit_disabled else "normal",
                 fg_color=disabled_fg if audit_disabled else primary_fg,
                 hover_color=disabled_fg if audit_disabled else primary_hover,
@@ -7314,8 +7428,9 @@ class GuiApp:  # pragma: no cover
 
     def _update_repo_selection_controls(self) -> None:
         has_targets = bool(getattr(self, "_repo_items", []))
+        has_remote_target = self._github_owner_value() is not None
         run_in_progress = bool(getattr(self, "_run_in_progress", False))
-        selection_state = "normal" if (has_targets and not run_in_progress) else "disabled"
+        selection_state = "normal" if (has_targets and not run_in_progress and not has_remote_target) else "disabled"
         repo_list = getattr(self, "repo_list", None)
         if repo_list is not None:
             try:
@@ -7584,6 +7699,12 @@ class GuiApp:  # pragma: no cover
             self.log("[INFO] Flow: audit ended with an operational error. Repair remains locked.")
             return
 
+        if selection_signature and selection_signature[0] == "github-owner":
+            self._lock_repair_until_next_audit("Repair (remote audit is audit-only)")
+            self._set_active_flow_tab(self._audit_tab_name)
+            self.log("[INFO] Flow: GitHub owner/org audit finished. Remote audit mode is audit-only.")
+            return
+
         self._start_repair_cooldown(reports_payload, selection_signature)
         self._set_active_flow_tab(self._repair_tab_name)
         self.log("[INFO] Flow: audit finished. Review the findings, then continue from the Repair tab.")
@@ -7785,10 +7906,21 @@ class GuiApp:  # pragma: no cover
 
         self._set_active_flow_tab(self._repair_tab_name if run_fix else self._audit_tab_name)
 
-        selected = self._selected_repo_names()
-        repos_to_run = normalize_repo_filters(selected)
-        selection_signature = self._selection_signature(repos_to_run)
-        if repos_to_run is None:
+        github_owner = self._github_owner_value()
+        if run_fix and github_owner:
+            self.messagebox.showwarning(
+                "Remote Audit Is Audit-Only",
+                "GitHub owner/org remote audit cannot be combined with Repair. Clear GitHub Owner / Org before repairing local repositories.",
+            )
+            return
+
+        if github_owner:
+            repos_to_run = self._github_repo_filters()
+        else:
+            selected = self._selected_repo_names()
+            repos_to_run = normalize_repo_filters(selected)
+        selection_signature = self._run_selection_signature(repos_to_run, github_owner=github_owner)
+        if repos_to_run is None and not github_owner:
             action_name = "repair" if run_fix else "audit"
             run_all = self.messagebox.askyesno(
                 "Run all repositories",
@@ -7809,6 +7941,16 @@ class GuiApp:  # pragma: no cover
                 "Max matches must be a positive integer.",
             )
             return
+
+        if github_owner:
+            try:
+                parse_positive_int(self.github_jobs_var.get().strip())
+            except argparse.ArgumentTypeError:
+                self.messagebox.showwarning(
+                    "Invalid GitHub Jobs",
+                    "GitHub clone workers must be a positive integer.",
+                )
+                return
 
         if not run_fix:
             self._lock_repair_until_next_audit("Repair (audit in progress)")
@@ -7840,6 +7982,8 @@ class GuiApp:  # pragma: no cover
             enforced_results_dir, forced = enforce_results_dir(Path(requested_report_dir))
             report_json = self.report_json_var.get().strip() or None
             replace_text_file = self.replace_text_file_var.get().strip() or None
+            github_owner = self._github_owner_value()
+            github_jobs = parse_positive_int(self.github_jobs_var.get().strip()) if github_owner else 4
 
             def _ui_sink(message: str) -> None:
                 def _emit() -> None:
@@ -7887,6 +8031,10 @@ class GuiApp:  # pragma: no cover
                 allowed_remote_owners=allowed_remote_owners,
                 replace_text_file=(replace_text_file if run_fix else None),
                 report_json=report_json,
+                github_owner=github_owner,
+                github_include_forks=self.github_include_forks_var.get(),
+                github_fast=self.github_fast_var.get(),
+                github_jobs=github_jobs,
                 audit_litellm_incident=self.audit_litellm_incident_var.get(),
                 audit_github_hardening=self.audit_github_hardening_var.get(),
             )

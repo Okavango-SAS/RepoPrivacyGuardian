@@ -23,6 +23,7 @@ Notes:
 - Treat `exfil_code_indicators` as advisory/manual-review by default. Review them, but do not expect them to flip PASS/FAIL on their own.
 - Treat `github_hardening_findings` and `github_hardening_warnings` as advisory/manual-review by default. Use `--audit-github-hardening` when the target repo lives on GitHub and you want to inspect repository settings as part of release readiness.
 - For GitHub hardening admin checks, support either token environment variables or an authenticated GitHub CLI session. GitHub MCP is not required for standalone CLI/Desktop use.
+- Use `--github-owner` only for opt-in remote audit discovery. It clones matching GitHub repos into temporary local directories, audits them with the same pipeline, and remains audit-only; do not combine it with `--fix` or `--push`.
 - Release validation should come from tracked tests only so a clean clone reproduces the same `pytest` signal.
 - Let the tool automate mechanical Git-safe remediation, but keep semantic source edits under review.
 - Use `--replace-text-file` when the repository contains a known literal that must be rewritten but the replacement cannot be inferred safely from the finding alone.
@@ -77,10 +78,20 @@ Optional GitHub release-hardening audit:
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening
 ```
 
+Optional GitHub owner/org remote audit:
+
+```sh
+repo-privacy-guardian --github-owner MyOrg --dry-run --yes
+repo-privacy-guardian --github-owner MyOrg --repos ServiceA ServiceB --github-fast --github-jobs 4 --dry-run --yes
+repo-privacy-guardian --github-owner MyOrg --github-include-forks --public-only --dry-run --yes
+```
+
 Notes:
 
 - Admin-only GitHub checks require `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN`.
+- GitHub owner/org audit reuses `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, or an authenticated `gh` session when private repository clones are needed.
 - The GitHub hardening audit inspects repository settings only; it does not push configuration changes.
+- The GUI exposes the same GitHub owner/org remote-audit controls as the CLI, but CLI remains preferred for agentic automation.
 
 Platform notes:
 

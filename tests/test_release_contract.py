@@ -622,6 +622,11 @@ def test_gui_run_worker_passes_replace_text_file_for_repair(tmp_path: Path, monk
     app.report_json_var = DummyVar("")
     app.replace_text_file_var = DummyVar("ops/replace-text.txt")
     app.public_only_var = DummyVar(False)
+    app.github_owner_var = DummyVar("")
+    app.github_repo_filters_var = DummyVar("")
+    app.github_include_forks_var = DummyVar(False)
+    app.github_fast_var = DummyVar(False)
+    app.github_jobs_var = DummyVar("4")
     app.push_var = DummyVar(False)
     app.redact_var = DummyVar(False)
     app.rewrite_personal_paths_var = DummyVar(False)
@@ -647,7 +652,82 @@ def test_gui_run_worker_passes_replace_text_file_for_repair(tmp_path: Path, monk
 
     assert captured["config"].replace_text_file == "ops/replace-text.txt"
     assert captured["config"].audit_github_hardening is True
+    assert captured["config"].github_owner is None
     assert captured["cancel_requested"] is True
+
+
+def test_gui_run_worker_passes_github_owner_remote_audit_options(tmp_path: Path, monkeypatch) -> None:
+    class DummyVar:
+        def __init__(self, value):
+            self.value = value
+
+        def get(self):
+            return self.value
+
+    class DummyRoot:
+        def after(self, _delay, callback):
+            callback()
+
+    captured: dict[str, object] = {}
+
+    def fake_execute_guard_pipeline(*, config, artifacts, logger, results_dir, **kwargs):  # type: ignore[no-untyped-def]
+        del artifacts, logger, results_dir, kwargs
+        captured["config"] = config
+        return 0
+
+    monkeypatch.setattr(rpg, "execute_guard_pipeline", fake_execute_guard_pipeline)
+
+    policy = tmp_path / "POLICY.md"
+    policy.write_text("# Policy\n", encoding="utf-8")
+
+    app = object.__new__(rpg.GuiApp)
+    app.root = DummyRoot()
+    app.root_var = DummyVar(str(tmp_path))
+    app.policy_var = DummyVar(str(policy))
+    app.owner_emails_var = DummyVar("")
+    app.allowed_remote_owners_var = DummyVar("")
+    app.report_dir_var = DummyVar(str(tmp_path / "Audit_Results"))
+    app.report_json_var = DummyVar("")
+    app.replace_text_file_var = DummyVar("ops/replace-text.txt")
+    app.public_only_var = DummyVar(True)
+    app.github_owner_var = DummyVar("Acme")
+    app.github_repo_filters_var = DummyVar("api, worker")
+    app.github_include_forks_var = DummyVar(True)
+    app.github_fast_var = DummyVar(True)
+    app.github_jobs_var = DummyVar("3")
+    app.push_var = DummyVar(True)
+    app.redact_var = DummyVar(False)
+    app.rewrite_personal_paths_var = DummyVar(True)
+    app.purge_detected_secret_files_var = DummyVar(True)
+    app.purge_all_detected_secret_files_var = DummyVar(True)
+    app.dry_run_var = DummyVar(True)
+    app.low_confidence_blocking_var = DummyVar(False)
+    app.audit_litellm_incident_var = DummyVar(False)
+    app.audit_github_hardening_var = DummyVar(False)
+    app.open_report_var = DummyVar(False)
+    app.confirm_each_repo_fix_var = DummyVar(True)
+    app.allow_non_owner_push_var = DummyVar(True)
+    app.owner_name_var = DummyVar("Owner")
+    app.noreply_var = DummyVar(rpg.DEFAULT_NOREPLY)
+    app.placeholder_var = DummyVar(rpg.DEFAULT_PLACEHOLDER)
+    app.max_matches_var = DummyVar("50")
+    app._active_cancel_token = None
+    app.log = lambda _msg: None
+    app._on_gui_run_finished = lambda *args, **kwargs: None
+
+    app._run_worker(["api", "worker"], 50, False, ("github-owner", "acme", "api", "worker"))
+
+    config = captured["config"]
+    assert config.github_owner == "Acme"
+    assert config.github_include_forks is True
+    assert config.github_fast is True
+    assert config.github_jobs == 3
+    assert config.repos == ["api", "worker"]
+    assert config.public_only is True
+    assert config.fix is False
+    assert config.push is False
+    assert config.replace_text_file is None
+    assert config.rewrite_personal_paths is False
 
 
 def test_gui_cancel_run_clicked_marks_token_and_logs() -> None:
@@ -704,6 +784,112 @@ def test_update_run_buttons_state_disables_refresh_button_while_run_is_active() 
     assert app._select_all_button.kwargs["state"] == "disabled"
     assert app._clear_selection_button.kwargs["state"] == "disabled"
     assert app.repo_list.state == "disabled"
+
+
+def test_update_run_buttons_state_allows_remote_github_audit_without_local_repos() -> None:
+    class DummyVar:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
+    class DummyWidget:
+        def __init__(self) -> None:
+            self.kwargs: dict[str, str] = {}
+
+        def configure(self, **kwargs) -> None:
+            self.kwargs.update(kwargs)
+
+    class DummyListbox:
+        def __init__(self) -> None:
+            self.state = "normal"
+
+        def configure(self, **kwargs) -> None:
+            if "state" in kwargs:
+                self.state = kwargs["state"]
+
+    app = object.__new__(rpg.GuiApp)
+    app.github_owner_var = DummyVar("acme")
+    app.github_repo_filters_var = DummyVar("")
+    app._run_in_progress = False
+    app._active_cancel_token = None
+    app._repo_items = []
+    app._audit_button = DummyWidget()
+    app._cancel_button = DummyWidget()
+    app._refresh_button = DummyWidget()
+    app._select_all_button = DummyWidget()
+    app._clear_selection_button = DummyWidget()
+    app._repair_button = None
+    app.repo_list = DummyListbox()
+
+    app._update_run_buttons_state()
+
+    assert app._audit_button.kwargs["text"] == "Run Audit"
+    assert app._audit_button.kwargs["state"] == "normal"
+    assert app.repo_list.state == "disabled"
+
+
+def test_gui_run_clicked_ignores_invalid_github_jobs_when_remote_owner_is_empty(monkeypatch) -> None:
+    class DummyVar:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
+    class DummyListbox:
+        def curselection(self) -> tuple[int]:
+            return (0,)
+
+    class DummyMessageBox:
+        def __init__(self) -> None:
+            self.warnings: list[tuple[str, str]] = []
+
+        def showinfo(self, title: str, message: str) -> None:
+            self.warnings.append((title, message))
+
+        def showwarning(self, title: str, message: str) -> None:
+            self.warnings.append((title, message))
+
+        def askyesno(self, _title: str, _message: str) -> bool:
+            return False
+
+    started: dict[str, object] = {}
+
+    class DummyThread:
+        def __init__(self, *, target, args, daemon):  # type: ignore[no-untyped-def]
+            started["target"] = target
+            started["args"] = args
+            started["daemon"] = daemon
+
+        def start(self) -> None:
+            started["started"] = True
+
+    monkeypatch.setattr(rpg.threading, "Thread", DummyThread)
+
+    app = object.__new__(rpg.GuiApp)
+    app._run_in_progress = False
+    app._audit_tab_name = "1. Audit"
+    app._repair_tab_name = "2. Repair"
+    app._set_active_flow_tab = lambda tab: started.setdefault("tab", tab)
+    app.github_owner_var = DummyVar("")
+    app.github_repo_filters_var = DummyVar("")
+    app.github_jobs_var = DummyVar("not-a-number")
+    app.max_matches_var = DummyVar("50")
+    app._repo_items = [("RepoPrivacyGuardian", "RepoPrivacyGuardian")]
+    app.repo_list = DummyListbox()
+    app.messagebox = DummyMessageBox()
+    app._lock_repair_until_next_audit = lambda reason: started.setdefault("lock", reason)
+    app._update_run_buttons_state = lambda: started.setdefault("buttons", True)
+    app._run_worker = lambda *args: None
+
+    app.run_clicked(False)
+
+    assert app.messagebox.warnings == []
+    assert app._run_in_progress is True
+    assert started["args"] == (["RepoPrivacyGuardian"], 50, False, ("RepoPrivacyGuardian",))
+    assert started["started"] is True
 
 
 def test_update_run_buttons_state_reflects_pending_stop_request() -> None:
@@ -849,6 +1035,39 @@ def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
     assert ("tab", "1. Audit") in seen
     assert any(item == ("log", "[INFO] Flow: audit cancelled. Run Audit again when you are ready to continue.") for item in seen)
     assert not any(kind == "cooldown" for kind, _value in seen)
+
+
+def test_on_gui_run_finished_keeps_repair_locked_after_remote_github_audit() -> None:
+    seen: list[tuple[str, str]] = []
+
+    app = object.__new__(rpg.GuiApp)
+    app._run_in_progress = True
+    app._active_cancel_token = rpg.CancellationToken()
+    app._lock_repair_until_next_audit = lambda reason: seen.append(("lock", reason))
+    app._set_active_flow_tab = lambda tab: seen.append(("tab", tab))
+    app._start_repair_cooldown = lambda reports_payload, selection_signature: seen.append(  # type: ignore[assignment]
+        ("cooldown", str((reports_payload, selection_signature)))
+    )
+    app.log = lambda message: seen.append(("log", message))
+    app._audit_tab_name = "1. Audit"
+    app._repair_tab_name = "2. Repair"
+
+    app._on_gui_run_finished(False, ("github-owner", "acme"), [{"name": "repo-a"}], rpg.EXIT_OK)
+
+    assert app._run_in_progress is False
+    assert app._active_cancel_token is None
+    assert ("lock", "Repair (remote audit is audit-only)") in seen
+    assert ("tab", "1. Audit") in seen
+    assert any("remote audit mode is audit-only" in value.lower() for kind, value in seen if kind == "log")
+    assert not any(kind == "cooldown" for kind, _value in seen)
+
+
+def test_gui_remote_selection_signature_includes_owner_and_filters() -> None:
+    app = object.__new__(rpg.GuiApp)
+
+    signature = app._run_selection_signature(["worker", "api"], github_owner="Acme")
+
+    assert signature == ("github-owner", "acme", "api", "worker")
 
 
 def test_choose_gui_font_family_prefers_available_candidates() -> None:

@@ -4,7 +4,7 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 ## Current stage
 
-- Current public line: `1.2.x`
+- Current public line: `1.3.x`
 - Maturity: stable for the CLI, packaging, and release-engineering surface
 - Goal of this stage: preserve the `1.x` contract while continuing additive hardening and documentation improvements
 
@@ -19,6 +19,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 `1.2.2` is an operations/readiness patch on top of `1.2.1`. It adds a repository-owned local release harness plus operator troubleshooting/runbook documentation without changing the CLI or local-first scope.
 
 `1.2.3` is a public-release stabilization patch on top of `1.2.2`. It restores release-governance alignment, tightens local/remote hardening audits, improves GUI onboarding and screenshot evidence, and preserves CLI/GUI parity without changing the CLI contract or report schema.
+
+`1.3.0` is an additive minor release on top of `1.2.3`. It adds opt-in GitHub owner/org remote audit mode, expands high-confidence secret detection, and restores GUI/CLI parity for the new remote-audit inputs while preserving the local-first default path.
 
 ## Versioning rules
 
