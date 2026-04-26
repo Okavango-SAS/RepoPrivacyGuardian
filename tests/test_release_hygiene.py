@@ -18,6 +18,7 @@ GUI_CONTRACT_DOCS = [
     "docs/KNOWN_ISSUES.md",
     "docs/LEARNED_LESSONS.md",
     "docs/RELEASE_CHECKLIST.md",
+    "docs/DOGFOODING.md",
     "docs/ROADMAP.md",
     "docs/prompts/02_PARIDAD_GUI_CLI.prompt.md",
 ]
@@ -46,10 +47,12 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian_resources/POLICY.md",
     "scripts/check_release_contract.py",
     "scripts/release_readiness.py",
+    "docs/DOGFOODING.md",
     "docs/prompts/01_AUDITORIA_Y_SEGUIMIENTO.prompt.md",
     "docs/prompts/02_PARIDAD_GUI_CLI.prompt.md",
     "docs/prompts/03_MEJORA_GUI_GITHUB_EMAIL.prompt.md",
     "docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md",
+    "docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md",
 ]
 
 RELEASE_DOCS_REQUIRED = [

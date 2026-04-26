@@ -1674,6 +1674,9 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "winget",
         "--replace-text-file",
         "Recommended agent prompt template",
+        "DOGFOODING",
+        "confirmed leaks, intentional fixtures/examples",
+        "05_DOGFOODING_AUDIT_ONLY.prompt.md",
         "What It Does Not Try To Be",
         "Release Engineering Docs",
         "CHANGELOG",
@@ -1698,8 +1701,46 @@ def test_agents_doc_describes_agentic_cli_workflow() -> None:
         "`--install-missing-tools`",
         "winget",
         "`--replace-text-file`",
+        "docs/DOGFOODING.md",
+        "confirmed leak",
+        "intentional fixture/example",
+        "raw sensitive values",
         "Act as a release/security engineer.",
     ]
 
     for snippet in required_snippets:
         assert snippet in agents
+
+
+def test_dogfooding_docs_preserve_audit_only_contract() -> None:
+    root = Path(__file__).resolve().parents[1]
+    dogfooding = (root / "docs" / "DOGFOODING.md").read_text(encoding="utf-8")
+    prompt = (root / "docs" / "prompts" / "05_DOGFOODING_AUDIT_ONLY.prompt.md").read_text(encoding="utf-8")
+
+    dogfooding_required = [
+        "The default posture is audit-only.",
+        "repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes",
+        "--audit-github-hardening",
+        "Confirmed leak",
+        "Intentional fixture/example",
+        "Indeterminate/manual review",
+        "Tooling/runtime issue",
+        "do not paste raw secret values",
+        "Audit_Results/<run_id>/report.json",
+        "No destructive changes were applied.",
+    ]
+    prompt_required = [
+        "sin activar fixes destructivos por default",
+        "repo-privacy-guardian --root <root> --repos <repo> --dry-run --yes",
+        "--audit-github-hardening",
+        "confirmed leak",
+        "fixture/documentacion intencional",
+        "tooling/runtime issue",
+        "No pegar secretos crudos",
+        "No destructive changes applied.",
+    ]
+
+    for snippet in dogfooding_required:
+        assert snippet in dogfooding
+    for snippet in prompt_required:
+        assert snippet in prompt

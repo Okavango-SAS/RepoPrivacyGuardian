@@ -20,6 +20,7 @@ This document defines how coding agents should use Repo Privacy Guardian from CL
 
 Notes:
 
+- Dogfooding runs for other repositories should follow `docs/DOGFOODING.md`: audit-only first, classify findings, preserve redacted evidence, and avoid pasting raw sensitive values into chat or tickets.
 - Treat `exfil_code_indicators` as advisory/manual-review by default. Review them, but do not expect them to flip PASS/FAIL on their own.
 - Treat `github_hardening_findings` and `github_hardening_warnings` as advisory/manual-review by default. Use `--audit-github-hardening` when the target repo lives on GitHub and you want to inspect repository settings as part of release readiness.
 - For GitHub hardening admin checks, support either token environment variables or an authenticated GitHub CLI session. GitHub MCP is not required for standalone CLI/Desktop use.
@@ -116,6 +117,8 @@ When reporting findings, keep outputs actionable and brief.
 - State risk level.
 - State possible consequence.
 - State one suggested next action.
+- Classify each finding as confirmed leak, intentional fixture/example, indeterminate/manual-review, advisory hardening, or tooling/runtime issue before proposing remediation.
+- Reference `report.json`, `report.html`, and `run.log` by path, but do not paste raw secrets, private emails, internal URLs, hostnames, or personal absolute paths.
 
 Avoid dumping all raw findings first. Start with decision guidance, then show details only if needed.
 
@@ -127,8 +130,9 @@ Use this prompt style when delegating execution to an agent:
 Act as a release/security engineer. Work only on <target-repo>.
 Use Repo Privacy Guardian from CLI, not GUI.
 Start with --help, then run a dry-run audit, review whether findings are real leaks or intentional fixtures,
-apply only safe reviewed fixes, use --replace-text-file only for explicit operator-approved substitutions,
-re-run until PASS, and preserve artifacts under Audit_Results.
+classify each finding with redacted evidence references, apply only safe reviewed fixes,
+use --replace-text-file only for explicit operator-approved substitutions, re-run until PASS,
+and preserve artifacts under Audit_Results.
 Do not push or rewrite history without explicit approval.
 ```
 

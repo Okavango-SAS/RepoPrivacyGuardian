@@ -90,6 +90,7 @@ Update the docs that are closest to the real behavior you changed:
 
 - `README.MD`: entrypoint, install, usage, and repo-level navigation
 - `docs/ARCHITECTURE.md`: code navigation and subsystem boundaries
+- `docs/DOGFOODING.md`: audit-only workflow for using this repo against other repositories
 - `docs/OPERATIONS.md`: release/readiness runbook
 - `docs/TROUBLESHOOTING.md`: operator failure modes and recovery
 - `docs/ENGINEERING_DECISIONS.md`: behavior changes that settle a design tradeoff

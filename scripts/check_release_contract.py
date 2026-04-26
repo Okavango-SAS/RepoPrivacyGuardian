@@ -14,6 +14,8 @@ README_REQUIREMENTS = [
     f"`v{CURRENT_VERSION}` is the current patch release with {CURRENT_VERSION_DESCRIPTION}",
     "malformed non-email identity tokens",
     "--github-owner",
+    "DOGFOODING",
+    "confirmed leaks, intentional fixtures/examples",
 ]
 
 CHECKLIST_REQUIREMENTS = [
@@ -21,6 +23,7 @@ CHECKLIST_REQUIREMENTS = [
     "manual extended CI suite has been run",
     "validation tiers documented in README",
     "branch protection required status checks match the current automatic CI smoke job names",
+    "Classify each finding as confirmed leak",
 ]
 
 KNOWN_ISSUES_REQUIREMENTS = [
@@ -53,16 +56,41 @@ WORKFLOW_REQUIREMENTS = [
     'run: python scripts/check_release_contract.py',
     'run: python tests/release_smoke_cli.py',
     'run: python tests/release_smoke_gui.py',
+    '- "AGENTS.MD"',
     '- "CHANGELOG.md"',
     '- "README.MD"',
+    '- "docs/DOGFOODING.md"',
     '- "docs/KNOWN_ISSUES.md"',
     '- "docs/POLICY.md"',
     '- "docs/RELEASE_CHECKLIST.md"',
     '- "docs/TROUBLESHOOTING.md"',
     '- "docs/VERSIONING.md"',
+    '- "docs/prompts/**"',
     '- "scripts/check_release_contract.py"',
     '- "scripts/release_readiness.py"',
     '- "tests/**"',
+]
+
+DOGFOODING_REQUIREMENTS = [
+    "The default posture is audit-only.",
+    "repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes",
+    "confirmed leak",
+    "Intentional fixture/example",
+    "Indeterminate/manual review",
+    "Audit_Results/<run_id>/report.json",
+    "do not paste raw secret values",
+    "No destructive changes were applied.",
+    "--audit-github-hardening",
+]
+
+DOGFOODING_PROMPT_REQUIREMENTS = [
+    "No destructive changes applied.",
+    "confirmed leak",
+    "fixture/documentacion intencional",
+    "advisory hardening",
+    "tooling/runtime issue",
+    "No pegar secretos crudos",
+    "--audit-github-hardening",
 ]
 
 
@@ -82,6 +110,8 @@ def validate_release_contract() -> list[str]:
     policy = _read("docs/POLICY.md")
     troubleshooting = _read("docs/TROUBLESHOOTING.md")
     versioning = _read("docs/VERSIONING.md")
+    dogfooding = _read("docs/DOGFOODING.md")
+    dogfooding_prompt = _read("docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md")
     workflow = _read(".github/workflows/ci.yml")
     pyproject = _read("pyproject.toml")
     changelog = _read("CHANGELOG.md")
@@ -92,6 +122,14 @@ def validate_release_contract() -> list[str]:
     errors.extend(_require_contains(policy, POLICY_REQUIREMENTS, "docs/POLICY.md"))
     errors.extend(_require_contains(troubleshooting, TROUBLESHOOTING_REQUIREMENTS, "docs/TROUBLESHOOTING.md"))
     errors.extend(_require_contains(versioning, VERSIONING_REQUIREMENTS, "docs/VERSIONING.md"))
+    errors.extend(_require_contains(dogfooding, DOGFOODING_REQUIREMENTS, "docs/DOGFOODING.md"))
+    errors.extend(
+        _require_contains(
+            dogfooding_prompt,
+            DOGFOODING_PROMPT_REQUIREMENTS,
+            "docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md",
+        )
+    )
     errors.extend(_require_contains(workflow, WORKFLOW_REQUIREMENTS, ".github/workflows/ci.yml"))
 
     if f'version = "{CURRENT_VERSION}"' not in pyproject:

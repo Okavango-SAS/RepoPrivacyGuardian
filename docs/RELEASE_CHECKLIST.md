@@ -20,8 +20,11 @@ Use this checklist before tagging a public release.
 
 - Run audit on target repositories.
 - Save JSON report artifact.
+- For dogfooding another repository, follow `docs/DOGFOODING.md` and keep the first pass audit-only.
 - Review FAIL reasons by severity.
 - Review advisory/manual-review findings separately from blockers, including `exfil_code_indicators`.
+- Classify each finding as confirmed leak, intentional fixture/example, indeterminate/manual-review, advisory hardening, or tooling/runtime issue before proposing fixes.
+- Reference redacted evidence only; do not paste raw secrets, private emails, hostnames, internal URLs, or personal absolute paths into public notes.
 - If using GUI, confirm `Audit` is the first executable step and `Repair` is visually locked before audit context is available.
 
 ## 3. Remediation plan

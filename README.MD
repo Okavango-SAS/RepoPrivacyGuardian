@@ -438,18 +438,22 @@ Repo Privacy Guardian works well as an agent-driven CLI tool. A safe default pat
 4. real fix only for the reviewed repos
 5. re-run until `PASS`
 
+For dogfooding against another repository, use [DOGFOODING](docs/DOGFOODING.md). That runbook keeps the first pass audit-only, requires classification of confirmed leaks versus intentional fixtures/examples, and treats `Audit_Results/<run_id>/` artifacts as sensitive local evidence even when redacted.
+
 ### Recommended agent prompt template
 
 ```text
 Act as a release/security engineer. Work only on <target-repo>.
 Use Repo Privacy Guardian from CLI, not GUI.
-Start with --help, then run a dry-run audit, analyze whether findings are real leaks or intentional fixtures,
-apply only safe reviewed fixes, use --replace-text-file only when an explicit literal replacement is required,
+Start with --help, then run a dry-run audit, classify findings as confirmed leaks, intentional fixtures/examples,
+indeterminate/manual-review, advisory hardening, or tooling/runtime issues. Reference redacted evidence from
+Audit_Results/<run_id>/report.json, report.html, and run.log without pasting raw secrets or private paths.
+Apply only safe reviewed fixes, use --replace-text-file only when an explicit literal replacement is required,
 re-run the audit until the repository is PASS, and preserve audit artifacts under Audit_Results.
 Do not push or rewrite history without explicit approval.
 ```
 
-The repository also includes reusable prompt files under `docs/prompts/` for agentic audit and parity workflows.
+The repository also includes reusable prompt files under `docs/prompts/`, including `05_DOGFOODING_AUDIT_ONLY.prompt.md`, for agentic audit and parity workflows.
 
 ## 🧰 Headless and Desktop Diagnostics
 
@@ -491,6 +495,7 @@ Validation tiers for this repository:
 - [VERSIONING](docs/VERSIONING.md): versioning policy, stable-baseline notes, and `1.x` release discipline
 - [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md): pre-tag release checklist
 - [OPERATIONS](docs/OPERATIONS.md): local runbook for preflight, release validation, and recovery
+- [DOGFOODING](docs/DOGFOODING.md): audit-only workflow for using the tool defensively on other repositories
 - [TROUBLESHOOTING](docs/TROUBLESHOOTING.md): common operator failures and fast diagnosis paths
 - [RELEASE_NOTES_TEMPLATE](docs/RELEASE_NOTES_TEMPLATE.md): lightweight notes template for public releases
 - [ROADMAP](docs/ROADMAP.md): current maturity, next hardening steps, and out-of-scope boundaries
@@ -501,7 +506,7 @@ Validation tiers for this repository:
 - `repo_privacy_guardian_artifacts.py`: typed run-artifact and run-state helpers shared by CLI and GUI flow
 - `repo_privacy_guardian_resources/`: packaged policy resource used by installed builds
 - `config/requirements/`: compatibility dependency manifests
-- `docs/`: policy, prompts, release docs, and engineering rationale
+- `docs/`: policy, dogfooding runbook, prompts, release docs, and engineering rationale
 - `tests/`: tracked regression, packaging, smoke coverage, and release hygiene
 - `.github/workflows/ci.yml`: cost-first automatic CLI smoke plus manual extended validation and Windows GUI smoke
 
