@@ -5,13 +5,15 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.3.5"
-CURRENT_VERSION_DESCRIPTION = "GUI locale selector and parity hardening"
+CURRENT_VERSION = "1.3.6"
+CURRENT_VERSION_DESCRIPTION = "first-run onboarding and CLI help clarity"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
     "manual extended CI",
     f"`v{CURRENT_VERSION}` is the current patch release with {CURRENT_VERSION_DESCRIPTION}",
+    "## ⚡ 60-Second First Run",
+    "How to read the first result:",
     "malformed non-email identity tokens",
     "--github-owner",
     "DOGFOODING",

@@ -10184,9 +10184,19 @@ def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Audit/fix repository public-release safety based on docs/POLICY.md. "
+            "Start safely with --check-tooling, then a --dry-run audit; fixes are opt-in. "
             "Outbound/exfil indicators remain advisory/manual-review by default."
         ),
         epilog=(
+            "First-time safe path (no writes):\n"
+            "  repo-privacy-guardian --check-tooling\n"
+            "  repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes\n"
+            "\n"
+            "Read the result:\n"
+            "  PASS   no blocking publication issues were found\n"
+            "  REVIEW inspect advisory findings before publishing\n"
+            "  FAIL   do not publish until blocking findings are fixed\n"
+            "\n"
             "Common CLI flow:\n"
             "  repo-privacy-guardian --check-tooling\n"
             "  repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes\n"

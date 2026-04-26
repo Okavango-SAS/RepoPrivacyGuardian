@@ -154,6 +154,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.3.1`" in versioning
     assert "`1.3.4`" in versioning
     assert "`1.3.5`" in versioning
+    assert "`1.3.6`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "Validation evidence" in release_notes
 
@@ -245,6 +246,8 @@ def test_changelog_records_stable_release() -> None:
     assert "GitHub owner audit mode and GUI/CLI parity update." in changelog
     assert "## [1.3.1] - 2026-04-25" in changelog
     assert "Release-readiness reliability hardening update." in changelog
+    assert "## [1.3.6] - 2026-04-26" in changelog
+    assert "First-run onboarding and CLI help clarity update." in changelog
     assert "## [1.3.5] - 2026-04-26" in changelog
     assert "GUI locale selector and parity hardening update." in changelog
     assert "## [1.3.4] - 2026-04-26" in changelog
@@ -271,9 +274,9 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.3.5"' in pyproject
+    assert 'version = "1.3.6"' in pyproject
     assert "Current release line: `v1.3.x`." in readme
-    assert "`v1.3.5` is the current patch release with GUI locale selector and parity hardening." in readme
+    assert "`v1.3.6` is the current patch release with first-run onboarding and CLI help clarity." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme

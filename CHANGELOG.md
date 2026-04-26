@@ -4,9 +4,15 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.3.6] - 2026-04-26
+
+First-run onboarding and CLI help clarity update.
+
 ### Added
 
-- Added a concise bilingual README opening so Spanish-speaking GUI users can understand the tool and launch the localized desktop path without duplicating the full technical documentation.
+- Added a concise README 60-second first-run path for skim-reading users, including install, tooling preflight, safe audit, GUI launch, and PASS/REVIEW/FAIL interpretation.
+- Added clearer CLI help epilog guidance so `--help` now shows the safe no-write first run and explains result meanings before advanced examples.
+- Added contract coverage for the first-run README path and CLI help decision guidance.
 
 ## [1.3.5] - 2026-04-26
 

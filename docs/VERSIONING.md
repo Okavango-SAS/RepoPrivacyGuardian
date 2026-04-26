@@ -32,6 +32,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.3.5` is a GUI localization patch on top of `1.3.4`. It adds a persisted English / Spanish (Latin America) GUI language selector and locale catalogs while keeping CLI flags, reports, and `GuardRunConfig` mappings unchanged.
 
+`1.3.6` is a first-run onboarding patch on top of `1.3.5`. It adds a concise README quick path and clearer CLI help guidance for new users while keeping audit behavior, remediation defaults, and report schema unchanged.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

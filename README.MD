@@ -24,6 +24,25 @@ Luego abrí `Settings` (`Configuración`) → `GUI Language` (`Idioma de la GUI`
 
 **English.** Repo Privacy Guardian audits Git repositories before public release: it detects secrets, Git identity metadata, personal paths, sensitive files, and `.gitignore` drift, then writes local JSON, HTML, and log evidence. The CLI remains English for automation compatibility, while the GUI can switch between `English` and `Español (Latinoamérica)` without changing behavior or reports.
 
+## ⚡ 60-Second First Run
+
+Use this when you cloned the repository and just want to know if another repo is safe to publish.
+
+| Goal | Command |
+| --- | --- |
+| Install the CLI from this checkout | `python -m pip install .` |
+| Check local prerequisites | `repo-privacy-guardian --check-tooling` |
+| Audit one repo without writing changes | `repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes` |
+| Open the desktop GUI | `python -m pip install ".[gui]"` then `repo-privacy-guardian --gui` |
+
+How to read the first result:
+
+- `PASS`: no blocking publication issue was found.
+- `REVIEW`: the repo may still be publishable, but inspect advisory findings first.
+- `FAIL`: do not publish yet; fix the blocking findings and re-run the audit.
+
+All run evidence stays local under `Audit_Results/<run_id>/` as `report.json`, `report.html`, and `run.log`.
+
 ## ✨ Why This Exists
 
 - Catch sensitive Git identity metadata before it leaks.
@@ -37,7 +56,7 @@ Luego abrí `Settings` (`Configuración`) → `GUI Language` (`Idioma de la GUI`
 
 Choose the path that matches what you need right now:
 
-- First-time operator: read `--help`, run `--check-tooling`, then do a dry-run audit.
+- First-time operator: use the 60-second path above, then inspect `Audit_Results/<run_id>/report.html`.
 - Contributor working from a checkout: use [LOCAL_DEVELOPMENT](docs/LOCAL_DEVELOPMENT.md) for setup, validation loops, and repo map.
 - Maintainer preparing a release: use [OPERATIONS](docs/OPERATIONS.md), [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md), and `python scripts/release_readiness.py`.
 
@@ -58,7 +77,7 @@ Choose the path that matches what you need right now:
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
 - `v1.2.3` is the public-release stabilization and GUI UX update.
-- `v1.3.5` is the current patch release with GUI locale selector and parity hardening.
+- `v1.3.6` is the current patch release with first-run onboarding and CLI help clarity.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.

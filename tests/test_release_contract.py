@@ -56,6 +56,12 @@ def test_main_without_args_prints_help_and_does_not_launch_gui(
 def test_parser_help_mentions_common_cli_flow() -> None:
     help_text = rpg.make_parser().format_help()
 
+    assert "Start safely with --check-tooling, then a --dry-run audit; fixes are opt-in." in help_text
+    assert "First-time safe path (no writes):" in help_text
+    assert "Read the result:" in help_text
+    assert "PASS   no blocking publication issues were found" in help_text
+    assert "REVIEW inspect advisory findings before publishing" in help_text
+    assert "FAIL   do not publish until blocking findings are fixed" in help_text
     assert "Common CLI flow:" in help_text
     assert "repo-privacy-guardian --check-tooling" in help_text
     assert "repo-privacy-guardian --gui" in help_text
@@ -1943,6 +1949,11 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "Español (Latinoamérica)",
         "La CLI se mantiene en inglés para preservar compatibilidad con automatizaciones",
         'python -m pip install ".[gui]"',
+        "## ⚡ 60-Second First Run",
+        "How to read the first result:",
+        "`PASS`: no blocking publication issue was found.",
+        "`REVIEW`: the repo may still be publishable",
+        "`FAIL`: do not publish yet",
     ]
 
     for snippet in required_snippets:
