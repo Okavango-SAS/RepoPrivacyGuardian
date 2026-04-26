@@ -192,8 +192,23 @@ def _github_ok_hardening_response(url: str) -> tuple[object | None, str] | None:
 def test_secret_content_patterns_include_specific_provider_tokens() -> None:
     samples = [
         "gho_" + ("A" * 36),
+        "github_pat_" + ("A" * 80),
+        "glpat-" + ("A" * 24),
+        "gldt-" + ("B" * 24),
+        "glrt-" + ("C" * 24),
+        "glptt-" + ("D" * 24),
+        "cfut_" + ("E" * 44),
+        "cfat_" + ("F" * 44),
         "https://hooks.slack.com/services/T" + ("A" * 8) + "/B" + ("B" * 8) + "/" + ("C" * 24),
+        "https://discord.com/api/webhooks/" + ("1" * 18) + "/" + ("A" * 48),
+        "xapp-" + ("A" * 24),
+        "xwfp-" + ("B" * 24),
         _fixture_stripe_secret(),
+        "rk_live_" + ("A" * 24),
+        "sk-proj-" + ("A" * 40),
+        "sk-svcacct-" + ("B" * 40),
+        "sk-ant-api03-" + ("C" * 40),
+        "sk-ant-admin" + ("D" * 40),
         "SG." + ("A" * 22) + "." + ("B" * 43),
         "npm_" + ("A" * 36),
         "123456789:" + ("A" * 35),
@@ -201,7 +216,13 @@ def test_secret_content_patterns_include_specific_provider_tokens() -> None:
         "heroku_api_key=" + ("a" * 8) + "-" + ("b" * 4) + "-" + ("c" * 4) + "-" + ("d" * 4) + "-" + ("e" * 12),
         "AccountKey=" + ("A" * 88),
         "aws_secret_access_key=" + ("A" * 40),
+        "cloudflare_api_token=" + ("A" * 40),
+        "datadog_api_key=" + ("a" * 32),
+        "twilio_auth_token=" + ("b" * 32),
+        "mailgun_api_key=key-" + ("c" * 32),
+        "Authorization: Bearer " + ("A" * 32),
         "postgres://user:" + ("A" * 16) + "@db.example.invalid/app",
+        "https://svc:" + ("P" * 16) + "@api.example.invalid/v1",
     ]
 
     for sample in samples:
@@ -211,6 +232,48 @@ def test_secret_content_patterns_include_specific_provider_tokens() -> None:
 def test_secret_content_patterns_do_not_block_generic_assignments() -> None:
     generic = 'password="' + ("not-a-real-secret" * 2) + '"'
     assert rpg.SECRET_CONTENT_RE.search(generic) is None
+
+
+def test_secret_taxonomy_classifies_generic_assignments_and_safe_examples() -> None:
+    generic = 'api_key="' + ("synthetic-review-token" * 2) + '"'
+    assert rpg.SECRET_CONTENT_RE.search(generic) is None
+    assert rpg.LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE.search(generic)
+
+    fixture_context = rpg.classify_secret_match_context(
+        "tests/fixtures/secrets.txt",
+        "token=ghp_" + ("A" * 36),
+    )
+    doc_context = rpg.classify_secret_match_context(
+        "README.md",
+        "postgres://user:pass@example.invalid/db",
+    )
+    active_context = rpg.classify_secret_match_context(
+        "src/settings.py",
+        "api_key=" + ("A" * 32),
+    )
+
+    assert fixture_context == "fixture"
+    assert doc_context == "documentation"
+    assert active_context == "active"
+
+
+def test_sensitive_filename_patterns_cover_env_provider_and_git_artifacts() -> None:
+    sensitive_paths = [
+        ".env.production",
+        ".npmrc",
+        ".pypirc",
+        ".netrc",
+        ".docker/config.json",
+        ".aws/credentials",
+        ".kube/config",
+        "kubeconfig",
+        "id_ed25519",
+    ]
+
+    for path in sensitive_paths:
+        assert rpg.SENSITIVE_FILENAME_RE.search(path), path
+
+    assert rpg.SENSITIVE_FILENAME_RE.search(".env.example") is None
 
 
 def test_run_logger_writes_file_and_calls_sink(tmp_path: Path) -> None:
@@ -1101,6 +1164,12 @@ def test_audit_repo_records_tracked_file_enumeration_failures(tmp_path: Path, mo
             ),
             ("ls-files", "-z"): rpg.CommandResult(1, "", "fatal: simulated ls-files failure"),
             ("ls-files", "-ci", "--exclude-standard"): rpg.CommandResult(0, "", ""),
+            (
+                "config",
+                "--local",
+                "--get-regexp",
+                r"^(http\..*\.extraheader|url\..*\.insteadOf|credential\..*)",
+            ): rpg.CommandResult(1, "", ""),
             ("log", "--all", "--diff-filter=A", "--name-only", "--pretty=format:"): rpg.CommandResult(
                 0,
                 "",
@@ -2136,12 +2205,16 @@ def test_email_match_context_edge_cases_and_empty_ownership_split() -> None:
 
 def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     secret = _fixture_secret()
+    low_confidence_secret = "api_key=" + ("synthetic-review-token" * 2)
+    credentialed_url = "https://svc:" + ("P" * 16) + "@api.example.invalid/v1"
     win_path = _fixture_win_user_path("Documents", "repo")
     escaped_win_path = _fixture_escaped_win_user_path("Documents", "repo")
     unix_user_path = _fixture_unix_user_path("Users", "bob", "repo")
     unix_home_path = _fixture_unix_user_path("home", "carol", ".ssh")
     sample = (
         f"token {secret} "
+        f"generic {low_confidence_secret} "
+        f"url {credentialed_url} "
         "email dev@example.com "
         f"path {win_path} "
         f"json_path {escaped_win_path} "
@@ -2152,6 +2225,8 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     redacted = rpg.redact_sensitive_text(sample)
 
     assert rpg.REDACTED_SECRET in redacted
+    assert "synthetic-review-token" not in redacted
+    assert "svc:" not in redacted
     assert rpg.REDACTED_EMAIL in redacted
     assert "C:\\Users\\<redacted>" in redacted
     assert "C:\\\\Users\\\\<redacted>" in redacted
@@ -2162,6 +2237,7 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
 
     report = _make_report("repo-a")
     report.path = _fixture_win_user_path_slash("repo-a")
+    report.origin_url = credentialed_url
     report.clean_status = "author dev@example.com"
     report.author_emails = ["dev@example.com"]
     report.committer_emails = ["ops@example.com"]
@@ -2174,11 +2250,19 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     report.unexpected_identity_tokens_owned_repo = ["owner at privacy dot dev"]
     report.unexpected_identity_tokens_third_party_repo = ["12345"]
     report.tracked_secret_matches = [f"secret.txt:1:{secret}"]
+    report.tracked_secret_high_confidence = [f"secret.txt:1:{secret}"]
+    report.tracked_secret_low_confidence = [f"settings.py:1:{low_confidence_secret}"]
+    report.tracked_secret_fixture_matches = [f"tests/fixtures/secrets.txt:1:{secret}"]
+    report.tracked_secret_documentation_matches = [
+        "README.md:1:postgres://user:pass@example.invalid/db"
+    ]
     report.tracked_path_matches = [f"file.txt:1:{_fixture_win_user_path_slash('Documents')}"]
     report.tracked_email_matches = ["file.txt:2:dev@example.com"]
     report.tracked_email_high_confidence = ["src/main.py:2:dev@example.com"]
     report.tracked_email_low_confidence = ["tests/test_main.py:2:dev@example.com"]
     report.history_email_matches = ["L1:dev@example.com:+ email = 'dev@example.com'"]
+    report.history_secret_low_confidence = [f"L1:src/settings.py:{low_confidence_secret}"]
+    report.git_metadata_secret_matches = [f"origin_url:{credentialed_url}"]
     report.history_email_high_confidence = ["L1:dev@example.com:+ email = 'dev@example.com'"]
     report.history_email_low_confidence = ["L2:dev@example.com:+ assert foo('dev@example.com')"]
     report.github_hardening_findings = ["GitHub repository hardening: .github/CODEOWNERS is missing."]
@@ -2187,6 +2271,7 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     payload = rpg.sanitize_report_for_export(report)
 
     assert payload["path"] == "C:/Users/<redacted>/repo-a"
+    assert payload["origin_url"] == rpg.REDACTED_SECRET
     assert payload["author_emails"] == [rpg.REDACTED_EMAIL]
     assert payload["committer_emails"] == [rpg.REDACTED_EMAIL]
     assert payload["author_identity_tokens"] == [rpg.REDACTED_IDENTITY_TOKEN]
@@ -2201,6 +2286,12 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     assert payload["unexpected_identity_tokens_owned_repo"] == [rpg.REDACTED_IDENTITY_TOKEN]
     assert payload["unexpected_identity_tokens_third_party_repo"] == [rpg.REDACTED_IDENTITY_TOKEN]
     assert rpg.REDACTED_SECRET in payload["tracked_secret_matches"][0]
+    assert rpg.REDACTED_SECRET in payload["tracked_secret_high_confidence"][0]
+    assert rpg.REDACTED_SECRET in payload["tracked_secret_low_confidence"][0]
+    assert rpg.REDACTED_SECRET in payload["tracked_secret_fixture_matches"][0]
+    assert rpg.REDACTED_SECRET in payload["tracked_secret_documentation_matches"][0]
+    assert rpg.REDACTED_SECRET in payload["history_secret_low_confidence"][0]
+    assert rpg.REDACTED_SECRET in payload["git_metadata_secret_matches"][0]
     assert rpg.REDACTED_EMAIL in payload["tracked_email_matches"][0]
     assert rpg.REDACTED_EMAIL in payload["tracked_email_high_confidence"][0]
     assert rpg.REDACTED_EMAIL in payload["tracked_email_low_confidence"][0]

@@ -24,6 +24,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.3.1` is a release-readiness hardening patch on top of `1.3.0`. It bounds GitHub CLI auth probes, owner/org discovery pagination, clone worker fan-out, temp cleanup retries, atomic report writes, and subprocess-based smoke/test helpers without changing the CLI contract.
 
+`1.3.2` is a secret-taxonomy hardening patch on top of `1.3.1`. It broadens modern provider/webhook/credentialed-URL/Git-metadata detection, separates low-confidence generic assignments from blocking high-confidence findings, and classifies synthetic fixtures and safe documentation examples without changing default remediation safety.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

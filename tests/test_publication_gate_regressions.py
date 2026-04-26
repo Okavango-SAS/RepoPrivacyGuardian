@@ -148,6 +148,78 @@ def test_env_example_is_allowed_as_tracked_template_file(tmp_path: Path) -> None
     assert report.history_sensitive_added == []
 
 
+def test_secret_taxonomy_keeps_low_confidence_and_safe_examples_non_blocking(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "secret-taxonomy-safe")
+    generic_value = "synthetic-review-token" * 2
+    high_shape_fixture = "ghp_" + ("A" * 36)
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "src" / "settings.py", f'api_key="{generic_value}"\n')
+    _write(repo / "tests" / "fixtures" / "secrets.txt", f"token={high_shape_fixture}\n")
+    _write(repo / "README.md", "postgres://user:pass@example.invalid/db\n")
+    _commit_all(repo, "add synthetic secret taxonomy examples")
+
+    report = _make_guard(tmp_path).audit_repo(repo)
+
+    assert report.tracked_secret_matches == []
+    assert report.history_secret_matches == []
+    assert report.tracked_secret_low_confidence
+    assert report.history_secret_low_confidence
+    assert report.tracked_secret_fixture_matches
+    assert report.history_secret_fixture_matches
+    assert report.tracked_secret_documentation_matches
+    assert report.history_secret_documentation_matches
+    assert "secret-like patterns in tracked files" not in report.failures
+    assert "secret-like patterns in history patches" not in report.failures
+
+
+def test_secret_taxonomy_blocks_modern_provider_tokens_in_source(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "secret-taxonomy-high")
+    provider_token = "glpat-" + ("A" * 24)
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "src" / "service.py", f'TOKEN = "{provider_token}"\n')
+    _commit_all(repo, "add synthetic provider token")
+
+    report = _make_guard(tmp_path).audit_repo(repo)
+
+    assert report.tracked_secret_matches
+    assert report.tracked_secret_high_confidence == report.tracked_secret_matches
+    assert "secret-like patterns in tracked files" in report.failures
+
+
+def test_git_metadata_credentialed_remote_is_blocking_and_redacted(tmp_path: Path) -> None:
+    credentialed_remote = "https://svc:" + ("P" * 16) + "@github.com/example/repo.git"
+    repo = _init_repo(tmp_path, "secret-taxonomy-remote", remote=credentialed_remote)
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "README.md", "remote metadata\n")
+    _commit_all(repo, "add readme")
+
+    report = _make_guard(tmp_path).audit_repo(repo)
+    payload = rpg.sanitize_report_for_export(report)
+
+    assert report.git_metadata_secret_matches
+    assert "secret-like patterns in git metadata" in report.failures
+    assert "svc:" not in str(payload["origin_url"])
+    assert rpg.REDACTED_SECRET in str(payload["origin_url"])
+
+
+def test_git_metadata_generic_credential_config_is_advisory_and_redacted(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "secret-taxonomy-git-config")
+    generic_secret = "synthetic-review-token" * 2
+    _git(repo, "config", "credential.password", generic_secret)
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "README.md", "local config metadata\n")
+    _commit_all(repo, "add readme")
+
+    report = _make_guard(tmp_path).audit_repo(repo)
+    payload = rpg.sanitize_report_for_export(report)
+
+    assert report.git_metadata_secret_matches == []
+    assert report.git_metadata_secret_low_confidence
+    assert "secret-like patterns in git metadata" not in report.failures
+    assert generic_secret not in str(payload["git_metadata_secret_low_confidence"])
+    assert rpg.REDACTED_SECRET in str(payload["git_metadata_secret_low_confidence"])
+
+
 def test_private_commit_metadata_blocks_when_owner_cannot_be_inferred(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path, "metadata-no-origin", user_email="owner.real@privacy.dev")
     _write(repo / ".gitignore", DEFAULT_BASELINE)

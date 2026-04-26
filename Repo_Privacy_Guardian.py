@@ -164,45 +164,98 @@ SENSITIVE_FILENAME_RE = re.compile(
     ENV_SENSITIVE_FILENAME_RE
     + r"|"
     r"\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|"
-    r"(^|/)id_rsa$|"
+    r"(^|/)id_(?:rsa|dsa|ecdsa|ed25519)$|"
+    r"(^|/)\.(?:npmrc|pypirc|netrc|dockercfg)$|"
+    r"(^|/)\.docker/config\.json$|"
+    r"(^|/)\.aws/credentials$|"
+    r"(^|/)\.kube/config$|"
+    r"(^|/)kubeconfig$|"
     r"(^|/)(secrets?|credentials?|token)([._-]|$)|"
     r"(^|/)__pycache__(/|$)|"
     r"\.pyc$",
     re.IGNORECASE,
 )
 
-SECRET_CONTENT_RE = re.compile(
+HIGH_CONFIDENCE_SECRET_CONTENT_RE = re.compile(
     r"gh[opsru]_[A-Za-z0-9]{36,}|"
     r"github_pat_[A-Za-z0-9_]{40,}|"
+    r"\bgl(?:pat|oas|dt|rtr|rt|cbt|ptt|ft|imt|agent|wt|soat)-[A-Za-z0-9_-]{16,}\b|"
+    r"\bcf(?:k|ut|at)_[A-Za-z0-9]{40,}\b|"
     r"AKIA[0-9A-Z]{16}|"
     r"(?i:aws[_-]?secret[_-]?access[_-]?key)\s*[=:]\s*['\"]?[A-Za-z0-9/+=]{40}['\"]?|"
     r"AIza[0-9A-Za-z\-_]{35}|"
-    r"xox[baprs]-[A-Za-z0-9-]+|"
+    r"\bya29\.[0-9A-Za-z\-_]{32,}\b|"
+    r"\bsk-(?:proj|svcacct)-[A-Za-z0-9_-]{32,}\b|"
+    r"\bsk-ant-(?:api\d{2}-|admin)[A-Za-z0-9_-]{20,}\b|"
+    r"x(?:ox[baprs]|app|wfp)-[A-Za-z0-9-]+|"
     r"https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+|"
-    r"sk_live_[0-9A-Za-z]{24,}|"
+    r"https://discord(?:app)?\.com/api/webhooks/\d{17,20}/[A-Za-z0-9_-]{32,}|"
+    r"(?:sk|rk)_live_[0-9A-Za-z]{24,}|"
     r"SG\.[A-Za-z0-9\-_]{22,}\.[A-Za-z0-9\-_]{43,}|"
     r"npm_[A-Za-z0-9]{36}|"
     r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b|"
     r"\b[MN][A-Za-z\d]{23,}\.[\w-]{6}\.[\w-]{27,}\b|"
     r"(?i:heroku[_-]?api[_-]?key)\s*[=:]\s*['\"]?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}['\"]?|"
     r"(?i:(?:AccountKey|storage[_-]?key))\s*[=:]\s*['\"]?[A-Za-z0-9+/=]{88}['\"]?|"
-    r"(?i:\b(?:mongodb(?:\+srv)?|mysql|postgres(?:ql)?|redis|amqp)://[^\s:'\"/@]+:[^\s@'\"]+@[^\s'\"]+)|"
-    r"Authorization:\s*(Bearer|token)\s+[A-Za-z0-9._-]+|"
+    r"(?i:cloudflare[_-]?(?:api[_-]?)?(?:token|key))\s*[=:]\s*['\"]?[A-Za-z0-9_-]{37,64}['\"]?|"
+    r"(?i:datadog[_-]?(?:api|app(?:lication)?)?[_-]?key)\s*[=:]\s*['\"]?[0-9a-f]{32,40}['\"]?|"
+    r"(?i:twilio[_-]?auth[_-]?token)\s*[=:]\s*['\"]?[0-9a-f]{32}['\"]?|"
+    r"(?i:mailgun[_-]?api[_-]?key)\s*[=:]\s*['\"]?key-[0-9a-f]{32}['\"]?|"
+    r"(?i:\b(?:https?|ssh|ftp|ftps|sftp|mongodb(?:\+srv)?|mysql|postgres(?:ql)?|redis|rediss|amqp|amqps)://[^\s:/?#'\"`<>]+:[^\s@'\"`<>]{3,}@[^\s'\"`<>]+)|"
+    r"(?i:\bauthorization\s*:\s*(?:bearer|token|basic)\s+[A-Za-z0-9._~+/=-]{16,})|"
     r"BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY"
+)
+SECRET_CONTENT_RE = HIGH_CONFIDENCE_SECRET_CONTENT_RE
+
+LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)(?P<key>\b(?:password|passwd|pwd|passphrase|secret|api[_-]?key|apikey|"
+    r"access[_-]?token|auth[_-]?token|refresh[_-]?token|client[_-]?secret|"
+    r"private[_-]?key|connection[_-]?string|webhook[_-]?url|dsn)\b)"
+    r"(?P<sep>\s*(?:=|:)\s*)"
+    r"(?P<quote>['\"]?)"
+    r"(?P<value>[A-Za-z0-9][A-Za-z0-9._~:/?#\[\]@!$&()*+,;=%-]{12,})"
+    r"(?P=quote)"
+)
+
+SECRET_FIXTURE_PATH_RE = re.compile(
+    r"(^|/)(test|tests|fixture|fixtures|mock|mocks|sample|samples|demo|spec|benchmarks?)(/|$)",
+    re.IGNORECASE,
+)
+SECRET_DOCUMENTATION_PATH_RE = re.compile(r"(^|/)(docs?|examples?)(/|$)", re.IGNORECASE)
+SECRET_DOCUMENTATION_FILE_RE = re.compile(
+    r"readme|changelog|contributing|copilot|instructions|policy|roadmap|"
+    r"checklist|known_issues|lessons|operations|troubleshooting|versioning",
+    re.IGNORECASE,
+)
+SECRET_SAFE_PLACEHOLDER_RE = re.compile(
+    r"(?i)\b(?:example|sample|dummy|fake|fixture|mock|placeholder|redacted|"
+    r"changeme|change-me|not-a-real|your[_-]?(?:token|key|secret|password)|"
+    r"insert[_-]?here|todo|example\.invalid|localhost)\b|"
+    r"<[^>\n]{1,80}>|"
+    r"\$\{[A-Za-z0-9_:-]{1,80}\}|"
+    r"%[A-Za-z0-9_]{1,80}%|"
+    r"\b[A-Z0-9_]{2,}_(?:TOKEN|KEY|SECRET|PASSWORD)\b|"
+    r"\b(?:x{8,}|a{16,}|b{16,}|c{16,}|0{16,})\b|"
+    r"([A-Za-z0-9])\1{15,}"
 )
 
 SECRET_REMEDIATE_FILENAME_RE = re.compile(
     ENV_SENSITIVE_FILENAME_RE
     + r"|"
     r"\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|"
-    r"(^|/)id_rsa$|"
+    r"(^|/)id_(?:rsa|dsa|ecdsa|ed25519)$|"
+    r"(^|/)\.(?:npmrc|pypirc|netrc|dockercfg)$|"
+    r"(^|/)\.docker/config\.json$|"
+    r"(^|/)\.aws/credentials$|"
+    r"(^|/)\.kube/config$|"
+    r"(^|/)kubeconfig$|"
     r"(^|/)(secret|credential|token|password|passwd|api[_-]?key)([._-]|$)",
     re.IGNORECASE,
 )
 
 PERSONAL_PATH_RE = re.compile(
     r"(?i)"
-    r"[A-Za-z]:(?:\\\\|\\|/)(?:Users|home)(?:\\\\|\\|/)[A-Za-z0-9][A-Za-z0-9._-]*"
+    r"[A-Za-z]:(?:\\\\|\\|/)(?:Users|Documents and Settings|home)(?:\\\\|\\|/)[A-Za-z0-9][A-Za-z0-9._-]*"
     r"|/(?:Users|home)/[A-Za-z0-9][A-Za-z0-9._-]*"
 )
 PERSONAL_PATH_LITERAL_PATTERNS = (
@@ -1573,6 +1626,10 @@ class RepoReport:
     email_ownership_evaluated: bool = False
 
     tracked_secret_matches: list[str] = field(default_factory=list)
+    tracked_secret_high_confidence: list[str] = field(default_factory=list)
+    tracked_secret_low_confidence: list[str] = field(default_factory=list)
+    tracked_secret_fixture_matches: list[str] = field(default_factory=list)
+    tracked_secret_documentation_matches: list[str] = field(default_factory=list)
     tracked_path_matches: list[str] = field(default_factory=list)
     tracked_email_matches: list[str] = field(default_factory=list)
     tracked_email_high_confidence: list[str] = field(default_factory=list)
@@ -1580,13 +1637,20 @@ class RepoReport:
     tracked_secret_files: list[str] = field(default_factory=list)
 
     history_secret_matches: list[str] = field(default_factory=list)
+    history_secret_high_confidence: list[str] = field(default_factory=list)
+    history_secret_low_confidence: list[str] = field(default_factory=list)
+    history_secret_fixture_matches: list[str] = field(default_factory=list)
+    history_secret_documentation_matches: list[str] = field(default_factory=list)
     history_path_matches: list[str] = field(default_factory=list)
     history_email_matches: list[str] = field(default_factory=list)
     history_email_high_confidence: list[str] = field(default_factory=list)
     history_email_low_confidence: list[str] = field(default_factory=list)
     email_confidence_evaluated: bool = False
+    secret_confidence_evaluated: bool = False
     low_confidence_email_mode: str = "informational"
     history_secret_files: list[str] = field(default_factory=list)
+    git_metadata_secret_matches: list[str] = field(default_factory=list)
+    git_metadata_secret_low_confidence: list[str] = field(default_factory=list)
 
     history_sensitive_added: list[str] = field(default_factory=list)
     history_sensitive_deleted: list[str] = field(default_factory=list)
@@ -1635,6 +1699,16 @@ class RepoReport:
         )
         low_confidence_emails = self.tracked_email_low_confidence + self.history_email_low_confidence
         low_confidence_blocking = self.low_confidence_email_mode == "blocking"
+        tracked_secret_high_confidence = (
+            self.tracked_secret_high_confidence
+            if self.secret_confidence_evaluated
+            else self.tracked_secret_matches
+        )
+        history_secret_high_confidence = (
+            self.history_secret_high_confidence
+            if self.secret_confidence_evaluated
+            else self.history_secret_matches
+        )
         worktree_dirty = repo_has_dirty_worktree(self.clean_status)
 
         checks = [
@@ -1645,9 +1719,10 @@ class RepoReport:
                 bool(owned_unexpected_identity_tokens),
                 "unexpected commit metadata identity tokens in owned repository",
             ),
-            (bool(self.tracked_secret_matches), "secret-like patterns in tracked files"),
+            (bool(tracked_secret_high_confidence), "secret-like patterns in tracked files"),
+            (bool(self.git_metadata_secret_matches), "secret-like patterns in git metadata"),
             (bool(self.tracked_path_matches), "personal path patterns in tracked files"),
-            (bool(self.history_secret_matches), "secret-like patterns in history patches"),
+            (bool(history_secret_high_confidence), "secret-like patterns in history patches"),
             (bool(self.history_path_matches), "personal path patterns in history patches"),
             (
                 bool(history_email_high_confidence),
@@ -2084,6 +2159,72 @@ class RepoPublicationGuard:  # pragma: no cover
                         return matches
         return matches
 
+    def _append_secret_taxonomy_match(
+        self,
+        *,
+        rel_path: str | None,
+        line_number: int,
+        line: str,
+        high_confidence: list[str],
+        low_confidence: list[str],
+        fixtures: list[str],
+        documentation: list[str],
+        history: bool = False,
+    ) -> None:
+        has_high_confidence_secret = SECRET_CONTENT_RE.search(line) is not None
+        has_low_confidence_secret = (
+            not has_high_confidence_secret
+            and LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE.search(line) is not None
+        )
+        if not has_high_confidence_secret and not has_low_confidence_secret:
+            return
+
+        rel = rel_path or "-"
+        snippet = line.strip()[:240]
+        entry = f"L{line_number}:{rel}:{snippet}" if history else f"{rel}:{line_number}:{snippet}"
+        context = classify_secret_match_context(rel_path, snippet)
+
+        if context == "fixture":
+            if len(fixtures) < self.max_matches:
+                fixtures.append(entry)
+            return
+        if context == "documentation":
+            if len(documentation) < self.max_matches:
+                documentation.append(entry)
+            return
+        if has_high_confidence_secret:
+            if len(high_confidence) < self.max_matches:
+                high_confidence.append(entry)
+            return
+        if len(low_confidence) < self.max_matches:
+            low_confidence.append(entry)
+
+    def _scan_tracked_secret_taxonomy(
+        self,
+        repo: Path,
+    ) -> tuple[list[str], list[str], list[str], list[str]]:
+        high_confidence: list[str] = []
+        low_confidence: list[str] = []
+        fixtures: list[str] = []
+        documentation: list[str] = []
+
+        for file_path in self._iter_tracked_files(repo):
+            rel = file_path.relative_to(repo).as_posix()
+            text = read_text_file_for_scan(file_path)
+            if text is None:
+                continue
+            for idx, line in enumerate(text.splitlines(), start=1):
+                self._append_secret_taxonomy_match(
+                    rel_path=rel,
+                    line_number=idx,
+                    line=line,
+                    high_confidence=high_confidence,
+                    low_confidence=low_confidence,
+                    fixtures=fixtures,
+                    documentation=documentation,
+                )
+        return high_confidence, low_confidence, fixtures, documentation
+
     def _scan_exfil_code_indicators(self, repo: Path) -> list[str]:
         matches: list[str] = []
         for file_path in self._iter_tracked_files(repo):
@@ -2137,6 +2278,60 @@ class RepoPublicationGuard:  # pragma: no cover
             path_filter=self._is_supply_chain_candidate_path,
         )
         report.litellm_incident_severity = classify_litellm_incident_severity(report)
+
+    def _scan_git_metadata_secrets(self, repo: Path, report: RepoReport) -> None:
+        high_confidence: list[str] = []
+        low_confidence: list[str] = []
+
+        def inspect_value(label: str, value: str | None) -> None:
+            if not value:
+                return
+            snippet = value.strip()[:240]
+            normalized_assignment = re.sub(r"^([^\s=]+)\s+", r"\1=", snippet, count=1)
+            candidates = [snippet]
+            if normalized_assignment != snippet:
+                candidates.append(normalized_assignment)
+            if any(SECRET_CONTENT_RE.search(candidate) for candidate in candidates):
+                if len(high_confidence) < self.max_matches:
+                    high_confidence.append(f"{label}:{snippet}")
+                return
+            low_confidence_candidate = next(
+                (
+                    candidate
+                    for candidate in candidates
+                    if LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE.search(candidate)
+                ),
+                None,
+            )
+            if low_confidence_candidate:
+                if len(low_confidence) < self.max_matches:
+                    low_confidence.append(f"{label}:{low_confidence_candidate}")
+
+        inspect_value("origin_url", report.origin_url)
+        inspect_value("upstream_url", report.upstream_url)
+
+        config = self._git(
+            repo,
+            "config",
+            "--local",
+            "--get-regexp",
+            r"^(http\..*\.extraheader|url\..*\.insteadOf|credential\..*)",
+        )
+        if config.returncode not in {0, 1}:
+            detail = (config.stderr or config.stdout or "").strip()[:240]
+            suffix = f": {detail}" if detail else ""
+            self._record_repo_runtime_issue(
+                f"git metadata secret scan failed with exit code {config.returncode}{suffix}"
+            )
+            report.git_metadata_secret_matches = high_confidence
+            report.git_metadata_secret_low_confidence = low_confidence
+            return
+
+        for line in config.stdout.splitlines():
+            inspect_value("git_config", line)
+
+        report.git_metadata_secret_matches = high_confidence
+        report.git_metadata_secret_low_confidence = low_confidence
 
     def _scan_github_hardening(self, repo: Path, report: RepoReport) -> None:
         findings, warnings = audit_github_release_hardening(
@@ -2255,6 +2450,89 @@ class RepoPublicationGuard:  # pragma: no cover
                 f"history patch scan failed with exit code {returncode}{suffix}"
             )
         return matches
+
+    def _scan_history_secret_taxonomy(
+        self,
+        repo: Path,
+    ) -> tuple[list[str], list[str], list[str], list[str]]:
+        cmd = [
+            "git",
+            "-C",
+            str(repo),
+            "log",
+            "--all",
+            "-p",
+            "--no-color",
+            "--pretty=format:",
+        ]
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                **streaming_popen_kwargs(),
+            )
+        except FileNotFoundError:
+            self._record_repo_runtime_issue("history secret taxonomy scan failed to start: Git executable not found")
+            return [], [], [], []
+        except Exception as exc:
+            self._record_repo_runtime_issue(f"history secret taxonomy scan failed to start: {exc}")
+            return [], [], [], []
+
+        high_confidence: list[str] = []
+        low_confidence: list[str] = []
+        fixtures: list[str] = []
+        documentation: list[str] = []
+        current_file: str | None = None
+        deadline = time.monotonic() + DEFAULT_GIT_STREAM_TIMEOUT_SECONDS
+        timed_out = False
+        try:
+            stream = proc.stdout
+            if stream is None:
+                return high_confidence, low_confidence, fixtures, documentation
+            for idx, raw_line in enumerate(stream, start=1):
+                if time.monotonic() >= deadline:
+                    self.log(
+                        f"[WARN] {repo_display_name(repo)}: history secret taxonomy scan timed out after {DEFAULT_GIT_STREAM_TIMEOUT_SECONDS}s"
+                    )
+                    self._terminate_process_if_running(proc)
+                    timed_out = True
+                    break
+                if raw_line.startswith("diff --git "):
+                    match = re.match(r"diff --git a/(.+?) b/(.+)$", raw_line.strip())
+                    current_file = match.group(2) if match else None
+                    continue
+                if raw_line.startswith("+++") or raw_line.startswith("---"):
+                    continue
+                if not (raw_line.startswith("+") or raw_line.startswith("-")):
+                    continue
+
+                self._append_secret_taxonomy_match(
+                    rel_path=current_file,
+                    line_number=idx,
+                    line=raw_line[1:],
+                    high_confidence=high_confidence,
+                    low_confidence=low_confidence,
+                    fixtures=fixtures,
+                    documentation=documentation,
+                    history=True,
+                )
+        finally:
+            returncode, stderr_text = self._finalize_git_stream_process(proc)
+        if timed_out:
+            self._record_repo_runtime_issue(
+                f"history secret taxonomy scan timed out after {DEFAULT_GIT_STREAM_TIMEOUT_SECONDS}s"
+            )
+        elif returncode not in {0, None}:
+            detail = (stderr_text or "").strip()[:240]
+            suffix = f": {detail}" if detail else ""
+            self._record_repo_runtime_issue(
+                f"history secret taxonomy scan failed with exit code {returncode}{suffix}"
+            )
+        return high_confidence, low_confidence, fixtures, documentation
 
     def _scan_history_non_allowed_emails(self, repo: Path) -> list[str]:
         cmd = [
@@ -2418,7 +2696,12 @@ class RepoPublicationGuard:  # pragma: no cover
                 if not (line.startswith("+") or line.startswith("-")):
                     continue
 
-                if SECRET_CONTENT_RE.search(line) and current_file not in seen:
+                line_context = line[1:] if line.startswith(("+", "-")) else line
+                if (
+                    SECRET_CONTENT_RE.search(line_context)
+                    and classify_secret_match_context(current_file, line_context) == "active"
+                    and current_file not in seen
+                ):
                     seen.add(current_file)
                     files.append(current_file)
                     if len(files) >= self.max_matches:
@@ -2608,8 +2891,15 @@ class RepoPublicationGuard:  # pragma: no cover
         )
         report.email_ownership_evaluated = True
 
-        report.tracked_secret_matches = self._scan_tracked_content(repo, SECRET_CONTENT_RE)
+        (
+            report.tracked_secret_high_confidence,
+            report.tracked_secret_low_confidence,
+            report.tracked_secret_fixture_matches,
+            report.tracked_secret_documentation_matches,
+        ) = self._scan_tracked_secret_taxonomy(repo)
+        report.tracked_secret_matches = list(report.tracked_secret_high_confidence)
         report.tracked_secret_files = self._extract_file_paths_from_match_lines(report.tracked_secret_matches)
+        self._scan_git_metadata_secrets(repo, report)
         report.tracked_path_matches = self._scan_tracked_content(repo, PERSONAL_PATH_RE)
         report.tracked_email_matches = self._scan_tracked_non_allowed_emails(repo)
         (
@@ -2617,7 +2907,13 @@ class RepoPublicationGuard:  # pragma: no cover
             report.tracked_email_low_confidence,
         ) = split_email_matches_by_confidence(report.tracked_email_matches)
 
-        report.history_secret_matches = self._scan_history_patch(repo, SECRET_CONTENT_RE)
+        (
+            report.history_secret_high_confidence,
+            report.history_secret_low_confidence,
+            report.history_secret_fixture_matches,
+            report.history_secret_documentation_matches,
+        ) = self._scan_history_secret_taxonomy(repo)
+        report.history_secret_matches = list(report.history_secret_high_confidence)
         report.history_secret_files = self._scan_history_secret_files(repo)
         report.history_path_matches = self._scan_history_patch(repo, PERSONAL_PATH_RE)
         report.history_email_matches = self._scan_history_non_allowed_emails(repo)
@@ -2626,6 +2922,7 @@ class RepoPublicationGuard:  # pragma: no cover
             report.history_email_low_confidence,
         ) = split_email_matches_by_confidence(report.history_email_matches)
         report.email_confidence_evaluated = True
+        report.secret_confidence_evaluated = True
 
         self._build_secret_remediation_plan(report)
 
@@ -3123,8 +3420,8 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     guidance_level, guidance_risk, guidance_consequence, guidance_suggestion = repo_user_guidance(report)
     logger(f"\n=== {report.name} ===")
     logger(f"path: {report.path}")
-    logger(f"origin: {report.origin_url or '-'}")
-    logger(f"upstream: {report.upstream_url or '-'}")
+    logger(f"origin: {redact_sensitive_text(report.origin_url or '-')}")
+    logger(f"upstream: {redact_sensitive_text(report.upstream_url or '-')}")
     logger(f"branch/head/upstream_head: {report.branch or '-'} / {report.head or '-'} / {report.origin_head or '-'}")
     logger(f"status: {report.status}")
     if report.failures:
@@ -3151,12 +3448,22 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
         f"{len(report.unexpected_identity_tokens_third_party_repo)}"
     )
     logger(f"tracked_secret_matches: {len(report.tracked_secret_matches)}")
+    logger(f"tracked_secret_high_confidence: {len(report.tracked_secret_high_confidence)}")
+    logger(f"tracked_secret_low_confidence: {len(report.tracked_secret_low_confidence)}")
+    logger(f"tracked_secret_fixture_matches: {len(report.tracked_secret_fixture_matches)}")
+    logger(f"tracked_secret_documentation_matches: {len(report.tracked_secret_documentation_matches)}")
     logger(f"tracked_secret_files: {len(report.tracked_secret_files)}")
+    logger(f"git_metadata_secret_matches: {len(report.git_metadata_secret_matches)}")
+    logger(f"git_metadata_secret_low_confidence: {len(report.git_metadata_secret_low_confidence)}")
     logger(f"tracked_path_matches: {len(report.tracked_path_matches)}")
     logger(f"tracked_email_matches: {len(report.tracked_email_matches)}")
     logger(f"tracked_email_high_confidence: {len(report.tracked_email_high_confidence)}")
     logger(f"tracked_email_low_confidence: {len(report.tracked_email_low_confidence)}")
     logger(f"history_secret_matches: {len(report.history_secret_matches)}")
+    logger(f"history_secret_high_confidence: {len(report.history_secret_high_confidence)}")
+    logger(f"history_secret_low_confidence: {len(report.history_secret_low_confidence)}")
+    logger(f"history_secret_fixture_matches: {len(report.history_secret_fixture_matches)}")
+    logger(f"history_secret_documentation_matches: {len(report.history_secret_documentation_matches)}")
     logger(f"history_secret_files: {len(report.history_secret_files)}")
     logger(f"history_path_matches: {len(report.history_path_matches)}")
     logger(f"history_email_matches: {len(report.history_email_matches)}")
@@ -3521,6 +3828,45 @@ def is_low_confidence_email_context(rel_path: str | None, snippet: str) -> bool:
     return False
 
 
+def extract_secret_match_context(match_line: str) -> tuple[str | None, str]:
+    if not match_line:
+        return None, ""
+
+    if match_line.startswith("L"):
+        parts = match_line.split(":", 3)
+        if len(parts) == 4:
+            return parts[1] if parts[1] != "-" else None, parts[3]
+        parts = match_line.split(":", 2)
+        snippet = parts[2] if len(parts) == 3 else match_line
+        return None, snippet
+
+    parts = match_line.split(":", 2)
+    if len(parts) == 3:
+        return parts[0], parts[2]
+    if len(parts) >= 2:
+        return parts[0], parts[-1]
+    return None, match_line
+
+
+def classify_secret_match_context(rel_path: str | None, snippet: str) -> str:
+    normalized_path = (rel_path or "").replace("\\", "/").strip().lower()
+    normalized_snippet = (snippet or "").strip()
+    if not normalized_path or not normalized_snippet:
+        return "active"
+
+    if not SECRET_SAFE_PLACEHOLDER_RE.search(normalized_snippet):
+        return "active"
+
+    if SECRET_FIXTURE_PATH_RE.search(normalized_path):
+        return "fixture"
+
+    file_name = Path(normalized_path).name
+    if SECRET_DOCUMENTATION_PATH_RE.search(normalized_path) or SECRET_DOCUMENTATION_FILE_RE.search(file_name):
+        return "documentation"
+
+    return "active"
+
+
 def split_email_matches_by_confidence(matches: list[str]) -> tuple[list[str], list[str]]:
     high_confidence: list[str] = []
     low_confidence: list[str] = []
@@ -3580,13 +3926,32 @@ def split_unexpected_emails_by_origin_ownership(
     return [], list(unexpected_emails)
 
 
+def _redact_low_confidence_secret_assignment(match: re.Match[str]) -> str:
+    quote = match.group("quote") or ""
+    closing_quote = quote if quote else ""
+    return f"{match.group('key')}{match.group('sep')}{quote}{REDACTED_SECRET}{closing_quote}"
+
+
 def redact_sensitive_text(value: str) -> str:
     text = str(value)
     text = SECRET_CONTENT_RE.sub(REDACTED_SECRET, text)
+    text = LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE.sub(_redact_low_confidence_secret_assignment, text)
     # Handle escaped Windows paths often seen inside JSON string literals.
     text = re.sub(r"C:\\\\Users\\\\[^\\\s]+", r"C:\\\\Users\\\\<redacted>", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"C:\\\\Documents and Settings\\\\[^\\\s]+",
+        r"C:\\\\Documents and Settings\\\\<redacted>",
+        text,
+        flags=re.IGNORECASE,
+    )
     text = re.sub(r"AppData\\\\[^\\\s]+", r"AppData\\\\<redacted>", text, flags=re.IGNORECASE)
     text = re.sub(r"C:\\Users\\[^\\\s]+", r"C:\\Users\\<redacted>", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"C:\\Documents and Settings\\[^\\\s]+",
+        r"C:\\Documents and Settings\\<redacted>",
+        text,
+        flags=re.IGNORECASE,
+    )
     text = re.sub(r"/Users/[^/\s]+", "/Users/<redacted>", text)
     text = re.sub(r"/home/[^/\s]+", "/home/<redacted>", text)
     text = re.sub(r"AppData\\[^\\\s]+", r"AppData\\<redacted>", text, flags=re.IGNORECASE)
@@ -3613,6 +3978,8 @@ def _redact_text_list(items: list[str]) -> list[str]:
 def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload = dict(report.__dict__)
     payload["path"] = redact_sensitive_text(report.path)
+    payload["origin_url"] = redact_sensitive_text(report.origin_url) if report.origin_url else None
+    payload["upstream_url"] = redact_sensitive_text(report.upstream_url) if report.upstream_url else None
     payload["clean_status"] = redact_sensitive_text(report.clean_status or "")
     payload["author_emails"] = _redact_email_list(report.author_emails)
     payload["committer_emails"] = _redact_email_list(report.committer_emails)
@@ -3631,17 +3998,41 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
         report.unexpected_identity_tokens_third_party_repo
     )
     payload["tracked_secret_matches"] = _redact_text_list(report.tracked_secret_matches)
+    payload["tracked_secret_high_confidence"] = _redact_text_list(
+        report.tracked_secret_high_confidence
+    )
+    payload["tracked_secret_low_confidence"] = _redact_text_list(report.tracked_secret_low_confidence)
+    payload["tracked_secret_fixture_matches"] = _redact_text_list(
+        report.tracked_secret_fixture_matches
+    )
+    payload["tracked_secret_documentation_matches"] = _redact_text_list(
+        report.tracked_secret_documentation_matches
+    )
     payload["tracked_path_matches"] = _redact_text_list(report.tracked_path_matches)
     payload["tracked_email_matches"] = _redact_text_list(report.tracked_email_matches)
     payload["tracked_email_high_confidence"] = _redact_text_list(report.tracked_email_high_confidence)
     payload["tracked_email_low_confidence"] = _redact_text_list(report.tracked_email_low_confidence)
     payload["tracked_secret_files"] = _redact_text_list(report.tracked_secret_files)
     payload["history_secret_matches"] = _redact_text_list(report.history_secret_matches)
+    payload["history_secret_high_confidence"] = _redact_text_list(
+        report.history_secret_high_confidence
+    )
+    payload["history_secret_low_confidence"] = _redact_text_list(report.history_secret_low_confidence)
+    payload["history_secret_fixture_matches"] = _redact_text_list(
+        report.history_secret_fixture_matches
+    )
+    payload["history_secret_documentation_matches"] = _redact_text_list(
+        report.history_secret_documentation_matches
+    )
     payload["history_path_matches"] = _redact_text_list(report.history_path_matches)
     payload["history_email_matches"] = _redact_text_list(report.history_email_matches)
     payload["history_email_high_confidence"] = _redact_text_list(report.history_email_high_confidence)
     payload["history_email_low_confidence"] = _redact_text_list(report.history_email_low_confidence)
     payload["history_secret_files"] = _redact_text_list(report.history_secret_files)
+    payload["git_metadata_secret_matches"] = _redact_text_list(report.git_metadata_secret_matches)
+    payload["git_metadata_secret_low_confidence"] = _redact_text_list(
+        report.git_metadata_secret_low_confidence
+    )
     payload["history_sensitive_added"] = _redact_text_list(report.history_sensitive_added)
     payload["history_sensitive_deleted"] = _redact_text_list(report.history_sensitive_deleted)
     payload["secret_file_candidates"] = _redact_text_list(report.secret_file_candidates)
@@ -3826,6 +4217,7 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
     has_secret_risk = bool(
         report.tracked_secret_matches
         or report.history_secret_matches
+        or report.git_metadata_secret_matches
         or report.secret_file_candidates
         or report.history_sensitive_added
         or report.history_sensitive_deleted
@@ -3860,6 +4252,18 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
             "Medium risk: local/personal paths were detected.",
             "Possible consequence: host/user structure disclosure and unnecessary attack-surface context.",
             "Suggestion: review samples and authorize path-focused cleanup if repository will be public.",
+        )
+
+    if (
+        report.tracked_secret_low_confidence
+        or report.history_secret_low_confidence
+        or report.git_metadata_secret_low_confidence
+    ):
+        return (
+            "REVIEW",
+            "Advisory review: generic secret-like assignments were detected.",
+            "Possible consequence: a real credential may be hidden among noisy examples if not classified.",
+            "Suggestion: classify each low-confidence secret finding as confirmed leak, fixture, safe documentation, or false positive before remediation.",
         )
 
     if report.exfil_code_indicators:
@@ -3936,9 +4340,13 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
         score = max(score, 50)
         highlights.append("LiteLLM references found; verify installed versions and provenance")
 
-    if report.tracked_secret_matches or report.history_secret_matches:
+    if report.tracked_secret_matches or report.history_secret_matches or report.git_metadata_secret_matches:
         score = max(score, 100)
-        highlights.append("Secret-like patterns found in tracked content or history")
+        highlights.append("Secret-like patterns found in tracked content, history, or Git metadata")
+    if report.tracked_secret_low_confidence or report.history_secret_low_confidence:
+        highlights.append("Low-confidence secret assignments require manual review (informational)")
+    if report.git_metadata_secret_low_confidence:
+        highlights.append("Low-confidence Git metadata secret indicators require manual review")
     if report.secret_file_candidates:
         score = max(score, 95)
         highlights.append("Secret file candidates detected")
@@ -4020,6 +4428,13 @@ def build_detected_findings_preview(report: RepoReport) -> list[str]:
 
     add("tracked secret", report.tracked_secret_matches)
     add("history secret", report.history_secret_matches)
+    add("git metadata secret", report.git_metadata_secret_matches)
+    add("tracked secret low confidence", report.tracked_secret_low_confidence)
+    add("history secret low confidence", report.history_secret_low_confidence)
+    add("tracked secret fixture", report.tracked_secret_fixture_matches)
+    add("history secret fixture", report.history_secret_fixture_matches)
+    add("tracked secret safe documentation", report.tracked_secret_documentation_matches)
+    add("history secret safe documentation", report.history_secret_documentation_matches)
     add("secret file candidate", report.secret_file_candidates)
     add("tracked path", report.tracked_path_matches)
     add("history path", report.history_path_matches)
@@ -4068,6 +4483,14 @@ def report_contains_sensitive_findings(report: RepoReport) -> bool:
     return bool(
         report.tracked_secret_matches
         or report.history_secret_matches
+        or report.git_metadata_secret_matches
+        or report.tracked_secret_low_confidence
+        or report.history_secret_low_confidence
+        or report.git_metadata_secret_low_confidence
+        or report.tracked_secret_fixture_matches
+        or report.history_secret_fixture_matches
+        or report.tracked_secret_documentation_matches
+        or report.history_secret_documentation_matches
         or report.secret_file_candidates
         or report.unexpected_emails
         or report.unexpected_identity_tokens
@@ -4249,7 +4672,7 @@ def render_html_report(
             f"<td>{esc(rep.status)}</td>"
             f"<td>{esc(classify_litellm_incident_severity(rep))}</td>"
             f"<td class=\"num\">{len(rep.failures)}</td>"
-            f"<td class=\"num\">{len(rep.tracked_secret_matches) + len(rep.history_secret_matches)}</td>"
+            f"<td class=\"num\">{len(rep.tracked_secret_matches) + len(rep.history_secret_matches) + len(rep.git_metadata_secret_matches)}</td>"
             f"<td class=\"num\">{len(rep.secret_file_candidates)}</td>"
             f"<td class=\"num\">{len(owned_unexpected)}</td>"
             f"<td class=\"num\">{len(owned_unexpected_identity_tokens)}</td>"
@@ -4286,7 +4709,17 @@ def render_html_report(
             f"<tr><td>unexpected_identity_tokens_owned_repo</td><td class=\"num\">{len(owned_unexpected_identity_tokens)}</td></tr>"
             f"<tr><td>unexpected_identity_tokens_third_party_repo</td><td class=\"num\">{len(third_party_unexpected_identity_tokens)}</td></tr>"
             f"<tr><td>tracked_secret_matches</td><td class=\"num\">{len(rep.tracked_secret_matches)}</td></tr>"
+            f"<tr><td>tracked_secret_high_confidence</td><td class=\"num\">{len(rep.tracked_secret_high_confidence)}</td></tr>"
+            f"<tr><td>tracked_secret_low_confidence</td><td class=\"num\">{len(rep.tracked_secret_low_confidence)}</td></tr>"
+            f"<tr><td>tracked_secret_fixture_matches</td><td class=\"num\">{len(rep.tracked_secret_fixture_matches)}</td></tr>"
+            f"<tr><td>tracked_secret_documentation_matches</td><td class=\"num\">{len(rep.tracked_secret_documentation_matches)}</td></tr>"
             f"<tr><td>history_secret_matches</td><td class=\"num\">{len(rep.history_secret_matches)}</td></tr>"
+            f"<tr><td>history_secret_high_confidence</td><td class=\"num\">{len(rep.history_secret_high_confidence)}</td></tr>"
+            f"<tr><td>history_secret_low_confidence</td><td class=\"num\">{len(rep.history_secret_low_confidence)}</td></tr>"
+            f"<tr><td>history_secret_fixture_matches</td><td class=\"num\">{len(rep.history_secret_fixture_matches)}</td></tr>"
+            f"<tr><td>history_secret_documentation_matches</td><td class=\"num\">{len(rep.history_secret_documentation_matches)}</td></tr>"
+            f"<tr><td>git_metadata_secret_matches</td><td class=\"num\">{len(rep.git_metadata_secret_matches)}</td></tr>"
+            f"<tr><td>git_metadata_secret_low_confidence</td><td class=\"num\">{len(rep.git_metadata_secret_low_confidence)}</td></tr>"
             f"<tr><td>secret_file_candidates</td><td class=\"num\">{len(rep.secret_file_candidates)}</td></tr>"
             f"<tr><td>tracked_path_matches</td><td class=\"num\">{len(rep.tracked_path_matches)}</td></tr>"
             f"<tr><td>history_path_matches</td><td class=\"num\">{len(rep.history_path_matches)}</td></tr>"
@@ -4352,6 +4785,30 @@ def render_html_report(
             "</section>"
             "<section><h5>History secret matches (sample)</h5>"
             f"{render_lines(rep.history_secret_matches)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>Low-confidence secret assignments (tracked)</h5>"
+            f"{render_lines(rep.tracked_secret_low_confidence)}"
+            "</section>"
+            "<section><h5>Low-confidence secret assignments (history)</h5>"
+            f"{render_lines(rep.history_secret_low_confidence)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>Secret fixtures/examples (safe)</h5>"
+            f"{render_lines(rep.tracked_secret_fixture_matches + rep.history_secret_fixture_matches)}"
+            "</section>"
+            "<section><h5>Secret documentation examples (safe)</h5>"
+            f"{render_lines(rep.tracked_secret_documentation_matches + rep.history_secret_documentation_matches)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>Git metadata secret matches</h5>"
+            f"{render_lines(rep.git_metadata_secret_matches)}"
+            "</section>"
+            "<section><h5>Git metadata low-confidence secret indicators</h5>"
+            f"{render_lines(rep.git_metadata_secret_low_confidence)}"
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
@@ -4431,8 +4888,8 @@ def render_html_report(
             "<details class=\"repo-detail\">"
             f"<summary>{esc(rep.name)} | severity {esc(sev_label)} | status {esc(rep.status)}</summary>"
             f"<p class=\"meta\">path: <code>{esc(redact_sensitive_text(rep.path))}</code></p>"
-            f"<p class=\"meta\">origin: <code>{esc(rep.origin_url or '-')}</code></p>"
-            f"<p class=\"meta\">upstream: <code>{esc(rep.upstream_url or '-')}</code></p>"
+            f"<p class=\"meta\">origin: <code>{esc(redact_sensitive_text(rep.origin_url or '-'))}</code></p>"
+            f"<p class=\"meta\">upstream: <code>{esc(redact_sensitive_text(rep.upstream_url or '-'))}</code></p>"
             f"{detail_sections}"
             "</details>"
         )

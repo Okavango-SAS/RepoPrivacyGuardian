@@ -76,10 +76,17 @@ git log --all --pretty=format:"%h %an <%ae> | %cn <%ce>"
 Search for secrets in patch history:
 
 ```sh
-git log --all -p --no-color | rg -n "ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z\-_]{35}|xox[baprs]-[A-Za-z0-9-]+|Authorization:\\s*(Bearer|token)\\s+[A-Za-z0-9._-]+|BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY"
+git log --all -p --no-color | rg -n "gh[opsru]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}|gl(pat|dt|rt|ptt|ft)-[A-Za-z0-9_-]{16,}|cf(k|ut|at)_[A-Za-z0-9]{40,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z\-_]{35}|x(ox[baprs]|app|wfp)-[A-Za-z0-9-]+|hooks\.slack\.com/services|discord(app)?\.com/api/webhooks|Authorization:\\s*(Bearer|token|Basic)\\s+[A-Za-z0-9._~+/=-]+|BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY"
 ```
 
-Repo Privacy Guardian's built-in scanner also includes additional high-confidence provider-specific patterns such as GitHub OAuth tokens, Slack webhook URLs, Stripe secret keys, SendGrid keys, NPM tokens, Telegram/Discord bot tokens, Heroku API keys, Azure storage keys, AWS secret-key assignments, and credentialed database URIs. Generic `password = "..."` style assignments are not blocking by default because they are too noisy in examples and tests.
+Repo Privacy Guardian's built-in scanner separates secret evidence into confidence buckets:
+
+- Blocking high-confidence patterns include GitHub and GitLab tokens, prefixed Cloudflare tokens, OpenAI and Anthropic key shapes, Google API/OAuth tokens, Slack tokens and webhooks, Discord webhooks and bot tokens, Stripe live/restricted keys, SendGrid keys, NPM tokens, Telegram tokens, Heroku API keys, Azure storage keys, AWS secret-key assignments, selected provider-key assignments, authorization headers, private-key headers, and credentialed URLs.
+- Advisory low-confidence patterns include generic `password = ...`, `api_key = ...`, `client_secret = ...`, token, connection-string, webhook, and DSN assignments that do not match a provider-specific high-confidence pattern.
+- Fixture and safe-documentation matches are separated when the value is placeholder-like and appears in tests, fixtures, mocks, samples, demos, docs, examples, README-style files, changelogs, policies, or runbooks. These buckets do not block publication by default.
+- Git metadata is included: credentialed remotes, URL rewrite rules, credential-related local config, and HTTP extra headers are scanned and redacted in reports.
+
+Report fields preserve that taxonomy: `tracked_secret_matches`, `history_secret_matches`, and `git_metadata_secret_matches` are high-confidence blocking buckets; `tracked_secret_low_confidence`, `history_secret_low_confidence`, and `git_metadata_secret_low_confidence` are advisory; `tracked_secret_fixture_matches`, `history_secret_fixture_matches`, `tracked_secret_documentation_matches`, and `history_secret_documentation_matches` are safe-example buckets.
 
 Search for personal/local paths in history:
 
@@ -90,13 +97,13 @@ git log --all -p --no-color | rg -n "C:\\\\Users\\\\|/Users/|/home/|AppData\\\\|
 Detect sensitive filenames ever added:
 
 ```sh
-git log --all --diff-filter=A --name-only --pretty=format: | rg -n -i "^\.env$|^\.env\.|\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|id_rsa|secrets?\\.|credentials?\\.|token"
+git log --all --diff-filter=A --name-only --pretty=format: | rg -n -i "^\.env$|^\.env\.|\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|id_(rsa|dsa|ecdsa|ed25519)|(^|/)\.(npmrc|pypirc|netrc|dockercfg)$|(^|/)\.docker/config\.json$|(^|/)\.aws/credentials$|(^|/)\.kube/config$|(^|/)kubeconfig$|secrets?\\.|credentials?\\.|token"
 ```
 
 Detect sensitive filenames later deleted (still a historical leak risk):
 
 ```sh
-git log --all --diff-filter=D --name-only --pretty=format: | rg -n -i "^\.env$|^\.env\.|\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|id_rsa|secrets?\\.|credentials?\\.|token"
+git log --all --diff-filter=D --name-only --pretty=format: | rg -n -i "^\.env$|^\.env\.|\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|id_(rsa|dsa|ecdsa|ed25519)|(^|/)\.(npmrc|pypirc|netrc|dockercfg)$|(^|/)\.docker/config\.json$|(^|/)\.aws/credentials$|(^|/)\.kube/config$|(^|/)kubeconfig$|secrets?\\.|credentials?\\.|token"
 ```
 
 ### C) Current tracked tree audit
@@ -104,7 +111,7 @@ git log --all --diff-filter=D --name-only --pretty=format: | rg -n -i "^\.env$|^
 Search secrets in current tracked files:
 
 ```sh
-git grep -n -I -E "ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z\-_]{35}|xox[baprs]-[A-Za-z0-9-]+|Authorization: Bearer|Authorization: token|BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY"
+git grep -n -I -E "gh[opsru]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}|gl(pat|dt|rt|ptt|ft)-[A-Za-z0-9_-]{16,}|cf(k|ut|at)_[A-Za-z0-9]{40,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z\-_]{35}|x(ox[baprs]|app|wfp)-[A-Za-z0-9-]+|hooks\.slack\.com/services|discord(app)?\.com/api/webhooks|Authorization: (Bearer|token|Basic)|BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY"
 ```
 
 Search personal/local paths:

@@ -43,7 +43,7 @@ Choose the path that matches what you need right now:
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
 - `v1.2.3` is the public-release stabilization and GUI UX update.
-- `v1.3.1` is the current patch release with release-readiness reliability hardening update.
+- `v1.3.2` is the current patch release with secret taxonomy and evidence-classification hardening.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -58,7 +58,8 @@ Choose the path that matches what you need right now:
 ## 🔍 What It Audits
 
 - leaked Git identity metadata
-- secrets in tracked content and history, including high-confidence provider tokens and credentialed database URIs
+- secrets in tracked content, history, and Git metadata, including high-confidence provider tokens, webhooks, auth headers, and credentialed URLs
+- low-confidence generic secret assignments as advisory review items, with synthetic fixtures and safe documentation examples separated from blocking findings
 - personal or local absolute paths
 - sensitive filenames in history
 - tracked-but-ignored files and `.gitignore` drift
@@ -73,7 +74,7 @@ Blocking checks that can change `PASS` to `FAIL`:
 - dirty working tree
 - Git fsck failures
 - private or unexpected commit metadata emails or malformed non-email identity tokens
-- tracked or historical secret indicators
+- tracked, historical, or Git metadata high-confidence secret indicators
 - tracked or historical personal path leaks
 - low-confidence email findings when configured as blocking
 - sensitive filenames in history
@@ -85,10 +86,14 @@ Blocking checks that can change `PASS` to `FAIL`:
 Advisory checks that do not change `PASS` or `FAIL` by default:
 
 - `exfil_code_indicators`
+- `tracked_secret_low_confidence`, `history_secret_low_confidence`, and `git_metadata_secret_low_confidence`
+- `tracked_secret_fixture_matches`, `history_secret_fixture_matches`, `tracked_secret_documentation_matches`, and `history_secret_documentation_matches`
 - `github_hardening_findings`
 - `github_hardening_warnings`
 
 `exfil_code_indicators` is intentionally manual-review only by default. It is surfaced in CLI guidance, JSON, HTML, and severity highlights, but it does not fail a repository unless a future strict mode is introduced.
+
+Generic `password = ...`, `api_key = ...`, `client_secret = ...`, and similar assignments are separated as low-confidence advisory findings unless they also match a high-confidence provider pattern. Placeholder-looking values in tests, fixtures, docs, examples, and README-style files are surfaced separately as safe fixture/documentation evidence instead of blocking publication.
 
 GitHub hardening findings and warnings are also advisory/manual-review only by default when `--audit-github-hardening` is enabled.
 

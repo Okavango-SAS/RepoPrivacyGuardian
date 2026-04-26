@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.3.1"
-CURRENT_VERSION_DESCRIPTION = "release-readiness reliability hardening update"
+CURRENT_VERSION = "1.3.2"
+CURRENT_VERSION_DESCRIPTION = "secret taxonomy and evidence-classification hardening"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
@@ -19,6 +19,8 @@ README_REQUIREMENTS = [
     "Token-gated coverage",
     "secret scanning configuration",
     "immutable releases",
+    "tracked_secret_low_confidence",
+    "git_metadata_secret_low_confidence",
 ]
 
 CHECKLIST_REQUIREMENTS = [
@@ -44,6 +46,8 @@ POLICY_REQUIREMENTS = [
     "Token-gated checks",
     "secret scanning push protection",
     "Alert findings stay redacted",
+    "tracked_secret_low_confidence",
+    "git_metadata_secret_matches",
 ]
 
 TROUBLESHOOTING_REQUIREMENTS = [
@@ -86,6 +90,7 @@ DOGFOODING_REQUIREMENTS = [
     "confirmed leak",
     "Intentional fixture/example",
     "Indeterminate/manual review",
+    "Safe documentation",
     "Audit_Results/<run_id>/report.json",
     "do not paste raw secret values",
     "No destructive changes were applied.",

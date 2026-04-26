@@ -59,9 +59,10 @@ Classify each finding before proposing action:
 
 | Classification | Evidence pattern | Default action |
 | --- | --- | --- |
-| Confirmed leak | Real credential shape in source/history, private identity metadata, real local path, or sensitive file with production context | Block release, preserve redacted evidence, rotate affected secret outside this tool, then prepare reviewed remediation |
-| Intentional fixture/example | Synthetic value in tests, docs, examples, mocks, screenshots, or placeholder-only content | Mark as fixture. Rewrite to more obvious placeholder only if it can confuse scanners or users |
-| Indeterminate/manual review | Context is incomplete, value resembles a secret but may be sample data, or the repository owner must decide policy intent | Keep audit-only, ask for owner decision, and do not auto-fix |
+| Confirmed leak | High-confidence provider token, webhook, auth header, credentialed URL, Git metadata credential, private identity metadata, real local path, or sensitive file with production context | Block release, preserve redacted evidence, rotate affected secret outside this tool, then prepare reviewed remediation |
+| Intentional fixture/example | `tracked_secret_fixture_matches`, `history_secret_fixture_matches`, synthetic values in tests, examples, mocks, screenshots, or placeholder-only content | Mark as fixture. Rewrite to a clearer placeholder only if it can confuse scanners or users |
+| Safe documentation | `tracked_secret_documentation_matches`, `history_secret_documentation_matches`, placeholder-like values in docs, README-style files, policies, runbooks, or changelogs | Keep non-blocking. Prefer obvious placeholders and avoid real credential shapes unless the example requires them |
+| Indeterminate/manual review | `tracked_secret_low_confidence`, `history_secret_low_confidence`, `git_metadata_secret_low_confidence`, context-incomplete values, or generic assignments that may be sample data | Keep audit-only, ask for owner decision, and do not auto-fix |
 | Advisory hardening | `github_hardening_findings`, `github_hardening_warnings`, or `exfil_code_indicators` | Review manually. These signals are advisory/manual-review by default |
 | Tooling/runtime issue | `execution_errors`, clone/auth warnings, timeout, or partial scan evidence | Treat the run as incomplete until the issue is resolved and the audit is re-run |
 
@@ -112,4 +113,3 @@ If a confirmed leak exists:
 5. use `--replace-text-file` only for explicit operator-approved literal substitutions
 6. execute real fixes only after review
 7. re-run audit and preserve the new artifact paths
-

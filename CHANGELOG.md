@@ -4,24 +4,33 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-04-26
+
+Secret taxonomy and evidence-classification hardening update.
+
 ### Added
 
 - Added a tracked `DESIGN.md` design-token guide for future GUI changes.
 - Added GUI drag-and-drop support for local repository folders through the optional GUI drag-and-drop runtime.
 - Added a dogfooding audit-only runbook and agent prompt for using Repo Privacy Guardian defensively on other repositories while preserving redacted evidence.
 - Added broader audit-only GitHub hardening coverage for repository visibility, secret scanning and push protection, open secret/Dependabot alert presence, private vulnerability reporting, and immutable releases.
+- Expanded high-confidence secret detection for modern GitHub, GitLab, Cloudflare, OpenAI, Anthropic, Google, Slack, Discord, Stripe, Datadog, Twilio, Mailgun, provider assignment, auth-header, webhook, credentialed URL, and Git metadata credential patterns.
+- Added explicit non-blocking buckets for low-confidence generic secret assignments, synthetic fixtures, and safe documentation examples in CLI, JSON, and HTML reports.
+- Expanded sensitive filename coverage for provider credential files such as `.npmrc`, `.pypirc`, `.netrc`, `.docker/config.json`, `.aws/credentials`, `.kube/config`, `kubeconfig`, and modern SSH key names.
 
 ### Changed
 
 - Simplified the GUI first screen by keeping only the normal Audit path prominent after setup and moving policy/output/GitHub/identity controls into a collapsible Settings area with local non-secret preference persistence.
 - Tightened agentic audit guidance to require finding classification before remediation and to avoid pasting raw sensitive evidence.
 - Clarified GitHub hardening operator messages and documentation so unauthenticated checks, token-gated checks, and required admin/security permissions are explicit.
+- Kept generic `password`, `api_key`, token, DSN, connection-string, and webhook assignments advisory unless they also match a provider-specific high-confidence pattern.
 
 ### Fixed
 
 - Removed the last host-PID liveness assertion from the regression suite so process-liveness behavior is covered with deterministic mocks instead of probing the active pytest/Codex process.
 - Bounded run-artifact directory collision handling so report initialization fails visibly instead of looping indefinitely under pathological timestamp/name collisions.
 - Report optional GUI drag-and-drop dependency readiness separately so `--check-tooling --gui` diagnoses missing DnD support without blocking the desktop fallback path.
+- Redacted credentialed remote URLs and low-confidence assignment values consistently in logs, JSON, and HTML artifacts.
 
 ## [1.3.1] - 2026-04-25
 
