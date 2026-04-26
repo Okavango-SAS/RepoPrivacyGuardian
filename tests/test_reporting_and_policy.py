@@ -1648,6 +1648,7 @@ def test_build_gui_tooling_checks_reports_missing_python_gui_bits(monkeypatch) -
 
     tkinter_check = next(check for check in checks if check.name == "tkinter")
     customtkinter_check = next(check for check in checks if check.name == "customtkinter")
+    tkinterdnd2_check = next(check for check in checks if check.name == "tkinterdnd2")
     assert tkinter_check.state == "ready"
     assert customtkinter_check.state == "missing"
     assert customtkinter_check.auto_install_command == [
@@ -1657,6 +1658,32 @@ def test_build_gui_tooling_checks_reports_missing_python_gui_bits(monkeypatch) -
         "install",
         *rpg.GUI_INSTALL_PACKAGES,
     ]
+    assert tkinterdnd2_check.state == "missing"
+    assert tkinterdnd2_check.blocking is False
+    assert tkinterdnd2_check.auto_install_command == [
+        rpg.sys.executable,
+        "-m",
+        "pip",
+        "install",
+        *rpg.GUI_DRAG_DROP_INSTALL_PACKAGES,
+    ]
+
+
+def test_build_gui_tooling_checks_reports_optional_drag_drop_ready(monkeypatch) -> None:
+    monkeypatch.setattr(rpg, "probe_git_available", lambda runner=None: (True, None))
+    monkeypatch.setattr(rpg, "has_desktop_display", lambda platform_name=None, env=None: True)
+    monkeypatch.setattr(
+        rpg,
+        "probe_python_module_available",
+        lambda module_name: module_name in {"tkinter", "customtkinter", "tkinterdnd2"},
+    )
+
+    checks = rpg.build_gui_tooling_checks()
+
+    tkinterdnd2_check = next(check for check in checks if check.name == "tkinterdnd2")
+    assert tkinterdnd2_check.state == "ready"
+    assert tkinterdnd2_check.blocking is False
+    assert tkinterdnd2_check.auto_install_command is None
 
 
 def test_build_gui_tooling_checks_skip_winget_when_git_is_ready(monkeypatch) -> None:
@@ -1676,7 +1703,7 @@ def test_build_gui_tooling_checks_skip_winget_when_git_is_ready(monkeypatch) -> 
 
     checks = rpg.build_gui_tooling_checks()
 
-    assert [check.name for check in checks] == ["git", "desktop-session", "tkinter", "customtkinter"]
+    assert [check.name for check in checks] == ["git", "desktop-session", "tkinter", "customtkinter", "tkinterdnd2"]
 
 
 def test_audit_github_release_hardening_warns_when_admin_checks_are_skipped(tmp_path: Path, monkeypatch) -> None:

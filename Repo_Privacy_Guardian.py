@@ -91,7 +91,8 @@ DEFAULT_RESULTS_DIR = default_results_dir()
 GUI_DEFAULT_PUBLIC_ONLY = False
 GUI_INSTALL_EXTRA = "repo-privacy-guardian[gui]"
 REMEDIATION_INSTALL_EXTRA = "repo-privacy-guardian[remediation]"
-GUI_INSTALL_PACKAGES = ["customtkinter>=5.2.2,<6", "tkinterdnd2>=0.4.3,<0.5"]
+GUI_DRAG_DROP_INSTALL_PACKAGES = ["tkinterdnd2>=0.4.3,<0.5"]
+GUI_INSTALL_PACKAGES = ["customtkinter>=5.2.2,<6", *GUI_DRAG_DROP_INSTALL_PACKAGES]
 REMEDIATION_INSTALL_PACKAGES = ["git-filter-repo>=2.45,<3"]
 GUI_SETTINGS_ENV_VAR = "REPO_PRIVACY_GUARDIAN_GUI_SETTINGS"
 GUI_SETTINGS_SCHEMA_VERSION = 1
@@ -1476,6 +1477,27 @@ def build_gui_tooling_checks() -> list[ToolingCheck]:
                 else f"{sys.executable} -m pip install {' '.join(GUI_INSTALL_PACKAGES)}"
             ),
             auto_install_command=(None if customtkinter_ready else customtkinter_cmd),
+        )
+    )
+
+    tkinterdnd2_ready = probe_python_module_available("tkinterdnd2")
+    tkinterdnd2_cmd = build_python_package_install_command(GUI_DRAG_DROP_INSTALL_PACKAGES)
+    checks.append(
+        ToolingCheck(
+            name="tkinterdnd2",
+            state="ready" if tkinterdnd2_ready else "missing",
+            blocking=False,
+            detail=(
+                "Optional GUI drag-and-drop dependency tkinterdnd2 is available."
+                if tkinterdnd2_ready
+                else "Optional GUI drag-and-drop dependency tkinterdnd2 is not installed; Browse/Refresh still works."
+            ),
+            install_hint=(
+                None
+                if tkinterdnd2_ready
+                else f"{sys.executable} -m pip install {' '.join(GUI_DRAG_DROP_INSTALL_PACKAGES)}"
+            ),
+            auto_install_command=(None if tkinterdnd2_ready else tkinterdnd2_cmd),
         )
     )
 

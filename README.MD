@@ -133,6 +133,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - The GUI keeps the staged `Audit -> Repair` interaction so operators cannot jump straight to write actions.
 - The GUI stores non-secret setup preferences locally after setup, then collapses policy/output/GitHub/identity controls into Settings so the main screen stays focused on repository selection, Audit, and the log.
 - The GUI repository list accepts drag-and-drop of local repository folders when the optional desktop drag-and-drop runtime is available; the Browse/Refresh path remains the fallback.
+- `--check-tooling --gui` reports drag-and-drop readiness as an optional warning, not as a GUI startup blocker.
 - GUI and CLI expose the same audit inputs for local repositories, GitHub owner/org remote audits, GitHub hardening, LiteLLM incident checks, report outputs, low-confidence email mode, and repair-only write options. GitHub owner/org remote audit remains audit-only in both paths.
 - The tracked `DESIGN.md` defines the desktop visual tokens and UX constraints used for GUI changes.
 

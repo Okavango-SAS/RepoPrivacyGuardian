@@ -39,6 +39,7 @@ Symptoms:
 What to do:
 
 - install or repair the GUI extras: `python -m pip install ".[gui]"`
+- run `repo-privacy-guardian --check-tooling --gui`; missing `tkinterdnd2` is reported as optional because the GUI can still run without drag-and-drop
 - restart the GUI so `tkinterdnd2` can initialize the native Tk drag-and-drop bridge
 - use Browse / Refresh as the supported fallback on desktop runtimes that do not expose Tk DnD
 
