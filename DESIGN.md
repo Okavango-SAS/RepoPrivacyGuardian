@@ -114,3 +114,17 @@ Buttons should be short and action-oriented. Cards should be shallow, with 8-12p
 - Do keep advanced/security-sensitive options explicit and collapsed.
 - Do not persist tokens, private owner email lists, or push guardrail bypass settings in GUI setup preferences.
 - Do not make remote GitHub audit feel like the default local-first path.
+
+## External Spec Hygiene
+
+This file follows the public Google Labs `google-labs-code/design.md` format at pinned release `0.1.0` with `version: alpha`.
+
+Repo Privacy Guardian vendors only this local `DESIGN.md` contract. Do not fetch a moving branch, install a floating `latest` package, or execute remote design tooling during normal GUI work.
+
+If maintainers choose to validate this file with the upstream CLI, use an explicitly pinned package version and a sanitized environment:
+
+```sh
+npx --yes @google/design.md@0.1.0 lint DESIGN.md
+```
+
+Before running that optional command, remove repository or GitHub secrets from the process environment, especially `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, and `NPM_TOKEN`. The validation should run read-only, from a clean checkout, without elevated filesystem, package-publish, or repository-write permissions.

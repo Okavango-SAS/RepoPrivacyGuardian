@@ -38,6 +38,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.3.8` is an agentic onboarding documentation patch on top of `1.3.7`. It documents agentic IDE and coding-agent usage as the primary automation use case and adds reusable prompts for post-clone environment preparation plus reviewed audit-and-repair workflows without changing CLI behavior, report schema, or GUI parity.
 
+`1.3.9` is a supply-chain documentation patch on top of `1.3.8`. It records the root `DESIGN.md` as following the public Google Labs `google-labs-code/design.md` format pinned to release `0.1.0`, and documents least-privilege, no-secret, pinned-tooling rules for any optional upstream validation.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

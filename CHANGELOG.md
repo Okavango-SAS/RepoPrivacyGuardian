@@ -4,6 +4,15 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.3.9] - 2026-04-26
+
+DESIGN.md supply-chain hygiene documentation update.
+
+### Added
+
+- Documented `google-labs-code/design.md` as the upstream DESIGN.md format reference pinned to release `0.1.0`.
+- Added least-privilege guidance for optional upstream DESIGN.md validation: no floating `latest`, no repository or package-publish secrets in the environment, and read-only execution only.
+
 ## [1.3.8] - 2026-04-26
 
 Agentic IDE onboarding and prompt-library documentation update.

@@ -157,6 +157,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.3.6`" in versioning
     assert "`1.3.7`" in versioning
     assert "`1.3.8`" in versioning
+    assert "`1.3.9`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "Validation evidence" in release_notes
 
@@ -272,6 +273,8 @@ def test_changelog_records_stable_release() -> None:
     assert "GitHub owner audit mode and GUI/CLI parity update." in changelog
     assert "## [1.3.1] - 2026-04-25" in changelog
     assert "Release-readiness reliability hardening update." in changelog
+    assert "## [1.3.9] - 2026-04-26" in changelog
+    assert "DESIGN.md supply-chain hygiene documentation update." in changelog
     assert "## [1.3.8] - 2026-04-26" in changelog
     assert "Agentic IDE onboarding and prompt-library documentation update." in changelog
     assert "## [1.3.7] - 2026-04-26" in changelog
@@ -304,9 +307,9 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.3.8"' in pyproject
+    assert 'version = "1.3.9"' in pyproject
     assert "Current release line: `v1.3.x`." in readme
-    assert "`v1.3.8` is the current patch release with agentic IDE onboarding prompts and documentation." in readme
+    assert "`v1.3.9` is the current patch release with pinned DESIGN.md supply-chain hygiene documentation." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme
@@ -386,6 +389,29 @@ def test_ci_workflow_uses_sha_pinned_actions_and_least_privilege() -> None:
     assert workflow.count("persist-credentials: false") == 5
     assert len(pinned_actions) == 10
     assert not re.search(r"uses:\s+actions/(?:checkout|setup-python)@v\d", workflow)
+
+
+def test_design_md_external_spec_hygiene_is_pinned_and_least_privilege() -> None:
+    root = _repo_root()
+    design = (root / "DESIGN.md").read_text(encoding="utf-8")
+    operations = (root / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
+    readme = (root / "README.MD").read_text(encoding="utf-8")
+
+    for text in (design, operations, readme):
+        assert "google-labs-code/design.md" in text
+        assert "@google/design.md@0.1.0" in text
+
+    for text in (design, operations):
+        assert "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN" in text
+        assert "GITHUB_TOKEN" in text
+        assert "GH_TOKEN" in text
+        assert "NPM_TOKEN" in text
+        assert "read-only" in text
+
+    assert "@google/design.md@latest" not in design
+    assert "@google/design.md@latest" not in operations
+    assert "package-publish" in design
+    assert "repository-write permissions" in design
 
 
 def test_ci_workflow_matches_cost_first_validation_contract() -> None:

@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.3.8"
-CURRENT_VERSION_DESCRIPTION = "agentic IDE onboarding prompts and documentation"
+CURRENT_VERSION = "1.3.9"
+CURRENT_VERSION_DESCRIPTION = "pinned DESIGN.md supply-chain hygiene documentation"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
@@ -24,6 +24,8 @@ README_REQUIREMENTS = [
     "Token-gated coverage",
     "secret scanning configuration",
     "immutable releases",
+    "google-labs-code/design.md",
+    "@google/design.md@0.1.0",
     "tracked_secret_low_confidence",
     "git_metadata_secret_low_confidence",
 ]
@@ -68,6 +70,24 @@ VERSIONING_REQUIREMENTS = [
     "validation tiers",
     "automatic CI smoke",
     "manual extended CI",
+    "`1.3.9`",
+]
+
+OPERATIONS_REQUIREMENTS = [
+    "External design-spec hygiene",
+    "google-labs-code/design.md",
+    "@google/design.md@0.1.0",
+    "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN",
+    "NPM_TOKEN",
+]
+
+DESIGN_REQUIREMENTS = [
+    "External Spec Hygiene",
+    "google-labs-code/design.md",
+    "@google/design.md@0.1.0",
+    "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN",
+    "NPM_TOKEN",
+    "without elevated filesystem, package-publish, or repository-write permissions",
 ]
 
 WORKFLOW_REQUIREMENTS = [
@@ -134,6 +154,8 @@ def validate_release_contract() -> list[str]:
     policy = _read("docs/POLICY.md")
     troubleshooting = _read("docs/TROUBLESHOOTING.md")
     versioning = _read("docs/VERSIONING.md")
+    operations = _read("docs/OPERATIONS.md")
+    design = _read("DESIGN.md")
     dogfooding = _read("docs/DOGFOODING.md")
     dogfooding_prompt = _read("docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md")
     workflow = _read(".github/workflows/ci.yml")
@@ -146,6 +168,8 @@ def validate_release_contract() -> list[str]:
     errors.extend(_require_contains(policy, POLICY_REQUIREMENTS, "docs/POLICY.md"))
     errors.extend(_require_contains(troubleshooting, TROUBLESHOOTING_REQUIREMENTS, "docs/TROUBLESHOOTING.md"))
     errors.extend(_require_contains(versioning, VERSIONING_REQUIREMENTS, "docs/VERSIONING.md"))
+    errors.extend(_require_contains(operations, OPERATIONS_REQUIREMENTS, "docs/OPERATIONS.md"))
+    errors.extend(_require_contains(design, DESIGN_REQUIREMENTS, "DESIGN.md"))
     errors.extend(_require_contains(dogfooding, DOGFOODING_REQUIREMENTS, "docs/DOGFOODING.md"))
     errors.extend(
         _require_contains(

@@ -27,6 +27,19 @@ Cheap contract-drift check from a repository checkout:
 python scripts/check_release_contract.py
 ```
 
+## External design-spec hygiene
+
+The root `DESIGN.md` follows the public Google Labs `google-labs-code/design.md` format, pinned to release `0.1.0` while the upstream spec is still `alpha`.
+
+Supply-chain guardrails for maintainers:
+
+- treat the checked-in `DESIGN.md` as the source of truth for GUI work
+- do not fetch a moving branch, install `@latest`, or execute remote design tooling during normal development
+- if upstream validation is needed, use only a pinned package version: `npx --yes @google/design.md@0.1.0 lint DESIGN.md`
+- run that optional validation read-only, from a clean checkout, without elevated filesystem or repository-write permissions
+- remove secrets from the command environment before running external tooling, especially `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, and `NPM_TOKEN`
+- do not grant package-publish, GitHub-write, or admin credentials to design-spec tooling
+
 ## Preferred local release validation
 
 Run the repository-owned release harness before tagging or publishing package artifacts:

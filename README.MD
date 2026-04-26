@@ -77,7 +77,7 @@ Choose the path that matches what you need right now:
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
 - `v1.2.3` is the public-release stabilization and GUI UX update.
-- `v1.3.8` is the current patch release with agentic IDE onboarding prompts and documentation.
+- `v1.3.9` is the current patch release with pinned DESIGN.md supply-chain hygiene documentation.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -176,6 +176,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - GUI and CLI expose the same audit inputs for local repositories, GitHub owner/org remote audits, GitHub hardening, LiteLLM incident checks, report outputs, low-confidence email mode, and repair-only write options. GitHub owner/org remote audit remains audit-only in both paths.
 - The GUI language selector supports English and Spanish (Latin America). Locale affects GUI labels, dialogs, and contextual help only; CLI flags, run settings, reports, and backend behavior stay unchanged.
 - The tracked `DESIGN.md` defines the desktop visual tokens and UX constraints used for GUI changes.
+- `DESIGN.md` follows the public Google Labs `google-labs-code/design.md` format pinned to release `0.1.0`; optional upstream validation must use pinned tooling such as `npx --yes @google/design.md@0.1.0 lint DESIGN.md`, a sanitized environment with no GitHub/npm secrets, and read-only least-privilege execution.
 
 ## 📦 Installation
 
