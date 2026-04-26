@@ -278,6 +278,7 @@ def repo_display_name(repo: Path) -> str:
 
 
 def process_exists(pid: int) -> bool | None:
+    """Best-effort compatibility probe; repository locks do not use PID liveness."""
     if pid <= 0:
         return False
     if os.name == "nt":

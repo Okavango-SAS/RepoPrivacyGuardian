@@ -4,7 +4,9 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
-No public changes yet.
+### Fixed
+
+- Removed the last host-PID liveness assertion from the regression suite so process-liveness behavior is covered with deterministic mocks instead of probing the active pytest/Codex process.
 
 ## [1.3.1] - 2026-04-25
 

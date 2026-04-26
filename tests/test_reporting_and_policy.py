@@ -780,9 +780,14 @@ def test_run_state_tracker_persists_phase_updates(tmp_path: Path) -> None:
     assert payload["total_repositories"] == 1
 
 
-def test_process_exists_handles_current_and_invalid_pid() -> None:
-    assert rpg.process_exists(os.getpid()) is True
+def test_process_exists_rejects_invalid_pid_without_liveness_probe(monkeypatch) -> None:
+    calls: list[tuple[int, int]] = []
+
+    monkeypatch.setattr(rpg.os, "kill", lambda pid, sig: calls.append((pid, sig)))
+
     assert rpg.process_exists(-1) is False
+    assert rpg.process_exists(0) is False
+    assert calls == []
 
 
 def test_subprocess_and_locking_helpers_cover_non_interactive_defaults(tmp_path: Path) -> None:
