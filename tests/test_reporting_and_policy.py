@@ -766,6 +766,27 @@ def test_create_run_artifacts_handles_collision(tmp_path: Path, monkeypatch) -> 
     assert artifacts.state_path.name == "run_state.json"
 
 
+def test_create_run_artifacts_fails_after_collision_budget(tmp_path: Path) -> None:
+    def fixed_now() -> datetime:
+        return datetime(2026, 4, 7, 12, 0, 0)
+
+    base = tmp_path / "Audit_Results"
+    base.mkdir()
+    (base / "20260407-120000").mkdir()
+    (base / "20260407-120000-01").mkdir()
+
+    with pytest.raises(RuntimeError, match="Unable to create unique run artifacts directory after 2 attempts"):
+        rpg.artifact_helpers.create_run_artifacts(
+            base,
+            ensure_private_directory=rpg.ensure_private_directory,
+            path_has_existing_symlink_ancestor=rpg._path_has_existing_symlink_ancestor,
+            apply_private_permissions=rpg._apply_private_permissions,
+            run_state_filename=rpg.RUN_STATE_FILENAME,
+            now_factory=fixed_now,
+            max_collision_attempts=2,
+        )
+
+
 def test_run_state_tracker_persists_phase_updates(tmp_path: Path) -> None:
     artifacts = rpg.create_run_artifacts(tmp_path / "Audit_Results")
     config = _make_run_config(root=tmp_path, policy=tmp_path / "POLICY.md")

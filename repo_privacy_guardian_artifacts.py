@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Callable
 
 
+RUN_ARTIFACT_COLLISION_ATTEMPTS = 1000
+
+
 @dataclass
 class RunArtifacts:
     run_id: str
@@ -119,21 +122,30 @@ def create_run_artifacts(
     apply_private_permissions: Callable[[Path, int], None],
     run_state_filename: str,
     now_factory: Callable[[], datetime] = datetime.now,
+    max_collision_attempts: int = RUN_ARTIFACT_COLLISION_ATTEMPTS,
 ) -> RunArtifacts:
+    if max_collision_attempts <= 0:
+        raise ValueError("max_collision_attempts must be positive")
+
     ensure_private_directory(base_dir)
     stamp = now_factory().strftime("%Y%m%d-%H%M%S")
-    suffix = 0
-    while True:
+    run_dir: Path | None = None
+    for suffix in range(max_collision_attempts):
         run_name = stamp if suffix == 0 else f"{stamp}-{suffix:02d}"
-        run_dir = base_dir / run_name
-        if path_has_existing_symlink_ancestor(run_dir):
-            raise RuntimeError(f"Refusing to create run artifacts under symlinked path: {run_dir}")
+        candidate = base_dir / run_name
+        if path_has_existing_symlink_ancestor(candidate):
+            raise RuntimeError(f"Refusing to create run artifacts under symlinked path: {candidate}")
         try:
-            run_dir.mkdir(parents=True, exist_ok=False)
+            candidate.mkdir(parents=True, exist_ok=False)
+            run_dir = candidate
             break
         except FileExistsError:
-            suffix += 1
             continue
+    if run_dir is None:
+        raise RuntimeError(
+            f"Unable to create unique run artifacts directory after {max_collision_attempts} attempts under {base_dir}"
+        )
+
     apply_private_permissions(run_dir, 0o700)
     started = now_factory()
     return RunArtifacts(

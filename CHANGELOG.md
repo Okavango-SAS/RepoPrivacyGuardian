@@ -7,6 +7,7 @@ All notable public-release changes to this project are documented here.
 ### Fixed
 
 - Removed the last host-PID liveness assertion from the regression suite so process-liveness behavior is covered with deterministic mocks instead of probing the active pytest/Codex process.
+- Bounded run-artifact directory collision handling so report initialization fails visibly instead of looping indefinitely under pathological timestamp/name collisions.
 
 ## [1.3.1] - 2026-04-25
 
