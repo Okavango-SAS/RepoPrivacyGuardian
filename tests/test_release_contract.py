@@ -1486,6 +1486,83 @@ def test_refresh_repos_invalid_root_surfaces_empty_state_and_disables_audit(tmp_
     assert app.repo_list.state == "disabled"
 
 
+def test_refresh_repos_remote_owner_surfaces_audit_only_state(tmp_path: Path) -> None:
+    class DummyVar:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
+    class DummyListbox:
+        def __init__(self) -> None:
+            self.items: list[str] = ["stale"]
+            self.state = "normal"
+
+        def delete(self, _start, _end) -> None:
+            self.items = []
+
+        def curselection(self) -> tuple[int, ...]:
+            return ()
+
+        def configure(self, **kwargs) -> None:
+            if "state" in kwargs:
+                self.state = kwargs["state"]
+
+    class DummyWidget:
+        def __init__(self) -> None:
+            self.text = ""
+            self.kwargs: dict[str, object] = {}
+
+        def configure(self, **kwargs) -> None:
+            self.kwargs.update(kwargs)
+            if "text" in kwargs:
+                self.text = kwargs["text"]
+
+        def place(self, **kwargs) -> None:
+            self.kwargs.update(kwargs)
+
+        def place_forget(self) -> None:
+            self.kwargs["hidden"] = "1"
+
+        def lift(self) -> None:
+            self.kwargs["lifted"] = "1"
+
+    app = object.__new__(rpg.GuiApp)
+    app.root_var = DummyVar(str(tmp_path / "missing-root"))
+    app.github_owner_var = DummyVar("Acme")
+    app.github_repo_filters_var = DummyVar("api, worker")
+    app.repo_list = DummyListbox()
+    app._repo_items = [("stale", "stale")]
+    app._repo_summary_label = DummyWidget()
+    app._repo_empty_state = DummyWidget()
+    app._repo_empty_state_title_label = DummyWidget()
+    app._repo_empty_state_body_label = DummyWidget()
+    app._repo_empty_state_hint_label = DummyWidget()
+    app._audit_button = DummyWidget()
+    app._select_all_button = DummyWidget()
+    app._clear_selection_button = DummyWidget()
+    app._refresh_button = DummyWidget()
+    app._repair_button = None
+    app._cancel_button = None
+    app._run_in_progress = False
+    app._active_cancel_token = None
+
+    app.refresh_repos()
+
+    assert app._repo_items == []
+    assert app.repo_list.items == []
+    assert app._repo_empty_state_title_label.text == "GitHub owner/org audit active"
+    assert "2 named remote repositories" in app._repo_empty_state_body_label.text
+    assert "audit-only" in app._repo_empty_state_body_label.text
+    assert "local repository list is ignored" in app._repo_summary_label.text.lower()
+    assert "keep Repair locked" in app._repo_summary_label.text
+    assert app._audit_button.kwargs["text"] == "Run Audit"
+    assert app._audit_button.kwargs["state"] == "normal"
+    assert app.repo_list.state == "disabled"
+    assert app._select_all_button.kwargs["state"] == "disabled"
+
+
 def test_refresh_repos_is_ignored_while_run_is_in_progress(tmp_path: Path) -> None:
     class DummyVar:
         def __init__(self, value: str) -> None:
@@ -1530,13 +1607,25 @@ def test_build_repair_status_summary_mentions_pass_fail_counts() -> None:
 
     summary = app._build_repair_status_summary(
         [
-            {"name": "repo-a", "status": "FAIL"},
-            {"name": "repo-b", "status": "PASS"},
+            {
+                "name": "repo-a",
+                "status": "FAIL",
+                "failures": ["secret-like patterns in tracked files"],
+                "tracked_secret_low_confidence": ["settings.py:1:<redacted-secret>"],
+            },
+            {
+                "name": "repo-b",
+                "status": "PASS",
+                "tracked_secret_fixture_matches": ["tests/fixtures/example.env:1:<redacted-secret>"],
+            },
         ]
     )
 
     assert "1 FAIL / 1 PASS" in summary
     assert "repo-a, repo-b" in summary
+    assert "1 blocking category" in summary
+    assert "1 manual-review signal" in summary
+    assert "1 fixture/documentation match kept non-blocking" in summary
 
 
 def test_gui_browse_helpers_update_variables(tmp_path: Path) -> None:
@@ -1610,6 +1699,9 @@ def test_gui_repair_confirmation_text_uses_english_labels() -> None:
         {
             "name": "repo-a",
             "status": "FAIL",
+            "failures": ["secret-like patterns in tracked files"],
+            "tracked_secret_low_confidence": ["settings.py:1:<redacted-secret>"],
+            "tracked_secret_fixture_matches": ["tests/fixtures/example.env:1:<redacted-secret>"],
             "tracked_but_ignored": ["secret.txt"],
             "tracked_path_matches": ["<redacted-path>"],
             "history_path_matches": [],
@@ -1621,6 +1713,9 @@ def test_gui_repair_confirmation_text_uses_english_labels() -> None:
     text = app._build_repair_confirmation_text(("repo-a",))
 
     assert "Repair will run with the following plan:" in text
+    assert "Blocking categories: 1" in text
+    assert "Manual-review signals: 1" in text
+    assert "Fixture/documentation matches kept non-blocking: 1" in text
     assert "Continue?" in text
     assert "Se va a ejecutar" not in text
 

@@ -4,6 +4,20 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-04-26
+
+GUI target-mode and repair-review UX hardening update.
+
+### Changed
+
+- Clarified the GUI repository target surface when GitHub owner/org remote audit is active: the local repository list now shows an audit-only remote state instead of competing Root errors, and the Settings hint explicitly says remote mode ignores the local list.
+- Improved the staged Repair summary so operators see blocking failure categories, manual-review advisory signals, and fixture/documentation matches that were intentionally kept non-blocking before confirming write actions.
+- Documented the remote-audit GUI state and the updated Repair review guidance for public-release operators.
+
+### Fixed
+
+- Prevented stale local repository entries from remaining visible underneath the drag/drop list when switching into GitHub owner/org remote audit mode.
+
 ## [1.3.2] - 2026-04-26
 
 Secret taxonomy and evidence-classification hardening update.

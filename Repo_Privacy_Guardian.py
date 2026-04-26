@@ -7715,7 +7715,10 @@ class GuiApp:  # pragma: no cover
         except Exception:
             github_owner = None
         if github_owner:
-            return f"Settings hidden. GitHub owner/org remote audit is active for {github_owner}. Open Settings to edit."
+            return (
+                f"Settings hidden. GitHub owner/org remote audit is active for {github_owner} "
+                "(audit-only; local list ignored). Open Settings to edit."
+            )
         return "Setup is saved and hidden. Open Settings for policy, output, GitHub, or identity controls."
 
     def _set_setup_settings_visibility(self, visible: bool) -> None:
@@ -7974,6 +7977,14 @@ class GuiApp:  # pragma: no cover
                 "body_color": "#526679",
                 "hint": "Clone a repository here or point Root at a folder that already contains git repositories.",
             },
+            "github_remote": {
+                "title": "GitHub owner/org audit active",
+                "fg": "#F2FBF8",
+                "border": "#B9DDD3",
+                "title_color": "#0E4F4A",
+                "body_color": "#385B5A",
+                "hint": "Local repository selection is paused. Open Settings to edit or clear the GitHub owner/org.",
+            },
         }
         theme = palette.get(self._repo_empty_reason, palette["no_repos"])
         repo_empty_state.configure(fg_color=theme["fg"], border_color=theme["border"])
@@ -8070,16 +8081,11 @@ class GuiApp:  # pragma: no cover
 
         github_owner = self._github_owner_value()
         if github_owner:
-            filters = self._github_repo_filters()
-            filter_text = (
-                "all matching repositories"
-                if filters is None
-                else f"{len(filters)} named remote repositories"
-            )
             repo_summary_label.configure(
                 text=(
                     f"GitHub owner/org audit is active for {github_owner}. "
-                    f"The local repository list is ignored; Audit will discover {filter_text} through GitHub."
+                    f"The local repository list is ignored; Audit will discover {self._github_remote_filter_text()} "
+                    "through GitHub and keep Repair locked because remote mode is audit-only."
                 )
             )
             return
@@ -8114,6 +8120,32 @@ class GuiApp:  # pragma: no cover
             )
         )
 
+    def _report_item_count(self, payload: dict[str, object], *keys: str) -> int:
+        return sum(len(self._report_list(payload, key)) for key in keys)
+
+    def _manual_review_signal_count(self, payload: dict[str, object]) -> int:
+        return self._report_item_count(
+            payload,
+            "tracked_secret_low_confidence",
+            "history_secret_low_confidence",
+            "git_metadata_secret_low_confidence",
+            "tracked_email_low_confidence",
+            "history_email_low_confidence",
+            "exfil_code_indicators",
+            "github_hardening_findings",
+            "github_hardening_warnings",
+            "secret_file_manual_review_candidates",
+        )
+
+    def _safe_context_count(self, payload: dict[str, object]) -> int:
+        return self._report_item_count(
+            payload,
+            "tracked_secret_fixture_matches",
+            "history_secret_fixture_matches",
+            "tracked_secret_documentation_matches",
+            "history_secret_documentation_matches",
+        )
+
     def _build_repair_status_summary(self, reports_payload: list[dict[str, object]]) -> str:
         total = len(reports_payload)
         if total == 0:
@@ -8121,19 +8153,40 @@ class GuiApp:  # pragma: no cover
 
         passed = sum(1 for item in reports_payload if item.get("status") == "PASS")
         failed = sum(1 for item in reports_payload if item.get("status") == "FAIL")
+        blocking_categories = sum(self._report_item_count(item, "failures") for item in reports_payload)
+        manual_review_signals = sum(self._manual_review_signal_count(item) for item in reports_payload)
+        safe_context = sum(self._safe_context_count(item) for item in reports_payload)
         names = [str(item.get("name")) for item in reports_payload[:3] if item.get("name")]
         label = ", ".join(names)
         if total > len(names):
             label += f", +{total - len(names)} more"
 
+        detail_parts: list[str] = []
+        if blocking_categories:
+            category_word = "category" if blocking_categories == 1 else "categories"
+            detail_parts.append(f"{blocking_categories} blocking {category_word}")
+        if manual_review_signals:
+            signal_word = "signal" if manual_review_signals == 1 else "signals"
+            detail_parts.append(f"{manual_review_signals} manual-review {signal_word}")
+        if safe_context:
+            match_word = "match" if safe_context == 1 else "matches"
+            detail_parts.append(f"{safe_context} fixture/documentation {match_word} kept non-blocking")
+        detail_text = (" " + "; ".join(detail_parts) + ".") if detail_parts else ""
+
         if failed:
             return (
-                f"Last audit: {label}. {failed} FAIL / {passed} PASS. "
+                f"Last audit: {label}. {failed} FAIL / {passed} PASS.{detail_text} "
                 "Review the findings and confirm every write action before Repair."
             )
 
+        if manual_review_signals:
+            return (
+                f"Last audit: {label}. All selected repositories passed.{detail_text} "
+                "Classify advisory findings before publication; Repair is optional and should only apply reviewed cleanup actions."
+            )
+
         return (
-            f"Last audit: {label}. All selected repositories passed. "
+            f"Last audit: {label}. All selected repositories passed.{detail_text} "
             "Repair is optional; use it only if you still want to apply reviewed cleanup actions."
         )
 
@@ -8286,7 +8339,40 @@ class GuiApp:  # pragma: no cover
         value = variable.get() if variable is not None else ""
         return normalize_csv_values(value) or None
 
+    def _github_remote_filter_text(self) -> str:
+        filters = self._github_repo_filters()
+        if filters is None:
+            return "all matching repositories"
+        repo_word = "repository" if len(filters) == 1 else "repositories"
+        return f"{len(filters)} named remote {repo_word}"
+
+    def _github_remote_state_message(self, github_owner: str) -> str:
+        return (
+            f"Audit will discover {self._github_remote_filter_text()} for {github_owner}, "
+            "clone them into a temporary private directory, and remove the clones when the run finishes. "
+            "Remote mode is audit-only, so Repair stays unavailable for these targets."
+        )
+
+    def _sync_remote_target_surface(self) -> bool:
+        github_owner = self._github_owner_value()
+        if not github_owner:
+            return False
+        try:
+            self.repo_list.delete(0, "end")
+        except Exception:
+            pass
+        self._repo_items = []
+        self._set_repo_empty_state(
+            True,
+            self._github_remote_state_message(github_owner),
+            reason="github_remote",
+        )
+        return True
+
     def _on_github_remote_controls_changed(self, *_args: object) -> None:
+        if not self._sync_remote_target_surface():
+            if getattr(self, "_repo_empty_reason", None) == "github_remote":
+                self.refresh_repos()
         self._update_repo_summary()
         self._update_run_buttons_state()
 
@@ -8521,6 +8607,11 @@ class GuiApp:  # pragma: no cover
             name = str(rep.get("name", "(repo)"))
             status = str(rep.get("status", "UNKNOWN"))
             lines.append(f"- {name} [{status}]")
+            lines.append(f"  * Blocking categories: {self._report_item_count(rep, 'failures')}")
+            lines.append(f"  * Manual-review signals: {self._manual_review_signal_count(rep)}")
+            safe_context_count = self._safe_context_count(rep)
+            if safe_context_count:
+                lines.append(f"  * Fixture/documentation matches kept non-blocking: {safe_context_count}")
 
             tracked_ignored = self._report_list(rep, "tracked_but_ignored")
             if tracked_ignored:
@@ -8675,6 +8766,10 @@ class GuiApp:  # pragma: no cover
             return
         self.repo_list.delete(0, "end")
         self._repo_items = []
+        if self._sync_remote_target_surface():
+            self._update_repo_summary()
+            self._update_run_buttons_state()
+            return
         root = Path(self.root_var.get())
         root_error = validate_repository_root(root)
         if root_error:

@@ -150,3 +150,13 @@ The next UX pass reduces first-screen load further:
 - Added drag-and-drop repository-folder targeting when the optional desktop DnD runtime is available, with Browse/Refresh still available as the fallback.
 - The compact layout is clearer, but naturally denser than the primary desktop width.
 - The app still does not have automated visual regression coverage; `docs/ux-audit/` remains the maintained screenshot evidence for UI review.
+
+## 2026-04-26 Follow-Up
+
+The release-readiness UX pass focused on target-state clarity and safer review language:
+
+- When GitHub owner/org remote audit is active, the repository list now switches to a dedicated remote audit state instead of showing stale local repositories or Root validation errors.
+- The remote state explains that repositories are discovered through GitHub, cloned temporarily, cleaned up after the run, and remain audit-only with Repair locked.
+- The hidden Settings hint now calls out that remote mode ignores the local repository list.
+- The Repair summary and confirmation prompt now separate blocking failure categories, manual-review advisory signals, and fixture/documentation matches kept non-blocking.
+- Regression tests cover the remote target-state surface and the richer Repair review summary.

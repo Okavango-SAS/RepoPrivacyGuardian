@@ -152,7 +152,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.2.3`" in versioning
     assert "`1.3.0`" in versioning
     assert "`1.3.1`" in versioning
-    assert "`1.3.2`" in versioning
+    assert "`1.3.3`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "Validation evidence" in release_notes
 
@@ -244,6 +244,8 @@ def test_changelog_records_stable_release() -> None:
     assert "GitHub owner audit mode and GUI/CLI parity update." in changelog
     assert "## [1.3.1] - 2026-04-25" in changelog
     assert "Release-readiness reliability hardening update." in changelog
+    assert "## [1.3.3] - 2026-04-26" in changelog
+    assert "GUI target-mode and repair-review UX hardening update." in changelog
     assert "## [1.3.2] - 2026-04-26" in changelog
     assert "Secret taxonomy and evidence-classification hardening update." in changelog
     assert "## [1.2.3] - 2026-04-24" in changelog
@@ -264,9 +266,9 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.3.2"' in pyproject
+    assert 'version = "1.3.3"' in pyproject
     assert "Current release line: `v1.3.x`." in readme
-    assert "`v1.3.2` is the current patch release with secret taxonomy and evidence-classification hardening." in readme
+    assert "`v1.3.3` is the current patch release with GUI target-mode and repair-review UX hardening." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme

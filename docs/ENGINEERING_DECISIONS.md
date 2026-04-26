@@ -104,6 +104,7 @@ This file captures key design decisions and their rationale.
 - Aligned GUI GitHub owner/org mode with CLI: remote audits are opt-in, use the shared scanner pipeline through temporary clones, and remain audit-only with repair locked in the GUI.
 - Reduced first-screen overload without changing parity by persisting non-secret GUI setup preferences, collapsing policy/output/GitHub/identity controls into Settings, and keeping all run-config mappings unchanged.
 - Added optional repository-folder drag-and-drop as a target-selection shortcut; Browse/Refresh and CLI `--root/--repos` remain the canonical fallback paths.
+- Clarified the GUI target surface for GitHub owner/org mode so local repository validation errors do not compete with an active remote audit target, and the Repair review summary distinguishes blocking, advisory/manual-review, and safe fixture/documentation context.
 - Added parity regression tests for argument validation, defaults, confirmation gate, fix/re-audit flow, and runtime error handling.
 
 ### Residual risk and follow-up
