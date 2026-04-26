@@ -7,7 +7,7 @@ This document defines how coding agents should use Repo Privacy Guardian from CL
 - Use CLI for automation, reproducibility, and stable artifacts.
 - GUI and CLI are parity paths for checks and policy logic.
 - GUI parity includes staged interaction: `Audit` first, then `Repair` after audit context unlocks the visual repair gate.
-- Prefer CLI in agentic IDE workflows (Codex, Cursor, Antigravity, VS Code with GitHub Copilot, and similar tools).
+- Prefer CLI in agentic IDE workflows (Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, and similar tools). This is the primary automation use case.
 
 ## CLI First Workflow
 
@@ -29,6 +29,16 @@ Notes:
 - Release validation should come from tracked tests only so a clean clone reproduces the same `pytest` signal.
 - Let the tool automate mechanical Git-safe remediation, but keep semantic source edits under review.
 - Use `--replace-text-file` when the repository contains a known literal that must be rewritten but the replacement cannot be inferred safely from the finding alone.
+
+## Agentic IDE Use Case
+
+Repo Privacy Guardian is meant to be easy to delegate to coding agents while preserving operator control.
+
+- For a fresh clone of this tool, use `docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md`.
+- For audit-only dogfooding against another repository, use `docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md`.
+- For reviewed audit-and-repair work, use `docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md`.
+- Keep the first pass audit-only and classify findings before requesting writes.
+- Do not paste raw secrets, private paths, private hostnames, or unredacted logs into agent chat.
 
 ## Recommended Commands
 

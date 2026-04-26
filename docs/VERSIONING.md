@@ -36,6 +36,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.3.7` is a CLI/GUI parity hardening patch on top of `1.3.6`. It adds a testable CLI parser-to-runtime adapter and field-level regression coverage that compares every shared `GuardRunConfig` field from equivalent CLI and GUI inputs while keeping behavior, report schema, and GUI locale presentation unchanged.
 
+`1.3.8` is an agentic onboarding documentation patch on top of `1.3.7`. It documents agentic IDE and coding-agent usage as the primary automation use case and adds reusable prompts for post-clone environment preparation plus reviewed audit-and-repair workflows without changing CLI behavior, report schema, or GUI parity.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

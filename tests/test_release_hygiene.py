@@ -156,6 +156,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.3.5`" in versioning
     assert "`1.3.6`" in versioning
     assert "`1.3.7`" in versioning
+    assert "`1.3.8`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "Validation evidence" in release_notes
 
@@ -224,6 +225,30 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
     assert "Alert findings stay redacted" in policy
 
 
+def test_docs_cover_agentic_ide_prompt_library() -> None:
+    root = _repo_root()
+    readme = (root / "README.MD").read_text(encoding="utf-8")
+    agents = (root / "AGENTS.MD").read_text(encoding="utf-8")
+    dogfooding = (root / "docs" / "DOGFOODING.md").read_text(encoding="utf-8")
+    setup_prompt = (root / "docs" / "prompts" / "06_PREPARACION_ENTORNO_AGENTICA.prompt.md").read_text(
+        encoding="utf-8"
+    )
+    repair_prompt = (root / "docs" / "prompts" / "07_AUDITORIA_REPARACION_AGENTICA.prompt.md").read_text(
+        encoding="utf-8"
+    )
+
+    for text in (readme, agents, dogfooding):
+        assert "Codex, Claude Code, Antigravity, GitHub Copilot, Cursor" in text
+        assert "06_PREPARACION_ENTORNO_AGENTICA.prompt.md" in text
+        assert "07_AUDITORIA_REPARACION_AGENTICA.prompt.md" in text
+
+    assert "repo-privacy-guardian --check-tooling" in setup_prompt
+    assert "python -m pip install ." in setup_prompt
+    assert "repo-privacy-guardian --root <repos-root> --repos <target-repo> --dry-run --yes" in repair_prompt
+    assert "repo-privacy-guardian --root <repos-root> --repos <target-repo> --fix --dry-run --yes" in repair_prompt
+    assert "No ejecutar `--push` sin aprobacion explicita" in repair_prompt
+
+
 def test_docs_cover_secret_taxonomy_confidence_buckets() -> None:
     root = _repo_root()
     readme = (root / "README.MD").read_text(encoding="utf-8")
@@ -247,6 +272,8 @@ def test_changelog_records_stable_release() -> None:
     assert "GitHub owner audit mode and GUI/CLI parity update." in changelog
     assert "## [1.3.1] - 2026-04-25" in changelog
     assert "Release-readiness reliability hardening update." in changelog
+    assert "## [1.3.8] - 2026-04-26" in changelog
+    assert "Agentic IDE onboarding and prompt-library documentation update." in changelog
     assert "## [1.3.7] - 2026-04-26" in changelog
     assert "CLI/GUI parity regression hardening update." in changelog
     assert "## [1.3.6] - 2026-04-26" in changelog
@@ -277,9 +304,9 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.3.7"' in pyproject
+    assert 'version = "1.3.8"' in pyproject
     assert "Current release line: `v1.3.x`." in readme
-    assert "`v1.3.7` is the current patch release with CLI/GUI parity regression hardening." in readme
+    assert "`v1.3.8` is the current patch release with agentic IDE onboarding prompts and documentation." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme

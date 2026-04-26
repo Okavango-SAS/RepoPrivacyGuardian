@@ -4,6 +4,23 @@ Use this runbook when Repo Privacy Guardian is used defensively to prepare anoth
 
 The default posture is audit-only. Do not enable destructive fixes by default.
 
+## Primary Agentic Use Case
+
+The main automation use case is running Repo Privacy Guardian from an agentic IDE or coding agent such as Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, or an equivalent local agent.
+
+Use the CLI as the durable contract:
+
+- agents can run repeatable commands
+- artifacts are stable and inspectable
+- GUI labels/locales cannot change backend semantics
+- the operator keeps approval authority for destructive fixes
+
+Prompt library:
+
+- environment preparation after cloning this tool: `docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md`
+- audit-only dogfooding: `docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md`
+- reviewed audit and repair: `docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md`
+
 ## CLI Contract
 
 The maintained automation contract is CLI-first:

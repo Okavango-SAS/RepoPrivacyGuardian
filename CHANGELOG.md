@@ -4,6 +4,16 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.3.8] - 2026-04-26
+
+Agentic IDE onboarding and prompt-library documentation update.
+
+### Added
+
+- Documented agentic IDE and coding-agent usage as the primary automation use case, including Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, and equivalent tools.
+- Added reusable prompts for environment preparation after cloning Repo Privacy Guardian and for reviewed audit-and-repair workflows.
+- Added prompt-library references to README, AGENTS, and dogfooding documentation.
+
 ## [1.3.7] - 2026-04-26
 
 CLI/GUI parity regression hardening update.

@@ -77,7 +77,7 @@ Choose the path that matches what you need right now:
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
 - `v1.2.3` is the public-release stabilization and GUI UX update.
-- `v1.3.7` is the current patch release with CLI/GUI parity regression hardening.
+- `v1.3.8` is the current patch release with agentic IDE onboarding prompts and documentation.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -492,7 +492,18 @@ Practical rule: let the tool perform mechanical Git-safe rewrites, but keep sema
 
 ## 🤖 Agentic CLI Workflow
 
-Repo Privacy Guardian works well as an agent-driven CLI tool. A safe default pattern is:
+Repo Privacy Guardian is designed to be comfortable in multiple modes, but the primary automation use case is an agentic IDE or coding agent running the CLI. This includes Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, and similar tools.
+
+The recommended agentic shape is:
+
+- the human chooses the target repository and risk tolerance
+- the agent runs Repo Privacy Guardian from CLI
+- the first pass is audit-only
+- findings are classified before any repair
+- destructive remediation requires explicit approval
+- artifacts remain local under `Audit_Results/<run_id>/`
+
+A safe default pattern is:
 
 1. `repo-privacy-guardian --help`
 2. dry-run audit
@@ -501,6 +512,14 @@ Repo Privacy Guardian works well as an agent-driven CLI tool. A safe default pat
 5. re-run until `PASS`
 
 For dogfooding against another repository, use [DOGFOODING](docs/DOGFOODING.md). That runbook keeps the first pass audit-only, requires classification of confirmed leaks versus intentional fixtures/examples, and treats `Audit_Results/<run_id>/` artifacts as sensitive local evidence even when redacted.
+
+Reusable copy/paste prompts:
+
+| Situation | Prompt |
+| --- | --- |
+| Prepare this tool after cloning | [`06_PREPARACION_ENTORNO_AGENTICA.prompt.md`](docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md) |
+| Audit another repository without fixes | [`05_DOGFOODING_AUDIT_ONLY.prompt.md`](docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md) |
+| Audit, review, and repair after approval | [`07_AUDITORIA_REPARACION_AGENTICA.prompt.md`](docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md) |
 
 ### Recommended agent prompt template
 
@@ -515,7 +534,7 @@ re-run the audit until the repository is PASS, and preserve audit artifacts unde
 Do not push or rewrite history without explicit approval.
 ```
 
-The repository also includes reusable prompt files under `docs/prompts/`, including `05_DOGFOODING_AUDIT_ONLY.prompt.md`, for agentic audit and parity workflows.
+The repository also includes reusable prompt files under `docs/prompts/` for environment setup, audit-only dogfooding, reviewed repair, GUI/CLI parity, and release-readiness workflows.
 
 ## 🧰 Headless and Desktop Diagnostics
 

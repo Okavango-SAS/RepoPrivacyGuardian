@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.3.7"
-CURRENT_VERSION_DESCRIPTION = "CLI/GUI parity regression hardening"
+CURRENT_VERSION = "1.3.8"
+CURRENT_VERSION_DESCRIPTION = "agentic IDE onboarding prompts and documentation"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
@@ -17,6 +17,9 @@ README_REQUIREMENTS = [
     "malformed non-email identity tokens",
     "--github-owner",
     "DOGFOODING",
+    "Codex, Claude Code, Antigravity, GitHub Copilot, Cursor",
+    "06_PREPARACION_ENTORNO_AGENTICA.prompt.md",
+    "07_AUDITORIA_REPARACION_AGENTICA.prompt.md",
     "confirmed leaks, intentional fixtures/examples",
     "Token-gated coverage",
     "secret scanning configuration",
@@ -99,6 +102,9 @@ DOGFOODING_REQUIREMENTS = [
     "do not paste raw secret values",
     "No destructive changes were applied.",
     "--audit-github-hardening",
+    "Codex, Claude Code, Antigravity, GitHub Copilot, Cursor",
+    "06_PREPARACION_ENTORNO_AGENTICA.prompt.md",
+    "07_AUDITORIA_REPARACION_AGENTICA.prompt.md",
 ]
 
 DOGFOODING_PROMPT_REQUIREMENTS = [
