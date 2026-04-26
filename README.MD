@@ -131,7 +131,10 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - GUI runs can be cancelled; cancellation stops after the active repository step completes and the run is recorded as `ABORTED`.
 - In the GUI, `Open HTML report automatically` is opt-in and off by default.
 - The GUI keeps the staged `Audit -> Repair` interaction so operators cannot jump straight to write actions.
+- The GUI stores non-secret setup preferences locally after setup, then collapses policy/output/GitHub/identity controls into Settings so the main screen stays focused on repository selection, Audit, and the log.
+- The GUI repository list accepts drag-and-drop of local repository folders when the optional desktop drag-and-drop runtime is available; the Browse/Refresh path remains the fallback.
 - GUI and CLI expose the same audit inputs for local repositories, GitHub owner/org remote audits, GitHub hardening, LiteLLM incident checks, report outputs, low-confidence email mode, and repair-only write options. GitHub owner/org remote audit remains audit-only in both paths.
+- The tracked `DESIGN.md` defines the desktop visual tokens and UX constraints used for GUI changes.
 
 ## 📦 Installation
 
@@ -191,6 +194,7 @@ External requirements:
 - `git-filter-repo` is required only for remediation that rewrites history
 - GitHub CLI (`gh`) is optional for local audits, can supply admin auth for `--audit-github-hardening`, and is required for cloning private repositories in `--github-owner` mode
 - Linux desktop GUI use may require a Tk package such as `python3-tk`
+- Desktop drag-and-drop uses `tkinterdnd2`, included in the optional GUI dependency set. If that runtime cannot initialize, the GUI keeps working with Browse/Refresh.
 
 Recommended support target:
 
@@ -359,6 +363,8 @@ The GUI keeps the staged safety contract:
 1. `Audit`
 2. review findings
 3. `Repair` only after audit context unlocks it
+
+After setup is saved, the GUI keeps advanced parity controls collapsed in Settings. This changes visibility only; GUI runs still build the same `GuardRunConfig` fields as CLI runs.
 
 The GUI is intentionally privacy-first for public release. Maintained screenshots live under `docs/ux-audit/` and must use neutral visible paths so local usernames, private roots, and internal repository lists are not published in image pixels.
 

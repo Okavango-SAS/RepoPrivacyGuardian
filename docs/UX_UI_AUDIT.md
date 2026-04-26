@@ -138,5 +138,15 @@ After:
 ## Remaining Limits
 
 - The GUI remains desktop-first and intentionally secondary to the CLI release contract.
+
+## 2026-04-25 Follow-Up
+
+The next UX pass reduces first-screen load further:
+
+- Added root-level `DESIGN.md` tokens and rules so future GUI work has a durable visual/interaction contract.
+- Kept the main Audit screen focused on Root, repository selection/drop target, Audit controls, and the log.
+- Moved policy, report export, GitHub owner/org remote audit, clone tuning, and identity setup into a collapsible Settings area.
+- Persisted only non-secret GUI setup preferences locally; tokens, private owner email lists, replacement files, and push bypass choices are not stored.
+- Added drag-and-drop repository-folder targeting when the optional desktop DnD runtime is available, with Browse/Refresh still available as the fallback.
 - The compact layout is clearer, but naturally denser than the primary desktop width.
 - The app still does not have automated visual regression coverage; `docs/ux-audit/` remains the maintained screenshot evidence for UI review.

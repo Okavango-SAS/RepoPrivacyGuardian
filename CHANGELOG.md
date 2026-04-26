@@ -4,6 +4,15 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Added a tracked `DESIGN.md` design-token guide for future GUI changes.
+- Added GUI drag-and-drop support for local repository folders through the optional GUI drag-and-drop runtime.
+
+### Changed
+
+- Simplified the GUI first screen by keeping only the normal Audit path prominent after setup and moving policy/output/GitHub/identity controls into a collapsible Settings area with local non-secret preference persistence.
+
 ### Fixed
 
 - Removed the last host-PID liveness assertion from the regression suite so process-liveness behavior is covered with deterministic mocks instead of probing the active pytest/Codex process.

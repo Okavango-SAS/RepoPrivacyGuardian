@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 import socket
-from typing import Callable, Mapping
+from typing import Callable, Iterable, Mapping
 
 import repo_privacy_guardian_artifacts as artifact_helpers
 import repo_privacy_guardian_github as github_helpers
@@ -91,8 +91,11 @@ DEFAULT_RESULTS_DIR = default_results_dir()
 GUI_DEFAULT_PUBLIC_ONLY = False
 GUI_INSTALL_EXTRA = "repo-privacy-guardian[gui]"
 REMEDIATION_INSTALL_EXTRA = "repo-privacy-guardian[remediation]"
-GUI_INSTALL_PACKAGES = ["customtkinter>=5.2.2,<6"]
+GUI_INSTALL_PACKAGES = ["customtkinter>=5.2.2,<6", "tkinterdnd2>=0.4.3,<0.5"]
 REMEDIATION_INSTALL_PACKAGES = ["git-filter-repo>=2.45,<3"]
+GUI_SETTINGS_ENV_VAR = "REPO_PRIVACY_GUARDIAN_GUI_SETTINGS"
+GUI_SETTINGS_SCHEMA_VERSION = 1
+GUI_SETTINGS_MAX_BYTES = 32 * 1024
 WINGET_BOOTSTRAP_URL = "https://aka.ms/getwinget"
 WINGET_PACKAGE_FAMILY_NAME = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe"
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
@@ -5274,6 +5277,116 @@ def normalize_text_values(values: list[str]) -> list[str]:
     return list(dict.fromkeys(value.strip() for value in values if value and value.strip()))
 
 
+def default_gui_settings_path(env: Mapping[str, str] | None = None) -> Path:
+    current_env = os.environ if env is None else env
+    override = (current_env.get(GUI_SETTINGS_ENV_VAR) or "").strip()
+    if override:
+        return Path(override).expanduser()
+
+    if os.name == "nt":
+        base = current_env.get("LOCALAPPDATA") or current_env.get("APPDATA")
+        if base:
+            return Path(base) / "RepoPrivacyGuardian" / "gui_settings.json"
+
+    xdg_config = (current_env.get("XDG_CONFIG_HOME") or "").strip()
+    if xdg_config:
+        return Path(xdg_config).expanduser() / "repo-privacy-guardian" / "gui_settings.json"
+
+    return Path.home() / ".config" / "repo-privacy-guardian" / "gui_settings.json"
+
+
+def load_gui_settings(path: Path | None = None) -> dict[str, object]:
+    settings_path = path or default_gui_settings_path()
+    try:
+        if not settings_path.exists() or settings_path.is_symlink():
+            return {}
+        if settings_path.stat().st_size > GUI_SETTINGS_MAX_BYTES:
+            return {}
+        payload = json.loads(settings_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    if not isinstance(payload, dict):
+        return {}
+    try:
+        schema_version = int(payload.get("schema_version") or 0)
+    except (TypeError, ValueError):
+        return {}
+    if schema_version != GUI_SETTINGS_SCHEMA_VERSION:
+        return {}
+    return payload
+
+
+def save_gui_settings(path: Path, payload: dict[str, object]) -> None:
+    safe_payload = dict(payload)
+    safe_payload["schema_version"] = GUI_SETTINGS_SCHEMA_VERSION
+    write_private_json_file(path, safe_payload)
+
+
+def gui_setting_str(settings: Mapping[str, object], key: str, default: str) -> str:
+    value = settings.get(key)
+    if isinstance(value, str):
+        return value
+    return default
+
+
+def gui_setting_bool(settings: Mapping[str, object], key: str, default: bool) -> bool:
+    value = settings.get(key)
+    if isinstance(value, bool):
+        return value
+    return default
+
+
+def parse_tk_drop_paths(raw_data: str, splitter: Callable[[str], Iterable[str]] | None = None) -> list[Path]:
+    raw_value = raw_data.strip()
+    if not raw_value:
+        return []
+
+    parts: Iterable[str]
+    if splitter is not None:
+        try:
+            parts = splitter(raw_value)
+        except Exception:
+            parts = [raw_value]
+    else:
+        parts = [raw_value]
+
+    return [Path(item).expanduser() for item in parts if item and str(item).strip()]
+
+
+def resolve_dropped_repository_targets(paths: list[Path]) -> tuple[Path | None, list[str], str | None]:
+    directories: list[Path] = []
+    for raw_path in paths:
+        try:
+            candidate = raw_path.expanduser()
+            if not candidate.exists():
+                continue
+            directories.append(candidate if candidate.is_dir() else candidate.parent)
+        except OSError:
+            continue
+
+    if not directories:
+        return None, [], "Drop one or more existing repository folders."
+
+    resolved = [path.resolve() for path in directories]
+    if len(resolved) == 1:
+        repo_dir = resolved[0]
+        selected = ["."] if is_git_repository(repo_dir) else []
+        return repo_dir, selected, None
+
+    if all(is_git_repository(path) for path in resolved):
+        parents = {path.parent for path in resolved}
+        if len(parents) == 1:
+            parent = next(iter(parents))
+            return parent, [path.name for path in resolved], None
+
+    try:
+        common_root = Path(os.path.commonpath([str(path) for path in resolved]))
+    except ValueError:
+        return None, [], "Dropped repositories must live on the same drive."
+    return common_root, [], None
+
+
 def build_guard_run_config(
     *,
     mode: str,
@@ -5619,8 +5732,12 @@ class GuiApp:  # pragma: no cover
         self._disabled_button_fg = "#B8C6D5"
         self._disabled_button_text = "#64748B"
 
-        self.root_var = tk.StringVar(value=str(default_root_dir()))
-        self.policy_var = tk.StringVar(value=str(DEFAULT_POLICY))
+        self._gui_settings_path = default_gui_settings_path()
+        self._gui_settings = load_gui_settings(self._gui_settings_path)
+        setup_completed = gui_setting_bool(self._gui_settings, "setup_completed", False)
+
+        self.root_var = tk.StringVar(value=gui_setting_str(self._gui_settings, "root", str(default_root_dir())))
+        self.policy_var = tk.StringVar(value=gui_setting_str(self._gui_settings, "policy", str(DEFAULT_POLICY)))
         self.noreply_var = tk.StringVar(value=DEFAULT_NOREPLY)
         self.placeholder_var = tk.StringVar(value=DEFAULT_PLACEHOLDER)
         self.owner_name_var = tk.StringVar(value="Owner")
@@ -5628,27 +5745,41 @@ class GuiApp:  # pragma: no cover
         self.allowed_remote_owners_var = tk.StringVar(value="")
         self.git_user_name_var = tk.StringVar(value="Owner")
         self.git_user_email_var = tk.StringVar(value=DEFAULT_NOREPLY)
-        self.report_dir_var = tk.StringVar(value=str(default_results_dir()))
-        self.report_json_var = tk.StringVar(value="")
+        self.report_dir_var = tk.StringVar(
+            value=gui_setting_str(self._gui_settings, "report_dir", str(default_results_dir()))
+        )
+        self.report_json_var = tk.StringVar(value=gui_setting_str(self._gui_settings, "report_json", ""))
         self.replace_text_file_var = tk.StringVar(value="")
-        self.max_matches_var = tk.StringVar(value="50")
-        self.github_owner_var = tk.StringVar(value="")
-        self.github_repo_filters_var = tk.StringVar(value="")
-        self.github_jobs_var = tk.StringVar(value="4")
+        self.max_matches_var = tk.StringVar(value=gui_setting_str(self._gui_settings, "max_matches", "50"))
+        self.github_owner_var = tk.StringVar(value=gui_setting_str(self._gui_settings, "github_owner", ""))
+        self.github_repo_filters_var = tk.StringVar(
+            value=gui_setting_str(self._gui_settings, "github_repo_filters", "")
+        )
+        self.github_jobs_var = tk.StringVar(value=gui_setting_str(self._gui_settings, "github_jobs", "4"))
 
-        self.public_only_var = tk.BooleanVar(value=GUI_DEFAULT_PUBLIC_ONLY)
-        self.github_include_forks_var = tk.BooleanVar(value=False)
-        self.github_fast_var = tk.BooleanVar(value=False)
+        self.public_only_var = tk.BooleanVar(
+            value=gui_setting_bool(self._gui_settings, "public_only", GUI_DEFAULT_PUBLIC_ONLY)
+        )
+        self.github_include_forks_var = tk.BooleanVar(
+            value=gui_setting_bool(self._gui_settings, "github_include_forks", False)
+        )
+        self.github_fast_var = tk.BooleanVar(value=gui_setting_bool(self._gui_settings, "github_fast", False))
         self.push_var = tk.BooleanVar(value=False)
         self.redact_var = tk.BooleanVar(value=False)
         self.rewrite_personal_paths_var = tk.BooleanVar(value=False)
         self.purge_detected_secret_files_var = tk.BooleanVar(value=False)
         self.purge_all_detected_secret_files_var = tk.BooleanVar(value=False)
-        self.dry_run_var = tk.BooleanVar(value=False)
-        self.low_confidence_blocking_var = tk.BooleanVar(value=False)
-        self.audit_litellm_incident_var = tk.BooleanVar(value=False)
-        self.audit_github_hardening_var = tk.BooleanVar(value=False)
-        self.open_report_var = tk.BooleanVar(value=False)
+        self.dry_run_var = tk.BooleanVar(value=gui_setting_bool(self._gui_settings, "dry_run", False))
+        self.low_confidence_blocking_var = tk.BooleanVar(
+            value=gui_setting_bool(self._gui_settings, "low_confidence_blocking", False)
+        )
+        self.audit_litellm_incident_var = tk.BooleanVar(
+            value=gui_setting_bool(self._gui_settings, "audit_litellm_incident", False)
+        )
+        self.audit_github_hardening_var = tk.BooleanVar(
+            value=gui_setting_bool(self._gui_settings, "audit_github_hardening", False)
+        )
+        self.open_report_var = tk.BooleanVar(value=gui_setting_bool(self._gui_settings, "open_report", False))
         self.confirm_each_repo_fix_var = tk.BooleanVar(value=True)
         self.allow_non_owner_push_var = tk.BooleanVar(value=False)
         self.audit_github_hardening_var.trace_add("write", self._on_audit_github_hardening_toggled)
@@ -5674,6 +5805,13 @@ class GuiApp:  # pragma: no cover
         self._workflow_strip_visible = True
         self._audit_tab_name = "1. Audit"
         self._repair_tab_name = "2. Repair"
+        self._setup_settings_visible = not setup_completed
+        self._setup_settings_toggle_button = None
+        self._setup_settings_hint_label = None
+        self._setup_settings_frame = None
+        self._settings_status_label = None
+        self._repo_drop_hint_label = None
+        self._dnd_command_names: list[str] = []
         self._advanced_identity_visible = False
         self._advanced_identity_toggle_button = None
         self._advanced_identity_hint_label = None
@@ -5790,7 +5928,7 @@ class GuiApp:  # pragma: no cover
         self._settings_card = settings_card
         ctk.CTkLabel(
             settings_card,
-            text="1. Audit Setup",
+            text="Audit Target",
             font=self._font(16, bold=True),
             text_color=self._text_heading,
         ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
@@ -5816,7 +5954,7 @@ class GuiApp:  # pragma: no cover
         ).grid(row=0, column=0, sticky="w", padx=10, pady=10)
         ctk.CTkLabel(
             quick_start,
-            text="Confirm Root -> Run Audit -> review the log/report -> open Repair only if cleanup is needed.",
+            text="Choose a local root or drop repository folders below. Then run Audit and review findings before Repair.",
             justify="left",
             anchor="w",
             wraplength=820,
@@ -5834,28 +5972,88 @@ class GuiApp:  # pragma: no cover
         )
 
         row += 1
-        self._add_file_field(
+        setup_toggle_row = ctk.CTkFrame(
             settings_card,
-            row=row,
+            fg_color="#F8FCFA",
+            corner_radius=10,
+            border_width=1,
+            border_color="#D6E7E1",
+        )
+        setup_toggle_row.grid(row=row, column=0, columnspan=3, sticky="we", padx=14, pady=(6, 12))
+        setup_toggle_row.grid_columnconfigure(0, weight=1)
+        self._setup_settings_hint_label = ctk.CTkLabel(
+            setup_toggle_row,
+            text="Initial setup is open. Save it once, then the main screen stays focused on Audit.",
+            justify="left",
+            anchor="w",
+            wraplength=760,
+            font=self._font(11),
+            text_color=self._text_muted,
+        )
+        self._setup_settings_hint_label.grid(row=0, column=0, sticky="we", padx=12, pady=10)
+        self._setup_settings_toggle_button = ctk.CTkButton(
+            setup_toggle_row,
+            text="Hide Settings",
+            command=self._toggle_setup_settings,
+            width=170,
+            height=32,
+            corner_radius=8,
+            **self._secondary_button_options(),
+        )
+        self._setup_settings_toggle_button.grid(row=0, column=1, sticky="e", padx=(8, 12), pady=10)
+
+        row += 1
+        setup_settings_frame = ctk.CTkFrame(
+            settings_card,
+            fg_color="#FBFEFC",
+            corner_radius=10,
+            border_width=1,
+            border_color="#D6E7E1",
+        )
+        setup_settings_frame.grid(row=row, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
+        setup_settings_frame.grid_columnconfigure(1, weight=1)
+        self._setup_settings_frame = setup_settings_frame
+
+        ctk.CTkLabel(
+            setup_settings_frame,
+            text="Setup & Settings",
+            font=self._font(14, bold=True),
+            text_color=self._text_heading,
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 4))
+        self._settings_status_label = ctk.CTkLabel(
+            setup_settings_frame,
+            text="Use these controls for policy/output overrides, GitHub owner audits, and advanced identity setup.",
+            justify="left",
+            anchor="w",
+            wraplength=880,
+            font=self._font(11),
+            text_color=self._text_muted,
+        )
+        self._settings_status_label.grid(row=1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 8))
+
+        settings_row = 2
+        self._add_file_field(
+            setup_settings_frame,
+            row=settings_row,
             label="Policy File",
             variable=self.policy_var,
             title="Choose a policy file",
             filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
         )
 
-        row += 1
+        settings_row += 1
         self._add_directory_field(
-            settings_card,
-            row=row,
+            setup_settings_frame,
+            row=settings_row,
             label="Audit Results Folder",
             variable=self.report_dir_var,
             title="Choose the base results directory",
         )
 
-        row += 1
+        settings_row += 1
         self._add_save_file_field(
-            settings_card,
-            row=row,
+            setup_settings_frame,
+            row=settings_row,
             label="Optional JSON Copy",
             variable=self.report_json_var,
             title="Choose the extra JSON export path",
@@ -5863,15 +6061,15 @@ class GuiApp:  # pragma: no cover
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
         )
 
-        row += 1
+        settings_row += 1
         github_remote_card = ctk.CTkFrame(
-            settings_card,
+            setup_settings_frame,
             fg_color="#F6FAFE",
             corner_radius=10,
             border_width=1,
             border_color="#C9DDEE",
         )
-        github_remote_card.grid(row=row, column=0, columnspan=3, sticky="we", padx=14, pady=(4, 10))
+        github_remote_card.grid(row=settings_row, column=0, columnspan=3, sticky="we", padx=14, pady=(4, 10))
         github_remote_card.grid_columnconfigure(1, weight=1)
         github_remote_card.grid_columnconfigure(3, weight=1)
         ctk.CTkLabel(
@@ -5928,41 +6126,54 @@ class GuiApp:  # pragma: no cover
             text_color="#1E293B",
         ).grid(row=1, column=3, sticky="w", padx=(0, 12), pady=(4, 10))
 
-        row += 1
+        settings_row += 1
         ctk.CTkLabel(
-            settings_card,
+            setup_settings_frame,
             text="Max findings per check",
             font=self._font(12),
             text_color="#1E293B",
-        ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
+        ).grid(row=settings_row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
         ctk.CTkEntry(
-            settings_card,
+            setup_settings_frame,
             textvariable=self.max_matches_var,
             width=100,
             height=32,
             corner_radius=8,
-        ).grid(row=row, column=1, sticky="w", pady=(4, 12))
+        ).grid(row=settings_row, column=1, sticky="w", pady=(4, 12))
         ctk.CTkLabel(
-            settings_card,
+            setup_settings_frame,
             text=(
-                "Most users only need to confirm the Root, then click Run Audit. "
-                "Policy and output defaults are safe unless you have a custom release policy."
+                "These settings persist locally for the GUI. Secret/token values are not stored here."
             ),
             justify="left",
             anchor="w",
             wraplength=760,
             font=self._font(11),
             text_color=self._text_muted,
-        ).grid(row=row + 1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
+        ).grid(row=settings_row + 1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 8))
+
+        setup_actions = ctk.CTkFrame(setup_settings_frame, fg_color="transparent")
+        setup_actions.grid(row=settings_row + 2, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 10))
+        setup_actions.grid_columnconfigure(0, weight=1)
+        ctk.CTkButton(
+            setup_actions,
+            text="Save Setup",
+            command=self.save_setup_clicked,
+            width=140,
+            height=32,
+            corner_radius=8,
+            fg_color=self._support_button_fg,
+            hover_color=self._support_button_hover,
+        ).grid(row=0, column=1, sticky="e")
 
         advanced_identity_row = ctk.CTkFrame(
-            settings_card,
+            setup_settings_frame,
             fg_color="#F8FCFA",
             corner_radius=10,
             border_width=1,
             border_color="#D6E7E1",
         )
-        advanced_identity_row.grid(row=row + 2, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
+        advanced_identity_row.grid(row=settings_row + 3, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
         advanced_identity_row.grid_columnconfigure(0, weight=1)
         self._advanced_identity_hint_label = ctk.CTkLabel(
             advanced_identity_row,
@@ -6184,6 +6395,7 @@ class GuiApp:  # pragma: no cover
         ).grid(row=4, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 12))
         self._identity_card = identity_card
         self._set_advanced_identity_visibility(False)
+        self._set_setup_settings_visibility(self._setup_settings_visible)
 
         options_card = ctk.CTkFrame(
             repair_tab,
@@ -6608,7 +6820,7 @@ class GuiApp:  # pragma: no cover
         self._refresh_button.pack(side="left")
         self._repo_summary_label = ctk.CTkLabel(
             repos_card,
-            text="Step 2: select repositories, or leave the selection empty to audit every repository shown under Root.",
+            text="Select repositories, drop repository folders, or leave empty to audit every repository shown under Root.",
             justify="left",
             anchor="w",
             font=self._font(11),
@@ -6625,7 +6837,16 @@ class GuiApp:  # pragma: no cover
         )
         list_shell.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=14, pady=(0, 8))
         list_shell.grid_columnconfigure(0, weight=1)
-        list_shell.grid_rowconfigure(0, weight=1)
+        list_shell.grid_rowconfigure(1, weight=1)
+        self._repo_drop_hint_label = ctk.CTkLabel(
+            list_shell,
+            text="Drag repository folders here, or use Browse / Refresh.",
+            justify="left",
+            anchor="w",
+            font=self._font(11),
+            text_color=self._text_muted,
+        )
+        self._repo_drop_hint_label.grid(row=0, column=0, columnspan=2, sticky="we", padx=10, pady=(8, 0))
 
         self.repo_list = tk.Listbox(
             list_shell,
@@ -6640,11 +6861,12 @@ class GuiApp:  # pragma: no cover
             selectforeground="#F8FAFC",
             font=self._font(11),
         )
-        self.repo_list.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=10)
+        self.repo_list.grid(row=1, column=0, sticky="nsew", padx=(10, 0), pady=10)
         repo_scroll = ctk.CTkScrollbar(list_shell, orientation="vertical", command=self.repo_list.yview)
-        repo_scroll.grid(row=0, column=1, sticky="ns", padx=(8, 10), pady=10)
+        repo_scroll.grid(row=1, column=1, sticky="ns", padx=(8, 10), pady=10)
         self.repo_list.configure(yscrollcommand=repo_scroll.set)
         self.repo_list.bind("<<ListboxSelect>>", self._on_repo_selection_changed)
+        self._enable_repo_drag_and_drop(list_shell, self.repo_list)
         self._repo_empty_state = ctk.CTkFrame(
             list_shell,
             fg_color=self._surface_alt,
@@ -6951,6 +7173,81 @@ class GuiApp:  # pragma: no cover
             return
         self._workflow_strip.grid_remove()
 
+    def _current_gui_settings_payload(self, *, setup_completed: bool) -> dict[str, object]:
+        return {
+            "setup_completed": setup_completed,
+            "root": self.root_var.get().strip(),
+            "policy": self.policy_var.get().strip(),
+            "report_dir": self.report_dir_var.get().strip(),
+            "report_json": self.report_json_var.get().strip(),
+            "max_matches": self.max_matches_var.get().strip(),
+            "github_owner": self.github_owner_var.get().strip(),
+            "github_repo_filters": self.github_repo_filters_var.get().strip(),
+            "github_jobs": self.github_jobs_var.get().strip(),
+            "public_only": bool(self.public_only_var.get()),
+            "github_include_forks": bool(self.github_include_forks_var.get()),
+            "github_fast": bool(self.github_fast_var.get()),
+            "dry_run": bool(self.dry_run_var.get()),
+            "low_confidence_blocking": bool(self.low_confidence_blocking_var.get()),
+            "audit_litellm_incident": bool(self.audit_litellm_incident_var.get()),
+            "audit_github_hardening": bool(self.audit_github_hardening_var.get()),
+            "open_report": bool(self.open_report_var.get()),
+        }
+
+    def _save_gui_setup_settings(self, *, setup_completed: bool) -> bool:
+        settings_path = getattr(self, "_gui_settings_path", None)
+        if settings_path is None:
+            return False
+        try:
+            save_gui_settings(
+                settings_path,
+                self._current_gui_settings_payload(setup_completed=setup_completed),
+            )
+        except Exception as exc:
+            try:
+                self.log(f"[WARN] GUI setup settings could not be saved: {exc}")
+            except Exception:
+                pass
+            return False
+        return True
+
+    def save_setup_clicked(self) -> None:
+        if self._save_gui_setup_settings(setup_completed=True):
+            self.log(f"[INFO] GUI setup saved to {self._gui_settings_path}")
+            self._set_setup_settings_visibility(False)
+
+    def _toggle_setup_settings(self) -> None:
+        self._set_setup_settings_visibility(not self._setup_settings_visible)
+
+    def _setup_settings_hint_text(self, visible: bool) -> str:
+        if visible:
+            return "Setup is open. Save it once, then the main screen stays focused on Audit."
+        try:
+            github_owner = self._github_owner_value()
+        except Exception:
+            github_owner = None
+        if github_owner:
+            return f"Settings hidden. GitHub owner/org remote audit is active for {github_owner}. Open Settings to edit."
+        return "Setup is saved and hidden. Open Settings for policy, output, GitHub, or identity controls."
+
+    def _set_setup_settings_visibility(self, visible: bool) -> None:
+        self._setup_settings_visible = visible
+
+        toggle_button = getattr(self, "_setup_settings_toggle_button", None)
+        if toggle_button is not None:
+            toggle_button.configure(text="Hide Settings" if visible else "Open Settings")
+
+        hint_label = getattr(self, "_setup_settings_hint_label", None)
+        if hint_label is not None:
+            hint_label.configure(text=self._setup_settings_hint_text(visible))
+
+        frame = getattr(self, "_setup_settings_frame", None)
+        if frame is not None:
+            if visible:
+                frame.grid()
+            else:
+                frame.grid_remove()
+
     def _toggle_advanced_identity_settings(self) -> None:
         self._set_advanced_identity_visibility(not self._advanced_identity_visible)
 
@@ -7207,6 +7504,76 @@ class GuiApp:  # pragma: no cover
             repo_empty_state.lift()
         except Exception:
             pass
+
+    def _set_repo_drop_hint(self, message: str) -> None:
+        label = getattr(self, "_repo_drop_hint_label", None)
+        if label is not None:
+            label.configure(text=message)
+
+    def _enable_repo_drag_and_drop(self, *widgets: object) -> None:
+        try:
+            from tkinterdnd2 import DND_FILES, TkinterDnD
+
+            TkinterDnD._require(self.root)
+        except Exception as exc:
+            self._set_repo_drop_hint(f"Drag-and-drop is unavailable in this Tk runtime. Use Browse / Refresh. ({exc})")
+            return
+
+        def _drop(raw_data: str) -> str:
+            self._handle_repo_drop(raw_data)
+            return "copy"
+
+        def _copy_action(*_args: object) -> str:
+            return "copy"
+
+        for widget in widgets:
+            try:
+                widget.tk.call("tkdnd::drop_target", "register", widget._w, DND_FILES)
+                drop_command = self.root.register(_drop)
+                enter_command = self.root.register(_copy_action)
+                self._dnd_command_names.extend([drop_command, enter_command])
+                widget.tk.call("bind", widget._w, "<<Drop>>", f"{drop_command} %D")
+                widget.tk.call("bind", widget._w, "<<DropEnter>>", enter_command)
+                widget.tk.call("bind", widget._w, "<<DropPosition>>", enter_command)
+            except Exception as exc:
+                self._set_repo_drop_hint(f"Drag-and-drop registration failed. Use Browse / Refresh. ({exc})")
+                return
+
+        self._set_repo_drop_hint("Drag repository folders here to set the audit target, or use Browse / Refresh.")
+
+    def _handle_repo_drop(self, raw_data: str) -> None:
+        if getattr(self, "_run_in_progress", False):
+            self.log("[INFO] Drag-and-drop is disabled while a run is in progress.")
+            return
+
+        splitter = getattr(getattr(self.root, "tk", None), "splitlist", None)
+        paths = parse_tk_drop_paths(raw_data, splitter=splitter)
+        target_root, selected_values, error = resolve_dropped_repository_targets(paths)
+        if error or target_root is None:
+            self.log(f"[WARN] Repository drop ignored: {error or 'no usable paths'}")
+            return
+
+        if self._github_owner_value():
+            self.github_owner_var.set("")
+            self.log("[INFO] Cleared GitHub owner/org remote audit because local repositories were dropped.")
+
+        self.root_var.set(str(target_root))
+        self.refresh_repos()
+        self._select_repo_values(selected_values)
+        selected_text = "all detected repositories" if not selected_values else ", ".join(selected_values)
+        self.log(f"[INFO] Repository drop loaded Root: {target_root} ({selected_text}).")
+        self._save_gui_setup_settings(setup_completed=True)
+        self._set_setup_settings_visibility(False)
+
+    def _select_repo_values(self, selected_values: list[str]) -> None:
+        if not selected_values or not self._repo_items:
+            return
+        wanted = set(selected_values)
+        self.repo_list.selection_clear(0, "end")
+        for index, (_label, value) in enumerate(self._repo_items):
+            if value in wanted:
+                self.repo_list.selection_set(index)
+        self._update_repo_summary()
 
     def _update_repo_summary(self) -> None:
         repo_summary_label = getattr(self, "_repo_summary_label", None)
@@ -8025,6 +8392,9 @@ class GuiApp:  # pragma: no cover
 
         if not run_fix:
             self._lock_repair_until_next_audit("Repair (audit in progress)")
+
+        self._save_gui_setup_settings(setup_completed=True)
+        self._set_setup_settings_visibility(False)
 
         self._run_in_progress = True
         self._active_cancel_token = CancellationToken()

@@ -29,6 +29,19 @@ What to do:
 - rerun with `repo-privacy-guardian --check-tooling --gui`
 - on Linux, confirm both Tk and a graphical session are available
 
+## GUI drag-and-drop is unavailable
+
+Symptoms:
+
+- the repository list says drag-and-drop is unavailable
+- dropping a repository folder does nothing, but Browse / Refresh still works
+
+What to do:
+
+- install or repair the GUI extras: `python -m pip install ".[gui]"`
+- restart the GUI so `tkinterdnd2` can initialize the native Tk drag-and-drop bridge
+- use Browse / Refresh as the supported fallback on desktop runtimes that do not expose Tk DnD
+
 ## GitHub hardening is partial or warning-only
 
 Symptoms:

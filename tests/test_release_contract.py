@@ -1043,6 +1043,118 @@ def test_gui_advanced_identity_settings_are_collapsible() -> None:
     assert profile_card.actions[-1] == "grid_configure"
 
 
+def test_gui_setup_settings_are_collapsible() -> None:
+    class DummyWidget:
+        def __init__(self) -> None:
+            self.actions: list[str] = []
+            self.kwargs: dict[str, object] = {}
+
+        def configure(self, **kwargs: object) -> None:
+            self.kwargs.update(kwargs)
+
+        def grid(self) -> None:
+            self.actions.append("grid")
+
+        def grid_remove(self) -> None:
+            self.actions.append("grid_remove")
+
+    frame = DummyWidget()
+    toggle_button = DummyWidget()
+    hint_label = DummyWidget()
+
+    app = object.__new__(rpg.GuiApp)
+    app._setup_settings_visible = True
+    app._setup_settings_frame = frame
+    app._setup_settings_toggle_button = toggle_button
+    app._setup_settings_hint_label = hint_label
+
+    app._set_setup_settings_visibility(False)
+
+    assert app._setup_settings_visible is False
+    assert toggle_button.kwargs["text"] == "Open Settings"
+    assert "saved and hidden" in str(hint_label.kwargs["text"])
+    assert frame.actions == ["grid_remove"]
+
+    app._toggle_setup_settings()
+
+    assert app._setup_settings_visible is True
+    assert toggle_button.kwargs["text"] == "Hide Settings"
+    assert "Setup is open" in str(hint_label.kwargs["text"])
+    assert frame.actions[-1] == "grid"
+
+
+def test_gui_settings_payload_excludes_identity_secrets() -> None:
+    class DummyVar:
+        def __init__(self, value: object) -> None:
+            self.value = value
+
+        def get(self) -> object:
+            return self.value
+
+    app = object.__new__(rpg.GuiApp)
+    app.root_var = DummyVar("C:/repos")
+    app.policy_var = DummyVar("POLICY.md")
+    app.report_dir_var = DummyVar("Audit_Results")
+    app.report_json_var = DummyVar("")
+    app.max_matches_var = DummyVar("50")
+    app.github_owner_var = DummyVar("Acme")
+    app.github_repo_filters_var = DummyVar("api")
+    app.github_jobs_var = DummyVar("4")
+    app.public_only_var = DummyVar(True)
+    app.github_include_forks_var = DummyVar(False)
+    app.github_fast_var = DummyVar(True)
+    app.dry_run_var = DummyVar(False)
+    app.low_confidence_blocking_var = DummyVar(False)
+    app.audit_litellm_incident_var = DummyVar(False)
+    app.audit_github_hardening_var = DummyVar(True)
+    app.open_report_var = DummyVar(False)
+
+    payload = app._current_gui_settings_payload(setup_completed=True)
+
+    assert payload["setup_completed"] is True
+    assert payload["github_owner"] == "Acme"
+    assert "owner_emails" not in payload
+    assert "noreply_email" not in payload
+    assert "placeholder_email" not in payload
+    assert "allowed_remote_owners" not in payload
+
+
+def test_gui_settings_roundtrip_uses_private_json(tmp_path: Path) -> None:
+    settings_path = tmp_path / "gui_settings.json"
+
+    rpg.save_gui_settings(
+        settings_path,
+        {
+            "setup_completed": True,
+            "root": "C:/repos",
+            "github_owner": "Acme",
+        },
+    )
+
+    loaded = rpg.load_gui_settings(settings_path)
+
+    assert loaded["schema_version"] == rpg.GUI_SETTINGS_SCHEMA_VERSION
+    assert loaded["setup_completed"] is True
+    assert loaded["root"] == "C:/repos"
+    assert loaded["github_owner"] == "Acme"
+
+
+def test_default_gui_settings_path_honors_env_override(tmp_path: Path) -> None:
+    override = tmp_path / "custom-settings.json"
+
+    assert rpg.default_gui_settings_path({rpg.GUI_SETTINGS_ENV_VAR: str(override)}) == override
+
+
+def test_load_gui_settings_ignores_invalid_files(tmp_path: Path) -> None:
+    invalid_json = tmp_path / "invalid.json"
+    invalid_json.write_text("{not-json", encoding="utf-8")
+    invalid_schema = tmp_path / "invalid-schema.json"
+    invalid_schema.write_text('{"schema_version": "bad"}', encoding="utf-8")
+
+    assert rpg.load_gui_settings(invalid_json) == {}
+    assert rpg.load_gui_settings(invalid_schema) == {}
+
+
 def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
     seen: list[tuple[str, str]] = []
 
@@ -1099,6 +1211,111 @@ def test_gui_remote_selection_signature_includes_owner_and_filters() -> None:
     signature = app._run_selection_signature(["worker", "api"], github_owner="Acme")
 
     assert signature == ("github-owner", "acme", "api", "worker")
+
+
+def test_parse_tk_drop_paths_uses_tk_splitter() -> None:
+    paths = rpg.parse_tk_drop_paths(
+        "{C:/Repos/Repo A} C:/Repos/RepoB",
+        splitter=lambda _raw: ("C:/Repos/Repo A", "C:/Repos/RepoB"),
+    )
+
+    assert [str(path).replace("\\", "/") for path in paths] == ["C:/Repos/Repo A", "C:/Repos/RepoB"]
+
+
+def test_parse_tk_drop_paths_falls_back_when_splitter_fails() -> None:
+    paths = rpg.parse_tk_drop_paths("C:/Repos/RepoA", splitter=lambda _raw: (_ for _ in ()).throw(ValueError))
+
+    assert len(paths) == 1
+    assert str(paths[0]).replace("\\", "/") == "C:/Repos/RepoA"
+
+
+def test_resolve_dropped_repository_targets_selects_single_repo_root(tmp_path: Path) -> None:
+    repo = tmp_path / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+
+    root, selected, error = rpg.resolve_dropped_repository_targets([repo])
+
+    assert error is None
+    assert root == repo.resolve()
+    assert selected == ["."]
+
+
+def test_resolve_dropped_repository_targets_selects_sibling_repos(tmp_path: Path) -> None:
+    repo_a = tmp_path / "repo-a"
+    repo_b = tmp_path / "repo-b"
+    (repo_a / ".git").mkdir(parents=True)
+    (repo_b / ".git").mkdir(parents=True)
+
+    root, selected, error = rpg.resolve_dropped_repository_targets([repo_a, repo_b])
+
+    assert error is None
+    assert root == tmp_path.resolve()
+    assert selected == ["repo-a", "repo-b"]
+
+
+def test_gui_repo_drop_sets_local_root_and_selection(tmp_path: Path) -> None:
+    class DummyVar:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
+        def set(self, value: str) -> None:
+            self.value = value
+
+    class DummyTk:
+        def __init__(self, values: tuple[str, ...]) -> None:
+            self.values = values
+
+        def splitlist(self, _raw: str) -> tuple[str, ...]:
+            return self.values
+
+    class DummyRoot:
+        def __init__(self, values: tuple[str, ...]) -> None:
+            self.tk = DummyTk(values)
+
+    class DummyListbox:
+        def __init__(self) -> None:
+            self.selected: set[int] = set()
+
+        def selection_clear(self, _start: int, _end: str) -> None:
+            self.selected.clear()
+
+        def selection_set(self, index: int) -> None:
+            self.selected.add(index)
+
+    repo_a = tmp_path / "repo-a"
+    repo_b = tmp_path / "repo-b"
+    (repo_a / ".git").mkdir(parents=True)
+    (repo_b / ".git").mkdir(parents=True)
+
+    events: list[object] = []
+    app = object.__new__(rpg.GuiApp)
+    app.root = DummyRoot((str(repo_a), str(repo_b)))
+    app.root_var = DummyVar("")
+    app.github_owner_var = DummyVar("Acme")
+    app._run_in_progress = False
+    app._repo_items = []
+    app.repo_list = DummyListbox()
+    app.log = events.append
+    app._github_owner_value = lambda: app.github_owner_var.get().strip() or None
+    app._update_repo_summary = lambda: events.append("summary")
+    app._set_setup_settings_visibility = lambda visible: events.append(("settings", visible))
+    app._save_gui_setup_settings = lambda setup_completed: events.append(("save", setup_completed)) or True
+
+    def refresh_repos() -> None:
+        app._repo_items = [("repo-a", "repo-a"), ("repo-b", "repo-b")]
+
+    app.refresh_repos = refresh_repos
+
+    app._handle_repo_drop("ignored-by-splitter")
+
+    assert app.root_var.get() == str(tmp_path.resolve())
+    assert app.github_owner_var.get() == ""
+    assert app.repo_list.selected == {0, 1}
+    assert ("save", True) in events
+    assert ("settings", False) in events
 
 
 def test_choose_gui_font_family_prefers_available_candidates() -> None:

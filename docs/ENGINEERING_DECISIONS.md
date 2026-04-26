@@ -102,6 +102,8 @@ This file captures key design decisions and their rationale.
 - Aligned GUI `public_only` default with CLI default.
 - Aligned GUI repository scope behavior with CLI: if no repository filter is provided, run all repositories under root after explicit confirmation.
 - Aligned GUI GitHub owner/org mode with CLI: remote audits are opt-in, use the shared scanner pipeline through temporary clones, and remain audit-only with repair locked in the GUI.
+- Reduced first-screen overload without changing parity by persisting non-secret GUI setup preferences, collapsing policy/output/GitHub/identity controls into Settings, and keeping all run-config mappings unchanged.
+- Added optional repository-folder drag-and-drop as a target-selection shortcut; Browse/Refresh and CLI `--root/--repos` remain the canonical fallback paths.
 - Added parity regression tests for argument validation, defaults, confirmation gate, fix/re-audit flow, and runtime error handling.
 
 ### Residual risk and follow-up

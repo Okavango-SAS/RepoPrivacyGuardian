@@ -40,7 +40,7 @@ Source = "https://github.com/axeljackal/RepoPrivacyGuardian"
 Changelog = "https://github.com/axeljackal/RepoPrivacyGuardian/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-gui = ["customtkinter>=5.2.2,<6"]
+gui = ["customtkinter>=5.2.2,<6", "tkinterdnd2>=0.4.3,<0.5"]
 remediation = ["git-filter-repo>=2.45,<3"]
 rewrite = ["git-filter-repo>=2.45,<3"]
 test = [
@@ -52,6 +52,7 @@ test = [
 ]
 dev = [
   "customtkinter>=5.2.2,<6",
+  "tkinterdnd2>=0.4.3,<0.5",
   "git-filter-repo>=2.45,<3",
   "build>=1.2,<2",
   "pyright>=1.1.408,<2",
