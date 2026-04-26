@@ -4,6 +4,19 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-04-26
+
+GUI locale selector and parity hardening update.
+
+### Added
+
+- Added a persisted GUI language selector with English and Spanish (Latin America) support for labels, dialogs, contextual help, and safety copy.
+- Added locale catalogs with key-parity tests so future languages can be added without changing the CLI contract or GUI run-config mappings.
+
+### Changed
+
+- Kept CLI output, flags, report schemas, and backend pipeline behavior unchanged; GUI localization now changes only presentation text.
+
 ## [1.3.4] - 2026-04-26
 
 GUI contextual-help UX hardening update.

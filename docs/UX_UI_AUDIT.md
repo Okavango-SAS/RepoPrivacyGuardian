@@ -169,3 +169,12 @@ The next GUI pass focused on reducing uncertainty without reopening the first-sc
 - Added visible `i` badges next to advanced Settings and Repair options where hover affordance alone would be too easy to miss.
 - Kept the primary Audit path unchanged: repository selection, Audit, Stop, Refresh, and log remain the visible first-screen workflow.
 - Centralized tooltip copy in code and added regression coverage so future UI options must keep explanatory text.
+
+## 2026-04-26 GUI Locale Pass
+
+The localization pass added a presentation-only language selector without widening the CLI contract:
+
+- Added English and Spanish (Latin America) locale catalogs for GUI labels, dialogs, safety copy, and contextual help.
+- Persisted the locale as non-secret GUI setup state while keeping tokens, identity secrets, and repair bypass controls out of saved settings.
+- Kept CLI parity by mapping localized labels back to the same internal variables and `GuardRunConfig` fields; tests assert locale changes do not alter run-config payloads.
+- Left CLI help, report field names, JSON/HTML schema, policy keys, and backend log semantics unchanged.

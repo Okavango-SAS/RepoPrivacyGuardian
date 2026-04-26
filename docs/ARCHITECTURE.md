@@ -88,6 +88,7 @@ Keep these boundaries intact when editing:
 - Repository root validation and target discovery should stay shared between CLI and GUI to preserve `Current Root` parity and error semantics.
 - Run cancellation and exit-code/status semantics should stay shared between CLI and GUI so `run_state.json`, logs, and operator expectations do not drift.
 - GitHub/network logic should stay isolated from local audit/remediation flow so transport/typecheck changes do not churn unrelated CLI/GUI code.
+- GUI localization is a presentation layer only. Locale catalogs translate desktop labels, dialogs, and help copy while shared config names, CLI flags, report fields, and policy keys remain canonical.
 - Policy defaults should be expressed once in code and reused by smoke tests or fixtures where possible.
 
 ## Execution flow

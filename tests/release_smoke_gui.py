@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import sys
+import json
+import os
+import tempfile
 import traceback
 from pathlib import Path
 
@@ -25,10 +28,26 @@ import Repo_Privacy_Guardian as rpg  # noqa: E402
 
 def main() -> int:
     try:
-        app = rpg.GuiApp()
-        app.root.after(100, app.root.update_idletasks)
-        app.root.after(250, app.root.destroy)
-        app.run()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            settings_path = Path(temp_dir) / "gui_settings.json"
+            settings_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": rpg.GUI_SETTINGS_SCHEMA_VERSION,
+                        "setup_completed": False,
+                        "gui_locale": rpg.GUI_LOCALE_ES_419,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            os.environ[rpg.GUI_SETTINGS_ENV_VAR] = str(settings_path)
+            app = rpg.GuiApp()
+            assert app._current_locale() == rpg.GUI_LOCALE_ES_419
+            app._on_gui_locale_selected("English")
+            assert app._current_locale() == rpg.GUI_LOCALE_DEFAULT
+            app.root.after(100, app.root.update_idletasks)
+            app.root.after(250, app.root.destroy)
+            app.run()
         return 0
     except Exception as exc:  # pragma: no cover - exercised in CI smoke
         raise SystemExit(f"GUI smoke failed: {exc}\n{traceback.format_exc()}") from exc

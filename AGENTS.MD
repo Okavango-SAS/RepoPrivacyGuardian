@@ -95,6 +95,7 @@ Notes:
 - Remote discovery and clone work are bounded: auth probes are non-interactive with a timeout, repository pagination fails closed at the page limit, and clone workers are capped.
 - The GitHub hardening audit inspects repository settings only; it does not push configuration changes.
 - The GUI exposes the same GitHub owner/org remote-audit controls as the CLI, but CLI remains preferred for agentic automation.
+- GUI locale is presentation-only. English and Spanish (Latin America) labels must keep the same CLI flags, policy keys, report fields, and run-config mappings.
 
 Platform notes:
 

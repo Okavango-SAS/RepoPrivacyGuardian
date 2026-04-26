@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.3.4"
-CURRENT_VERSION_DESCRIPTION = "GUI contextual-help UX hardening"
+CURRENT_VERSION = "1.3.5"
+CURRENT_VERSION_DESCRIPTION = "GUI locale selector and parity hardening"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",

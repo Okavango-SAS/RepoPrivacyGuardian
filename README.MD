@@ -43,7 +43,7 @@ Choose the path that matches what you need right now:
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
 - `v1.2.3` is the public-release stabilization and GUI UX update.
-- `v1.3.4` is the current patch release with GUI contextual-help UX hardening.
+- `v1.3.5` is the current patch release with GUI locale selector and parity hardening.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -140,6 +140,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - The GUI repository list accepts drag-and-drop of local repository folders when the optional desktop drag-and-drop runtime is available; the Browse/Refresh path remains the fallback.
 - `--check-tooling --gui` reports drag-and-drop readiness as an optional warning, not as a GUI startup blocker.
 - GUI and CLI expose the same audit inputs for local repositories, GitHub owner/org remote audits, GitHub hardening, LiteLLM incident checks, report outputs, low-confidence email mode, and repair-only write options. GitHub owner/org remote audit remains audit-only in both paths.
+- The GUI language selector supports English and Spanish (Latin America). Locale affects GUI labels, dialogs, and contextual help only; CLI flags, run settings, reports, and backend behavior stay unchanged.
 - The tracked `DESIGN.md` defines the desktop visual tokens and UX constraints used for GUI changes.
 
 ## 📦 Installation
@@ -391,6 +392,8 @@ After setup is saved, the GUI keeps advanced parity controls collapsed in Settin
 When GitHub owner/org remote audit is active, the repository picker switches to a dedicated audit-only state instead of showing local Root errors. The local list is ignored, temporary clones are cleaned up after the run, and `Repair` remains locked for remote targets.
 
 Non-obvious GUI controls expose contextual help on hover, with visible `i` badges next to advanced settings and repair options that need extra operator context.
+
+GUI localization is presentation-only. The selectable locales are English and Spanish (Latin America), persisted as a non-secret GUI preference. Adding another GUI language should add catalog entries with the same keys; it must not rename CLI flags, report fields, policy keys, or `GuardRunConfig` mappings.
 
 The GUI is intentionally privacy-first for public release. Maintained screenshots live under `docs/ux-audit/` and must use neutral visible paths so local usernames, private roots, and internal repository lists are not published in image pixels.
 

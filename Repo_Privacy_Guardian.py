@@ -97,6 +97,12 @@ REMEDIATION_INSTALL_PACKAGES = ["git-filter-repo>=2.45,<3"]
 GUI_SETTINGS_ENV_VAR = "REPO_PRIVACY_GUARDIAN_GUI_SETTINGS"
 GUI_SETTINGS_SCHEMA_VERSION = 1
 GUI_SETTINGS_MAX_BYTES = 32 * 1024
+GUI_LOCALE_DEFAULT = "en"
+GUI_LOCALE_ES_419 = "es-419"
+GUI_LOCALE_OPTIONS: tuple[tuple[str, str], ...] = (
+    (GUI_LOCALE_DEFAULT, "English"),
+    (GUI_LOCALE_ES_419, "Español (Latinoamérica)"),
+)
 WINGET_BOOTSTRAP_URL = "https://aka.ms/getwinget"
 WINGET_PACKAGE_FAMILY_NAME = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe"
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
@@ -1618,6 +1624,7 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
         "Maximum number of samples retained per check in logs and reports. Lower values keep reports shorter; "
         "higher values aid deep triage."
     ),
+    "gui_language": "Language for GUI labels, contextual help, and dialogs. This does not change CLI flags, reports, or behavior.",
     "save_setup": "Stores only non-secret GUI preferences and collapses setup controls so the main view stays focused on Audit.",
     "advanced_identity": (
         "Shows optional Git identity and GitHub email privacy controls used when Repair rewrites or redacts identity metadata."
@@ -1685,6 +1692,615 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
     "repo_drop_area": (
         "Drag local repository folders here to set the Root and selection automatically. Browse/Refresh remains the fallback."
     ),
+}
+
+GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
+    "repositories_root": (
+        "Carpeta local que contiene uno o más repositorios git. Arrastrá carpetas de repositorios a la lista "
+        "o usá Buscar/Actualizar para refrescar los objetivos locales."
+    ),
+    "settings_toggle": "Muestra u oculta controles de configuración inicial. Las preferencias no secretas quedan guardadas sólo para este usuario.",
+    "policy_file": "Archivo Markdown de política usado por CLI y GUI para definir las reglas del gate de publicación.",
+    "audit_results_folder": (
+        "Carpeta base para artefactos con timestamp: JSON, HTML, log y estado de corrida. La política mantiene salidas en Audit_Results."
+    ),
+    "optional_json_copy": "Ruta opcional para una segunda copia JSON destinada a automatización. El report.json con timestamp siempre se escribe.",
+    "github_owner": (
+        "Modo remoto opt-in para auditar un usuario u organización de GitHub. La GUI descubre repositorios, "
+        "los clona temporalmente, los audita y mantiene Reparar bloqueado."
+    ),
+    "github_repo_filters": (
+        "Nombres de repositorios remotos separados por coma para incluir cuando GitHub owner/org está activo. Dejalo vacío "
+        "para descubrir todos los repositorios que coincidan."
+    ),
+    "github_clone_workers": (
+        "Cantidad de clones concurrentes para auditoría GitHub owner/org. Valores más altos pueden ser más rápidos, "
+        "pero usan más red, disco y procesos."
+    ),
+    "github_include_forks": (
+        "Incluye repositorios fork en el discovery de GitHub owner/org. Viene apagado para evitar auditar contenido heredado "
+        "o de terceros sin querer."
+    ),
+    "github_fast": (
+        "Usa clones shallow en auditoría GitHub owner/org. Es más rápido en repos grandes, pero limita el historial disponible para el scanner."
+    ),
+    "max_findings": (
+        "Cantidad máxima de muestras retenidas por check en logs y reportes. Valores bajos acortan reportes; "
+        "valores altos ayudan en triage profundo."
+    ),
+    "gui_language": "Idioma de etiquetas, ayuda contextual y diálogos de la GUI. No cambia flags, reportes ni contrato CLI.",
+    "save_setup": "Guarda sólo preferencias no secretas de la GUI y colapsa la configuración para enfocar la vista principal en Auditar.",
+    "advanced_identity": (
+        "Muestra controles opcionales de identidad Git y privacidad de email GitHub usados cuando Reparar reescribe o redacta metadatos."
+    ),
+    "noreply_email": "Dirección noreply de GitHub usada como identidad segura de reemplazo durante una reparación revisada.",
+    "placeholder_email": "Placeholder neutral usado al redactar emails de terceros durante una reparación revisada.",
+    "owner_name": "Nombre visible a usar en commits del owner reescritos cuando se autoriza reparación de identidad.",
+    "owner_emails": (
+        "Emails privados del owner separados por coma que pueden reemplazarse por la dirección noreply durante una reparación revisada."
+    ),
+    "git_user_name": "Valor que se lee o escribe en git user.name al aplicar configuración Git local/global.",
+    "git_user_email": "Email estilo noreply que se lee o escribe en git user.email en la configuración Git local/global.",
+    "apply_global_git_config": (
+        "Escribe git config --global user.name y user.email para todos los repositorios de esta máquina luego de confirmar."
+    ),
+    "apply_local_git_config": "Escribe git user.name y user.email sólo para el repositorio local seleccionado.",
+    "read_current_git_identity": "Lee la identidad Git efectiva sin cambiar la configuración local ni global.",
+    "open_github_email_settings": (
+        "Abre GitHub email settings para verificar manualmente privacidad de email y bloqueo de pushes con email privado."
+    ),
+    "public_only": (
+        "Filtra objetivos locales a repositorios cuyo origin GitHub sea públicamente accesible. Útil antes de checks de release público."
+    ),
+    "redact_third_party_emails": (
+        "Durante Reparar, reemplaza emails de contribuidores no owner con el placeholder. No hace nada durante Auditar."
+    ),
+    "low_confidence_blocking": (
+        "Convierte hallazgos ruidosos de email low-confidence en fallas bloqueantes. Dejalo apagado salvo que quieras un gate más estricto."
+    ),
+    "dry_run_preview": "Ejecuta Reparar en modo preview para reportar cambios planeados sin escribir en repositorios.",
+    "audit_github_hardening": (
+        "Agrega checks read-only de settings GitHub como branch protection, permisos de Actions, secret scanning y Dependabot."
+    ),
+    "audit_litellm_incident": "Agrega checks focalizados para indicadores del incidente supply-chain de LiteLLM de marzo de 2026.",
+    "open_html_report": "Abre automáticamente el reporte HTML generado cuando termina una corrida desde GUI.",
+    "confirm_each_repo_fix": (
+        "Pregunta antes de aplicar Reparar en cada repositorio para revisar corridas multi-repo objetivo por objetivo."
+    ),
+    "rewrite_personal_paths": (
+        "Durante Reparar, reescribe hallazgos revisados de rutas personales en contenido trackeado e historial usando reglas replace-text."
+    ),
+    "replace_text_rules": "Archivo replace-text opcional para sustituciones literales que la herramienta no puede inferir de forma segura.",
+    "force_push": (
+        "Después de reescribir historial, fuerza push a origin. Usalo sólo luego de backups y coordinación con colaboradores."
+    ),
+    "bypass_remote_owner_guardrail": (
+        "Desactiva el check de safety del owner remoto antes del force push. Es intencionalmente riesgoso y requiere aceptación explícita."
+    ),
+    "allowed_remote_owners": "Allowlist separada por coma de owners remotos aceptados por el guardrail de force-push.",
+    "purge_safe_secret_files": "Purga candidatos de archivos secretos clasificados como más seguros de remover automáticamente luego de revisión.",
+    "purge_risky_secret_files": (
+        "También purga candidatos ambiguos o manual-review. Usalo sólo después de confirmar cada candidato."
+    ),
+    "repair_button": "Ejecuta Reparar sólo después de una Auditoría completa y de que la ventana de revisión libere el gate de seguridad.",
+    "run_audit": "Ejecuta la auditoría del publication gate para repositorios seleccionados o todos los visibles si lo confirmás.",
+    "stop_after_current_step": (
+        "Solicita cancelación cooperativa. El paso activo del repositorio termina limpiamente antes de detener la corrida."
+    ),
+    "refresh_repos": "Recarga objetivos de repositorios locales desde la carpeta Root actual.",
+    "select_all_repos": "Selecciona todos los repositorios locales visibles para la próxima Auditoría o Reparación.",
+    "clear_selection": (
+        "Limpia la selección local. Si ejecutás Auditar sin selección, la GUI pregunta antes de correr todos."
+    ),
+    "clear_log": "Limpia sólo el log en pantalla. Los artefactos existentes en Audit_Results no se eliminan.",
+    "repo_drop_area": (
+        "Arrastrá carpetas de repositorios locales acá para configurar Root y selección automáticamente. Buscar/Actualizar sigue disponible."
+    ),
+}
+
+GUI_TOOLTIP_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
+    GUI_LOCALE_DEFAULT: GUI_TOOLTIP_TEXT,
+    GUI_LOCALE_ES_419: GUI_TOOLTIP_TEXT_ES_419,
+}
+
+GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
+    GUI_LOCALE_DEFAULT: {
+        "header_title": "Repo Privacy Guardian",
+        "header_subtitle": "Start with Audit: choose a root, review findings, then Repair only after the safety gate unlocks.",
+        "workflow_audit": "1 Audit",
+        "workflow_review": "2 Review findings",
+        "workflow_repair": "3 Repair if needed",
+        "workflow_parity": "CLI parity: same backend",
+        "tab_audit": "1. Audit",
+        "tab_repair": "2. Repair",
+        "audit_target": "Audit Target",
+        "recommended_path": "Recommended path",
+        "recommended_path_body": "Choose a local root or drop repository folders below. Then run Audit and review findings before Repair.",
+        "repositories_root": "Repositories Root",
+        "choose_repositories_root": "Choose the repositories root directory",
+        "setup_initial_hint": "Initial setup is open. Save it once, then the main screen stays focused on Audit.",
+        "hide_settings": "Hide Settings",
+        "open_settings": "Open Settings",
+        "setup_settings": "Setup & Settings",
+        "settings_status": "Use these controls for policy/output overrides, GitHub owner audits, and advanced identity setup.",
+        "gui_language": "GUI Language",
+        "policy_file": "Policy File",
+        "choose_policy_file": "Choose a policy file",
+        "audit_results_folder": "Audit Results Folder",
+        "choose_results_folder": "Choose the base results directory",
+        "optional_json_copy": "Optional JSON Copy",
+        "choose_json_copy": "Choose the extra JSON export path",
+        "github_owner": "GitHub Owner / Org",
+        "github_owner_placeholder": "optional owner or organization",
+        "remote_repo_filters": "Remote repo filters",
+        "remote_repo_filters_placeholder": "repo-a, repo-b",
+        "clone_workers": "Clone workers",
+        "include_forks": "Include forks",
+        "fast_shallow_clone": "Fast shallow clone",
+        "max_findings": "Max findings per check",
+        "settings_persist_note": "These settings persist locally for the GUI. Secret/token values are not stored here.",
+        "save_setup": "Save Setup",
+        "advanced_identity_hidden": "Advanced identity settings are hidden for the normal audit-only path.",
+        "advanced_identity_visible": "Advanced identity settings are visible. Use them only when Repair needs custom metadata.",
+        "show_advanced_identity": "Show advanced identity settings",
+        "hide_advanced_identity": "Hide advanced identity settings",
+        "owner_profile": "Owner Profile (repair defaults)",
+        "owner_profile_body": "Used by Repair when rewriting or redacting commit identity metadata.",
+        "noreply_email": "Noreply Email",
+        "placeholder_email": "Placeholder Email",
+        "owner_name": "Owner Name",
+        "private_emails_to_replace": "Private emails to replace",
+        "optional_git_identity": "Optional: Git Identity & GitHub Email Privacy",
+        "git_user_name": "git user.name",
+        "git_user_email": "git user.email (noreply)",
+        "apply_global_git_config": "Apply Global Git Config",
+        "apply_local_git_config": "Apply Local Git Config",
+        "read_current_git_identity": "Read Current Git Identity",
+        "open_github_email_settings": "Open GitHub Email Settings",
+        "github_email_privacy_help": GITHUB_EMAIL_PRIVACY_HELP,
+        "identity_help": (
+            "Use this only if your local Git identity needs privacy-safe noreply settings. "
+            "Use GitHub Email Settings to verify private-email and push-block protections, and to copy your noreply address when needed."
+        ),
+        "repair_plan_options": "Repair Plan Options",
+        "review_output_options": "Review & Output Options",
+        "review_output_info": "CLI-equivalent run toggles. They do not rewrite history on their own.",
+        "only_audit_public_remotes": "Only audit public remotes",
+        "redact_third_party_emails": "Redact third-party emails during repair",
+        "low_confidence_blocking": "Treat low-confidence emails as blocking",
+        "dry_run_preview": "Dry run / preview repair",
+        "audit_github_hardening": "Audit GitHub release hardening",
+        "audit_litellm_incident": "Audit LiteLLM incident (Mar-2026)",
+        "open_html_report": "Open HTML report automatically",
+        "confirm_each_repo_fix": "Confirm each repository during repair",
+        "repair_write_actions": "Repair Write Actions",
+        "repair_write_info": "These options are only applied when you click Repair.",
+        "repair_write_body": "Only applied when you click Repair. Review the latest audit summary before enabling them.",
+        "rewrite_personal_paths": "Rewrite personal paths in history",
+        "rewrite_personal_paths_body": "Uses reviewed replace-text rules during repair to rewrite detected personal paths.",
+        "replace_text_rules": "Additional Replace-Text Rules",
+        "choose_replace_text_file": "Choose an explicit replace-text file",
+        "replace_text_rules_body": "Optional operator-reviewed literal replacements for cleanup the tool cannot infer safely.",
+        "force_push": "Force-push rewritten history",
+        "bypass_remote_owner_guardrail": "Bypass remote-owner guardrail",
+        "allowed_remote_owners": "Allowed remote owners",
+        "allowed_remote_owners_body": "Use a comma-separated allowlist. Leave bypass off to keep owner verification active.",
+        "purge_safe_secret_files": "Purge safe secret-file candidates",
+        "purge_risky_secret_files": "Purge risky manual-review candidates too",
+        "purge_body": "Safe mode skips ambiguous files. Risky mode also includes candidates that still need manual judgment.",
+        "repair_flow": "Repair Flow",
+        "audit_required": "Audit required",
+        "audit_again_required": "Audit again required",
+        "latest_audit_summary": "Latest audit summary",
+        "no_audit_results": "No audit results in this session yet. Run Audit first, then review the summary before applying write actions.",
+        "repair_stays_disabled": "Repair stays disabled until Audit finishes and the review window completes.",
+        "repair_tab_locked": "Repair tab locked",
+        "before_repair": "Before Repair, do this:",
+        "repair_lock_step_1": "1. Run Audit and confirm the selected repositories are the ones you want to review.",
+        "repair_lock_step_2": "2. Read the log and findings summary before enabling any write actions.",
+        "repair_lock_step_3": "3. Come back here only when you are ready to confirm a repair plan.",
+        "go_to_audit": "Go to Audit",
+        "repositories": "Repositories",
+        "run_audit": "Run Audit",
+        "audit_unavailable": "Audit unavailable",
+        "stop_after_current_step": "Stop After Current Step",
+        "stopping_after_current_step": "Stopping after current step...",
+        "refresh": "Refresh",
+        "repo_summary_default": "Select repositories, drop repository folders, or leave empty to audit every repository shown under Root.",
+        "repo_drop_hint": "Drag repository folders here, or use Browse / Refresh.",
+        "repo_drop_ready": "Drag repository folders here to set the audit target, or use Browse / Refresh.",
+        "repo_drop_unavailable": "Drag-and-drop is unavailable in this Tk runtime. Use Browse / Refresh. ({error})",
+        "repo_drop_registration_failed": "Drag-and-drop registration failed. Use Browse / Refresh. ({error})",
+        "repo_targets_unavailable": "Repository targets unavailable",
+        "choose_valid_root": "Choose a valid Root folder to load one or more git repositories.",
+        "run_audit_available_hint": "Run Audit becomes available once at least one repository target is visible in this list.",
+        "select_all": "Select All",
+        "clear_selection": "Clear Selection",
+        "clear_log": "Clear Log",
+        "execution_log": "Execution Log",
+        "browse": "Browse…",
+        "save_as": "Save As…",
+        "setup_hint_open": "Setup is open. Save it once, then the main screen stays focused on Audit.",
+        "setup_hint_remote": "Settings hidden. GitHub owner/org remote audit is active for {github_owner} (audit-only; local list ignored). Open Settings to edit.",
+        "setup_hint_hidden": "Setup is saved and hidden. Open Settings for policy, output, GitHub, or identity controls.",
+        "all_matching_repositories": "all matching repositories",
+        "named_remote_repo_singular": "{count} named remote repository",
+        "named_remote_repo_plural": "{count} named remote repositories",
+        "github_remote_state": (
+            "Audit will discover {filter_text} for {github_owner}, clone them into a temporary private directory, "
+            "and remove the clones when the run finishes. Remote mode is audit-only, so Repair stays unavailable for these targets."
+        ),
+        "repo_empty_invalid_root_title": "Root folder not found",
+        "repo_empty_invalid_root_hint": "Pick a valid directory, then refresh the repository list.",
+        "repo_empty_no_repos_title": "No repositories found",
+        "repo_empty_no_repos_hint": "Clone a repository here or point Root at a folder that already contains git repositories.",
+        "repo_empty_github_remote_title": "GitHub owner/org audit active",
+        "repo_empty_github_remote_hint": "Local repository selection is paused. Open Settings to edit or clear the GitHub owner/org.",
+        "repo_summary_remote": (
+            "GitHub owner/org audit is active for {github_owner}. The local repository list is ignored; Audit will discover "
+            "{filter_text} through GitHub and keep Repair locked because remote mode is audit-only."
+        ),
+        "repo_summary_invalid_root": "Root folder not found. Choose a valid directory before running Audit.",
+        "repo_summary_no_repos": "No git repositories detected under Root yet. Choose another folder or refresh after cloning.",
+        "repo_word_singular": "repository",
+        "repo_word_plural": "repositories",
+        "no_repos_selected": "No repositories selected.",
+        "selected_count": "{count} selected.",
+        "current_root_available": " Current Root is available in the list.",
+        "current_root_label": "Current Root",
+        "repo_summary_targets": (
+            "Step 2: {total} {repo_word} shown under Root. {selected_text} "
+            "Leave the selection empty to audit every repository shown.{root_hint}"
+        ),
+        "lock_repair_default": "Repair (run audit first)",
+        "lock_repair_run_again": "Repair (run audit again)",
+        "lock_repair_cancelled": "Repair (audit cancelled)",
+        "lock_repair_failed": "Repair (audit failed)",
+        "lock_repair_remote": "Repair (remote audit is audit-only)",
+        "lock_repair_in_progress": "Repair (audit in progress)",
+        "lock_repair_no_results": "Repair (no audited results yet)",
+        "lock_repair_message": "{reason}. Run Audit again before applying more write actions.",
+        "repair_wait": "Repair (wait {seconds}s)",
+        "repair": "Repair",
+        "review_window": "Review window",
+        "repair_ready": "Repair ready",
+        "optional_cleanup": "Optional cleanup",
+        "repair_unlocks_after_review": " Repair unlocks after the review window completes.",
+        "repair_now_available": " Repair is now available if you still want to apply reviewed cleanup actions.",
+        "repair_unlocks_in": " Repair unlocks in {seconds}s.",
+        "repair_lock_default_reason": "Repair stays locked until a valid audit has completed.",
+        "repair_lock_message": "{reason}\n\nRun Audit, review the results, and return here only when the repair plan is ready to confirm.",
+        "last_audit_failed": "Last audit: {label}. {failed} FAIL / {passed} PASS.{detail_text} Review the findings and confirm every write action before Repair.",
+        "last_audit_passed_manual": "Last audit: {label}. All selected repositories passed.{detail_text} Classify advisory findings before publication; Repair is optional and should only apply reviewed cleanup actions.",
+        "last_audit_passed": "Last audit: {label}. All selected repositories passed.{detail_text} Repair is optional; use it only if you still want to apply reviewed cleanup actions.",
+        "blocking_category_singular": "{count} blocking category",
+        "blocking_category_plural": "{count} blocking categories",
+        "manual_signal_singular": "{count} manual-review signal",
+        "manual_signal_plural": "{count} manual-review signals",
+        "fixture_match_singular": "{count} fixture/documentation match kept non-blocking",
+        "fixture_match_plural": "{count} fixture/documentation matches kept non-blocking",
+        "repair_plan_intro": "Repair will run with the following plan:",
+        "active_options": "Active options:",
+        "yes": "YES",
+        "no": "NO",
+        "auto_owner": "(auto from noreply if available)",
+        "plan_rewrite_paths": "- Rewrite personal paths: {value}",
+        "plan_replace_text": "- Explicit replace-text file: {value}",
+        "plan_purge_safe": "- Purge SAFE: {value}",
+        "plan_purge_risky": "- Purge RISKY: {value}",
+        "plan_force_push": "- Force push remote: {value}",
+        "plan_open_report": "- Open HTML report automatically: {value}",
+        "plan_confirm_each_repo": "- Confirm each repo fix: {value}",
+        "plan_allow_bypass": "- Allow non-owner push bypass: {value}",
+        "plan_allowed_owners": "- Allowed push owner(s): {value}",
+        "repair_baseline_changes": "Repair baseline changes:",
+        "baseline_gitignore": "- May add missing .gitignore patterns",
+        "baseline_untrack": "- May run git rm --cached on tracked-but-ignored files",
+        "baseline_rewrite": "- May rewrite history with git-filter-repo depending on the selected options",
+        "risky_warning_1": "WARNING: you selected RISKY options (purge all, force push, or owner-guardrail bypass).",
+        "risky_warning_2": "This can remove historical content irreversibly and/or bypass remote-owner protections.",
+        "audited_findings_summary": "Explicit summary of audited findings:",
+        "repo_status_line": "- {name} [{status}]",
+        "blocking_categories_line": "  * Blocking categories: {count}",
+        "manual_review_signals_line": "  * Manual-review signals: {count}",
+        "fixture_context_line": "  * Fixture/documentation matches kept non-blocking: {count}",
+        "planned_untrack_line": "  * Planned untrack (tracked-but-ignored): {count}",
+        "planned_path_rewrite_line": "  * Planned personal-path rewrite: {count} findings",
+        "personal_paths_disabled": "  * Personal paths: rewrite disabled",
+        "planned_purge_risky_line": "  * Planned Purge RISKY: {count} candidates",
+        "planned_purge_safe_line": "  * Planned Purge SAFE: {count} candidates",
+        "more_items": "    - ... and {count} more",
+        "secret_purge_disabled": "  * Secret-file purge: disabled",
+        "continue_question": "Continue?",
+        "rerun_if_changed": "(If you changed the repo selection or options, run Audit again first.)",
+        "dialog_repair_locked_title": "Repair Locked",
+        "dialog_repair_locked_review": "Repair becomes available only after a completed audit and a 10-second review window.",
+        "dialog_repair_locked_no_results": "There are no audit results in this session yet. Run Audit first.",
+        "dialog_new_audit_required_title": "New Audit Required",
+        "dialog_new_audit_required": "The current repo selection does not match the last audit. Run Audit again before Repair.",
+        "dialog_confirm_repair_title": "Confirm Repair Plan",
+        "dialog_risk_title": "Risk Acceptance Required",
+        "dialog_risk_message": "You selected RISKY options (purge all, force push, or owner-guardrail bypass).\nConfirm that you accept continuing AT YOUR OWN RISK.",
+        "dialog_invalid_git_identity": "Invalid Git identity",
+        "dialog_confirm_global_git_config": "Confirm Global Git Config",
+        "dialog_confirm_global_git_config_message": "This updates git config --global for all repositories on this machine. Continue?",
+        "dialog_global_git_config": "Global Git Config",
+        "dialog_local_git_config": "Local Git Config",
+        "dialog_read_git_identity": "Read Git Identity",
+        "dialog_read_git_identity_select_one": "Select zero or one repository to inspect local/effective git identity.",
+        "dialog_not_git_repo": "Not a git repository: {candidate}",
+        "dialog_current_git_identity": "Current Git Identity",
+        "dialog_github_email_settings": "GitHub Email Settings",
+        "dialog_run_in_progress": "Run In Progress",
+        "dialog_run_in_progress_message": "There is already an execution in progress. Wait until it finishes.",
+        "dialog_remote_audit_only": "Remote Audit Is Audit-Only",
+        "dialog_remote_audit_only_message": "GitHub owner/org remote audit cannot be combined with Repair. Clear GitHub Owner / Org before repairing local repositories.",
+        "dialog_run_all_title": "Run all repositories",
+        "dialog_run_all_message": "No repositories selected. Run {action_name} for all repositories under Root?",
+        "dialog_invalid_max_matches": "Invalid Max Matches",
+        "dialog_invalid_max_matches_message": "Max matches must be a positive integer.",
+        "dialog_invalid_github_jobs": "Invalid GitHub Jobs",
+        "dialog_invalid_github_jobs_message": "GitHub clone workers must be a positive integer.",
+        "action_repair": "repair",
+        "action_audit": "audit",
+        "confirm_repo_repair_title": "Confirm Repair for This Repository",
+        "confirm_repo_repair_message": "Repository {index}/{total}: {repo_name}\n\nApply Repair to this repository?\nYou can answer No to skip only this repository.",
+        "install_github_tooling_title": "Install GitHub Tooling",
+        "install_github_tooling_intro": "GitHub hardening checks work best with GitHub CLI (`gh`) and, on Windows, a healthy App Installer / winget setup.",
+        "install_github_tooling_confirm": "Install or repair that tooling now?",
+        "github_auth_needed_title": "GitHub Authentication Still Needed",
+        "github_auth_needed_message": "GitHub CLI is installed, but token-gated hardening checks still need authentication.\n\nRun `gh auth login`, or set REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN.",
+    },
+    GUI_LOCALE_ES_419: {
+        "header_title": "Repo Privacy Guardian",
+        "header_subtitle": "Empezá por Auditar: elegí una carpeta raíz, revisá hallazgos y usá Reparar sólo cuando se libere el gate de seguridad.",
+        "workflow_audit": "1 Auditar",
+        "workflow_review": "2 Revisar hallazgos",
+        "workflow_repair": "3 Reparar si hace falta",
+        "workflow_parity": "Paridad CLI: mismo backend",
+        "tab_audit": "1. Auditar",
+        "tab_repair": "2. Reparar",
+        "audit_target": "Objetivo de auditoría",
+        "recommended_path": "Camino recomendado",
+        "recommended_path_body": "Elegí una carpeta raíz local o arrastrá repositorios abajo. Después ejecutá Auditar y revisá hallazgos antes de Reparar.",
+        "repositories_root": "Carpeta raíz de repositorios",
+        "choose_repositories_root": "Elegir la carpeta raíz de repositorios",
+        "setup_initial_hint": "La configuración inicial está abierta. Guardala una vez y la pantalla principal queda enfocada en Auditar.",
+        "hide_settings": "Ocultar configuración",
+        "open_settings": "Abrir configuración",
+        "setup_settings": "Setup y configuración",
+        "settings_status": "Usá estos controles para política/salida, auditorías GitHub owner/org e identidad avanzada.",
+        "gui_language": "Idioma de la GUI",
+        "policy_file": "Archivo de política",
+        "choose_policy_file": "Elegir un archivo de política",
+        "audit_results_folder": "Carpeta de resultados",
+        "choose_results_folder": "Elegir la carpeta base de resultados",
+        "optional_json_copy": "Copia JSON opcional",
+        "choose_json_copy": "Elegir la ruta extra de export JSON",
+        "github_owner": "GitHub owner / org",
+        "github_owner_placeholder": "owner u organización opcional",
+        "remote_repo_filters": "Filtros de repos remotos",
+        "remote_repo_filters_placeholder": "repo-a, repo-b",
+        "clone_workers": "Workers de clone",
+        "include_forks": "Incluir forks",
+        "fast_shallow_clone": "Clone shallow rápido",
+        "max_findings": "Máx. hallazgos por check",
+        "settings_persist_note": "Estas preferencias quedan guardadas localmente para la GUI. No se guardan secretos ni tokens.",
+        "save_setup": "Guardar setup",
+        "advanced_identity_hidden": "La identidad avanzada está oculta para el flujo normal audit-only.",
+        "advanced_identity_visible": "La identidad avanzada está visible. Usala sólo si Reparar necesita metadatos personalizados.",
+        "show_advanced_identity": "Mostrar identidad avanzada",
+        "hide_advanced_identity": "Ocultar identidad avanzada",
+        "owner_profile": "Perfil del owner (defaults de reparación)",
+        "owner_profile_body": "Lo usa Reparar al reescribir o redactar metadatos de identidad de commits.",
+        "noreply_email": "Email noreply",
+        "placeholder_email": "Email placeholder",
+        "owner_name": "Nombre del owner",
+        "private_emails_to_replace": "Emails privados a reemplazar",
+        "optional_git_identity": "Opcional: identidad Git y privacidad de email GitHub",
+        "git_user_name": "git user.name",
+        "git_user_email": "git user.email (noreply)",
+        "apply_global_git_config": "Aplicar config Git global",
+        "apply_local_git_config": "Aplicar config Git local",
+        "read_current_git_identity": "Leer identidad Git actual",
+        "open_github_email_settings": "Abrir settings de email GitHub",
+        "github_email_privacy_help": (
+            "Usá GitHub Email Settings para verificar privacidad de email, bloqueo de pushes con email privado "
+            "y copiar tu dirección noreply cuando haga falta."
+        ),
+        "identity_help": (
+            "Usá esto sólo si tu identidad Git local necesita settings noreply seguros. "
+            "Usá GitHub Email Settings para verificar privacidad de email, bloqueo de pushes con email privado y copiar tu dirección noreply cuando haga falta."
+        ),
+        "repair_plan_options": "Opciones del plan de reparación",
+        "review_output_options": "Opciones de revisión y salida",
+        "review_output_info": "Toggles equivalentes al CLI. No reescriben historial por sí solos.",
+        "only_audit_public_remotes": "Auditar sólo remotos públicos",
+        "redact_third_party_emails": "Redactar emails de terceros al reparar",
+        "low_confidence_blocking": "Tratar emails low-confidence como bloqueantes",
+        "dry_run_preview": "Dry run / preview de reparación",
+        "audit_github_hardening": "Auditar hardening de release GitHub",
+        "audit_litellm_incident": "Auditar incidente LiteLLM (mar-2026)",
+        "open_html_report": "Abrir reporte HTML automáticamente",
+        "confirm_each_repo_fix": "Confirmar cada repositorio al reparar",
+        "repair_write_actions": "Acciones de escritura de Reparar",
+        "repair_write_info": "Estas opciones sólo se aplican cuando hacés clic en Reparar.",
+        "repair_write_body": "Sólo se aplican cuando hacés clic en Reparar. Revisá el último resumen de auditoría antes de activarlas.",
+        "rewrite_personal_paths": "Reescribir rutas personales en historial",
+        "rewrite_personal_paths_body": "Usa reglas replace-text revisadas durante Reparar para reescribir rutas personales detectadas.",
+        "replace_text_rules": "Reglas replace-text adicionales",
+        "choose_replace_text_file": "Elegir un archivo replace-text explícito",
+        "replace_text_rules_body": "Reemplazos literales revisados por operador para limpieza que la herramienta no puede inferir con seguridad.",
+        "force_push": "Force-push del historial reescrito",
+        "bypass_remote_owner_guardrail": "Bypass del guardrail de owner remoto",
+        "allowed_remote_owners": "Owners remotos permitidos",
+        "allowed_remote_owners_body": "Usá una allowlist separada por coma. Dejá bypass apagado para mantener verificación de owner.",
+        "purge_safe_secret_files": "Purgar candidatos seguros de archivos secretos",
+        "purge_risky_secret_files": "Purgar también candidatos riesgosos/manual-review",
+        "purge_body": "El modo seguro omite archivos ambiguos. El modo riesgoso también incluye candidatos que requieren juicio manual.",
+        "repair_flow": "Flujo de reparación",
+        "audit_required": "Auditoría requerida",
+        "audit_again_required": "Nueva auditoría requerida",
+        "latest_audit_summary": "Último resumen de auditoría",
+        "no_audit_results": "Todavía no hay resultados de auditoría en esta sesión. Ejecutá Auditar primero y revisá el resumen antes de aplicar acciones de escritura.",
+        "repair_stays_disabled": "Reparar queda deshabilitado hasta que Auditar termine y se complete la ventana de revisión.",
+        "repair_tab_locked": "Pestaña Reparar bloqueada",
+        "before_repair": "Antes de Reparar, hacé esto:",
+        "repair_lock_step_1": "1. Ejecutá Auditar y confirmá que seleccionaste los repositorios correctos.",
+        "repair_lock_step_2": "2. Leé el log y el resumen de hallazgos antes de activar acciones de escritura.",
+        "repair_lock_step_3": "3. Volvé acá sólo cuando estés listo para confirmar un plan de reparación.",
+        "go_to_audit": "Ir a Auditar",
+        "repositories": "Repositorios",
+        "run_audit": "Ejecutar Auditar",
+        "audit_unavailable": "Auditoría no disponible",
+        "stop_after_current_step": "Detener luego del paso actual",
+        "stopping_after_current_step": "Deteniendo luego del paso actual...",
+        "refresh": "Actualizar",
+        "repo_summary_default": "Seleccioná repositorios, arrastrá carpetas o dejá vacío para auditar todo lo visible bajo Root.",
+        "repo_drop_hint": "Arrastrá carpetas de repositorios acá, o usá Buscar / Actualizar.",
+        "repo_drop_ready": "Arrastrá carpetas de repositorios acá para configurar el objetivo de auditoría, o usá Buscar / Actualizar.",
+        "repo_drop_unavailable": "Drag-and-drop no está disponible en este runtime Tk. Usá Buscar / Actualizar. ({error})",
+        "repo_drop_registration_failed": "Falló el registro de drag-and-drop. Usá Buscar / Actualizar. ({error})",
+        "repo_targets_unavailable": "Objetivos de repositorio no disponibles",
+        "choose_valid_root": "Elegí una carpeta Root válida para cargar uno o más repositorios git.",
+        "run_audit_available_hint": "Ejecutar Auditar queda disponible cuando hay al menos un repositorio visible en esta lista.",
+        "select_all": "Seleccionar todo",
+        "clear_selection": "Limpiar selección",
+        "clear_log": "Limpiar log",
+        "execution_log": "Log de ejecución",
+        "browse": "Buscar…",
+        "save_as": "Guardar como…",
+        "setup_hint_open": "Setup abierto. Guardalo una vez y la pantalla principal queda enfocada en Auditar.",
+        "setup_hint_remote": "Configuración oculta. Auditoría remota GitHub owner/org activa para {github_owner} (audit-only; se ignora la lista local). Abrí Configuración para editar.",
+        "setup_hint_hidden": "Setup guardado y oculto. Abrí Configuración para política, salida, GitHub o identidad.",
+        "all_matching_repositories": "todos los repositorios que coincidan",
+        "named_remote_repo_singular": "{count} repositorio remoto nombrado",
+        "named_remote_repo_plural": "{count} repositorios remotos nombrados",
+        "github_remote_state": (
+            "Auditar va a descubrir {filter_text} para {github_owner}, clonarlos en una carpeta privada temporal "
+            "y eliminar los clones al finalizar. El modo remoto es audit-only, así que Reparar queda no disponible para esos objetivos."
+        ),
+        "repo_empty_invalid_root_title": "Carpeta Root no encontrada",
+        "repo_empty_invalid_root_hint": "Elegí un directorio válido y después actualizá la lista de repositorios.",
+        "repo_empty_no_repos_title": "No se encontraron repositorios",
+        "repo_empty_no_repos_hint": "Cloná un repositorio acá o apuntá Root a una carpeta que ya contenga repositorios git.",
+        "repo_empty_github_remote_title": "Auditoría GitHub owner/org activa",
+        "repo_empty_github_remote_hint": "La selección local está pausada. Abrí Configuración para editar o limpiar GitHub owner/org.",
+        "repo_summary_remote": (
+            "La auditoría GitHub owner/org está activa para {github_owner}. La lista local se ignora; Auditar va a descubrir "
+            "{filter_text} vía GitHub y mantener Reparar bloqueado porque el modo remoto es audit-only."
+        ),
+        "repo_summary_invalid_root": "Carpeta Root no encontrada. Elegí un directorio válido antes de ejecutar Auditar.",
+        "repo_summary_no_repos": "No se detectaron repositorios git bajo Root. Elegí otra carpeta o actualizá después de clonar.",
+        "repo_word_singular": "repositorio",
+        "repo_word_plural": "repositorios",
+        "no_repos_selected": "No hay repositorios seleccionados.",
+        "selected_count": "{count} seleccionados.",
+        "current_root_available": " La carpeta Root actual está disponible en la lista.",
+        "current_root_label": "Root actual",
+        "repo_summary_targets": (
+            "Paso 2: {total} {repo_word} visibles bajo Root. {selected_text} "
+            "Dejá la selección vacía para auditar todos los repositorios visibles.{root_hint}"
+        ),
+        "lock_repair_default": "Reparar (ejecutá auditoría primero)",
+        "lock_repair_run_again": "Reparar (volvé a auditar)",
+        "lock_repair_cancelled": "Reparar (auditoría cancelada)",
+        "lock_repair_failed": "Reparar (auditoría fallida)",
+        "lock_repair_remote": "Reparar (auditoría remota es audit-only)",
+        "lock_repair_in_progress": "Reparar (auditoría en curso)",
+        "lock_repair_no_results": "Reparar (sin resultados auditados)",
+        "lock_repair_message": "{reason}. Ejecutá Auditar nuevamente antes de aplicar más acciones de escritura.",
+        "repair_wait": "Reparar (esperá {seconds}s)",
+        "repair": "Reparar",
+        "review_window": "Ventana de revisión",
+        "repair_ready": "Reparación lista",
+        "optional_cleanup": "Limpieza opcional",
+        "repair_unlocks_after_review": " Reparar se desbloquea cuando termina la ventana de revisión.",
+        "repair_now_available": " Reparar ya está disponible si todavía querés aplicar acciones de limpieza revisadas.",
+        "repair_unlocks_in": " Reparar se desbloquea en {seconds}s.",
+        "repair_lock_default_reason": "Reparar queda bloqueado hasta que termine una auditoría válida.",
+        "repair_lock_message": "{reason}\n\nEjecutá Auditar, revisá los resultados y volvé acá sólo cuando el plan de reparación esté listo para confirmar.",
+        "last_audit_failed": "Última auditoría: {label}. {failed} FAIL / {passed} PASS.{detail_text} Revisá los hallazgos y confirmá cada acción de escritura antes de Reparar.",
+        "last_audit_passed_manual": "Última auditoría: {label}. Todos los repositorios seleccionados pasaron.{detail_text} Clasificá hallazgos advisory antes de publicar; Reparar es opcional y sólo debería aplicar limpiezas revisadas.",
+        "last_audit_passed": "Última auditoría: {label}. Todos los repositorios seleccionados pasaron.{detail_text} Reparar es opcional; usalo sólo si todavía querés aplicar acciones de limpieza revisadas.",
+        "blocking_category_singular": "{count} categoría bloqueante",
+        "blocking_category_plural": "{count} categorías bloqueantes",
+        "manual_signal_singular": "{count} señal manual-review",
+        "manual_signal_plural": "{count} señales manual-review",
+        "fixture_match_singular": "{count} coincidencia fixture/documentación mantenida no bloqueante",
+        "fixture_match_plural": "{count} coincidencias fixture/documentación mantenidas no bloqueantes",
+        "repair_plan_intro": "Reparar se va a ejecutar con este plan:",
+        "active_options": "Opciones activas:",
+        "yes": "SÍ",
+        "no": "NO",
+        "auto_owner": "(auto desde noreply si está disponible)",
+        "plan_rewrite_paths": "- Reescribir rutas personales: {value}",
+        "plan_replace_text": "- Archivo replace-text explícito: {value}",
+        "plan_purge_safe": "- Purgar SAFE: {value}",
+        "plan_purge_risky": "- Purgar RISKY: {value}",
+        "plan_force_push": "- Force push remoto: {value}",
+        "plan_open_report": "- Abrir reporte HTML automáticamente: {value}",
+        "plan_confirm_each_repo": "- Confirmar fix por repositorio: {value}",
+        "plan_allow_bypass": "- Permitir bypass de push no-owner: {value}",
+        "plan_allowed_owners": "- Owner(s) permitidos para push: {value}",
+        "repair_baseline_changes": "Cambios baseline de Reparar:",
+        "baseline_gitignore": "- Puede agregar patrones faltantes a .gitignore",
+        "baseline_untrack": "- Puede ejecutar git rm --cached sobre archivos trackeados pero ignorados",
+        "baseline_rewrite": "- Puede reescribir historial con git-filter-repo según las opciones seleccionadas",
+        "risky_warning_1": "WARNING: seleccionaste opciones RISKY (purgar todo, force push o bypass del guardrail de owner).",
+        "risky_warning_2": "Esto puede remover contenido histórico irreversiblemente o saltar protecciones de owner remoto.",
+        "audited_findings_summary": "Resumen explícito de hallazgos auditados:",
+        "repo_status_line": "- {name} [{status}]",
+        "blocking_categories_line": "  * Categorías bloqueantes: {count}",
+        "manual_review_signals_line": "  * Señales manual-review: {count}",
+        "fixture_context_line": "  * Coincidencias fixture/documentación mantenidas no bloqueantes: {count}",
+        "planned_untrack_line": "  * Untrack planeado (trackeado pero ignorado): {count}",
+        "planned_path_rewrite_line": "  * Reescritura planeada de rutas personales: {count} hallazgos",
+        "personal_paths_disabled": "  * Rutas personales: reescritura deshabilitada",
+        "planned_purge_risky_line": "  * Purga RISKY planeada: {count} candidatos",
+        "planned_purge_safe_line": "  * Purga SAFE planeada: {count} candidatos",
+        "more_items": "    - ... y {count} más",
+        "secret_purge_disabled": "  * Purga de archivos secretos: deshabilitada",
+        "continue_question": "¿Continuar?",
+        "rerun_if_changed": "(Si cambiaste la selección u opciones, ejecutá Auditar de nuevo primero.)",
+        "dialog_repair_locked_title": "Reparar bloqueado",
+        "dialog_repair_locked_review": "Reparar queda disponible sólo después de una auditoría completa y una ventana de revisión de 10 segundos.",
+        "dialog_repair_locked_no_results": "Todavía no hay resultados de auditoría en esta sesión. Ejecutá Auditar primero.",
+        "dialog_new_audit_required_title": "Se requiere nueva auditoría",
+        "dialog_new_audit_required": "La selección actual de repositorios no coincide con la última auditoría. Ejecutá Auditar de nuevo antes de Reparar.",
+        "dialog_confirm_repair_title": "Confirmar plan de reparación",
+        "dialog_risk_title": "Se requiere aceptación de riesgo",
+        "dialog_risk_message": "Seleccionaste opciones RISKY (purgar todo, force push o bypass del guardrail de owner).\nConfirmá que aceptás continuar BAJO TU PROPIO RIESGO.",
+        "dialog_invalid_git_identity": "Identidad Git inválida",
+        "dialog_confirm_global_git_config": "Confirmar config Git global",
+        "dialog_confirm_global_git_config_message": "Esto actualiza git config --global para todos los repositorios de esta máquina. ¿Continuar?",
+        "dialog_global_git_config": "Config Git global",
+        "dialog_local_git_config": "Config Git local",
+        "dialog_read_git_identity": "Leer identidad Git",
+        "dialog_read_git_identity_select_one": "Seleccioná cero o un repositorio para inspeccionar la identidad Git local/efectiva.",
+        "dialog_not_git_repo": "No es un repositorio git: {candidate}",
+        "dialog_current_git_identity": "Identidad Git actual",
+        "dialog_github_email_settings": "Settings de email GitHub",
+        "dialog_run_in_progress": "Ejecución en curso",
+        "dialog_run_in_progress_message": "Ya hay una ejecución en curso. Esperá a que termine.",
+        "dialog_remote_audit_only": "Auditoría remota es audit-only",
+        "dialog_remote_audit_only_message": "La auditoría remota GitHub owner/org no puede combinarse con Reparar. Limpiá GitHub Owner / Org antes de reparar repositorios locales.",
+        "dialog_run_all_title": "Ejecutar en todos los repositorios",
+        "dialog_run_all_message": "No hay repositorios seleccionados. ¿Ejecutar {action_name} para todos los repositorios bajo Root?",
+        "dialog_invalid_max_matches": "Máx. hallazgos inválido",
+        "dialog_invalid_max_matches_message": "Máx. hallazgos debe ser un entero positivo.",
+        "dialog_invalid_github_jobs": "Workers GitHub inválidos",
+        "dialog_invalid_github_jobs_message": "Workers de clone GitHub debe ser un entero positivo.",
+        "action_repair": "reparar",
+        "action_audit": "auditar",
+        "confirm_repo_repair_title": "Confirmar reparación para este repositorio",
+        "confirm_repo_repair_message": "Repositorio {index}/{total}: {repo_name}\n\n¿Aplicar Reparar a este repositorio?\nPodés responder No para omitir sólo este repositorio.",
+        "install_github_tooling_title": "Instalar tooling GitHub",
+        "install_github_tooling_intro": "Los checks de hardening GitHub funcionan mejor con GitHub CLI (`gh`) y, en Windows, App Installer / winget funcionando correctamente.",
+        "install_github_tooling_confirm": "¿Instalar o reparar ese tooling ahora?",
+        "github_auth_needed_title": "Todavía falta autenticación GitHub",
+        "github_auth_needed_message": "GitHub CLI está instalado, pero los checks con token todavía necesitan autenticación.\n\nEjecutá `gh auth login`, o configurá REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN o GH_TOKEN.",
+    },
 }
 
 
@@ -5929,6 +6545,29 @@ def gui_setting_bool(settings: Mapping[str, object], key: str, default: bool) ->
     return default
 
 
+def normalize_gui_locale(value: object) -> str:
+    if not isinstance(value, str):
+        return GUI_LOCALE_DEFAULT
+    normalized = value.strip().lower().replace("_", "-")
+    if normalized in {"en", "en-us", "english"}:
+        return GUI_LOCALE_DEFAULT
+    if normalized in {"es", "es-419", "es-ar", "es-cl", "es-co", "es-mx", "spanish", "espanol", "español"}:
+        return GUI_LOCALE_ES_419
+    return GUI_LOCALE_DEFAULT
+
+
+def gui_locale_label(locale: str) -> str:
+    labels = dict(GUI_LOCALE_OPTIONS)
+    return labels.get(normalize_gui_locale(locale), labels[GUI_LOCALE_DEFAULT])
+
+
+def gui_locale_from_label(label: str) -> str:
+    for locale, display_label in GUI_LOCALE_OPTIONS:
+        if label == display_label:
+            return locale
+    return normalize_gui_locale(label)
+
+
 def parse_tk_drop_paths(raw_data: str, splitter: Callable[[str], Iterable[str]] | None = None) -> list[Path]:
     raw_value = raw_data.strip()
     if not raw_value:
@@ -6326,7 +6965,12 @@ class GuiApp:  # pragma: no cover
 
         self._gui_settings_path = default_gui_settings_path()
         self._gui_settings = load_gui_settings(self._gui_settings_path)
+        self._gui_locale = normalize_gui_locale(gui_setting_str(self._gui_settings, "gui_locale", GUI_LOCALE_DEFAULT))
+        self.locale_var = tk.StringVar(value=gui_locale_label(self._gui_locale))
+        self._localized_config_targets: list[tuple[object, str, str, dict[str, object]]] = []
+        self._locale_menu = None
         setup_completed = gui_setting_bool(self._gui_settings, "setup_completed", False)
+        self._setup_completed = setup_completed
 
         self.root_var = tk.StringVar(value=gui_setting_str(self._gui_settings, "root", str(default_root_dir())))
         self.policy_var = tk.StringVar(value=gui_setting_str(self._gui_settings, "policy", str(DEFAULT_POLICY)))
@@ -6386,7 +7030,7 @@ class GuiApp:  # pragma: no cover
         self._run_in_progress = False
         self._active_cancel_token: CancellationToken | None = None
         self._repair_ready = False
-        self._repair_button_text = "Repair (run audit first)"
+        self._repair_button_text = self._t("lock_repair_default")
         self._repair_cooldown_seconds = 10
         self._repair_cooldown_remaining = 0
         self._repair_cooldown_after_id = None
@@ -6395,8 +7039,8 @@ class GuiApp:  # pragma: no cover
         self._flow_tabs = None
         self._workflow_strip = None
         self._workflow_strip_visible = True
-        self._audit_tab_name = "1. Audit"
-        self._repair_tab_name = "2. Repair"
+        self._audit_tab_name = self._t("tab_audit")
+        self._repair_tab_name = self._t("tab_repair")
         self._setup_settings_visible = not setup_completed
         self._setup_settings_toggle_button = None
         self._setup_settings_hint_label = None
@@ -6447,39 +7091,39 @@ class GuiApp:  # pragma: no cover
         header = ctk.CTkFrame(app, fg_color=self._header_fg, corner_radius=18)
         header.grid(row=0, column=0, sticky="we", padx=16, pady=(10, 8))
         header.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             header,
-            text="Repo Privacy Guardian",
+            text=self._t("header_title"),
             font=self._font(24, bold=True),
             text_color="#F8FAFC",
-        ).grid(row=0, column=0, sticky="w", padx=18, pady=(12, 0))
-        ctk.CTkLabel(
+        ), "text", "header_title").grid(row=0, column=0, sticky="w", padx=18, pady=(12, 0))
+        self._localize_widget(ctk.CTkLabel(
             header,
-            text="Start with Audit: choose a root, review findings, then Repair only after the safety gate unlocks.",
+            text=self._t("header_subtitle"),
             font=self._font(13),
             text_color="#D8FFF3",
-        ).grid(row=1, column=0, sticky="w", padx=18, pady=(2, 8))
+        ), "text", "header_subtitle").grid(row=1, column=0, sticky="w", padx=18, pady=(2, 8))
 
         workflow_strip = ctk.CTkFrame(header, fg_color="transparent")
         workflow_strip.grid(row=2, column=0, sticky="w", padx=18, pady=(0, 14))
         self._workflow_strip = workflow_strip
         workflow_items = [
-            "1 Audit",
-            "2 Review findings",
-            "3 Repair if needed",
-            "CLI parity: same backend",
+            "workflow_audit",
+            "workflow_review",
+            "workflow_repair",
+            "workflow_parity",
         ]
-        for idx, label in enumerate(workflow_items):
-            ctk.CTkLabel(
+        for idx, label_key in enumerate(workflow_items):
+            self._localize_widget(ctk.CTkLabel(
                 workflow_strip,
-                text=label,
+                text=self._t(label_key),
                 height=26,
                 corner_radius=13,
                 fg_color=self._header_chip_fg,
                 text_color=self._header_chip_text,
                 font=self._font(11, bold=True),
                 padx=12,
-            ).grid(row=0, column=idx, sticky="w", padx=(0, 8))
+            ), "text", label_key).grid(row=0, column=idx, sticky="w", padx=(0, 8))
 
         flow_tabs = ctk.CTkTabview(
             app,
@@ -6518,12 +7162,12 @@ class GuiApp:  # pragma: no cover
         settings_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         settings_card.grid_columnconfigure(1, weight=1)
         self._settings_card = settings_card
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             settings_card,
-            text="Audit Target",
+            text=self._t("audit_target"),
             font=self._font(16, bold=True),
             text_color=self._text_heading,
-        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
+        ), "text", "audit_target").grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
 
         quick_start = ctk.CTkFrame(
             settings_card,
@@ -6534,33 +7178,33 @@ class GuiApp:  # pragma: no cover
         )
         quick_start.grid(row=1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 10))
         quick_start.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             quick_start,
-            text="Recommended path",
+            text=self._t("recommended_path"),
             height=28,
             corner_radius=14,
             fg_color=self._primary_button_fg,
             text_color="#F8FAFC",
             font=self._font(11, bold=True),
             padx=12,
-        ).grid(row=0, column=0, sticky="w", padx=10, pady=10)
-        ctk.CTkLabel(
+        ), "text", "recommended_path").grid(row=0, column=0, sticky="w", padx=10, pady=10)
+        self._localize_widget(ctk.CTkLabel(
             quick_start,
-            text="Choose a local root or drop repository folders below. Then run Audit and review findings before Repair.",
+            text=self._t("recommended_path_body"),
             justify="left",
             anchor="w",
             wraplength=820,
             font=self._font(12),
             text_color=self._text_body,
-        ).grid(row=0, column=1, sticky="we", padx=(0, 10), pady=10)
+        ), "text", "recommended_path_body").grid(row=0, column=1, sticky="we", padx=(0, 10), pady=10)
 
         row = 2
         self._add_directory_field(
             settings_card,
             row=row,
-            label="Repositories Root",
+            label_key="repositories_root",
             variable=self.root_var,
-            title="Choose the repositories root directory",
+            title_key="choose_repositories_root",
             tooltip_key="repositories_root",
         )
 
@@ -6576,17 +7220,18 @@ class GuiApp:  # pragma: no cover
         setup_toggle_row.grid_columnconfigure(0, weight=1)
         self._setup_settings_hint_label = ctk.CTkLabel(
             setup_toggle_row,
-            text="Initial setup is open. Save it once, then the main screen stays focused on Audit.",
+            text=self._t("setup_initial_hint"),
             justify="left",
             anchor="w",
             wraplength=760,
             font=self._font(11),
             text_color=self._text_muted,
         )
+        self._localize_widget(self._setup_settings_hint_label, "text", "setup_initial_hint")
         self._setup_settings_hint_label.grid(row=0, column=0, sticky="we", padx=12, pady=10)
         self._setup_settings_toggle_button = ctk.CTkButton(
             setup_toggle_row,
-            text="Hide Settings",
+            text=self._t("hide_settings"),
             command=self._toggle_setup_settings,
             width=170,
             height=32,
@@ -6608,30 +7253,52 @@ class GuiApp:  # pragma: no cover
         setup_settings_frame.grid_columnconfigure(1, weight=1)
         self._setup_settings_frame = setup_settings_frame
 
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             setup_settings_frame,
-            text="Setup & Settings",
+            text=self._t("setup_settings"),
             font=self._font(14, bold=True),
             text_color=self._text_heading,
-        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 4))
+        ), "text", "setup_settings").grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 4))
         self._settings_status_label = ctk.CTkLabel(
             setup_settings_frame,
-            text="Use these controls for policy/output overrides, GitHub owner audits, and advanced identity setup.",
+            text=self._t("settings_status"),
             justify="left",
             anchor="w",
             wraplength=880,
             font=self._font(11),
             text_color=self._text_muted,
         )
+        self._localize_widget(self._settings_status_label, "text", "settings_status")
         self._settings_status_label.grid(row=1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 8))
 
         settings_row = 2
+        self._make_field_label(
+            setup_settings_frame,
+            text_key="gui_language",
+            tooltip_key="gui_language",
+        ).grid(row=settings_row, column=0, sticky="w", padx=(14, 8), pady=4)
+        self._locale_menu = ctk.CTkOptionMenu(
+            setup_settings_frame,
+            variable=self.locale_var,
+            values=[label for _locale, label in GUI_LOCALE_OPTIONS],
+            command=self._on_gui_locale_selected,
+            height=32,
+            corner_radius=8,
+            fg_color=self._secondary_button_fg,
+            button_color=self._support_button_fg,
+            button_hover_color=self._support_button_hover,
+            text_color=self._secondary_button_text,
+        )
+        self._bind_tooltip_key(self._locale_menu, "gui_language")
+        self._locale_menu.grid(row=settings_row, column=1, sticky="w", pady=4)
+
+        settings_row += 1
         self._add_file_field(
             setup_settings_frame,
             row=settings_row,
-            label="Policy File",
+            label_key="policy_file",
             variable=self.policy_var,
-            title="Choose a policy file",
+            title_key="choose_policy_file",
             filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
             tooltip_key="policy_file",
         )
@@ -6640,9 +7307,9 @@ class GuiApp:  # pragma: no cover
         self._add_directory_field(
             setup_settings_frame,
             row=settings_row,
-            label="Audit Results Folder",
+            label_key="audit_results_folder",
             variable=self.report_dir_var,
-            title="Choose the base results directory",
+            title_key="choose_results_folder",
             tooltip_key="audit_results_folder",
         )
 
@@ -6650,9 +7317,9 @@ class GuiApp:  # pragma: no cover
         self._add_save_file_field(
             setup_settings_frame,
             row=settings_row,
-            label="Optional JSON Copy",
+            label_key="optional_json_copy",
             variable=self.report_json_var,
-            title="Choose the extra JSON export path",
+            title_key="choose_json_copy",
             default_extension=".json",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             tooltip_key="optional_json_copy",
@@ -6671,7 +7338,7 @@ class GuiApp:  # pragma: no cover
         github_remote_card.grid_columnconfigure(3, weight=1)
         self._make_field_label(
             github_remote_card,
-            text="GitHub Owner / Org",
+            text_key="github_owner",
             tooltip_key="github_owner",
         ).grid(row=0, column=0, sticky="w", padx=(12, 8), pady=(10, 4))
         github_owner_entry = ctk.CTkEntry(
@@ -6679,13 +7346,14 @@ class GuiApp:  # pragma: no cover
             textvariable=self.github_owner_var,
             height=32,
             corner_radius=8,
-            placeholder_text="optional owner or organization",
+            placeholder_text=self._t("github_owner_placeholder"),
         )
+        self._localize_widget(github_owner_entry, "placeholder_text", "github_owner_placeholder")
         self._bind_tooltip_key(github_owner_entry, "github_owner")
         github_owner_entry.grid(row=0, column=1, sticky="we", padx=(0, 12), pady=(10, 4))
         self._make_field_label(
             github_remote_card,
-            text="Remote repo filters",
+            text_key="remote_repo_filters",
             tooltip_key="github_repo_filters",
         ).grid(row=0, column=2, sticky="w", padx=(0, 8), pady=(10, 4))
         github_filter_entry = ctk.CTkEntry(
@@ -6693,13 +7361,14 @@ class GuiApp:  # pragma: no cover
             textvariable=self.github_repo_filters_var,
             height=32,
             corner_radius=8,
-            placeholder_text="repo-a, repo-b",
+            placeholder_text=self._t("remote_repo_filters_placeholder"),
         )
+        self._localize_widget(github_filter_entry, "placeholder_text", "remote_repo_filters_placeholder")
         self._bind_tooltip_key(github_filter_entry, "github_repo_filters")
         github_filter_entry.grid(row=0, column=3, sticky="we", padx=(0, 12), pady=(10, 4))
         self._make_field_label(
             github_remote_card,
-            text="Clone workers",
+            text_key="clone_workers",
             tooltip_key="github_clone_workers",
         ).grid(row=1, column=0, sticky="w", padx=(12, 8), pady=(4, 10))
         github_jobs_entry = ctk.CTkEntry(
@@ -6713,27 +7382,29 @@ class GuiApp:  # pragma: no cover
         github_jobs_entry.grid(row=1, column=1, sticky="w", padx=(0, 12), pady=(4, 10))
         github_include_forks_checkbox = ctk.CTkCheckBox(
             github_remote_card,
-            text="Include forks",
+            text=self._t("include_forks"),
             variable=self.github_include_forks_var,
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._localize_widget(github_include_forks_checkbox, "text", "include_forks")
         self._bind_tooltip_key(github_include_forks_checkbox, "github_include_forks")
         github_include_forks_checkbox.grid(row=1, column=2, sticky="w", padx=(0, 12), pady=(4, 10))
         github_fast_checkbox = ctk.CTkCheckBox(
             github_remote_card,
-            text="Fast shallow clone",
+            text=self._t("fast_shallow_clone"),
             variable=self.github_fast_var,
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._localize_widget(github_fast_checkbox, "text", "fast_shallow_clone")
         self._bind_tooltip_key(github_fast_checkbox, "github_fast")
         github_fast_checkbox.grid(row=1, column=3, sticky="w", padx=(0, 12), pady=(4, 10))
 
         settings_row += 1
         self._make_field_label(
             setup_settings_frame,
-            text="Max findings per check",
+            text_key="max_findings",
             tooltip_key="max_findings",
         ).grid(row=settings_row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
         max_matches_entry = ctk.CTkEntry(
@@ -6745,24 +7416,22 @@ class GuiApp:  # pragma: no cover
         )
         self._bind_tooltip_key(max_matches_entry, "max_findings")
         max_matches_entry.grid(row=settings_row, column=1, sticky="w", pady=(4, 12))
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             setup_settings_frame,
-            text=(
-                "These settings persist locally for the GUI. Secret/token values are not stored here."
-            ),
+            text=self._t("settings_persist_note"),
             justify="left",
             anchor="w",
             wraplength=760,
             font=self._font(11),
             text_color=self._text_muted,
-        ).grid(row=settings_row + 1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 8))
+        ), "text", "settings_persist_note").grid(row=settings_row + 1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 8))
 
         setup_actions = ctk.CTkFrame(setup_settings_frame, fg_color="transparent")
         setup_actions.grid(row=settings_row + 2, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 10))
         setup_actions.grid_columnconfigure(0, weight=1)
         save_setup_button = ctk.CTkButton(
             setup_actions,
-            text="Save Setup",
+            text=self._t("save_setup"),
             command=self.save_setup_clicked,
             width=140,
             height=32,
@@ -6770,6 +7439,7 @@ class GuiApp:  # pragma: no cover
             fg_color=self._support_button_fg,
             hover_color=self._support_button_hover,
         )
+        self._localize_widget(save_setup_button, "text", "save_setup")
         self._bind_tooltip_key(save_setup_button, "save_setup")
         save_setup_button.grid(row=0, column=1, sticky="e")
 
@@ -6784,7 +7454,7 @@ class GuiApp:  # pragma: no cover
         advanced_identity_row.grid_columnconfigure(0, weight=1)
         self._advanced_identity_hint_label = ctk.CTkLabel(
             advanced_identity_row,
-            text="Advanced identity settings are hidden for the normal audit-only path.",
+            text=self._t("advanced_identity_hidden"),
             justify="left",
             anchor="w",
             wraplength=760,
@@ -6794,7 +7464,7 @@ class GuiApp:  # pragma: no cover
         self._advanced_identity_hint_label.grid(row=0, column=0, sticky="we", padx=12, pady=10)
         self._advanced_identity_toggle_button = ctk.CTkButton(
             advanced_identity_row,
-            text="Show advanced identity settings",
+            text=self._t("show_advanced_identity"),
             command=self._toggle_advanced_identity_settings,
             width=230,
             height=32,
@@ -6816,24 +7486,24 @@ class GuiApp:  # pragma: no cover
         self._profile_card = profile_card
         self._compact_top_layout = False
 
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             profile_card,
-            text="Owner Profile (repair defaults)",
+            text=self._t("owner_profile"),
             font=self._font(16, bold=True),
             text_color=self._text_heading,
-        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
-        ctk.CTkLabel(
+        ), "text", "owner_profile").grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
+        self._localize_widget(ctk.CTkLabel(
             profile_card,
-            text="Used by Repair when rewriting or redacting commit identity metadata.",
+            text=self._t("owner_profile_body"),
             justify="left",
             anchor="w",
             wraplength=440,
             font=self._font(11),
             text_color=self._text_muted,
-        ).grid(row=1, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 6))
+        ), "text", "owner_profile_body").grid(row=1, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 6))
 
         row = 2
-        self._make_field_label(profile_card, text="Noreply Email", tooltip_key="noreply_email").grid(
+        self._make_field_label(profile_card, text_key="noreply_email", tooltip_key="noreply_email").grid(
             row=row,
             column=0,
             sticky="w",
@@ -6851,7 +7521,7 @@ class GuiApp:  # pragma: no cover
         )
 
         row += 1
-        self._make_field_label(profile_card, text="Placeholder Email", tooltip_key="placeholder_email").grid(
+        self._make_field_label(profile_card, text_key="placeholder_email", tooltip_key="placeholder_email").grid(
             row=row,
             column=0,
             sticky="w",
@@ -6869,7 +7539,7 @@ class GuiApp:  # pragma: no cover
         )
 
         row += 1
-        self._make_field_label(profile_card, text="Owner Name", tooltip_key="owner_name").grid(
+        self._make_field_label(profile_card, text_key="owner_name", tooltip_key="owner_name").grid(
             row=row,
             column=0,
             sticky="w",
@@ -6889,7 +7559,7 @@ class GuiApp:  # pragma: no cover
         row += 1
         self._make_field_label(
             profile_card,
-            text="Private emails to replace",
+            text_key="private_emails_to_replace",
             tooltip_key="owner_emails",
         ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
         owner_emails_entry = ctk.CTkEntry(profile_card, textvariable=self.owner_emails_var, height=32, corner_radius=8)
@@ -6911,14 +7581,14 @@ class GuiApp:  # pragma: no cover
         )
         identity_card.grid(row=1, column=0, sticky="we", padx=10, pady=(10, 8))
         identity_card.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             identity_card,
-            text="Optional: Git Identity & GitHub Email Privacy",
+            text=self._t("optional_git_identity"),
             font=self._font(16, bold=True),
             text_color=self._text_heading,
-        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
+        ), "text", "optional_git_identity").grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
 
-        self._make_field_label(identity_card, text="git user.name", tooltip_key="git_user_name").grid(
+        self._make_field_label(identity_card, text_key="git_user_name", tooltip_key="git_user_name").grid(
             row=1,
             column=0,
             sticky="w",
@@ -6937,7 +7607,7 @@ class GuiApp:  # pragma: no cover
 
         self._make_field_label(
             identity_card,
-            text="git user.email (noreply)",
+            text_key="git_user_email",
             tooltip_key="git_user_email",
         ).grid(row=2, column=0, sticky="w", padx=(14, 8), pady=4)
         git_user_email_entry = ctk.CTkEntry(
@@ -6961,44 +7631,48 @@ class GuiApp:  # pragma: no cover
         self._identity_actions = identity_actions
         identity_primary_global = ctk.CTkButton(
             identity_actions,
-            text="Apply Global Git Config",
+            text=self._t("apply_global_git_config"),
             command=self.apply_git_identity_global_clicked,
             height=32,
             corner_radius=8,
             fg_color=self._support_button_fg,
             hover_color=self._support_button_hover,
         )
+        self._localize_widget(identity_primary_global, "text", "apply_global_git_config")
         self._bind_tooltip_key(identity_primary_global, "apply_global_git_config")
         identity_primary_global.grid(row=0, column=0, sticky="we", padx=(0, 6), pady=3)
         identity_primary_local = ctk.CTkButton(
             identity_actions,
-            text="Apply Local Git Config",
+            text=self._t("apply_local_git_config"),
             command=self.apply_git_identity_local_clicked,
             height=32,
             corner_radius=8,
             fg_color=self._support_button_fg,
             hover_color=self._support_button_hover,
         )
+        self._localize_widget(identity_primary_local, "text", "apply_local_git_config")
         self._bind_tooltip_key(identity_primary_local, "apply_local_git_config")
         identity_primary_local.grid(row=0, column=1, sticky="we", padx=(6, 6), pady=3)
         identity_secondary_read = ctk.CTkButton(
             identity_actions,
-            text="Read Current Git Identity",
+            text=self._t("read_current_git_identity"),
             command=self.read_git_identity_clicked,
             height=32,
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._localize_widget(identity_secondary_read, "text", "read_current_git_identity")
         self._bind_tooltip_key(identity_secondary_read, "read_current_git_identity")
         identity_secondary_read.grid(row=0, column=2, sticky="we", padx=(6, 6), pady=3)
         identity_secondary_settings = ctk.CTkButton(
             identity_actions,
-            text="Open GitHub Email Settings",
+            text=self._t("open_github_email_settings"),
             command=self.open_github_email_settings_clicked,
             height=32,
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._localize_widget(identity_secondary_settings, "text", "open_github_email_settings")
         self._bind_tooltip_key(identity_secondary_settings, "open_github_email_settings")
         identity_secondary_settings.grid(row=0, column=3, sticky="we", padx=(6, 0), pady=3)
         self._identity_action_buttons = [
@@ -7008,18 +7682,22 @@ class GuiApp:  # pragma: no cover
             identity_secondary_settings,
         ]
 
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             identity_card,
-            text=(
-                "Use this only if your local Git identity needs privacy-safe noreply settings. "
-                f"{GITHUB_EMAIL_PRIVACY_HELP}"
-            ),
+            text=self._t("identity_help"),
             justify="left",
             anchor="w",
             wraplength=1200,
             font=self._font(12),
             text_color=self._text_body,
-        ).grid(row=4, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 12))
+        ), "text", "identity_help").grid(
+            row=4,
+            column=0,
+            columnspan=2,
+            sticky="we",
+            padx=14,
+            pady=(8, 12),
+        )
         self._identity_card = identity_card
         self._set_advanced_identity_visibility(False)
         self._set_setup_settings_visibility(self._setup_settings_visible)
@@ -7035,12 +7713,12 @@ class GuiApp:  # pragma: no cover
         options_card.grid_columnconfigure(0, weight=1)
         options_card.grid_columnconfigure(1, weight=1)
         self._options_card = options_card
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             options_card,
-            text="Repair Plan Options",
+            text=self._t("repair_plan_options"),
             font=self._font(16, bold=True),
             text_color=self._text_heading,
-        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
+        ), "text", "repair_plan_options").grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
 
         safe_options = ctk.CTkFrame(
             options_card,
@@ -7053,35 +7731,36 @@ class GuiApp:  # pragma: no cover
         safe_options.grid_columnconfigure(0, weight=1)
         safe_options.grid_columnconfigure(1, weight=0)
         self._safe_options_card = safe_options
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             safe_options,
-            text="Review & Output Options",
+            text=self._t("review_output_options"),
             font=self._font(13, bold=True),
             text_color="#0E4F4A",
-        ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
+        ), "text", "review_output_options").grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
         self._make_info_badge(
             safe_options,
-            "CLI-equivalent run toggles. They do not rewrite history on their own.",
+            lambda: self._t("review_output_info"),
         ).grid(row=0, column=1, sticky="e", padx=(0, 12), pady=(10, 2))
 
         safe_items = [
-            ("Only audit public remotes", self.public_only_var, "public_only"),
-            ("Redact third-party emails during repair", self.redact_var, "redact_third_party_emails"),
-            ("Treat low-confidence emails as blocking", self.low_confidence_blocking_var, "low_confidence_blocking"),
-            ("Dry run / preview repair", self.dry_run_var, "dry_run_preview"),
-            ("Audit GitHub release hardening", self.audit_github_hardening_var, "audit_github_hardening"),
-            ("Audit LiteLLM incident (Mar-2026)", self.audit_litellm_incident_var, "audit_litellm_incident"),
-            ("Open HTML report automatically", self.open_report_var, "open_html_report"),
-            ("Confirm each repository during repair", self.confirm_each_repo_fix_var, "confirm_each_repo_fix"),
+            ("only_audit_public_remotes", self.public_only_var, "public_only"),
+            ("redact_third_party_emails", self.redact_var, "redact_third_party_emails"),
+            ("low_confidence_blocking", self.low_confidence_blocking_var, "low_confidence_blocking"),
+            ("dry_run_preview", self.dry_run_var, "dry_run_preview"),
+            ("audit_github_hardening", self.audit_github_hardening_var, "audit_github_hardening"),
+            ("audit_litellm_incident", self.audit_litellm_incident_var, "audit_litellm_incident"),
+            ("open_html_report", self.open_report_var, "open_html_report"),
+            ("confirm_each_repo_fix", self.confirm_each_repo_fix_var, "confirm_each_repo_fix"),
         ]
-        for idx, (label, var, tooltip_key) in enumerate(safe_items, start=1):
+        for idx, (label_key, var, tooltip_key) in enumerate(safe_items, start=1):
             checkbox = ctk.CTkCheckBox(
                 safe_options,
-                text=label,
+                text=self._t(label_key),
                 variable=var,
                 font=self._font(12),
                 text_color="#1E293B",
             )
+            self._localize_widget(checkbox, "text", label_key)
             self._bind_tooltip_key(checkbox, tooltip_key)
             checkbox.grid(row=idx, column=0, sticky="w", padx=12, pady=4)
             self._make_info_badge_for(safe_options, tooltip_key).grid(row=idx, column=1, sticky="e", padx=(0, 12))
@@ -7098,30 +7777,31 @@ class GuiApp:  # pragma: no cover
         destructive_options.grid_columnconfigure(1, weight=0)
         self._destructive_options_card = destructive_options
         self._compact_options_layout = False
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             destructive_options,
-            text="Repair Write Actions",
+            text=self._t("repair_write_actions"),
             font=self._font(13, bold=True),
             text_color="#7A3E05",
-        ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
+        ), "text", "repair_write_actions").grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
         self._make_info_badge(
             destructive_options,
-            "These options are only applied when you click Repair.",
+            lambda: self._t("repair_write_info"),
         ).grid(row=0, column=1, sticky="e", padx=(0, 12), pady=(10, 2))
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             destructive_options,
-            text="Only applied when you click Repair. Review the latest audit summary before enabling them.",
+            text=self._t("repair_write_body"),
             font=self._font(11),
             text_color="#8A4B10",
-        ).grid(row=1, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 8))
+        ), "text", "repair_write_body").grid(row=1, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 8))
 
         self._rewrite_paths_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Rewrite personal paths in history",
+            text=self._t("rewrite_personal_paths"),
             variable=self.rewrite_personal_paths_var,
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._localize_widget(self._rewrite_paths_checkbox, "text", "rewrite_personal_paths")
         self._bind_tooltip_key(self._rewrite_paths_checkbox, "rewrite_personal_paths")
         self._rewrite_paths_checkbox.grid(row=2, column=0, sticky="w", padx=12, pady=(0, 4))
         self._make_info_badge_for(destructive_options, "rewrite_personal_paths").grid(
@@ -7130,16 +7810,16 @@ class GuiApp:  # pragma: no cover
             sticky="e",
             padx=(0, 12),
         )
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             destructive_options,
-            text="Uses reviewed replace-text rules during repair to rewrite detected personal paths.",
+            text=self._t("rewrite_personal_paths_body"),
             font=self._font(11),
             text_color="#8A4B10",
-        ).grid(row=3, column=0, columnspan=2, sticky="w", padx=36, pady=(0, 6))
+        ), "text", "rewrite_personal_paths_body").grid(row=3, column=0, columnspan=2, sticky="w", padx=36, pady=(0, 6))
 
         self._make_field_label(
             destructive_options,
-            text="Additional Replace-Text Rules",
+            text_key="replace_text_rules",
             tooltip_key="replace_text_rules",
         ).grid(row=4, column=0, sticky="w", padx=12, pady=(4, 0))
         replace_text_row = ctk.CTkFrame(destructive_options, fg_color="transparent")
@@ -7155,45 +7835,48 @@ class GuiApp:  # pragma: no cover
         replace_text_entry.grid(row=0, column=0, sticky="we", padx=(0, 8))
         replace_text_button = ctk.CTkButton(
             replace_text_row,
-            text="Browse…",
+            text=self._t("browse"),
             width=92,
             height=32,
             corner_radius=8,
             **self._secondary_button_options(),
             command=lambda: self._browse_existing_file(
                 self.replace_text_file_var,
-                title="Choose an explicit replace-text file",
+                title=self._t("choose_replace_text_file"),
                 filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
             ),
         )
+        self._localize_widget(replace_text_button, "text", "browse")
         self._bind_tooltip_key(replace_text_button, "replace_text_rules")
         replace_text_button.grid(row=0, column=1)
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             destructive_options,
-            text="Optional operator-reviewed literal replacements for cleanup the tool cannot infer safely.",
+            text=self._t("replace_text_rules_body"),
             font=self._font(11),
             text_color="#8A4B10",
-        ).grid(row=6, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
+        ), "text", "replace_text_rules_body").grid(row=6, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
 
         self._push_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Force-push rewritten history",
+            text=self._t("force_push"),
             variable=self.push_var,
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._localize_widget(self._push_checkbox, "text", "force_push")
         self._bind_tooltip_key(self._push_checkbox, "force_push")
         self._push_checkbox.grid(row=7, column=0, sticky="w", padx=12, pady=(0, 4))
         self._make_info_badge_for(destructive_options, "force_push").grid(row=7, column=1, sticky="e", padx=(0, 12))
 
         self._allow_non_owner_push_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Bypass remote-owner guardrail",
+            text=self._t("bypass_remote_owner_guardrail"),
             variable=self.allow_non_owner_push_var,
             command=self._on_allow_non_owner_push_toggled,
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._localize_widget(self._allow_non_owner_push_checkbox, "text", "bypass_remote_owner_guardrail")
         self._bind_tooltip_key(self._allow_non_owner_push_checkbox, "bypass_remote_owner_guardrail")
         self._allow_non_owner_push_checkbox.grid(row=8, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge_for(destructive_options, "bypass_remote_owner_guardrail").grid(
@@ -7205,7 +7888,7 @@ class GuiApp:  # pragma: no cover
 
         self._make_field_label(
             destructive_options,
-            text="Allowed remote owners",
+            text_key="allowed_remote_owners",
             tooltip_key="allowed_remote_owners",
         ).grid(row=9, column=0, sticky="w", padx=12, pady=(4, 0))
         self._allowed_remote_owner_entry = ctk.CTkEntry(
@@ -7223,21 +7906,22 @@ class GuiApp:  # pragma: no cover
             padx=12,
             pady=(2, 4),
         )
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             destructive_options,
-            text="Use a comma-separated allowlist. Leave bypass off to keep owner verification active.",
+            text=self._t("allowed_remote_owners_body"),
             font=self._font(11),
             text_color="#8A4B10",
-        ).grid(row=11, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
+        ), "text", "allowed_remote_owners_body").grid(row=11, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
 
         self._purge_safe_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Purge safe secret-file candidates",
+            text=self._t("purge_safe_secret_files"),
             variable=self.purge_detected_secret_files_var,
             command=self._on_purge_safe_toggled,
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._localize_widget(self._purge_safe_checkbox, "text", "purge_safe_secret_files")
         self._bind_tooltip_key(self._purge_safe_checkbox, "purge_safe_secret_files")
         self._purge_safe_checkbox.grid(row=12, column=0, sticky="w", padx=12, pady=(0, 4))
         self._make_info_badge_for(destructive_options, "purge_safe_secret_files").grid(
@@ -7249,12 +7933,13 @@ class GuiApp:  # pragma: no cover
 
         self._purge_risky_checkbox = ctk.CTkCheckBox(
             destructive_options,
-            text="Purge risky manual-review candidates too",
+            text=self._t("purge_risky_secret_files"),
             variable=self.purge_all_detected_secret_files_var,
             command=self._on_purge_risky_toggled,
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._localize_widget(self._purge_risky_checkbox, "text", "purge_risky_secret_files")
         self._bind_tooltip_key(self._purge_risky_checkbox, "purge_risky_secret_files")
         self._purge_risky_checkbox.grid(row=13, column=0, sticky="w", padx=12, pady=4)
         self._make_info_badge_for(destructive_options, "purge_risky_secret_files").grid(
@@ -7263,12 +7948,12 @@ class GuiApp:  # pragma: no cover
             sticky="e",
             padx=(0, 12),
         )
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             destructive_options,
-            text="Safe mode skips ambiguous files. Risky mode also includes candidates that still need manual judgment.",
+            text=self._t("purge_body"),
             font=self._font(11),
             text_color="#8A4B10",
-        ).grid(row=14, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 10))
+        ), "text", "purge_body").grid(row=14, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 10))
         self._sync_purge_mode_controls()
         self._sync_push_guardrail_controls()
 
@@ -7281,12 +7966,12 @@ class GuiApp:  # pragma: no cover
         )
         repair_actions_card.grid(row=1, column=0, sticky="we", padx=10, pady=(0, 8))
         repair_actions_card.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             repair_actions_card,
-            text="Repair Flow",
+            text=self._t("repair_flow"),
             font=self._font(14, bold=True),
             text_color="#7A3E05",
-        ).grid(row=0, column=0, sticky="w", padx=14, pady=(10, 4))
+        ), "text", "repair_flow").grid(row=0, column=0, sticky="w", padx=14, pady=(10, 4))
         self._repair_status_panel = ctk.CTkFrame(
             repair_actions_card,
             fg_color="#F2FBF8",
@@ -7298,7 +7983,7 @@ class GuiApp:  # pragma: no cover
         self._repair_status_panel.grid_columnconfigure(1, weight=1)
         self._repair_status_badge = ctk.CTkLabel(
             self._repair_status_panel,
-            text="Audit required",
+            text=self._t("audit_required"),
             height=28,
             corner_radius=14,
             fg_color="#D8F3EA",
@@ -7307,15 +7992,15 @@ class GuiApp:  # pragma: no cover
             padx=12,
         )
         self._repair_status_badge.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 6))
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             self._repair_status_panel,
-            text="Latest audit summary",
+            text=self._t("latest_audit_summary"),
             font=self._font(12, bold=True),
             text_color="#173A5E",
-        ).grid(row=0, column=1, sticky="w", padx=(0, 12), pady=(10, 6))
+        ), "text", "latest_audit_summary").grid(row=0, column=1, sticky="w", padx=(0, 12), pady=(10, 6))
         self._repair_status_label = ctk.CTkLabel(
             self._repair_status_panel,
-            text="No audit results in this session yet. Run Audit first, then review the summary before applying write actions.",
+            text=self._t("no_audit_results"),
             justify="left",
             anchor="w",
             wraplength=1080,
@@ -7338,14 +8023,14 @@ class GuiApp:  # pragma: no cover
         )
         self._bind_tooltip_key(self._repair_button, "repair_button")
         self._repair_button.grid(row=0, column=0, sticky="w")
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             repair_controls,
-            text="Repair stays disabled until Audit finishes and the review window completes.",
+            text=self._t("repair_stays_disabled"),
             justify="left",
             anchor="w",
             font=self._font(11),
             text_color="#6B7F93",
-        ).grid(row=0, column=1, sticky="w", padx=(10, 0), pady=6)
+        ), "text", "repair_stays_disabled").grid(row=0, column=1, sticky="w", padx=(10, 0), pady=6)
 
         blocker_overlay = ctk.CTkFrame(
             repair_tab,
@@ -7367,13 +8052,13 @@ class GuiApp:  # pragma: no cover
         )
         blocker_card.grid(row=0, column=0, padx=28, pady=(28, 20), sticky="n")
         blocker_card.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             blocker_card,
-            text="Repair tab locked",
+            text=self._t("repair_tab_locked"),
             justify="center",
             font=self._font(18, bold=True),
             text_color=self._text_heading,
-        ).grid(row=0, column=0, padx=24, pady=(22, 8), sticky="ew")
+        ), "text", "repair_tab_locked").grid(row=0, column=0, padx=24, pady=(22, 8), sticky="ew")
         self._repair_tab_block_label = ctk.CTkLabel(
             blocker_card,
             text="",
@@ -7383,41 +8068,42 @@ class GuiApp:  # pragma: no cover
             wraplength=620,
         )
         self._repair_tab_block_label.grid(row=1, column=0, padx=24, pady=(0, 10), sticky="ew")
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             blocker_card,
-            text="Before Repair, do this:",
+            text=self._t("before_repair"),
             justify="center",
             font=self._font(12, bold=True),
             text_color=self._text_muted,
-        ).grid(row=2, column=0, padx=24, pady=(0, 6), sticky="ew")
+        ), "text", "before_repair").grid(row=2, column=0, padx=24, pady=(0, 6), sticky="ew")
         step_texts = [
-            "1. Run Audit and confirm the selected repositories are the ones you want to review.",
-            "2. Read the log and findings summary before enabling any write actions.",
-            "3. Come back here only when you are ready to confirm a repair plan.",
+            "repair_lock_step_1",
+            "repair_lock_step_2",
+            "repair_lock_step_3",
         ]
         self._repair_tab_block_steps = []
-        for idx, step_text in enumerate(step_texts, start=3):
+        for idx, step_key in enumerate(step_texts, start=3):
             step_label = ctk.CTkLabel(
                 blocker_card,
-                text=step_text,
+                text=self._t(step_key),
                 justify="left",
                 anchor="w",
                 wraplength=620,
                 font=self._font(12),
                 text_color="#334155",
             )
+            self._localize_widget(step_label, "text", step_key)
             step_label.grid(row=idx, column=0, padx=24, pady=2, sticky="ew")
             self._repair_tab_block_steps.append(step_label)
-        ctk.CTkButton(
+        self._localize_widget(ctk.CTkButton(
             blocker_card,
-            text="Go to Audit",
+            text=self._t("go_to_audit"),
             command=lambda: self._set_active_flow_tab(self._audit_tab_name),
             width=170,
             height=34,
             corner_radius=8,
             fg_color=self._primary_button_fg,
             hover_color=self._primary_button_hover,
-        ).grid(row=6, column=0, pady=(14, 22))
+        ), "text", "go_to_audit").grid(row=6, column=0, pady=(14, 22))
 
         results_row = ctk.CTkFrame(app, fg_color="transparent")
         results_row.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 14))
@@ -7442,17 +8128,17 @@ class GuiApp:  # pragma: no cover
         repo_header.grid(row=0, column=0, columnspan=2, sticky="we", padx=14, pady=(12, 6))
         repo_header.grid_columnconfigure(0, weight=1)
         repo_header.grid_columnconfigure(1, weight=0)
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             repo_header,
-            text="Repositories",
+            text=self._t("repositories"),
             font=self._font(16, bold=True),
             text_color=self._text_heading,
-        ).grid(row=0, column=0, sticky="w")
+        ), "text", "repositories").grid(row=0, column=0, sticky="w")
         repo_actions = ctk.CTkFrame(repo_header, fg_color="transparent")
         repo_actions.grid(row=0, column=1, sticky="e")
         self._audit_button = ctk.CTkButton(
             repo_actions,
-            text="Run Audit",
+            text=self._t("run_audit"),
             command=lambda: self.run_clicked(run_fix=False),
             width=130,
             height=34,
@@ -7464,7 +8150,7 @@ class GuiApp:  # pragma: no cover
         self._audit_button.pack(side="left", padx=(0, 8))
         self._cancel_button = ctk.CTkButton(
             repo_actions,
-            text="Stop After Current Step",
+            text=self._t("stop_after_current_step"),
             command=self.cancel_run_clicked,
             width=172,
             height=34,
@@ -7475,7 +8161,7 @@ class GuiApp:  # pragma: no cover
         self._cancel_button.pack(side="left", padx=(0, 8))
         self._refresh_button = ctk.CTkButton(
             repo_actions,
-            text="Refresh",
+            text=self._t("refresh"),
             height=34,
             width=120,
             corner_radius=8,
@@ -7483,11 +8169,12 @@ class GuiApp:  # pragma: no cover
             fg_color=self._support_button_fg,
             hover_color=self._support_button_hover,
         )
+        self._localize_widget(self._refresh_button, "text", "refresh")
         self._bind_tooltip_key(self._refresh_button, "refresh_repos")
         self._refresh_button.pack(side="left")
         self._repo_summary_label = ctk.CTkLabel(
             repos_card,
-            text="Select repositories, drop repository folders, or leave empty to audit every repository shown under Root.",
+            text=self._t("repo_summary_default"),
             justify="left",
             anchor="w",
             font=self._font(11),
@@ -7507,7 +8194,7 @@ class GuiApp:  # pragma: no cover
         list_shell.grid_rowconfigure(1, weight=1)
         self._repo_drop_hint_label = ctk.CTkLabel(
             list_shell,
-            text="Drag repository folders here, or use Browse / Refresh.",
+            text=self._t("repo_drop_hint"),
             justify="left",
             anchor="w",
             font=self._font(11),
@@ -7547,7 +8234,7 @@ class GuiApp:  # pragma: no cover
         self._repo_empty_state.grid_columnconfigure(0, weight=1)
         self._repo_empty_state_title_label = ctk.CTkLabel(
             self._repo_empty_state,
-            text="Repository targets unavailable",
+            text=self._t("repo_targets_unavailable"),
             justify="center",
             anchor="center",
             font=self._font(14, bold=True),
@@ -7556,7 +8243,7 @@ class GuiApp:  # pragma: no cover
         self._repo_empty_state_title_label.grid(row=0, column=0, padx=18, pady=(16, 4), sticky="ew")
         self._repo_empty_state_body_label = ctk.CTkLabel(
             self._repo_empty_state,
-            text="Choose a valid Root folder to load one or more git repositories.",
+            text=self._t("choose_valid_root"),
             justify="center",
             anchor="center",
             font=self._font(12),
@@ -7566,7 +8253,7 @@ class GuiApp:  # pragma: no cover
         self._repo_empty_state_body_label.grid(row=1, column=0, padx=18, pady=(0, 6), sticky="ew")
         self._repo_empty_state_hint_label = ctk.CTkLabel(
             self._repo_empty_state,
-            text="Run Audit becomes available once at least one repository target is visible in this list.",
+            text=self._t("run_audit_available_hint"),
             justify="center",
             anchor="center",
             font=self._font(11),
@@ -7579,35 +8266,38 @@ class GuiApp:  # pragma: no cover
         run_controls.grid(row=3, column=0, columnspan=2, sticky="w", padx=14, pady=(4, 12))
         self._select_all_button = ctk.CTkButton(
             run_controls,
-            text="Select All",
+            text=self._t("select_all"),
             command=self.select_all,
             width=120,
             height=34,
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._localize_widget(self._select_all_button, "text", "select_all")
         self._bind_tooltip_key(self._select_all_button, "select_all_repos")
         self._select_all_button.pack(side="left", padx=8)
         self._clear_selection_button = ctk.CTkButton(
             run_controls,
-            text="Clear Selection",
+            text=self._t("clear_selection"),
             command=self.clear_selection,
             width=120,
             height=34,
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._localize_widget(self._clear_selection_button, "text", "clear_selection")
         self._bind_tooltip_key(self._clear_selection_button, "clear_selection")
         self._clear_selection_button.pack(side="left", padx=8)
         clear_log_button = ctk.CTkButton(
             run_controls,
-            text="Clear Log",
+            text=self._t("clear_log"),
             command=self.clear_output,
             width=120,
             height=34,
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._localize_widget(clear_log_button, "text", "clear_log")
         self._bind_tooltip_key(clear_log_button, "clear_log")
         clear_log_button.pack(side="left", padx=8)
 
@@ -7622,12 +8312,12 @@ class GuiApp:  # pragma: no cover
         output_card.grid_columnconfigure(0, weight=1)
         output_card.grid_rowconfigure(1, weight=1)
         self._output_card = output_card
-        ctk.CTkLabel(
+        self._localize_widget(ctk.CTkLabel(
             output_card,
-            text="Execution Log",
+            text=self._t("execution_log"),
             font=self._font(16, bold=True),
             text_color=self._text_heading,
-        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
+        ), "text", "execution_log").grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
         self.output = ctk.CTkTextbox(
             output_card,
             fg_color="#0B1720",
@@ -7642,7 +8332,7 @@ class GuiApp:  # pragma: no cover
         self.refresh_repos()
         self.root.bind("<Configure>", self._on_root_resize)
         self.root.after(0, self._apply_responsive_layout)
-        self._lock_repair_until_next_audit("Repair (run audit first)")
+        self._lock_repair_until_next_audit()
         self._set_active_flow_tab(self._audit_tab_name)
 
     def _font(self, size: int, *, bold: bool = False, mono: bool = False):
@@ -7658,19 +8348,124 @@ class GuiApp:  # pragma: no cover
             "text_color": self._secondary_button_text,
         }
 
+    def _current_locale(self) -> str:
+        return normalize_gui_locale(getattr(self, "_gui_locale", GUI_LOCALE_DEFAULT))
+
+    def _t(self, key: str, **kwargs: object) -> str:
+        locale = self._current_locale()
+        catalog = GUI_UI_TEXT_BY_LOCALE.get(locale, GUI_UI_TEXT_BY_LOCALE[GUI_LOCALE_DEFAULT])
+        template = catalog.get(key, GUI_UI_TEXT_BY_LOCALE[GUI_LOCALE_DEFAULT][key])
+        return template.format(**kwargs) if kwargs else template
+
+    def _configure_localized_widget(
+        self,
+        widget: object,
+        option: str,
+        key: str,
+        kwargs: dict[str, object],
+    ) -> None:
+        configure = getattr(widget, "configure", None)
+        if configure is None:
+            return
+        configure(**{option: self._t(key, **kwargs)})
+
+    def _localize_widget(self, widget, option: str, key: str, **kwargs: object):
+        self._configure_localized_widget(widget, option, key, kwargs)
+        targets = getattr(self, "_localized_config_targets", None)
+        if targets is not None:
+            targets.append((widget, option, key, dict(kwargs)))
+        return widget
+
+    def _refresh_localized_widgets(self) -> None:
+        for widget, option, key, kwargs in list(getattr(self, "_localized_config_targets", [])):
+            self._configure_localized_widget(widget, option, key, kwargs)
+
+    def _refresh_locale_menu(self) -> None:
+        locale_var = getattr(self, "locale_var", None)
+        if locale_var is not None:
+            locale_var.set(gui_locale_label(self._current_locale()))
+        locale_menu = getattr(self, "_locale_menu", None)
+        if locale_menu is not None:
+            try:
+                locale_menu.configure(values=[label for _locale, label in GUI_LOCALE_OPTIONS])
+                locale_menu.set(gui_locale_label(self._current_locale()))
+            except Exception:
+                pass
+
+    def _refresh_flow_tab_locale(self) -> None:
+        flow_tabs = getattr(self, "_flow_tabs", None)
+        if flow_tabs is None:
+            return
+        desired_audit_name = self._t("tab_audit")
+        desired_repair_name = self._t("tab_repair")
+        current_audit_name = getattr(self, "_audit_tab_name", desired_audit_name)
+        current_repair_name = getattr(self, "_repair_tab_name", desired_repair_name)
+        active_tab = None
+        try:
+            active_tab = flow_tabs.get()
+        except Exception:
+            active_tab = None
+        try:
+            if current_audit_name != desired_audit_name:
+                flow_tabs.rename(current_audit_name, desired_audit_name)
+                self._audit_tab_name = desired_audit_name
+            if current_repair_name != desired_repair_name:
+                flow_tabs.rename(current_repair_name, desired_repair_name)
+                self._repair_tab_name = desired_repair_name
+        except Exception:
+            self._audit_tab_name = desired_audit_name
+            self._repair_tab_name = desired_repair_name
+            return
+        if active_tab == current_repair_name:
+            self._set_active_flow_tab(desired_repair_name)
+        elif active_tab == current_audit_name:
+            self._set_active_flow_tab(desired_audit_name)
+
+    def _apply_gui_locale(self) -> None:
+        self._refresh_locale_menu()
+        self._refresh_flow_tab_locale()
+        self._refresh_localized_widgets()
+        self._set_setup_settings_visibility(getattr(self, "_setup_settings_visible", True))
+        self._set_advanced_identity_visibility(getattr(self, "_advanced_identity_visible", False))
+        if getattr(self, "_run_in_progress", False):
+            self._update_repo_summary()
+            self._update_run_buttons_state()
+            return
+        if getattr(self, "repo_list", None) is None:
+            return
+        selected = self._selected_repo_names()
+        self.refresh_repos()
+        self._select_repo_values(selected)
+
+    def _on_gui_locale_selected(self, selected_label: str) -> None:
+        self._gui_locale = gui_locale_from_label(selected_label)
+        self._apply_gui_locale()
+        self._save_gui_setup_settings(setup_completed=bool(getattr(self, "_setup_completed", False)))
+
     def _tooltip_text(self, key: str) -> str:
-        return GUI_TOOLTIP_TEXT[key]
+        catalog = GUI_TOOLTIP_TEXT_BY_LOCALE.get(self._current_locale(), GUI_TOOLTIP_TEXT)
+        return catalog.get(key, GUI_TOOLTIP_TEXT[key])
 
     def _bind_tooltip_key(self, widget, key: str):
-        self._bind_tooltip(widget, self._tooltip_text(key))
+        self._bind_tooltip(widget, lambda: self._tooltip_text(key))
         return widget
 
     def _make_info_badge_for(self, parent, key: str):
-        return self._make_info_badge(parent, self._tooltip_text(key))
+        return self._make_info_badge(parent, lambda: self._tooltip_text(key))
 
-    def _make_field_label(self, parent, *, text: str, tooltip_key: str | None = None):
+    def _make_field_label(
+        self,
+        parent,
+        *,
+        text: str | None = None,
+        text_key: str | None = None,
+        tooltip_key: str | None = None,
+    ):
         shell = self.ctk.CTkFrame(parent, fg_color="transparent")
-        label = self.ctk.CTkLabel(shell, text=text, font=self._font(12), text_color=self._text_body)
+        label_text = self._t(text_key) if text_key else (text or "")
+        label = self.ctk.CTkLabel(shell, text=label_text, font=self._font(12), text_color=self._text_body)
+        if text_key:
+            self._localize_widget(label, "text", text_key)
         label.pack(side="left")
         if tooltip_key:
             self._bind_tooltip_key(label, tooltip_key)
@@ -7731,12 +8526,14 @@ class GuiApp:  # pragma: no cover
         parent,
         *,
         row: int,
-        label: str,
+        label: str | None = None,
+        label_key: str | None = None,
         variable,
-        title: str,
+        title: str | None = None,
+        title_key: str | None = None,
         tooltip_key: str | None = None,
     ) -> None:
-        self._make_field_label(parent, text=label, tooltip_key=tooltip_key).grid(
+        self._make_field_label(parent, text=label, text_key=label_key, tooltip_key=tooltip_key).grid(
             row=row,
             column=0,
             sticky="w",
@@ -7755,13 +8552,14 @@ class GuiApp:  # pragma: no cover
         )
         button = self.ctk.CTkButton(
             parent,
-            text="Browse…",
+            text=self._t("browse"),
             width=92,
             height=32,
             corner_radius=8,
             **self._secondary_button_options(),
-            command=lambda: self._browse_directory(variable, title=title),
+            command=lambda: self._browse_directory(variable, title=self._t(title_key) if title_key else (title or "")),
         )
+        self._localize_widget(button, "text", "browse")
         if tooltip_key:
             self._bind_tooltip_key(button, tooltip_key)
         button.grid(row=row, column=2, padx=(0, 14), pady=4)
@@ -7771,13 +8569,15 @@ class GuiApp:  # pragma: no cover
         parent,
         *,
         row: int,
-        label: str,
+        label: str | None = None,
+        label_key: str | None = None,
         variable,
-        title: str,
+        title: str | None = None,
+        title_key: str | None = None,
         filetypes,
         tooltip_key: str | None = None,
     ) -> None:
-        self._make_field_label(parent, text=label, tooltip_key=tooltip_key).grid(
+        self._make_field_label(parent, text=label, text_key=label_key, tooltip_key=tooltip_key).grid(
             row=row,
             column=0,
             sticky="w",
@@ -7796,13 +8596,18 @@ class GuiApp:  # pragma: no cover
         )
         button = self.ctk.CTkButton(
             parent,
-            text="Browse…",
+            text=self._t("browse"),
             width=92,
             height=32,
             corner_radius=8,
             **self._secondary_button_options(),
-            command=lambda: self._browse_existing_file(variable, title=title, filetypes=filetypes),
+            command=lambda: self._browse_existing_file(
+                variable,
+                title=self._t(title_key) if title_key else (title or ""),
+                filetypes=filetypes,
+            ),
         )
+        self._localize_widget(button, "text", "browse")
         if tooltip_key:
             self._bind_tooltip_key(button, tooltip_key)
         button.grid(row=row, column=2, padx=(0, 14), pady=4)
@@ -7812,14 +8617,16 @@ class GuiApp:  # pragma: no cover
         parent,
         *,
         row: int,
-        label: str,
+        label: str | None = None,
+        label_key: str | None = None,
         variable,
-        title: str,
+        title: str | None = None,
+        title_key: str | None = None,
         default_extension: str,
         filetypes,
         tooltip_key: str | None = None,
     ) -> None:
-        self._make_field_label(parent, text=label, tooltip_key=tooltip_key).grid(
+        self._make_field_label(parent, text=label, text_key=label_key, tooltip_key=tooltip_key).grid(
             row=row,
             column=0,
             sticky="w",
@@ -7838,18 +8645,19 @@ class GuiApp:  # pragma: no cover
         )
         button = self.ctk.CTkButton(
             parent,
-            text="Save As…",
+            text=self._t("save_as"),
             width=92,
             height=32,
             corner_radius=8,
             **self._secondary_button_options(),
             command=lambda: self._browse_save_file(
                 variable,
-                title=title,
+                title=self._t(title_key) if title_key else (title or ""),
                 default_extension=default_extension,
                 filetypes=filetypes,
             ),
         )
+        self._localize_widget(button, "text", "save_as")
         if tooltip_key:
             self._bind_tooltip_key(button, tooltip_key)
         button.grid(row=row, column=2, padx=(0, 14), pady=4)
@@ -7898,6 +8706,7 @@ class GuiApp:  # pragma: no cover
     def _current_gui_settings_payload(self, *, setup_completed: bool) -> dict[str, object]:
         return {
             "setup_completed": setup_completed,
+            "gui_locale": self._current_locale(),
             "root": self.root_var.get().strip(),
             "policy": self.policy_var.get().strip(),
             "report_dir": self.report_dir_var.get().strip(),
@@ -7931,6 +8740,7 @@ class GuiApp:  # pragma: no cover
             except Exception:
                 pass
             return False
+        self._setup_completed = setup_completed
         return True
 
     def save_setup_clicked(self) -> None:
@@ -7943,24 +8753,21 @@ class GuiApp:  # pragma: no cover
 
     def _setup_settings_hint_text(self, visible: bool) -> str:
         if visible:
-            return "Setup is open. Save it once, then the main screen stays focused on Audit."
+            return self._t("setup_hint_open")
         try:
             github_owner = self._github_owner_value()
         except Exception:
             github_owner = None
         if github_owner:
-            return (
-                f"Settings hidden. GitHub owner/org remote audit is active for {github_owner} "
-                "(audit-only; local list ignored). Open Settings to edit."
-            )
-        return "Setup is saved and hidden. Open Settings for policy, output, GitHub, or identity controls."
+            return self._t("setup_hint_remote", github_owner=github_owner)
+        return self._t("setup_hint_hidden")
 
     def _set_setup_settings_visibility(self, visible: bool) -> None:
         self._setup_settings_visible = visible
 
         toggle_button = getattr(self, "_setup_settings_toggle_button", None)
         if toggle_button is not None:
-            toggle_button.configure(text="Hide Settings" if visible else "Open Settings")
+            toggle_button.configure(text=self._t("hide_settings" if visible else "open_settings"))
 
         hint_label = getattr(self, "_setup_settings_hint_label", None)
         if hint_label is not None:
@@ -7981,19 +8788,11 @@ class GuiApp:  # pragma: no cover
 
         toggle_button = getattr(self, "_advanced_identity_toggle_button", None)
         if toggle_button is not None:
-            toggle_button.configure(
-                text="Hide advanced identity settings" if visible else "Show advanced identity settings"
-            )
+            toggle_button.configure(text=self._t("hide_advanced_identity" if visible else "show_advanced_identity"))
 
         hint_label = getattr(self, "_advanced_identity_hint_label", None)
         if hint_label is not None:
-            hint_label.configure(
-                text=(
-                    "Advanced identity settings are visible. Use them only when Repair needs custom metadata."
-                    if visible
-                    else "Advanced identity settings are hidden for the normal audit-only path."
-                )
-            )
+            hint_label.configure(text=self._t("advanced_identity_visible" if visible else "advanced_identity_hidden"))
 
         identity_card = getattr(self, "_identity_card", None)
         if identity_card is not None:
@@ -8196,28 +8995,28 @@ class GuiApp:  # pragma: no cover
 
         palette = {
             "invalid_root": {
-                "title": "Root folder not found",
+                "title": self._t("repo_empty_invalid_root_title"),
                 "fg": "#FFF8F1",
                 "border": "#F2C48D",
                 "title_color": "#8A3B12",
                 "body_color": "#7C5A35",
-                "hint": "Pick a valid directory, then refresh the repository list.",
+                "hint": self._t("repo_empty_invalid_root_hint"),
             },
             "no_repos": {
-                "title": "No repositories found",
+                "title": self._t("repo_empty_no_repos_title"),
                 "fg": "#F6FAFE",
                 "border": "#C9DDEE",
                 "title_color": "#143A5A",
                 "body_color": "#526679",
-                "hint": "Clone a repository here or point Root at a folder that already contains git repositories.",
+                "hint": self._t("repo_empty_no_repos_hint"),
             },
             "github_remote": {
-                "title": "GitHub owner/org audit active",
+                "title": self._t("repo_empty_github_remote_title"),
                 "fg": "#F2FBF8",
                 "border": "#B9DDD3",
                 "title_color": "#0E4F4A",
                 "body_color": "#385B5A",
-                "hint": "Local repository selection is paused. Open Settings to edit or clear the GitHub owner/org.",
+                "hint": self._t("repo_empty_github_remote_hint"),
             },
         }
         theme = palette.get(self._repo_empty_reason, palette["no_repos"])
@@ -8249,7 +9048,7 @@ class GuiApp:  # pragma: no cover
 
             TkinterDnD._require(self.root)
         except Exception as exc:
-            self._set_repo_drop_hint(f"Drag-and-drop is unavailable in this Tk runtime. Use Browse / Refresh. ({exc})")
+            self._set_repo_drop_hint(self._t("repo_drop_unavailable", error=exc))
             return
 
         def _drop(raw_data: str) -> str:
@@ -8269,10 +9068,10 @@ class GuiApp:  # pragma: no cover
                 widget.tk.call("bind", widget._w, "<<DropEnter>>", enter_command)
                 widget.tk.call("bind", widget._w, "<<DropPosition>>", enter_command)
             except Exception as exc:
-                self._set_repo_drop_hint(f"Drag-and-drop registration failed. Use Browse / Refresh. ({exc})")
+                self._set_repo_drop_hint(self._t("repo_drop_registration_failed", error=exc))
                 return
 
-        self._set_repo_drop_hint("Drag repository folders here to set the audit target, or use Browse / Refresh.")
+        self._set_repo_drop_hint(self._t("repo_drop_ready"))
 
     def _handle_repo_drop(self, raw_data: str) -> None:
         if getattr(self, "_run_in_progress", False):
@@ -8316,10 +9115,10 @@ class GuiApp:  # pragma: no cover
         github_owner = self._github_owner_value()
         if github_owner:
             repo_summary_label.configure(
-                text=(
-                    f"GitHub owner/org audit is active for {github_owner}. "
-                    f"The local repository list is ignored; Audit will discover {self._github_remote_filter_text()} "
-                    "through GitHub and keep Repair locked because remote mode is audit-only."
+                text=self._t(
+                    "repo_summary_remote",
+                    github_owner=github_owner,
+                    filter_text=self._github_remote_filter_text(),
                 )
             )
             return
@@ -8330,27 +9129,25 @@ class GuiApp:  # pragma: no cover
 
         if total == 0:
             if getattr(self, "_repo_empty_reason", None) == "invalid_root":
-                repo_summary_label.configure(
-                    text="Root folder not found. Choose a valid directory before running Audit."
-                )
+                repo_summary_label.configure(text=self._t("repo_summary_invalid_root"))
             else:
-                repo_summary_label.configure(
-                    text="No git repositories detected under Root yet. Choose another folder or refresh after cloning."
-                )
+                repo_summary_label.configure(text=self._t("repo_summary_no_repos"))
             return
 
-        repo_word = "repository" if total == 1 else "repositories"
+        repo_word = self._t("repo_word_singular" if total == 1 else "repo_word_plural")
         selected_text = (
-            "No repositories selected."
+            self._t("no_repos_selected")
             if selected == 0
-            else f"{selected} selected."
+            else self._t("selected_count", count=selected)
         )
-        root_hint = " Current Root is available in the list." if includes_current_root else ""
+        root_hint = self._t("current_root_available") if includes_current_root else ""
         repo_summary_label.configure(
-            text=(
-                f"Step 2: {total} {repo_word} shown under Root. {selected_text} "
-                "Leave the selection empty to audit every repository shown."
-                f"{root_hint}"
+            text=self._t(
+                "repo_summary_targets",
+                total=total,
+                repo_word=repo_word,
+                selected_text=selected_text,
+                root_hint=root_hint,
             )
         )
 
@@ -8383,7 +9180,7 @@ class GuiApp:  # pragma: no cover
     def _build_repair_status_summary(self, reports_payload: list[dict[str, object]]) -> str:
         total = len(reports_payload)
         if total == 0:
-            return "No audit results in this session yet. Run Audit first, then review the summary before applying write actions."
+            return self._t("no_audit_results")
 
         passed = sum(1 for item in reports_payload if item.get("status") == "PASS")
         failed = sum(1 for item in reports_payload if item.get("status") == "FAIL")
@@ -8397,31 +9194,48 @@ class GuiApp:  # pragma: no cover
 
         detail_parts: list[str] = []
         if blocking_categories:
-            category_word = "category" if blocking_categories == 1 else "categories"
-            detail_parts.append(f"{blocking_categories} blocking {category_word}")
+            detail_parts.append(
+                self._t(
+                    "blocking_category_singular" if blocking_categories == 1 else "blocking_category_plural",
+                    count=blocking_categories,
+                )
+            )
         if manual_review_signals:
-            signal_word = "signal" if manual_review_signals == 1 else "signals"
-            detail_parts.append(f"{manual_review_signals} manual-review {signal_word}")
+            detail_parts.append(
+                self._t(
+                    "manual_signal_singular" if manual_review_signals == 1 else "manual_signal_plural",
+                    count=manual_review_signals,
+                )
+            )
         if safe_context:
-            match_word = "match" if safe_context == 1 else "matches"
-            detail_parts.append(f"{safe_context} fixture/documentation {match_word} kept non-blocking")
+            detail_parts.append(
+                self._t(
+                    "fixture_match_singular" if safe_context == 1 else "fixture_match_plural",
+                    count=safe_context,
+                )
+            )
         detail_text = (" " + "; ".join(detail_parts) + ".") if detail_parts else ""
 
         if failed:
-            return (
-                f"Last audit: {label}. {failed} FAIL / {passed} PASS.{detail_text} "
-                "Review the findings and confirm every write action before Repair."
+            return self._t(
+                "last_audit_failed",
+                label=label,
+                failed=failed,
+                passed=passed,
+                detail_text=detail_text,
             )
 
         if manual_review_signals:
-            return (
-                f"Last audit: {label}. All selected repositories passed.{detail_text} "
-                "Classify advisory findings before publication; Repair is optional and should only apply reviewed cleanup actions."
+            return self._t(
+                "last_audit_passed_manual",
+                label=label,
+                detail_text=detail_text,
             )
 
-        return (
-            f"Last audit: {label}. All selected repositories passed.{detail_text} "
-            "Repair is optional; use it only if you still want to apply reviewed cleanup actions."
+        return self._t(
+            "last_audit_passed",
+            label=label,
+            detail_text=detail_text,
         )
 
     def _set_repair_tab_visual_lock(self, locked: bool, reason: str | None = None) -> None:
@@ -8433,18 +9247,15 @@ class GuiApp:  # pragma: no cover
             return
 
         if self._repair_tab_block_label is not None:
-            lock_reason = reason or "Repair stays locked until a valid audit has completed."
+            lock_reason = reason or self._t("repair_lock_default_reason")
             self._repair_tab_block_label.configure(
-                text=(
-                    f"{lock_reason}\n\n"
-                    "Run Audit, review the results, and return here only when the repair plan is ready to confirm."
-                )
+                text=self._t("repair_lock_message", reason=lock_reason)
             )
 
         self._repair_tab_block_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
         self._repair_tab_block_overlay.lift()
 
-    def _make_info_badge(self, parent, message: str):
+    def _make_info_badge(self, parent, message: str | Callable[[], str]):
         badge = self.ctk.CTkLabel(
             parent,
             text="i",
@@ -8458,12 +9269,13 @@ class GuiApp:  # pragma: no cover
         self._bind_tooltip(badge, message)
         return badge
 
-    def _bind_tooltip(self, widget, message: str) -> None:
+    def _bind_tooltip(self, widget, message: str | Callable[[], str]) -> None:
         state = {"tip": None}
 
         def _show(_event) -> None:
             if state["tip"] is not None:
                 return
+            resolved_message = message() if callable(message) else message
 
             tip = self.tk.Toplevel(self.root)
             tip.wm_overrideredirect(True)
@@ -8482,7 +9294,7 @@ class GuiApp:  # pragma: no cover
             frame.pack(fill="both", expand=True)
             self.ctk.CTkLabel(
                 frame,
-                text=message,
+                text=resolved_message,
                 justify="left",
                 anchor="w",
                 wraplength=360,
@@ -8539,11 +9351,9 @@ class GuiApp:  # pragma: no cover
             checks,
             self.log,
             blocking_only=False,
-            title="Install GitHub Tooling",
-            intro=(
-                "GitHub hardening checks work best with GitHub CLI (`gh`) and, on Windows, a healthy App Installer / winget setup."
-            ),
-            confirm_question="Install or repair that tooling now?",
+            title=self._t("install_github_tooling_title"),
+            intro=self._t("install_github_tooling_intro"),
+            confirm_question=self._t("install_github_tooling_confirm"),
         )
         if not accepted:
             return
@@ -8553,9 +9363,8 @@ class GuiApp:  # pragma: no cover
         github_check = next((check for check in refreshed if check.name == "github-auth"), None)
         if github_check and github_check.state == "warning" and not github_check.auto_install_command:
             self.messagebox.showinfo(
-                "GitHub Authentication Still Needed",
-                "GitHub CLI is installed, but token-gated hardening checks still need authentication.\n\n"
-                "Run `gh auth login`, or set REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN.",
+                self._t("github_auth_needed_title"),
+                self._t("github_auth_needed_message"),
             )
 
     def _on_audit_github_hardening_toggled(self, *_args: object) -> None:
@@ -8576,15 +9385,15 @@ class GuiApp:  # pragma: no cover
     def _github_remote_filter_text(self) -> str:
         filters = self._github_repo_filters()
         if filters is None:
-            return "all matching repositories"
-        repo_word = "repository" if len(filters) == 1 else "repositories"
-        return f"{len(filters)} named remote {repo_word}"
+            return self._t("all_matching_repositories")
+        key = "named_remote_repo_singular" if len(filters) == 1 else "named_remote_repo_plural"
+        return self._t(key, count=len(filters))
 
     def _github_remote_state_message(self, github_owner: str) -> str:
-        return (
-            f"Audit will discover {self._github_remote_filter_text()} for {github_owner}, "
-            "clone them into a temporary private directory, and remove the clones when the run finishes. "
-            "Remote mode is audit-only, so Repair stays unavailable for these targets."
+        return self._t(
+            "github_remote_state",
+            filter_text=self._github_remote_filter_text(),
+            github_owner=github_owner,
         )
 
     def _sync_remote_target_surface(self) -> bool:
@@ -8646,7 +9455,7 @@ class GuiApp:  # pragma: no cover
             disabled_fg = getattr(self, "_disabled_button_fg", "#B8C6D5")
             disabled_text = getattr(self, "_disabled_button_text", "#64748B")
             audit_button.configure(
-                text="Run Audit" if (has_targets or has_remote_target) else "Audit unavailable",
+                text=self._t("run_audit" if (has_targets or has_remote_target) else "audit_unavailable"),
                 state="disabled" if audit_disabled else "normal",
                 fg_color=disabled_fg if audit_disabled else primary_fg,
                 hover_color=disabled_fg if audit_disabled else primary_hover,
@@ -8659,7 +9468,7 @@ class GuiApp:  # pragma: no cover
                 self._active_cancel_token and self._active_cancel_token.is_cancelled()
             )
             cancel_button.configure(
-                text="Stopping after current step..." if cancel_requested else "Stop After Current Step",
+                text=self._t("stopping_after_current_step" if cancel_requested else "stop_after_current_step"),
                 state="normal" if (self._run_in_progress and not cancel_requested) else "disabled",
             )
 
@@ -8703,19 +9512,21 @@ class GuiApp:  # pragma: no cover
                 text_color_disabled=disabled_text,
             )
 
-    def _lock_repair_until_next_audit(self, reason: str = "Repair (run audit first)") -> None:
+    def _lock_repair_until_next_audit(self, reason: str | None = None) -> None:
+        default_reason = self._t("lock_repair_default")
+        lock_reason = reason or default_reason
         self._cancel_repair_cooldown()
         self._repair_ready = False
         self._repair_cooldown_remaining = 0
-        self._repair_button_text = reason
+        self._repair_button_text = lock_reason
         self._set_repair_status(
-            "No audit results in this session yet. Run Audit first, then review the summary before applying write actions."
-            if reason == "Repair (run audit first)"
-            else f"{reason}. Run Audit again before applying more write actions.",
+            self._t("no_audit_results")
+            if lock_reason == default_reason
+            else self._t("lock_repair_message", reason=lock_reason),
             text_color="#5C6F82",
-            badge_text="Audit required" if reason == "Repair (run audit first)" else "Audit again required",
+            badge_text=self._t("audit_required" if lock_reason == default_reason else "audit_again_required"),
         )
-        self._set_repair_tab_visual_lock(True, reason)
+        self._set_repair_tab_visual_lock(True, lock_reason)
         self._update_run_buttons_state()
 
     def _start_repair_cooldown(
@@ -8727,18 +9538,18 @@ class GuiApp:  # pragma: no cover
         self._last_audit_selection_signature = selection_signature
 
         if not reports_payload:
-            self._lock_repair_until_next_audit("Repair (no audited results yet)")
+            self._lock_repair_until_next_audit(self._t("lock_repair_no_results"))
             return
 
         self._cancel_repair_cooldown()
         self._repair_ready = False
         self._repair_cooldown_remaining = self._repair_cooldown_seconds
-        self._repair_button_text = f"Repair (wait {self._repair_cooldown_remaining}s)"
+        self._repair_button_text = self._t("repair_wait", seconds=self._repair_cooldown_remaining)
         self._set_repair_status(
             self._build_repair_status_summary(reports_payload)
-            + " Repair unlocks after the review window completes.",
+            + self._t("repair_unlocks_after_review"),
             text_color="#7A4B13",
-            badge_text="Review window",
+            badge_text=self._t("review_window"),
             panel_fg="#FFF7ED",
             panel_border="#F5C58B",
             badge_fg="#FBD7A2",
@@ -8756,13 +9567,13 @@ class GuiApp:  # pragma: no cover
         if self._repair_cooldown_remaining <= 1:
             self._repair_ready = True
             self._repair_cooldown_remaining = 0
-            self._repair_button_text = "Repair"
+            self._repair_button_text = self._t("repair")
             failed = sum(1 for item in self._last_audit_reports_payload if item.get("status") == "FAIL")
             self._set_repair_status(
                 self._build_repair_status_summary(self._last_audit_reports_payload)
-                + " Repair is now available if you still want to apply reviewed cleanup actions.",
+                + self._t("repair_now_available"),
                 text_color="#7B1E1E",
-                badge_text="Repair ready" if failed else "Optional cleanup",
+                badge_text=self._t("repair_ready" if failed else "optional_cleanup"),
                 panel_fg="#FFF7ED" if failed else "#F0FDF4",
                 panel_border="#F5C58B" if failed else "#BBF7D0",
                 badge_fg="#FBD7A2" if failed else "#DCFCE7",
@@ -8773,12 +9584,12 @@ class GuiApp:  # pragma: no cover
             return
 
         self._repair_cooldown_remaining -= 1
-        self._repair_button_text = f"Repair (wait {self._repair_cooldown_remaining}s)"
+        self._repair_button_text = self._t("repair_wait", seconds=self._repair_cooldown_remaining)
         self._set_repair_status(
             self._build_repair_status_summary(self._last_audit_reports_payload)
-            + f" Repair unlocks in {self._repair_cooldown_remaining}s.",
+            + self._t("repair_unlocks_in", seconds=self._repair_cooldown_remaining),
             text_color="#7A4B13",
-            badge_text="Review window",
+            badge_text=self._t("review_window"),
             panel_fg="#FFF7ED",
             panel_border="#F5C58B",
             badge_fg="#FBD7A2",
@@ -8803,85 +9614,87 @@ class GuiApp:  # pragma: no cover
     def _build_repair_confirmation_text(self, selected_signature: tuple[str, ...] | None) -> str:
         risky_mode = self._is_risky_repair_selected()
         allowed_owners = normalize_csv_values(self.allowed_remote_owners_var.get())
-        owners_text = ", ".join(allowed_owners) if allowed_owners else "(auto from noreply if available)"
+        owners_text = ", ".join(allowed_owners) if allowed_owners else self._t("auto_owner")
+        yes_text = self._t("yes")
+        no_text = self._t("no")
 
         lines = [
-            "Repair will run with the following plan:",
+            self._t("repair_plan_intro"),
             "",
-            "Active options:",
-            f"- Rewrite personal paths: {'YES' if self.rewrite_personal_paths_var.get() else 'NO'}",
-            f"- Explicit replace-text file: {self.replace_text_file_var.get().strip() or 'NO'}",
-            f"- Purge SAFE: {'YES' if self.purge_detected_secret_files_var.get() else 'NO'}",
-            f"- Purge RISKY: {'YES' if self.purge_all_detected_secret_files_var.get() else 'NO'}",
-            f"- Force push remote: {'YES' if self.push_var.get() else 'NO'}",
-            f"- Open HTML report automatically: {'YES' if self.open_report_var.get() else 'NO'}",
-            f"- Confirm each repo fix: {'YES' if self.confirm_each_repo_fix_var.get() else 'NO'}",
-            f"- Allow non-owner push bypass: {'YES' if self.allow_non_owner_push_var.get() else 'NO'}",
-            f"- Allowed push owner(s): {owners_text}",
+            self._t("active_options"),
+            self._t("plan_rewrite_paths", value=yes_text if self.rewrite_personal_paths_var.get() else no_text),
+            self._t("plan_replace_text", value=self.replace_text_file_var.get().strip() or no_text),
+            self._t("plan_purge_safe", value=yes_text if self.purge_detected_secret_files_var.get() else no_text),
+            self._t("plan_purge_risky", value=yes_text if self.purge_all_detected_secret_files_var.get() else no_text),
+            self._t("plan_force_push", value=yes_text if self.push_var.get() else no_text),
+            self._t("plan_open_report", value=yes_text if self.open_report_var.get() else no_text),
+            self._t("plan_confirm_each_repo", value=yes_text if self.confirm_each_repo_fix_var.get() else no_text),
+            self._t("plan_allow_bypass", value=yes_text if self.allow_non_owner_push_var.get() else no_text),
+            self._t("plan_allowed_owners", value=owners_text),
             "",
-            "Repair baseline changes:",
-            "- May add missing .gitignore patterns",
-            "- May run git rm --cached on tracked-but-ignored files",
-            "- May rewrite history with git-filter-repo depending on the selected options",
+            self._t("repair_baseline_changes"),
+            self._t("baseline_gitignore"),
+            self._t("baseline_untrack"),
+            self._t("baseline_rewrite"),
         ]
 
         if risky_mode:
             lines.extend(
                 [
                     "",
-                    "WARNING: you selected RISKY options (purge all, force push, or owner-guardrail bypass).",
-                    "This can remove historical content irreversibly and/or bypass remote-owner protections.",
+                    self._t("risky_warning_1"),
+                    self._t("risky_warning_2"),
                 ]
             )
 
         lines.append("")
-        lines.append("Explicit summary of audited findings:")
+        lines.append(self._t("audited_findings_summary"))
 
         for rep in self._last_audit_reports_payload:
             name = str(rep.get("name", "(repo)"))
             status = str(rep.get("status", "UNKNOWN"))
-            lines.append(f"- {name} [{status}]")
-            lines.append(f"  * Blocking categories: {self._report_item_count(rep, 'failures')}")
-            lines.append(f"  * Manual-review signals: {self._manual_review_signal_count(rep)}")
+            lines.append(self._t("repo_status_line", name=name, status=status))
+            lines.append(self._t("blocking_categories_line", count=self._report_item_count(rep, "failures")))
+            lines.append(self._t("manual_review_signals_line", count=self._manual_review_signal_count(rep)))
             safe_context_count = self._safe_context_count(rep)
             if safe_context_count:
-                lines.append(f"  * Fixture/documentation matches kept non-blocking: {safe_context_count}")
+                lines.append(self._t("fixture_context_line", count=safe_context_count))
 
             tracked_ignored = self._report_list(rep, "tracked_but_ignored")
             if tracked_ignored:
-                lines.append(f"  * Planned untrack (tracked-but-ignored): {len(tracked_ignored)}")
+                lines.append(self._t("planned_untrack_line", count=len(tracked_ignored)))
 
             if self.rewrite_personal_paths_var.get():
                 path_findings = self._report_list(rep, "tracked_path_matches") + self._report_list(
                     rep,
                     "history_path_matches",
                 )
-                lines.append(f"  * Planned personal-path rewrite: {len(path_findings)} findings")
+                lines.append(self._t("planned_path_rewrite_line", count=len(path_findings)))
             else:
-                lines.append("  * Personal paths: rewrite disabled")
+                lines.append(self._t("personal_paths_disabled"))
 
             if self.purge_all_detected_secret_files_var.get():
                 purge_targets = self._report_list(rep, "secret_file_candidates")
-                lines.append(f"  * Planned Purge RISKY: {len(purge_targets)} candidates")
+                lines.append(self._t("planned_purge_risky_line", count=len(purge_targets)))
                 for item in purge_targets[:4]:
                     lines.append(f"    - {item}")
                 if len(purge_targets) > 4:
-                    lines.append(f"    - ... and {len(purge_targets) - 4} more")
+                    lines.append(self._t("more_items", count=len(purge_targets) - 4))
             elif self.purge_detected_secret_files_var.get():
                 purge_targets = self._report_list(rep, "secret_file_autopurge_candidates")
-                lines.append(f"  * Planned Purge SAFE: {len(purge_targets)} candidates")
+                lines.append(self._t("planned_purge_safe_line", count=len(purge_targets)))
                 for item in purge_targets[:4]:
                     lines.append(f"    - {item}")
                 if len(purge_targets) > 4:
-                    lines.append(f"    - ... and {len(purge_targets) - 4} more")
+                    lines.append(self._t("more_items", count=len(purge_targets) - 4))
             else:
-                lines.append("  * Secret-file purge: disabled")
+                lines.append(self._t("secret_purge_disabled"))
 
         lines.extend(
             [
                 "",
-                "Continue?",
-                "(If you changed the repo selection or options, run Audit again first.)",
+                self._t("continue_question"),
+                self._t("rerun_if_changed"),
             ]
         )
         return "\n".join(lines)
@@ -8889,35 +9702,34 @@ class GuiApp:  # pragma: no cover
     def _confirm_repair_run(self, selected_signature: tuple[str, ...] | None) -> bool:
         if not self._repair_ready:
             self.messagebox.showwarning(
-                "Repair Locked",
-                "Repair becomes available only after a completed audit and a 10-second review window.",
+                self._t("dialog_repair_locked_title"),
+                self._t("dialog_repair_locked_review"),
             )
             return False
 
         if not self._last_audit_reports_payload:
             self.messagebox.showwarning(
-                "Repair Locked",
-                "There are no audit results in this session yet. Run Audit first.",
+                self._t("dialog_repair_locked_title"),
+                self._t("dialog_repair_locked_no_results"),
             )
             return False
 
         if selected_signature != self._last_audit_selection_signature:
             self.messagebox.showwarning(
-                "New Audit Required",
-                "The current repo selection does not match the last audit. Run Audit again before Repair.",
+                self._t("dialog_new_audit_required_title"),
+                self._t("dialog_new_audit_required"),
             )
             return False
 
         plan_message = self._build_repair_confirmation_text(selected_signature)
-        confirmed = self.messagebox.askyesno("Confirm Repair Plan", plan_message)
+        confirmed = self.messagebox.askyesno(self._t("dialog_confirm_repair_title"), plan_message)
         if not confirmed:
             return False
 
         if self._is_risky_repair_selected():
             accepted = self.messagebox.askyesno(
-                "Risk Acceptance Required",
-                "You selected RISKY options (purge all, force push, or owner-guardrail bypass).\n"
-                "Confirm that you accept continuing AT YOUR OWN RISK.",
+                self._t("dialog_risk_title"),
+                self._t("dialog_risk_message"),
             )
             if not accepted:
                 return False
@@ -8934,24 +9746,24 @@ class GuiApp:  # pragma: no cover
         self._run_in_progress = False
         self._active_cancel_token = None
         if run_fix:
-            self._lock_repair_until_next_audit("Repair (run audit again)")
+            self._lock_repair_until_next_audit(self._t("lock_repair_run_again"))
             self._set_active_flow_tab(self._repair_tab_name)
             return
 
         if exit_code == EXIT_ABORTED:
-            self._lock_repair_until_next_audit("Repair (audit cancelled)")
+            self._lock_repair_until_next_audit(self._t("lock_repair_cancelled"))
             self._set_active_flow_tab(self._audit_tab_name)
             self.log("[INFO] Flow: audit cancelled. Run Audit again when you are ready to continue.")
             return
 
         if exit_code == EXIT_RUNTIME_ERROR:
-            self._lock_repair_until_next_audit("Repair (audit failed)")
+            self._lock_repair_until_next_audit(self._t("lock_repair_failed"))
             self._set_active_flow_tab(self._audit_tab_name)
             self.log("[INFO] Flow: audit ended with an operational error. Repair remains locked.")
             return
 
         if selection_signature and selection_signature[0] == "github-owner":
-            self._lock_repair_until_next_audit("Repair (remote audit is audit-only)")
+            self._lock_repair_until_next_audit(self._t("lock_repair_remote"))
             self._set_active_flow_tab(self._audit_tab_name)
             self.log("[INFO] Flow: GitHub owner/org audit finished. Remote audit mode is audit-only.")
             return
@@ -9008,11 +9820,11 @@ class GuiApp:  # pragma: no cover
         root_error = validate_repository_root(root)
         if root_error:
             if root_error.startswith("Root folder does not exist:"):
-                message = "The selected Root folder does not exist.\nChoose a valid directory to load repositories."
+                message = self._t("choose_valid_root")
             elif root_error.startswith("Root path is not a directory:"):
-                message = "The selected Root path is not a directory.\nChoose a valid directory to load repositories."
+                message = self._t("choose_valid_root")
             else:
-                message = f"{root_error}\nChoose a valid directory to load repositories."
+                message = f"{root_error}\n{self._t('choose_valid_root')}"
             self._set_repo_empty_state(
                 True,
                 message,
@@ -9026,7 +9838,7 @@ class GuiApp:  # pragma: no cover
         if discovery_error:
             self._set_repo_empty_state(
                 True,
-                f"{discovery_error}\nChoose a valid directory to load repositories.",
+                f"{discovery_error}\n{self._t('choose_valid_root')}",
                 reason="invalid_root",
             )
             self._update_repo_summary()
@@ -9035,7 +9847,7 @@ class GuiApp:  # pragma: no cover
 
         for repo in discovered:
             if repo == root:
-                self._repo_items.append((f"{root.name} (Current Root)", "."))
+                self._repo_items.append((f"{root.name} ({self._t('current_root_label')})", "."))
             else:
                 self._repo_items.append((repo.name, repo.name))
 
@@ -9047,7 +9859,7 @@ class GuiApp:  # pragma: no cover
 
         self._set_repo_empty_state(
             not self._repo_items,
-            "No git repositories were found under the selected Root.",
+            self._t("repo_summary_no_repos"),
             reason="no_repos",
         )
         self._update_repo_summary()
@@ -9065,7 +9877,7 @@ class GuiApp:  # pragma: no cover
         errors = validate_git_identity_inputs(user_name, user_email)
         if not errors:
             return True
-        self.messagebox.showerror("Invalid Git identity", "\n".join(errors))
+        self.messagebox.showerror(self._t("dialog_invalid_git_identity"), "\n".join(errors))
         return False
 
     def _show_identity_result(self, title: str, success: bool, message: str) -> None:
@@ -9082,8 +9894,8 @@ class GuiApp:  # pragma: no cover
             return
 
         confirmed = self.messagebox.askyesno(
-            "Confirm Global Git Config",
-            "This updates git config --global for all repositories on this machine. Continue?",
+            self._t("dialog_confirm_global_git_config"),
+            self._t("dialog_confirm_global_git_config_message"),
         )
         if not confirmed:
             return
@@ -9097,7 +9909,7 @@ class GuiApp:  # pragma: no cover
         if ok:
             self.owner_name_var.set(user_name)
             self.noreply_var.set(user_email)
-        self._show_identity_result("Global Git Config", ok, msg)
+        self._show_identity_result(self._t("dialog_global_git_config"), ok, msg)
 
     def apply_git_identity_local_clicked(self) -> None:
         user_name, user_email = self._read_identity_inputs()
@@ -9106,7 +9918,7 @@ class GuiApp:  # pragma: no cover
 
         repo_path, error = resolve_identity_repo_path(Path(self.root_var.get()), self._selected_repo_names())
         if error:
-            self.messagebox.showwarning("Local Git Config", error)
+            self.messagebox.showwarning(self._t("dialog_local_git_config"), error)
             return
 
         ok, msg = apply_git_identity_config(
@@ -9118,14 +9930,14 @@ class GuiApp:  # pragma: no cover
         if ok:
             self.owner_name_var.set(user_name)
             self.noreply_var.set(user_email)
-        self._show_identity_result("Local Git Config", ok, msg)
+        self._show_identity_result(self._t("dialog_local_git_config"), ok, msg)
 
     def read_git_identity_clicked(self) -> None:
         selected_repos = self._selected_repo_names()
         if len(selected_repos) > 1:
             self.messagebox.showwarning(
-                "Read Git Identity",
-                "Select zero or one repository to inspect local/effective git identity.",
+                self._t("dialog_read_git_identity"),
+                self._t("dialog_read_git_identity_select_one"),
             )
             return
 
@@ -9134,7 +9946,10 @@ class GuiApp:  # pragma: no cover
         if len(selected_repos) == 1:
             candidate = root / selected_repos[0]
             if not (candidate / ".git").exists():
-                self.messagebox.showwarning("Read Git Identity", f"Not a git repository: {candidate}")
+                self.messagebox.showwarning(
+                    self._t("dialog_read_git_identity"),
+                    self._t("dialog_not_git_repo", candidate=candidate),
+                )
                 return
             repo_path = candidate
         elif (root / ".git").exists():
@@ -9142,20 +9957,20 @@ class GuiApp:  # pragma: no cover
 
         config_values = read_git_identity_config(repo_path=repo_path)
         self.messagebox.showinfo(
-            "Current Git Identity",
+            self._t("dialog_current_git_identity"),
             format_git_identity_status(config_values, repo_path),
         )
         self.log("[INFO] Read current Git identity configuration.")
 
     def open_github_email_settings_clicked(self) -> None:
         ok, msg = open_github_email_settings()
-        self._show_identity_result("GitHub Email Settings", ok, msg)
+        self._show_identity_result(self._t("dialog_github_email_settings"), ok, msg)
 
     def run_clicked(self, run_fix: bool) -> None:
         if self._run_in_progress:
             self.messagebox.showinfo(
-                "Run In Progress",
-                "There is already an execution in progress. Wait until it finishes.",
+                self._t("dialog_run_in_progress"),
+                self._t("dialog_run_in_progress_message"),
             )
             return
 
@@ -9164,8 +9979,8 @@ class GuiApp:  # pragma: no cover
         github_owner = self._github_owner_value()
         if run_fix and github_owner:
             self.messagebox.showwarning(
-                "Remote Audit Is Audit-Only",
-                "GitHub owner/org remote audit cannot be combined with Repair. Clear GitHub Owner / Org before repairing local repositories.",
+                self._t("dialog_remote_audit_only"),
+                self._t("dialog_remote_audit_only_message"),
             )
             return
 
@@ -9176,10 +9991,10 @@ class GuiApp:  # pragma: no cover
             repos_to_run = normalize_repo_filters(selected)
         selection_signature = self._run_selection_signature(repos_to_run, github_owner=github_owner)
         if repos_to_run is None and not github_owner:
-            action_name = "repair" if run_fix else "audit"
+            action_name = self._t("action_repair" if run_fix else "action_audit")
             run_all = self.messagebox.askyesno(
-                "Run all repositories",
-                f"No repositories selected. Run {action_name} for all repositories under Root?",
+                self._t("dialog_run_all_title"),
+                self._t("dialog_run_all_message", action_name=action_name),
             )
             if not run_all:
                 return
@@ -9192,8 +10007,8 @@ class GuiApp:  # pragma: no cover
             max_matches = parse_positive_int(self.max_matches_var.get().strip())
         except argparse.ArgumentTypeError:
             self.messagebox.showwarning(
-                "Invalid Max Matches",
-                "Max matches must be a positive integer.",
+                self._t("dialog_invalid_max_matches"),
+                self._t("dialog_invalid_max_matches_message"),
             )
             return
 
@@ -9202,13 +10017,13 @@ class GuiApp:  # pragma: no cover
                 parse_positive_int(self.github_jobs_var.get().strip())
             except argparse.ArgumentTypeError:
                 self.messagebox.showwarning(
-                    "Invalid GitHub Jobs",
-                    "GitHub clone workers must be a positive integer.",
+                    self._t("dialog_invalid_github_jobs"),
+                    self._t("dialog_invalid_github_jobs_message"),
                 )
                 return
 
         if not run_fix:
-            self._lock_repair_until_next_audit("Repair (audit in progress)")
+            self._lock_repair_until_next_audit(self._t("lock_repair_in_progress"))
 
         self._save_gui_setup_settings(setup_completed=True)
         self._set_setup_settings_visibility(False)
@@ -9305,10 +10120,13 @@ class GuiApp:  # pragma: no cover
                     try:
                         result["value"] = bool(
                             self.messagebox.askyesno(
-                                "Confirm Repair for This Repository",
-                                f"Repository {index}/{total}: {repo_display_name(repo)}\n\n"
-                                "Apply Repair to this repository?\n"
-                                "You can answer No to skip only this repository.",
+                                self._t("confirm_repo_repair_title"),
+                                self._t(
+                                    "confirm_repo_repair_message",
+                                    index=index,
+                                    total=total,
+                                    repo_name=repo_display_name(repo),
+                                ),
                             )
                         )
                     finally:

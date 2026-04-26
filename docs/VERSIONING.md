@@ -30,6 +30,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.3.4` is a GUI contextual-help patch on top of `1.3.3`. It adds hover help and visible info badges for non-obvious setup, GitHub remote audit, identity, repair, and run-control options without changing CLI behavior or report schema.
 
+`1.3.5` is a GUI localization patch on top of `1.3.4`. It adds a persisted English / Spanish (Latin America) GUI language selector and locale catalogs while keeping CLI flags, reports, and `GuardRunConfig` mappings unchanged.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

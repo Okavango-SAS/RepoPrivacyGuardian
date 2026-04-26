@@ -1112,6 +1112,7 @@ def test_gui_settings_payload_excludes_identity_secrets() -> None:
     payload = app._current_gui_settings_payload(setup_completed=True)
 
     assert payload["setup_completed"] is True
+    assert payload["gui_locale"] == rpg.GUI_LOCALE_DEFAULT
     assert payload["github_owner"] == "Acme"
     assert "owner_emails" not in payload
     assert "noreply_email" not in payload
@@ -1126,6 +1127,7 @@ def test_gui_settings_roundtrip_uses_private_json(tmp_path: Path) -> None:
         settings_path,
         {
             "setup_completed": True,
+            "gui_locale": "es-419",
             "root": "C:/repos",
             "github_owner": "Acme",
         },
@@ -1135,6 +1137,7 @@ def test_gui_settings_roundtrip_uses_private_json(tmp_path: Path) -> None:
 
     assert loaded["schema_version"] == rpg.GUI_SETTINGS_SCHEMA_VERSION
     assert loaded["setup_completed"] is True
+    assert loaded["gui_locale"] == "es-419"
     assert loaded["root"] == "C:/repos"
     assert loaded["github_owner"] == "Acme"
 
@@ -1153,6 +1156,14 @@ def test_load_gui_settings_ignores_invalid_files(tmp_path: Path) -> None:
 
     assert rpg.load_gui_settings(invalid_json) == {}
     assert rpg.load_gui_settings(invalid_schema) == {}
+
+
+def test_gui_locale_helpers_normalize_supported_languages() -> None:
+    assert rpg.normalize_gui_locale("en-US") == rpg.GUI_LOCALE_DEFAULT
+    assert rpg.normalize_gui_locale("es_AR") == rpg.GUI_LOCALE_ES_419
+    assert rpg.normalize_gui_locale("Español") == rpg.GUI_LOCALE_ES_419
+    assert rpg.normalize_gui_locale("pt-BR") == rpg.GUI_LOCALE_DEFAULT
+    assert rpg.gui_locale_from_label("Español (Latinoamérica)") == rpg.GUI_LOCALE_ES_419
 
 
 def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
@@ -1345,6 +1356,7 @@ def test_gui_tooltip_catalog_covers_non_obvious_controls() -> None:
         "github_include_forks",
         "github_fast",
         "max_findings",
+        "gui_language",
         "save_setup",
         "advanced_identity",
         "noreply_email",
@@ -1383,7 +1395,17 @@ def test_gui_tooltip_catalog_covers_non_obvious_controls() -> None:
     }
 
     assert required_keys <= set(rpg.GUI_TOOLTIP_TEXT)
-    assert all(rpg.GUI_TOOLTIP_TEXT[key].strip().endswith(".") for key in required_keys)
+    for locale, catalog in rpg.GUI_TOOLTIP_TEXT_BY_LOCALE.items():
+        assert set(catalog) == set(rpg.GUI_TOOLTIP_TEXT), locale
+        assert all(catalog[key].strip().endswith(".") for key in required_keys), locale
+
+
+def test_gui_ui_locale_catalogs_have_parallel_keys() -> None:
+    base_keys = set(rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT])
+
+    assert base_keys
+    for locale, catalog in rpg.GUI_UI_TEXT_BY_LOCALE.items():
+        assert set(catalog) == base_keys, locale
 
 
 def test_gui_lock_default_text_is_english() -> None:
@@ -1531,7 +1553,7 @@ def test_refresh_repos_invalid_root_surfaces_empty_state_and_disables_audit(tmp_
 
     assert "Root folder not found" in app._repo_summary_label.text
     assert app._repo_empty_state_title_label.text == "Root folder not found"
-    assert app._repo_empty_state_body_label.text.startswith("The selected Root folder does not exist.")
+    assert app._repo_empty_state_body_label.text == rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT]["choose_valid_root"]
     assert app._audit_button.kwargs["text"] == "Audit unavailable"
     assert app._audit_button.kwargs["state"] == "disabled"
     assert app._select_all_button.kwargs["state"] == "disabled"
@@ -1772,6 +1794,88 @@ def test_gui_repair_confirmation_text_uses_english_labels() -> None:
     assert "Fixture/documentation matches kept non-blocking: 1" in text
     assert "Continue?" in text
     assert "Se va a ejecutar" not in text
+
+
+def test_gui_repair_confirmation_text_uses_selected_spanish_locale() -> None:
+    class DummyVar:
+        def __init__(self, value):
+            self.value = value
+
+        def get(self):
+            return self.value
+
+    app = object.__new__(rpg.GuiApp)
+    app._gui_locale = rpg.GUI_LOCALE_ES_419
+    app.allowed_remote_owners_var = DummyVar("axeljackal")
+    app.rewrite_personal_paths_var = DummyVar(True)
+    app.replace_text_file_var = DummyVar("ops/replace-text.txt")
+    app.purge_detected_secret_files_var = DummyVar(True)
+    app.purge_all_detected_secret_files_var = DummyVar(False)
+    app.push_var = DummyVar(False)
+    app.open_report_var = DummyVar(True)
+    app.confirm_each_repo_fix_var = DummyVar(True)
+    app.allow_non_owner_push_var = DummyVar(False)
+    app._last_audit_reports_payload = [
+        {
+            "name": "repo-a",
+            "status": "FAIL",
+            "failures": ["secret-like patterns in tracked files"],
+            "tracked_secret_low_confidence": ["settings.py:1:<redacted-secret>"],
+            "tracked_secret_fixture_matches": ["tests/fixtures/example.env:1:<redacted-secret>"],
+            "tracked_but_ignored": ["secret.txt"],
+            "tracked_path_matches": ["<redacted-path>"],
+            "history_path_matches": [],
+            "secret_file_autopurge_candidates": [".env"],
+            "secret_file_candidates": [".env"],
+        }
+    ]
+
+    text = app._build_repair_confirmation_text(("repo-a",))
+
+    assert "Reparar se va a ejecutar con este plan:" in text
+    assert "Categorías bloqueantes: 1" in text
+    assert "Señales manual-review: 1" in text
+    assert "¿Continuar?" in text
+    assert "Repair will run with the following plan:" not in text
+
+
+def test_gui_locale_does_not_change_run_config_payload_mapping() -> None:
+    class DummyVar:
+        def __init__(self, value):
+            self.value = value
+
+        def get(self):
+            return self.value
+
+    def make_app(locale: str):
+        app = object.__new__(rpg.GuiApp)
+        app._gui_locale = locale
+        app.root_var = DummyVar("C:/repos")
+        app.policy_var = DummyVar("docs/POLICY.md")
+        app.report_dir_var = DummyVar("Audit_Results")
+        app.report_json_var = DummyVar("")
+        app.max_matches_var = DummyVar("50")
+        app.github_owner_var = DummyVar("Acme")
+        app.github_repo_filters_var = DummyVar("api")
+        app.github_jobs_var = DummyVar("4")
+        app.public_only_var = DummyVar(True)
+        app.github_include_forks_var = DummyVar(False)
+        app.github_fast_var = DummyVar(True)
+        app.dry_run_var = DummyVar(True)
+        app.low_confidence_blocking_var = DummyVar(False)
+        app.audit_litellm_incident_var = DummyVar(False)
+        app.audit_github_hardening_var = DummyVar(True)
+        app.open_report_var = DummyVar(False)
+        return app
+
+    english_payload = make_app(rpg.GUI_LOCALE_DEFAULT)._current_gui_settings_payload(setup_completed=True)
+    spanish_payload = make_app(rpg.GUI_LOCALE_ES_419)._current_gui_settings_payload(setup_completed=True)
+    english_without_locale = {key: value for key, value in english_payload.items() if key != "gui_locale"}
+    spanish_without_locale = {key: value for key, value in spanish_payload.items() if key != "gui_locale"}
+
+    assert english_without_locale == spanish_without_locale
+    assert english_payload["gui_locale"] == rpg.GUI_LOCALE_DEFAULT
+    assert spanish_payload["gui_locale"] == rpg.GUI_LOCALE_ES_419
 
 
 def test_cli_defaults_follow_current_working_directory(tmp_path: Path) -> None:
