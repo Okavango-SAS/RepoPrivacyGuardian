@@ -160,3 +160,12 @@ The release-readiness UX pass focused on target-state clarity and safer review l
 - The hidden Settings hint now calls out that remote mode ignores the local repository list.
 - The Repair summary and confirmation prompt now separate blocking failure categories, manual-review advisory signals, and fixture/documentation matches kept non-blocking.
 - Regression tests cover the remote target-state surface and the richer Repair review summary.
+
+## 2026-04-26 Contextual-Help Pass
+
+The next GUI pass focused on reducing uncertainty without reopening the first-screen overload:
+
+- Added hover help for non-obvious controls in the main target picker, Settings, GitHub owner/org remote audit, identity setup, Repair options, and run controls.
+- Added visible `i` badges next to advanced Settings and Repair options where hover affordance alone would be too easy to miss.
+- Kept the primary Audit path unchanged: repository selection, Audit, Stop, Refresh, and log remain the visible first-screen workflow.
+- Centralized tooltip copy in code and added regression coverage so future UI options must keep explanatory text.

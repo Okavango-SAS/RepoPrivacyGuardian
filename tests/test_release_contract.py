@@ -1332,6 +1332,60 @@ def test_choose_gui_font_family_falls_back_to_first_candidate() -> None:
     assert picked == "Inter"
 
 
+def test_gui_tooltip_catalog_covers_non_obvious_controls() -> None:
+    required_keys = {
+        "repositories_root",
+        "settings_toggle",
+        "policy_file",
+        "audit_results_folder",
+        "optional_json_copy",
+        "github_owner",
+        "github_repo_filters",
+        "github_clone_workers",
+        "github_include_forks",
+        "github_fast",
+        "max_findings",
+        "save_setup",
+        "advanced_identity",
+        "noreply_email",
+        "placeholder_email",
+        "owner_name",
+        "owner_emails",
+        "git_user_name",
+        "git_user_email",
+        "apply_global_git_config",
+        "apply_local_git_config",
+        "read_current_git_identity",
+        "open_github_email_settings",
+        "public_only",
+        "redact_third_party_emails",
+        "low_confidence_blocking",
+        "dry_run_preview",
+        "audit_github_hardening",
+        "audit_litellm_incident",
+        "open_html_report",
+        "confirm_each_repo_fix",
+        "rewrite_personal_paths",
+        "replace_text_rules",
+        "force_push",
+        "bypass_remote_owner_guardrail",
+        "allowed_remote_owners",
+        "purge_safe_secret_files",
+        "purge_risky_secret_files",
+        "repair_button",
+        "run_audit",
+        "stop_after_current_step",
+        "refresh_repos",
+        "select_all_repos",
+        "clear_selection",
+        "clear_log",
+        "repo_drop_area",
+    }
+
+    assert required_keys <= set(rpg.GUI_TOOLTIP_TEXT)
+    assert all(rpg.GUI_TOOLTIP_TEXT[key].strip().endswith(".") for key in required_keys)
+
+
 def test_gui_lock_default_text_is_english() -> None:
     app = object.__new__(rpg.GuiApp)
     app._repair_cooldown_after_id = None

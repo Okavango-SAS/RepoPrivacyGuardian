@@ -105,6 +105,7 @@ This file captures key design decisions and their rationale.
 - Reduced first-screen overload without changing parity by persisting non-secret GUI setup preferences, collapsing policy/output/GitHub/identity controls into Settings, and keeping all run-config mappings unchanged.
 - Added optional repository-folder drag-and-drop as a target-selection shortcut; Browse/Refresh and CLI `--root/--repos` remain the canonical fallback paths.
 - Clarified the GUI target surface for GitHub owner/org mode so local repository validation errors do not compete with an active remote audit target, and the Repair review summary distinguishes blocking, advisory/manual-review, and safe fixture/documentation context.
+- Added centralized contextual help for non-obvious GUI controls, using hover tooltips and visible `i` badges in advanced Settings and Repair areas without changing run-config mappings.
 - Added parity regression tests for argument validation, defaults, confirmation gate, fix/re-audit flow, and runtime error handling.
 
 ### Residual risk and follow-up

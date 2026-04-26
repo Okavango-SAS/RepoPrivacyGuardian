@@ -1584,6 +1584,110 @@ def gui_font_candidates(platform_name: str | None = None) -> dict[str, tuple[str
     }
 
 
+GUI_TOOLTIP_TEXT: dict[str, str] = {
+    "repositories_root": (
+        "Local folder that contains one or more git repositories. Drop repository folders into the list "
+        "or use Browse/Refresh to update local targets."
+    ),
+    "settings_toggle": "Shows or hides setup-only controls. Saved non-secret preferences stay local to this desktop user.",
+    "policy_file": "Markdown policy file used by both CLI and GUI to define the publication gate rules.",
+    "audit_results_folder": (
+        "Base directory for timestamped JSON, HTML, log, and run-state artifacts. Policy keeps outputs under Audit_Results."
+    ),
+    "optional_json_copy": "Optional second JSON export path for automation. The timestamped report.json is always written.",
+    "github_owner": (
+        "Opt-in remote audit mode for a GitHub user or organization. The GUI discovers matching repositories, "
+        "clones them temporarily, audits them, and keeps Repair locked."
+    ),
+    "github_repo_filters": (
+        "Comma-separated remote repository names to include when GitHub owner/org audit is active. Leave empty "
+        "to discover all matching repositories."
+    ),
+    "github_clone_workers": (
+        "Number of concurrent clone workers for GitHub owner/org audit. Higher values can be faster but use more "
+        "network, disk, and process capacity."
+    ),
+    "github_include_forks": (
+        "Includes forked repositories in GitHub owner/org discovery. Off by default to avoid auditing inherited "
+        "or third-party content unintentionally."
+    ),
+    "github_fast": (
+        "Uses shallow clones in GitHub owner/org audit. Faster for large repos, but history available to the scanner may be limited."
+    ),
+    "max_findings": (
+        "Maximum number of samples retained per check in logs and reports. Lower values keep reports shorter; "
+        "higher values aid deep triage."
+    ),
+    "save_setup": "Stores only non-secret GUI preferences and collapses setup controls so the main view stays focused on Audit.",
+    "advanced_identity": (
+        "Shows optional Git identity and GitHub email privacy controls used when Repair rewrites or redacts identity metadata."
+    ),
+    "noreply_email": "GitHub noreply address used as the safe replacement identity during reviewed repair.",
+    "placeholder_email": "Neutral placeholder used when redacting third-party contributor emails during reviewed repair.",
+    "owner_name": "Display name to use for rewritten owner commits when identity repair is explicitly authorized.",
+    "owner_emails": (
+        "Comma-separated private owner emails that can be replaced with the noreply address during reviewed repair."
+    ),
+    "git_user_name": "Value to read or write for git user.name when applying local/global Git identity settings.",
+    "git_user_email": "Noreply-style email to read or write for git user.email in local/global Git config.",
+    "apply_global_git_config": (
+        "Writes git config --global user.name and user.email for all repositories on this machine after confirmation."
+    ),
+    "apply_local_git_config": "Writes git user.name and user.email only for the selected local repository.",
+    "read_current_git_identity": "Reads effective Git identity without changing local or global Git config.",
+    "open_github_email_settings": (
+        "Opens GitHub email settings so private-email and push-block protections can be verified manually."
+    ),
+    "public_only": (
+        "Filters local targets to repositories whose GitHub origin is publicly reachable. Useful before public-release checks."
+    ),
+    "redact_third_party_emails": (
+        "During Repair, replaces non-owner contributor emails with the placeholder email. It does nothing during Audit."
+    ),
+    "low_confidence_blocking": (
+        "Turns noisy low-confidence email findings into blocking failures. Leave off unless you want a stricter review gate."
+    ),
+    "dry_run_preview": "Runs Repair in preview mode so planned changes are reported without writing to repositories.",
+    "audit_github_hardening": (
+        "Adds read-only GitHub settings checks such as branch protection, Actions permissions, secret scanning, and Dependabot."
+    ),
+    "audit_litellm_incident": "Adds targeted checks for LiteLLM March 2026 supply-chain incident indicators.",
+    "open_html_report": "Opens the generated HTML report automatically after a GUI run finishes.",
+    "confirm_each_repo_fix": (
+        "Prompts before applying Repair to each repository so multi-repo runs can be reviewed one target at a time."
+    ),
+    "rewrite_personal_paths": (
+        "During Repair, rewrites reviewed personal path findings in tracked content and history using replace-text rules."
+    ),
+    "replace_text_rules": "Optional git-filter-repo replace-text file for literal substitutions the tool cannot infer safely.",
+    "force_push": (
+        "After a history rewrite, force-pushes changed history to origin. Use only after backups and collaborator coordination."
+    ),
+    "bypass_remote_owner_guardrail": (
+        "Disables the remote-owner safety check before force push. This is intentionally unsafe and requires explicit acceptance."
+    ),
+    "allowed_remote_owners": "Comma-separated allowlist of remote owners accepted for force-push guardrails.",
+    "purge_safe_secret_files": "Purges secret-file candidates classified as safer to remove automatically after review.",
+    "purge_risky_secret_files": (
+        "Also purges ambiguous/manual-review secret-file candidates. Use only after confirming every candidate."
+    ),
+    "repair_button": "Runs Repair only after a completed Audit and review window unlock the safety gate.",
+    "run_audit": "Runs the publication-gate audit for selected repositories or all visible repositories if confirmed.",
+    "stop_after_current_step": (
+        "Requests cooperative cancellation. The active repository step finishes cleanly before the run stops."
+    ),
+    "refresh_repos": "Reloads local repository targets from the current Root folder.",
+    "select_all_repos": "Selects every visible local repository target for the next Audit or Repair run.",
+    "clear_selection": (
+        "Clears local repository selection. If you run Audit with nothing selected, the GUI asks before running all."
+    ),
+    "clear_log": "Clears only the on-screen log. Existing Audit_Results artifacts are not deleted.",
+    "repo_drop_area": (
+        "Drag local repository folders here to set the Root and selection automatically. Browse/Refresh remains the fallback."
+    ),
+}
+
+
 def choose_gui_font_family(
     candidates: tuple[str, ...],
     available_families: set[str] | None = None,
@@ -6457,6 +6561,7 @@ class GuiApp:  # pragma: no cover
             label="Repositories Root",
             variable=self.root_var,
             title="Choose the repositories root directory",
+            tooltip_key="repositories_root",
         )
 
         row += 1
@@ -6488,6 +6593,7 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._bind_tooltip_key(self._setup_settings_toggle_button, "settings_toggle")
         self._setup_settings_toggle_button.grid(row=0, column=1, sticky="e", padx=(8, 12), pady=10)
 
         row += 1
@@ -6527,6 +6633,7 @@ class GuiApp:  # pragma: no cover
             variable=self.policy_var,
             title="Choose a policy file",
             filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
+            tooltip_key="policy_file",
         )
 
         settings_row += 1
@@ -6536,6 +6643,7 @@ class GuiApp:  # pragma: no cover
             label="Audit Results Folder",
             variable=self.report_dir_var,
             title="Choose the base results directory",
+            tooltip_key="audit_results_folder",
         )
 
         settings_row += 1
@@ -6547,6 +6655,7 @@ class GuiApp:  # pragma: no cover
             title="Choose the extra JSON export path",
             default_extension=".json",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            tooltip_key="optional_json_copy",
         )
 
         settings_row += 1
@@ -6560,74 +6669,82 @@ class GuiApp:  # pragma: no cover
         github_remote_card.grid(row=settings_row, column=0, columnspan=3, sticky="we", padx=14, pady=(4, 10))
         github_remote_card.grid_columnconfigure(1, weight=1)
         github_remote_card.grid_columnconfigure(3, weight=1)
-        ctk.CTkLabel(
+        self._make_field_label(
             github_remote_card,
             text="GitHub Owner / Org",
-            font=self._font(12),
-            text_color="#1E293B",
+            tooltip_key="github_owner",
         ).grid(row=0, column=0, sticky="w", padx=(12, 8), pady=(10, 4))
-        ctk.CTkEntry(
+        github_owner_entry = ctk.CTkEntry(
             github_remote_card,
             textvariable=self.github_owner_var,
             height=32,
             corner_radius=8,
             placeholder_text="optional owner or organization",
-        ).grid(row=0, column=1, sticky="we", padx=(0, 12), pady=(10, 4))
-        ctk.CTkLabel(
+        )
+        self._bind_tooltip_key(github_owner_entry, "github_owner")
+        github_owner_entry.grid(row=0, column=1, sticky="we", padx=(0, 12), pady=(10, 4))
+        self._make_field_label(
             github_remote_card,
             text="Remote repo filters",
-            font=self._font(12),
-            text_color="#1E293B",
+            tooltip_key="github_repo_filters",
         ).grid(row=0, column=2, sticky="w", padx=(0, 8), pady=(10, 4))
-        ctk.CTkEntry(
+        github_filter_entry = ctk.CTkEntry(
             github_remote_card,
             textvariable=self.github_repo_filters_var,
             height=32,
             corner_radius=8,
             placeholder_text="repo-a, repo-b",
-        ).grid(row=0, column=3, sticky="we", padx=(0, 12), pady=(10, 4))
-        ctk.CTkLabel(
+        )
+        self._bind_tooltip_key(github_filter_entry, "github_repo_filters")
+        github_filter_entry.grid(row=0, column=3, sticky="we", padx=(0, 12), pady=(10, 4))
+        self._make_field_label(
             github_remote_card,
             text="Clone workers",
-            font=self._font(12),
-            text_color="#1E293B",
+            tooltip_key="github_clone_workers",
         ).grid(row=1, column=0, sticky="w", padx=(12, 8), pady=(4, 10))
-        ctk.CTkEntry(
+        github_jobs_entry = ctk.CTkEntry(
             github_remote_card,
             textvariable=self.github_jobs_var,
             width=90,
             height=32,
             corner_radius=8,
-        ).grid(row=1, column=1, sticky="w", padx=(0, 12), pady=(4, 10))
-        ctk.CTkCheckBox(
+        )
+        self._bind_tooltip_key(github_jobs_entry, "github_clone_workers")
+        github_jobs_entry.grid(row=1, column=1, sticky="w", padx=(0, 12), pady=(4, 10))
+        github_include_forks_checkbox = ctk.CTkCheckBox(
             github_remote_card,
             text="Include forks",
             variable=self.github_include_forks_var,
             font=self._font(12),
             text_color="#1E293B",
-        ).grid(row=1, column=2, sticky="w", padx=(0, 12), pady=(4, 10))
-        ctk.CTkCheckBox(
+        )
+        self._bind_tooltip_key(github_include_forks_checkbox, "github_include_forks")
+        github_include_forks_checkbox.grid(row=1, column=2, sticky="w", padx=(0, 12), pady=(4, 10))
+        github_fast_checkbox = ctk.CTkCheckBox(
             github_remote_card,
             text="Fast shallow clone",
             variable=self.github_fast_var,
             font=self._font(12),
             text_color="#1E293B",
-        ).grid(row=1, column=3, sticky="w", padx=(0, 12), pady=(4, 10))
+        )
+        self._bind_tooltip_key(github_fast_checkbox, "github_fast")
+        github_fast_checkbox.grid(row=1, column=3, sticky="w", padx=(0, 12), pady=(4, 10))
 
         settings_row += 1
-        ctk.CTkLabel(
+        self._make_field_label(
             setup_settings_frame,
             text="Max findings per check",
-            font=self._font(12),
-            text_color="#1E293B",
+            tooltip_key="max_findings",
         ).grid(row=settings_row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
-        ctk.CTkEntry(
+        max_matches_entry = ctk.CTkEntry(
             setup_settings_frame,
             textvariable=self.max_matches_var,
             width=100,
             height=32,
             corner_radius=8,
-        ).grid(row=settings_row, column=1, sticky="w", pady=(4, 12))
+        )
+        self._bind_tooltip_key(max_matches_entry, "max_findings")
+        max_matches_entry.grid(row=settings_row, column=1, sticky="w", pady=(4, 12))
         ctk.CTkLabel(
             setup_settings_frame,
             text=(
@@ -6643,7 +6760,7 @@ class GuiApp:  # pragma: no cover
         setup_actions = ctk.CTkFrame(setup_settings_frame, fg_color="transparent")
         setup_actions.grid(row=settings_row + 2, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 10))
         setup_actions.grid_columnconfigure(0, weight=1)
-        ctk.CTkButton(
+        save_setup_button = ctk.CTkButton(
             setup_actions,
             text="Save Setup",
             command=self.save_setup_clicked,
@@ -6652,7 +6769,9 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             fg_color=self._support_button_fg,
             hover_color=self._support_button_hover,
-        ).grid(row=0, column=1, sticky="e")
+        )
+        self._bind_tooltip_key(save_setup_button, "save_setup")
+        save_setup_button.grid(row=0, column=1, sticky="e")
 
         advanced_identity_row = ctk.CTkFrame(
             setup_settings_frame,
@@ -6682,6 +6801,7 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._bind_tooltip_key(self._advanced_identity_toggle_button, "advanced_identity")
         self._advanced_identity_toggle_button.grid(row=0, column=1, sticky="e", padx=(8, 12), pady=10)
 
         profile_card = ctk.CTkFrame(
@@ -6713,14 +6833,16 @@ class GuiApp:  # pragma: no cover
         ).grid(row=1, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 6))
 
         row = 2
-        ctk.CTkLabel(profile_card, text="Noreply Email", font=self._font(12), text_color="#1E293B").grid(
+        self._make_field_label(profile_card, text="Noreply Email", tooltip_key="noreply_email").grid(
             row=row,
             column=0,
             sticky="w",
             padx=(14, 8),
             pady=4,
         )
-        ctk.CTkEntry(profile_card, textvariable=self.noreply_var, height=32, corner_radius=8).grid(
+        noreply_entry = ctk.CTkEntry(profile_card, textvariable=self.noreply_var, height=32, corner_radius=8)
+        self._bind_tooltip_key(noreply_entry, "noreply_email")
+        noreply_entry.grid(
             row=row,
             column=1,
             sticky="we",
@@ -6729,14 +6851,16 @@ class GuiApp:  # pragma: no cover
         )
 
         row += 1
-        ctk.CTkLabel(profile_card, text="Placeholder Email", font=self._font(12), text_color="#1E293B").grid(
+        self._make_field_label(profile_card, text="Placeholder Email", tooltip_key="placeholder_email").grid(
             row=row,
             column=0,
             sticky="w",
             padx=(14, 8),
             pady=4,
         )
-        ctk.CTkEntry(profile_card, textvariable=self.placeholder_var, height=32, corner_radius=8).grid(
+        placeholder_entry = ctk.CTkEntry(profile_card, textvariable=self.placeholder_var, height=32, corner_radius=8)
+        self._bind_tooltip_key(placeholder_entry, "placeholder_email")
+        placeholder_entry.grid(
             row=row,
             column=1,
             sticky="we",
@@ -6745,14 +6869,16 @@ class GuiApp:  # pragma: no cover
         )
 
         row += 1
-        ctk.CTkLabel(profile_card, text="Owner Name", font=self._font(12), text_color="#1E293B").grid(
+        self._make_field_label(profile_card, text="Owner Name", tooltip_key="owner_name").grid(
             row=row,
             column=0,
             sticky="w",
             padx=(14, 8),
             pady=4,
         )
-        ctk.CTkEntry(profile_card, textvariable=self.owner_name_var, height=32, corner_radius=8).grid(
+        owner_name_entry = ctk.CTkEntry(profile_card, textvariable=self.owner_name_var, height=32, corner_radius=8)
+        self._bind_tooltip_key(owner_name_entry, "owner_name")
+        owner_name_entry.grid(
             row=row,
             column=1,
             sticky="we",
@@ -6761,13 +6887,14 @@ class GuiApp:  # pragma: no cover
         )
 
         row += 1
-        ctk.CTkLabel(
+        self._make_field_label(
             profile_card,
             text="Private emails to replace",
-            font=self._font(12),
-            text_color="#1E293B",
+            tooltip_key="owner_emails",
         ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
-        ctk.CTkEntry(profile_card, textvariable=self.owner_emails_var, height=32, corner_radius=8).grid(
+        owner_emails_entry = ctk.CTkEntry(profile_card, textvariable=self.owner_emails_var, height=32, corner_radius=8)
+        self._bind_tooltip_key(owner_emails_entry, "owner_emails")
+        owner_emails_entry.grid(
             row=row,
             column=1,
             sticky="we",
@@ -6791,14 +6918,16 @@ class GuiApp:  # pragma: no cover
             text_color=self._text_heading,
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
 
-        ctk.CTkLabel(identity_card, text="git user.name", font=self._font(12), text_color="#1E293B").grid(
+        self._make_field_label(identity_card, text="git user.name", tooltip_key="git_user_name").grid(
             row=1,
             column=0,
             sticky="w",
             padx=(14, 8),
             pady=4,
         )
-        ctk.CTkEntry(identity_card, textvariable=self.git_user_name_var, height=32, corner_radius=8).grid(
+        git_user_name_entry = ctk.CTkEntry(identity_card, textvariable=self.git_user_name_var, height=32, corner_radius=8)
+        self._bind_tooltip_key(git_user_name_entry, "git_user_name")
+        git_user_name_entry.grid(
             row=1,
             column=1,
             sticky="we",
@@ -6806,13 +6935,19 @@ class GuiApp:  # pragma: no cover
             pady=4,
         )
 
-        ctk.CTkLabel(
+        self._make_field_label(
             identity_card,
             text="git user.email (noreply)",
-            font=self._font(12),
-            text_color="#1E293B",
+            tooltip_key="git_user_email",
         ).grid(row=2, column=0, sticky="w", padx=(14, 8), pady=4)
-        ctk.CTkEntry(identity_card, textvariable=self.git_user_email_var, height=32, corner_radius=8).grid(
+        git_user_email_entry = ctk.CTkEntry(
+            identity_card,
+            textvariable=self.git_user_email_var,
+            height=32,
+            corner_radius=8,
+        )
+        self._bind_tooltip_key(git_user_email_entry, "git_user_email")
+        git_user_email_entry.grid(
             row=2,
             column=1,
             sticky="we",
@@ -6833,6 +6968,7 @@ class GuiApp:  # pragma: no cover
             fg_color=self._support_button_fg,
             hover_color=self._support_button_hover,
         )
+        self._bind_tooltip_key(identity_primary_global, "apply_global_git_config")
         identity_primary_global.grid(row=0, column=0, sticky="we", padx=(0, 6), pady=3)
         identity_primary_local = ctk.CTkButton(
             identity_actions,
@@ -6843,6 +6979,7 @@ class GuiApp:  # pragma: no cover
             fg_color=self._support_button_fg,
             hover_color=self._support_button_hover,
         )
+        self._bind_tooltip_key(identity_primary_local, "apply_local_git_config")
         identity_primary_local.grid(row=0, column=1, sticky="we", padx=(6, 6), pady=3)
         identity_secondary_read = ctk.CTkButton(
             identity_actions,
@@ -6852,6 +6989,7 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._bind_tooltip_key(identity_secondary_read, "read_current_git_identity")
         identity_secondary_read.grid(row=0, column=2, sticky="we", padx=(6, 6), pady=3)
         identity_secondary_settings = ctk.CTkButton(
             identity_actions,
@@ -6861,6 +6999,7 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._bind_tooltip_key(identity_secondary_settings, "open_github_email_settings")
         identity_secondary_settings.grid(row=0, column=3, sticky="we", padx=(6, 0), pady=3)
         self._identity_action_buttons = [
             identity_primary_global,
@@ -6926,23 +7065,26 @@ class GuiApp:  # pragma: no cover
         ).grid(row=0, column=1, sticky="e", padx=(0, 12), pady=(10, 2))
 
         safe_items = [
-            ("Only audit public remotes", self.public_only_var),
-            ("Redact third-party emails during repair", self.redact_var),
-            ("Treat low-confidence emails as blocking", self.low_confidence_blocking_var),
-            ("Dry run / preview repair", self.dry_run_var),
-            ("Audit GitHub release hardening", self.audit_github_hardening_var),
-            ("Audit LiteLLM incident (Mar-2026)", self.audit_litellm_incident_var),
-            ("Open HTML report automatically", self.open_report_var),
-            ("Confirm each repository during repair", self.confirm_each_repo_fix_var),
+            ("Only audit public remotes", self.public_only_var, "public_only"),
+            ("Redact third-party emails during repair", self.redact_var, "redact_third_party_emails"),
+            ("Treat low-confidence emails as blocking", self.low_confidence_blocking_var, "low_confidence_blocking"),
+            ("Dry run / preview repair", self.dry_run_var, "dry_run_preview"),
+            ("Audit GitHub release hardening", self.audit_github_hardening_var, "audit_github_hardening"),
+            ("Audit LiteLLM incident (Mar-2026)", self.audit_litellm_incident_var, "audit_litellm_incident"),
+            ("Open HTML report automatically", self.open_report_var, "open_html_report"),
+            ("Confirm each repository during repair", self.confirm_each_repo_fix_var, "confirm_each_repo_fix"),
         ]
-        for idx, (label, var) in enumerate(safe_items, start=1):
-            ctk.CTkCheckBox(
+        for idx, (label, var, tooltip_key) in enumerate(safe_items, start=1):
+            checkbox = ctk.CTkCheckBox(
                 safe_options,
                 text=label,
                 variable=var,
                 font=self._font(12),
                 text_color="#1E293B",
-            ).grid(row=idx, column=0, sticky="w", padx=12, pady=4)
+            )
+            self._bind_tooltip_key(checkbox, tooltip_key)
+            checkbox.grid(row=idx, column=0, sticky="w", padx=12, pady=4)
+            self._make_info_badge_for(safe_options, tooltip_key).grid(row=idx, column=1, sticky="e", padx=(0, 12))
 
         destructive_options = ctk.CTkFrame(
             options_card,
@@ -6980,7 +7122,14 @@ class GuiApp:  # pragma: no cover
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._bind_tooltip_key(self._rewrite_paths_checkbox, "rewrite_personal_paths")
         self._rewrite_paths_checkbox.grid(row=2, column=0, sticky="w", padx=12, pady=(0, 4))
+        self._make_info_badge_for(destructive_options, "rewrite_personal_paths").grid(
+            row=2,
+            column=1,
+            sticky="e",
+            padx=(0, 12),
+        )
         ctk.CTkLabel(
             destructive_options,
             text="Uses reviewed replace-text rules during repair to rewrite detected personal paths.",
@@ -6988,22 +7137,23 @@ class GuiApp:  # pragma: no cover
             text_color="#8A4B10",
         ).grid(row=3, column=0, columnspan=2, sticky="w", padx=36, pady=(0, 6))
 
-        ctk.CTkLabel(
+        self._make_field_label(
             destructive_options,
             text="Additional Replace-Text Rules",
-            font=self._font(12),
-            text_color="#1E293B",
+            tooltip_key="replace_text_rules",
         ).grid(row=4, column=0, sticky="w", padx=12, pady=(4, 0))
         replace_text_row = ctk.CTkFrame(destructive_options, fg_color="transparent")
         replace_text_row.grid(row=5, column=0, columnspan=2, sticky="we", padx=12, pady=(2, 4))
         replace_text_row.grid_columnconfigure(0, weight=1)
-        ctk.CTkEntry(
+        replace_text_entry = ctk.CTkEntry(
             replace_text_row,
             textvariable=self.replace_text_file_var,
             height=32,
             corner_radius=8,
-        ).grid(row=0, column=0, sticky="we", padx=(0, 8))
-        ctk.CTkButton(
+        )
+        self._bind_tooltip_key(replace_text_entry, "replace_text_rules")
+        replace_text_entry.grid(row=0, column=0, sticky="we", padx=(0, 8))
+        replace_text_button = ctk.CTkButton(
             replace_text_row,
             text="Browse…",
             width=92,
@@ -7015,7 +7165,9 @@ class GuiApp:  # pragma: no cover
                 title="Choose an explicit replace-text file",
                 filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
             ),
-        ).grid(row=0, column=1)
+        )
+        self._bind_tooltip_key(replace_text_button, "replace_text_rules")
+        replace_text_button.grid(row=0, column=1)
         ctk.CTkLabel(
             destructive_options,
             text="Optional operator-reviewed literal replacements for cleanup the tool cannot infer safely.",
@@ -7030,7 +7182,9 @@ class GuiApp:  # pragma: no cover
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._bind_tooltip_key(self._push_checkbox, "force_push")
         self._push_checkbox.grid(row=7, column=0, sticky="w", padx=12, pady=(0, 4))
+        self._make_info_badge_for(destructive_options, "force_push").grid(row=7, column=1, sticky="e", padx=(0, 12))
 
         self._allow_non_owner_push_checkbox = ctk.CTkCheckBox(
             destructive_options,
@@ -7040,13 +7194,19 @@ class GuiApp:  # pragma: no cover
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._bind_tooltip_key(self._allow_non_owner_push_checkbox, "bypass_remote_owner_guardrail")
         self._allow_non_owner_push_checkbox.grid(row=8, column=0, sticky="w", padx=12, pady=4)
+        self._make_info_badge_for(destructive_options, "bypass_remote_owner_guardrail").grid(
+            row=8,
+            column=1,
+            sticky="e",
+            padx=(0, 12),
+        )
 
-        ctk.CTkLabel(
+        self._make_field_label(
             destructive_options,
             text="Allowed remote owners",
-            font=self._font(12),
-            text_color="#1E293B",
+            tooltip_key="allowed_remote_owners",
         ).grid(row=9, column=0, sticky="w", padx=12, pady=(4, 0))
         self._allowed_remote_owner_entry = ctk.CTkEntry(
             destructive_options,
@@ -7054,6 +7214,7 @@ class GuiApp:  # pragma: no cover
             height=32,
             corner_radius=8,
         )
+        self._bind_tooltip_key(self._allowed_remote_owner_entry, "allowed_remote_owners")
         self._allowed_remote_owner_entry.grid(
             row=10,
             column=0,
@@ -7077,7 +7238,14 @@ class GuiApp:  # pragma: no cover
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._bind_tooltip_key(self._purge_safe_checkbox, "purge_safe_secret_files")
         self._purge_safe_checkbox.grid(row=12, column=0, sticky="w", padx=12, pady=(0, 4))
+        self._make_info_badge_for(destructive_options, "purge_safe_secret_files").grid(
+            row=12,
+            column=1,
+            sticky="e",
+            padx=(0, 12),
+        )
 
         self._purge_risky_checkbox = ctk.CTkCheckBox(
             destructive_options,
@@ -7087,7 +7255,14 @@ class GuiApp:  # pragma: no cover
             font=self._font(12),
             text_color="#1E293B",
         )
+        self._bind_tooltip_key(self._purge_risky_checkbox, "purge_risky_secret_files")
         self._purge_risky_checkbox.grid(row=13, column=0, sticky="w", padx=12, pady=4)
+        self._make_info_badge_for(destructive_options, "purge_risky_secret_files").grid(
+            row=13,
+            column=1,
+            sticky="e",
+            padx=(0, 12),
+        )
         ctk.CTkLabel(
             destructive_options,
             text="Safe mode skips ambiguous files. Risky mode also includes candidates that still need manual judgment.",
@@ -7161,6 +7336,7 @@ class GuiApp:  # pragma: no cover
             fg_color="#B45309",
             hover_color="#92400E",
         )
+        self._bind_tooltip_key(self._repair_button, "repair_button")
         self._repair_button.grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(
             repair_controls,
@@ -7284,6 +7460,7 @@ class GuiApp:  # pragma: no cover
             fg_color=self._primary_button_fg,
             hover_color=self._primary_button_hover,
         )
+        self._bind_tooltip_key(self._audit_button, "run_audit")
         self._audit_button.pack(side="left", padx=(0, 8))
         self._cancel_button = ctk.CTkButton(
             repo_actions,
@@ -7294,6 +7471,7 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._bind_tooltip_key(self._cancel_button, "stop_after_current_step")
         self._cancel_button.pack(side="left", padx=(0, 8))
         self._refresh_button = ctk.CTkButton(
             repo_actions,
@@ -7305,6 +7483,7 @@ class GuiApp:  # pragma: no cover
             fg_color=self._support_button_fg,
             hover_color=self._support_button_hover,
         )
+        self._bind_tooltip_key(self._refresh_button, "refresh_repos")
         self._refresh_button.pack(side="left")
         self._repo_summary_label = ctk.CTkLabel(
             repos_card,
@@ -7334,7 +7513,9 @@ class GuiApp:  # pragma: no cover
             font=self._font(11),
             text_color=self._text_muted,
         )
-        self._repo_drop_hint_label.grid(row=0, column=0, columnspan=2, sticky="we", padx=10, pady=(8, 0))
+        self._bind_tooltip_key(self._repo_drop_hint_label, "repo_drop_area")
+        self._repo_drop_hint_label.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 0))
+        self._make_info_badge_for(list_shell, "repo_drop_area").grid(row=0, column=1, sticky="e", padx=(0, 10), pady=(8, 0))
 
         self.repo_list = tk.Listbox(
             list_shell,
@@ -7349,6 +7530,7 @@ class GuiApp:  # pragma: no cover
             selectforeground="#F8FAFC",
             font=self._font(11),
         )
+        self._bind_tooltip_key(self.repo_list, "repo_drop_area")
         self.repo_list.grid(row=1, column=0, sticky="nsew", padx=(10, 0), pady=10)
         repo_scroll = ctk.CTkScrollbar(list_shell, orientation="vertical", command=self.repo_list.yview)
         repo_scroll.grid(row=1, column=1, sticky="ns", padx=(8, 10), pady=10)
@@ -7404,6 +7586,7 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._bind_tooltip_key(self._select_all_button, "select_all_repos")
         self._select_all_button.pack(side="left", padx=8)
         self._clear_selection_button = ctk.CTkButton(
             run_controls,
@@ -7414,8 +7597,9 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             **self._secondary_button_options(),
         )
+        self._bind_tooltip_key(self._clear_selection_button, "clear_selection")
         self._clear_selection_button.pack(side="left", padx=8)
-        ctk.CTkButton(
+        clear_log_button = ctk.CTkButton(
             run_controls,
             text="Clear Log",
             command=self.clear_output,
@@ -7423,7 +7607,9 @@ class GuiApp:  # pragma: no cover
             height=34,
             corner_radius=8,
             **self._secondary_button_options(),
-        ).pack(side="left", padx=8)
+        )
+        self._bind_tooltip_key(clear_log_button, "clear_log")
+        clear_log_button.pack(side="left", padx=8)
 
         output_card = ctk.CTkFrame(
             results_row,
@@ -7471,6 +7657,25 @@ class GuiApp:  # pragma: no cover
             "border_color": self._secondary_button_border,
             "text_color": self._secondary_button_text,
         }
+
+    def _tooltip_text(self, key: str) -> str:
+        return GUI_TOOLTIP_TEXT[key]
+
+    def _bind_tooltip_key(self, widget, key: str):
+        self._bind_tooltip(widget, self._tooltip_text(key))
+        return widget
+
+    def _make_info_badge_for(self, parent, key: str):
+        return self._make_info_badge(parent, self._tooltip_text(key))
+
+    def _make_field_label(self, parent, *, text: str, tooltip_key: str | None = None):
+        shell = self.ctk.CTkFrame(parent, fg_color="transparent")
+        label = self.ctk.CTkLabel(shell, text=text, font=self._font(12), text_color=self._text_body)
+        label.pack(side="left")
+        if tooltip_key:
+            self._bind_tooltip_key(label, tooltip_key)
+            self._make_info_badge_for(shell, tooltip_key).pack(side="left", padx=(6, 0))
+        return shell
 
     def _dialog_initial_dir(self, current_value: str) -> str:
         raw_value = current_value.strip()
@@ -7521,22 +7726,34 @@ class GuiApp:  # pragma: no cover
         if selected:
             target_var.set(selected)
 
-    def _add_directory_field(self, parent, *, row: int, label: str, variable, title: str) -> None:
-        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color=self._text_body).grid(
+    def _add_directory_field(
+        self,
+        parent,
+        *,
+        row: int,
+        label: str,
+        variable,
+        title: str,
+        tooltip_key: str | None = None,
+    ) -> None:
+        self._make_field_label(parent, text=label, tooltip_key=tooltip_key).grid(
             row=row,
             column=0,
             sticky="w",
             padx=(14, 8),
             pady=4,
         )
-        self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8).grid(
+        entry = self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8)
+        if tooltip_key:
+            self._bind_tooltip_key(entry, tooltip_key)
+        entry.grid(
             row=row,
             column=1,
             sticky="we",
             padx=(0, 8),
             pady=4,
         )
-        self.ctk.CTkButton(
+        button = self.ctk.CTkButton(
             parent,
             text="Browse…",
             width=92,
@@ -7544,7 +7761,10 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             **self._secondary_button_options(),
             command=lambda: self._browse_directory(variable, title=title),
-        ).grid(row=row, column=2, padx=(0, 14), pady=4)
+        )
+        if tooltip_key:
+            self._bind_tooltip_key(button, tooltip_key)
+        button.grid(row=row, column=2, padx=(0, 14), pady=4)
 
     def _add_file_field(
         self,
@@ -7555,22 +7775,26 @@ class GuiApp:  # pragma: no cover
         variable,
         title: str,
         filetypes,
+        tooltip_key: str | None = None,
     ) -> None:
-        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color=self._text_body).grid(
+        self._make_field_label(parent, text=label, tooltip_key=tooltip_key).grid(
             row=row,
             column=0,
             sticky="w",
             padx=(14, 8),
             pady=4,
         )
-        self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8).grid(
+        entry = self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8)
+        if tooltip_key:
+            self._bind_tooltip_key(entry, tooltip_key)
+        entry.grid(
             row=row,
             column=1,
             sticky="we",
             padx=(0, 8),
             pady=4,
         )
-        self.ctk.CTkButton(
+        button = self.ctk.CTkButton(
             parent,
             text="Browse…",
             width=92,
@@ -7578,7 +7802,10 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             **self._secondary_button_options(),
             command=lambda: self._browse_existing_file(variable, title=title, filetypes=filetypes),
-        ).grid(row=row, column=2, padx=(0, 14), pady=4)
+        )
+        if tooltip_key:
+            self._bind_tooltip_key(button, tooltip_key)
+        button.grid(row=row, column=2, padx=(0, 14), pady=4)
 
     def _add_save_file_field(
         self,
@@ -7590,22 +7817,26 @@ class GuiApp:  # pragma: no cover
         title: str,
         default_extension: str,
         filetypes,
+        tooltip_key: str | None = None,
     ) -> None:
-        self.ctk.CTkLabel(parent, text=label, font=self._font(12), text_color=self._text_body).grid(
+        self._make_field_label(parent, text=label, tooltip_key=tooltip_key).grid(
             row=row,
             column=0,
             sticky="w",
             padx=(14, 8),
             pady=4,
         )
-        self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8).grid(
+        entry = self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8)
+        if tooltip_key:
+            self._bind_tooltip_key(entry, tooltip_key)
+        entry.grid(
             row=row,
             column=1,
             sticky="we",
             padx=(0, 8),
             pady=4,
         )
-        self.ctk.CTkButton(
+        button = self.ctk.CTkButton(
             parent,
             text="Save As…",
             width=92,
@@ -7618,7 +7849,10 @@ class GuiApp:  # pragma: no cover
                 default_extension=default_extension,
                 filetypes=filetypes,
             ),
-        ).grid(row=row, column=2, padx=(0, 14), pady=4)
+        )
+        if tooltip_key:
+            self._bind_tooltip_key(button, tooltip_key)
+        button.grid(row=row, column=2, padx=(0, 14), pady=4)
 
     def _get_logical_window_width(self) -> int:
         geometry = self.root.wm_geometry().split("+", maxsplit=1)[0]

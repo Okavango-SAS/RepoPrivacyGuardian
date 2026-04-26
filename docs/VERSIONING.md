@@ -28,6 +28,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.3.3` is a GUI/UX hardening patch on top of `1.3.2`. It clarifies remote GitHub owner/org audit mode in the repository picker, keeps local Root errors from competing with audit-only remote targets, and makes the Repair review summary distinguish blocking categories, manual-review signals, and non-blocking fixture/documentation context without changing CLI behavior or report schema.
 
+`1.3.4` is a GUI contextual-help patch on top of `1.3.3`. It adds hover help and visible info badges for non-obvious setup, GitHub remote audit, identity, repair, and run-control options without changing CLI behavior or report schema.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

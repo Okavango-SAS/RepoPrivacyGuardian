@@ -4,6 +4,16 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-04-26
+
+GUI contextual-help UX hardening update.
+
+### Added
+
+- Added centralized GUI tooltip copy for non-obvious setup, GitHub remote audit, identity, repair, and run-control options.
+- Added hover help and visible `i` badges across advanced Settings and Repair options so operators can inspect intent, safety impact, and scope without expanding docs.
+- Added regression coverage for the GUI contextual-help catalog so future UI controls cannot silently lose explanatory copy.
+
 ## [1.3.3] - 2026-04-26
 
 GUI target-mode and repair-review UX hardening update.

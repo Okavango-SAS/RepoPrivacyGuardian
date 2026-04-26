@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.3.3"
-CURRENT_VERSION_DESCRIPTION = "GUI target-mode and repair-review UX hardening"
+CURRENT_VERSION = "1.3.4"
+CURRENT_VERSION_DESCRIPTION = "GUI contextual-help UX hardening"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
