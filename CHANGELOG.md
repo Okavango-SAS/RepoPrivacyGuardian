@@ -4,6 +4,10 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Added a concise bilingual README opening so Spanish-speaking GUI users can understand the tool and launch the localized desktop path without duplicating the full technical documentation.
+
 ## [1.3.5] - 2026-04-26
 
 GUI locale selector and parity hardening update.

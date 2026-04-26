@@ -1940,6 +1940,9 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "clear old `dist/`, `build/`, and `*.egg-info/` outputs",
         "1. install the base CLI",
         "Axel E. Sacca",
+        "Español (Latinoamérica)",
+        "La CLI se mantiene en inglés para preservar compatibilidad con automatizaciones",
+        'python -m pip install ".[gui]"',
     ]
 
     for snippet in required_snippets:

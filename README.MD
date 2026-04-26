@@ -9,6 +9,21 @@
 
 It is designed for repeatable CLI execution first, with an optional desktop GUI that runs on the same underlying pipeline. Built and maintained by **Axel E. Sacca**.
 
+## 🌎 Language / Idioma
+
+**Español (Latinoamérica).** Repo Privacy Guardian te ayuda a revisar repositorios Git antes de publicarlos: detecta secretos, metadatos de identidad Git, rutas personales, archivos sensibles e inconsistencias de `.gitignore`, y genera evidencia local en JSON, HTML y log. La CLI se mantiene en inglés para preservar compatibilidad con automatizaciones, pero la GUI permite elegir `Español (Latinoamérica)` sin cambiar el comportamiento ni los reportes.
+
+Para abrir la GUI en español desde este checkout:
+
+```sh
+python -m pip install ".[gui]"
+repo-privacy-guardian --gui
+```
+
+Luego abrí `Settings` (`Configuración`) → `GUI Language` (`Idioma de la GUI`) → `Español (Latinoamérica)`.
+
+**English.** Repo Privacy Guardian audits Git repositories before public release: it detects secrets, Git identity metadata, personal paths, sensitive files, and `.gitignore` drift, then writes local JSON, HTML, and log evidence. The CLI remains English for automation compatibility, while the GUI can switch between `English` and `Español (Latinoamérica)` without changing behavior or reports.
+
 ## ✨ Why This Exists
 
 - Catch sensitive Git identity metadata before it leaks.
