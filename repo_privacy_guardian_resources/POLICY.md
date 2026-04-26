@@ -143,7 +143,8 @@ Recommended baseline:
 - Disable force pushes and branch deletion on the protected branch.
 - Require status checks for CI before merge.
 - Restrict GitHub Actions, require SHA pinning, keep default workflow permissions at `read`, and do not allow Actions to approve pull requests.
-- Enable Dependabot vulnerability alerts and automated security fixes.
+- Enable Dependabot vulnerability alerts, automated security fixes, secret scanning, and secret scanning push protection.
+- Enable immutable releases when the repository publishes release assets.
 - Keep issues enabled if you want community reports; disable wiki/projects when they are not intentionally part of the repository workflow.
 
 Optional Repo Privacy Guardian command:
@@ -152,13 +153,30 @@ Optional Repo Privacy Guardian command:
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening
 ```
 
-Admin-only GitHub checks require one of these environment variables:
+GitHub hardening is audit-only. Repo Privacy Guardian does not change remote repository settings.
+
+Checks that can run without authentication:
+
+- local `.github/CODEOWNERS`
+- public repository metadata, including visibility, archived/disabled state, issues, wiki, projects, and auto-merge
+- private vulnerability reporting for public repositories when GitHub allows unauthenticated metadata reads
+
+Token-gated checks:
+
+- default branch protection and stale required status checks
+- Actions policy, SHA pinning, and default `GITHUB_TOKEN` workflow permissions
+- Dependabot vulnerability alerts, Dependabot security updates, and open Dependabot alert presence
+- secret scanning configuration, push protection, and open secret-scanning alert presence
+- immutable releases
+
+Use one of these token sources for token-gated checks:
 
 - `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`
 - `GITHUB_TOKEN`
 - `GH_TOKEN`
+- authenticated GitHub CLI session via `gh auth login`
 
-Without a token, Repo Privacy Guardian still audits local `CODEOWNERS` and public repository metadata, but branch protection, Actions permissions, and security-alert checks remain partial.
+GitHub determines coverage from the token permissions. Branch protection, Actions, Dependabot security updates, and immutable releases typically require repository `Administration` read access. Dependabot and secret-scanning alert listing require security-alert access such as `security_events`, `Dependabot alerts` read, or an equivalent admin/security-manager role. Alert findings stay redacted: reports count/open-state risk only and do not include raw secret values or dependency names from GitHub API alert payloads.
 
 Optional GitHub owner/org remote audit:
 

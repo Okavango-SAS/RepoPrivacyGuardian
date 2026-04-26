@@ -16,6 +16,9 @@ README_REQUIREMENTS = [
     "--github-owner",
     "DOGFOODING",
     "confirmed leaks, intentional fixtures/examples",
+    "Token-gated coverage",
+    "secret scanning configuration",
+    "immutable releases",
 ]
 
 CHECKLIST_REQUIREMENTS = [
@@ -37,12 +40,18 @@ POLICY_REQUIREMENTS = [
     "malformed non-email identity tokens",
     'git log --all --pretty=format:"%h %an <%ae> | %cn <%ce>"',
     "--github-owner",
+    "Checks that can run without authentication",
+    "Token-gated checks",
+    "secret scanning push protection",
+    "Alert findings stay redacted",
 ]
 
 TROUBLESHOOTING_REQUIREMENTS = [
     "## GUI stop feels delayed",
     "Stop After Current Step",
     "Stopping after current step...",
+    "token-gated GitHub settings are not fully inspected",
+    "security-alert access",
 ]
 
 VERSIONING_REQUIREMENTS = [

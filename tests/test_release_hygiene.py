@@ -202,11 +202,18 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
     assert "winget" in readme
     assert "GitHub MCP is not a prerequisite" in readme
     assert "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN" in readme
+    assert "Token-gated coverage" in readme
+    assert "secret scanning configuration" in readme
+    assert "immutable releases" in readme
     assert ".env.example" in readme
     assert "--audit-github-hardening" in agents
     assert "--check-tooling" in agents
     assert "winget" in agents
     assert "branch protection" in policy.lower()
+    assert "Checks that can run without authentication" in policy
+    assert "Token-gated checks" in policy
+    assert "secret scanning push protection" in policy
+    assert "Alert findings stay redacted" in policy
 
 
 def test_changelog_records_stable_release() -> None:

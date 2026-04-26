@@ -9,11 +9,13 @@ All notable public-release changes to this project are documented here.
 - Added a tracked `DESIGN.md` design-token guide for future GUI changes.
 - Added GUI drag-and-drop support for local repository folders through the optional GUI drag-and-drop runtime.
 - Added a dogfooding audit-only runbook and agent prompt for using Repo Privacy Guardian defensively on other repositories while preserving redacted evidence.
+- Added broader audit-only GitHub hardening coverage for repository visibility, secret scanning and push protection, open secret/Dependabot alert presence, private vulnerability reporting, and immutable releases.
 
 ### Changed
 
 - Simplified the GUI first screen by keeping only the normal Audit path prominent after setup and moving policy/output/GitHub/identity controls into a collapsible Settings area with local non-secret preference persistence.
 - Tightened agentic audit guidance to require finding classification before remediation and to avoid pasting raw sensitive evidence.
+- Clarified GitHub hardening operator messages and documentation so unauthenticated checks, token-gated checks, and required admin/security permissions are explicit.
 
 ### Fixed
 

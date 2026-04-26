@@ -48,13 +48,17 @@ What to do:
 Symptoms:
 
 - `github_hardening_warnings` mention missing authentication
-- admin-only GitHub settings are not fully inspected
+- token-gated GitHub settings are not fully inspected
+- warnings mention missing security and analysis metadata even though a token is configured
 
 What to do:
 
 - set `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN`
 - or authenticate GitHub CLI with `gh auth login`
+- confirm the token has the needed repository permissions: `Administration` read for branch protection, Actions, immutable releases, and Dependabot security updates; security-alert access such as `security_events` or `Dependabot alerts` read for alert listings
 - rerun `--audit-github-hardening`
+
+Without auth, expected coverage is limited to local `CODEOWNERS`, public repository metadata, and public private-vulnerability-reporting metadata when available.
 
 ## `gh` is installed but still not enough
 

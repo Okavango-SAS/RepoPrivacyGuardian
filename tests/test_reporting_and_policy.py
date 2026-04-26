@@ -126,6 +126,69 @@ def _make_guard(root: Path, logger=None) -> rpg.RepoPublicationGuard:
     )
 
 
+def _github_ok_repo_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "default_branch": "main",
+        "visibility": "public",
+        "private": False,
+        "archived": False,
+        "disabled": False,
+        "has_issues": True,
+        "has_wiki": False,
+        "has_projects": False,
+        "allow_auto_merge": False,
+        "security_and_analysis": {
+            "secret_scanning": {"status": "enabled"},
+            "secret_scanning_push_protection": {"status": "enabled"},
+            "dependabot_security_updates": {"status": "enabled"},
+            "dependency_graph": {"status": "enabled"},
+        },
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _github_ok_hardening_response(url: str) -> tuple[object | None, str] | None:
+    if url.endswith("/private-vulnerability-reporting"):
+        return {"enabled": True}, "http_200"
+    if url.endswith("/actions/permissions"):
+        return {
+            "enabled": True,
+            "allowed_actions": "selected",
+            "sha_pinning_required": True,
+        }, "http_200"
+    if url.endswith("/actions/permissions/workflow"):
+        return {
+            "default_workflow_permissions": "read",
+            "can_approve_pull_request_reviews": False,
+        }, "http_200"
+    if url.endswith("/automated-security-fixes"):
+        return {"enabled": True, "paused": False}, "http_200"
+    if "dependabot/alerts" in url or "secret-scanning/alerts" in url:
+        return [], "http_200"
+    if url.endswith("/immutable-releases"):
+        return {"enabled": True, "enforced_by_owner": False}, "http_200"
+    if "/branches/" in url and url.endswith("/protection"):
+        return {
+            "required_pull_request_reviews": {
+                "required_approving_review_count": 1,
+                "require_code_owner_reviews": True,
+                "dismiss_stale_reviews": True,
+                "bypass_pull_request_allowances": {
+                    "users": [],
+                    "teams": [],
+                    "apps": [],
+                },
+            },
+            "required_conversation_resolution": {"enabled": True},
+            "required_status_checks": {"strict": True, "contexts": ["ci"]},
+            "allow_force_pushes": {"enabled": False},
+            "allow_deletions": {"enabled": False},
+            "enforce_admins": {"enabled": True},
+        }, "http_200"
+    return None
+
+
 def test_secret_content_patterns_include_specific_provider_tokens() -> None:
     samples = [
         "gho_" + ("A" * 36),
@@ -1440,42 +1503,10 @@ def test_github_helper_module_audit_resolves_token_by_default(tmp_path: Path, mo
 
     def fake_get_json(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
         seen_tokens.append(token)
-        if url.endswith("/actions/permissions"):
-            return ({"allowed_actions": "selected", "sha_pinning_required": True}, "http_200")
-        if url.endswith("/actions/permissions/workflow"):
-            return (
-                {
-                    "default_workflow_permissions": "read",
-                    "can_approve_pull_request_reviews": False,
-                },
-                "http_200",
-            )
-        if url.endswith("/automated-security-fixes"):
-            return ({"enabled": True, "paused": False}, "http_200")
-        if "/branches/" in url and url.endswith("/protection"):
-            return (
-                {
-                    "required_pull_request_reviews": {
-                        "required_approving_review_count": 1,
-                        "require_code_owner_reviews": True,
-                        "dismiss_stale_reviews": True,
-                    },
-                    "required_conversation_resolution": {"enabled": True},
-                    "required_status_checks": {"strict": True, "contexts": ["ci"]},
-                    "allow_force_pushes": {"enabled": False},
-                    "allow_deletions": {"enabled": False},
-                },
-                "http_200",
-            )
-        return (
-            {
-                "default_branch": "main",
-                "has_wiki": False,
-                "has_projects": False,
-                "allow_auto_merge": False,
-            },
-            "http_200",
-        )
+        response = _github_ok_hardening_response(url)
+        if response is not None:
+            return response
+        return _github_ok_repo_payload(), "http_200"
 
     monkeypatch.setattr(
         rpg_github,
@@ -1710,12 +1741,17 @@ def test_audit_github_release_hardening_warns_when_admin_checks_are_skipped(tmp_
     codeowners = tmp_path / ".github" / "CODEOWNERS"
     codeowners.parent.mkdir(parents=True)
     codeowners.write_text("* @owner\n", encoding="utf-8")
+    seen_urls: list[str] = []
+    seen_tokens: list[str | None] = []
 
-    monkeypatch.setattr(
-        rpg,
-        "github_api_get_json",
-        lambda url, token=None: ({"default_branch": "main", "has_wiki": False, "has_projects": False}, "http_200"),
-    )
+    def fake_get_json(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
+        seen_urls.append(url)
+        seen_tokens.append(token)
+        if url.endswith("/private-vulnerability-reporting"):
+            return {"enabled": True}, "http_200"
+        return _github_ok_repo_payload(security_and_analysis=None), "http_200"
+
+    monkeypatch.setattr(rpg, "github_api_get_json", fake_get_json)
 
     findings, warnings = rpg.audit_github_release_hardening(
         repo=tmp_path,
@@ -1724,14 +1760,21 @@ def test_audit_github_release_hardening_warns_when_admin_checks_are_skipped(tmp_
     )
 
     assert findings == []
-    assert any("Admin-only GitHub hardening checks were skipped" in item for item in warnings)
+    assert any("Token-gated GitHub hardening checks were skipped" in item for item in warnings)
+    assert any("Unauthenticated coverage is limited" in item for item in warnings)
+    assert all(token == "" for token in seen_tokens)
+    assert any(url.endswith("/private-vulnerability-reporting") for url in seen_urls)
+    assert not any("/branches/" in url for url in seen_urls)
+    assert not any("/actions/permissions" in url for url in seen_urls)
+    assert not any("/secret-scanning/alerts" in url for url in seen_urls)
+    assert not any("/dependabot/alerts" in url for url in seen_urls)
 
 
 def test_audit_github_release_hardening_reports_missing_controls(tmp_path: Path, monkeypatch) -> None:
     def fake_get_json(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
         assert token == "gh-admin-token"
         if url.endswith("/actions/permissions"):
-            return ({"allowed_actions": "all", "sha_pinning_required": False}, "http_200")
+            return ({"enabled": False, "allowed_actions": "all", "sha_pinning_required": False}, "http_200")
         if url.endswith("/actions/permissions/workflow"):
             return (
                 {
@@ -1742,6 +1785,23 @@ def test_audit_github_release_hardening_reports_missing_controls(tmp_path: Path,
             )
         if url.endswith("/automated-security-fixes"):
             return ({"enabled": False, "paused": False}, "http_200")
+        if "dependabot/alerts" in url:
+            return (
+                [
+                    {
+                        "number": 1,
+                        "state": "open",
+                        "dependency": {"package": {"name": "private-package-name"}},
+                    }
+                ],
+                "http_200",
+            )
+        if "secret-scanning/alerts" in url:
+            return ([{"number": 2, "state": "open", "secret": "raw-secret-value"}], "http_200")
+        if url.endswith("/immutable-releases"):
+            return (None, "http_404")
+        if url.endswith("/private-vulnerability-reporting"):
+            return ({"enabled": False}, "http_200")
         if url.endswith("/branches/main/protection"):
             return (
                 {
@@ -1749,21 +1809,37 @@ def test_audit_github_release_hardening_reports_missing_controls(tmp_path: Path,
                         "required_approving_review_count": 0,
                         "require_code_owner_reviews": False,
                         "dismiss_stale_reviews": False,
+                        "bypass_pull_request_allowances": {
+                            "users": [{"login": "release-admin"}],
+                            "teams": [],
+                            "apps": [],
+                        },
                     },
                     "required_conversation_resolution": {"enabled": False},
                     "required_status_checks": None,
                     "allow_force_pushes": {"enabled": True},
                     "allow_deletions": {"enabled": True},
+                    "enforce_admins": {"enabled": False},
                 },
                 "http_200",
             )
         return (
-            {
-                "default_branch": "main",
-                "has_wiki": True,
-                "has_projects": True,
-                "allow_auto_merge": True,
-            },
+            _github_ok_repo_payload(
+                visibility="private",
+                private=True,
+                archived=True,
+                disabled=True,
+                has_issues=False,
+                has_wiki=True,
+                has_projects=True,
+                allow_auto_merge=True,
+                security_and_analysis={
+                    "secret_scanning": {"status": "disabled"},
+                    "secret_scanning_push_protection": {"status": "disabled"},
+                    "dependabot_security_updates": {"status": "disabled"},
+                    "dependency_graph": {"status": "disabled"},
+                },
+            ),
             "http_200",
         )
 
@@ -1782,22 +1858,39 @@ def test_audit_github_release_hardening_reports_missing_controls(tmp_path: Path,
 
     assert warnings == []
     assert any(".github/CODEOWNERS is missing" in item for item in findings)
+    assert any("repository is private" in item for item in findings)
+    assert any("repository is archived" in item for item in findings)
+    assert any("repository is disabled" in item for item in findings)
+    assert any("issues are disabled" in item for item in findings)
     assert any("wiki is enabled" in item for item in findings)
     assert any("projects are enabled" in item for item in findings)
     assert any("auto-merge is enabled" in item for item in findings)
+    assert any("secret scanning status is disabled" in item for item in findings)
+    assert any("secret scanning push protection status is disabled" in item for item in findings)
+    assert any("Dependabot security updates status is disabled" in item for item in findings)
+    assert any("dependency graph status is disabled" in item for item in findings)
+    assert any("private vulnerability reporting is not enabled" in item for item in findings)
     assert any("approving review is not required" in item for item in findings)
     assert any("code owner reviews are not required" in item for item in findings)
     assert any("stale reviews are not dismissed" in item for item in findings)
+    assert any("bypass allowances are configured" in item for item in findings)
     assert any("conversation resolution is not required" in item for item in findings)
     assert any("required status checks are not configured" in item for item in findings)
     assert any("force pushes are allowed" in item for item in findings)
     assert any("branch deletion is allowed" in item for item in findings)
+    assert any("administrators can bypass branch protection" in item for item in findings)
+    assert any("Actions are disabled" in item for item in findings)
     assert any("all external actions are allowed" in item for item in findings)
     assert any("SHA pinning is not required" in item for item in findings)
     assert any("workflow permissions are broader than read-only" in item for item in findings)
     assert any("allow PR approval" in item for item in findings)
     assert any("vulnerability alerts are disabled" in item for item in findings)
     assert any("automated security fixes are disabled or paused" in item for item in findings)
+    assert any("Dependabot alerts" in item and "open alert" in item for item in findings)
+    assert any("secret scanning alerts" in item and "open alert" in item for item in findings)
+    assert any("immutable releases are not enabled" in item for item in findings)
+    assert not any("raw-secret-value" in item for item in findings)
+    assert not any("private-package-name" in item for item in findings)
 
 
 def test_audit_github_release_hardening_reports_stale_required_status_checks(tmp_path: Path, monkeypatch) -> None:
@@ -1833,18 +1926,9 @@ def test_audit_github_release_hardening_reports_stale_required_status_checks(tmp
 
     def fake_get_json(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
         assert token == "gh-admin-token"
-        if url.endswith("/actions/permissions"):
-            return ({"allowed_actions": "selected", "sha_pinning_required": True}, "http_200")
-        if url.endswith("/actions/permissions/workflow"):
-            return (
-                {
-                    "default_workflow_permissions": "read",
-                    "can_approve_pull_request_reviews": False,
-                },
-                "http_200",
-            )
-        if url.endswith("/automated-security-fixes"):
-            return ({"enabled": True, "paused": False}, "http_200")
+        response = _github_ok_hardening_response(url)
+        if response is not None and not ("/branches/" in url and url.endswith("/protection")):
+            return response
         if url.endswith("/branches/main/protection"):
             return (
                 {
@@ -1852,6 +1936,11 @@ def test_audit_github_release_hardening_reports_stale_required_status_checks(tmp
                         "required_approving_review_count": 1,
                         "require_code_owner_reviews": True,
                         "dismiss_stale_reviews": True,
+                        "bypass_pull_request_allowances": {
+                            "users": [],
+                            "teams": [],
+                            "apps": [],
+                        },
                     },
                     "required_conversation_resolution": {"enabled": True},
                     "required_status_checks": {
@@ -1863,18 +1952,11 @@ def test_audit_github_release_hardening_reports_stale_required_status_checks(tmp
                     },
                     "allow_force_pushes": {"enabled": False},
                     "allow_deletions": {"enabled": False},
+                    "enforce_admins": {"enabled": True},
                 },
                 "http_200",
             )
-        return (
-            {
-                "default_branch": "main",
-                "has_wiki": False,
-                "has_projects": False,
-                "allow_auto_merge": False,
-            },
-            "http_200",
-        )
+        return _github_ok_repo_payload(), "http_200"
 
     monkeypatch.setattr(rpg, "github_api_get_json", fake_get_json)
     monkeypatch.setattr(rpg, "github_api_probe_enabled", lambda url, token=None: (True, "http_204"))
@@ -1900,42 +1982,10 @@ def test_audit_github_release_hardening_uses_resolved_token_for_repo_metadata(tm
 
     def fake_get_json(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
         seen_tokens.append(token)
-        if url.endswith("/actions/permissions"):
-            return ({"allowed_actions": "selected", "sha_pinning_required": True}, "http_200")
-        if url.endswith("/actions/permissions/workflow"):
-            return (
-                {
-                    "default_workflow_permissions": "read",
-                    "can_approve_pull_request_reviews": False,
-                },
-                "http_200",
-            )
-        if url.endswith("/automated-security-fixes"):
-            return ({"enabled": True, "paused": False}, "http_200")
-        if url.endswith("/branches/main/protection"):
-            return (
-                {
-                    "required_pull_request_reviews": {
-                        "required_approving_review_count": 1,
-                        "require_code_owner_reviews": True,
-                        "dismiss_stale_reviews": True,
-                    },
-                    "required_conversation_resolution": {"enabled": True},
-                    "required_status_checks": {"strict": True, "contexts": ["ci"]},
-                    "allow_force_pushes": {"enabled": False},
-                    "allow_deletions": {"enabled": False},
-                },
-                "http_200",
-            )
-        return (
-            {
-                "default_branch": "main",
-                "has_wiki": False,
-                "has_projects": False,
-                "allow_auto_merge": False,
-            },
-            "http_200",
-        )
+        response = _github_ok_hardening_response(url)
+        if response is not None:
+            return response
+        return _github_ok_repo_payload(), "http_200"
 
     monkeypatch.setattr(rpg, "resolve_github_hardening_token", lambda env=None, runner=None: "gh-admin-token")
     monkeypatch.setattr(rpg, "github_api_get_json", fake_get_json)

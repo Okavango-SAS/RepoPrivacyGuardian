@@ -118,7 +118,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - The current readiness flow checks Git, GUI dependencies, rewrite tooling, Windows App Installer / `winget`, and GitHub hardening auth helpers when those features are relevant.
 - In `--gui` mode, when the desktop preflight detects supported missing prerequisites, the app offers a popup to install them and retry startup automatically.
 - In the GUI, enabling GitHub hardening also offers optional installation/repair of `gh`, and on Windows it can bootstrap App Installer / `winget` from the official Microsoft bundle when possible.
-- For GitHub hardening admin checks, the supported helpers are token environment variables or an authenticated GitHub CLI (`gh auth login`).
+- For GitHub hardening token-gated checks, the supported helpers are token environment variables or an authenticated GitHub CLI (`gh auth login`).
 - GitHub MCP is not a prerequisite for the standalone CLI/Desktop tool and is not required for end-user installations.
 - `.env.example` is tracked as a reference for optional GitHub auth variables, but the tool does not auto-load it.
 
@@ -282,7 +282,23 @@ Optional GitHub hardening audit for public-release settings:
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening
 ```
 
-If you want the branch-protection, Actions-permissions, and security-alert checks too, provide a repo-admin token via `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN` before running the command.
+This mode is audit-only: it reports advisory `github_hardening_findings` and `github_hardening_warnings`, but it does not change repository settings.
+
+Coverage without authentication:
+
+- local `.github/CODEOWNERS`
+- public repository metadata such as visibility, archived/disabled state, wiki/projects/issues, and auto-merge
+- private vulnerability reporting for public repositories when GitHub allows unauthenticated metadata reads
+
+Token-gated coverage:
+
+- default branch protection and required status-check drift
+- Actions repository policy, SHA pinning, and default `GITHUB_TOKEN` workflow permissions
+- Dependabot vulnerability alerts, Dependabot security updates, and open Dependabot alert presence
+- secret scanning configuration, push protection, and open secret-scanning alert presence
+- immutable releases
+
+Use `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, or an authenticated `gh auth login` session for token-gated checks. GitHub still decides completion from the token permissions: branch protection, Actions, Dependabot security updates, and immutable releases typically require repository `Administration` read access; Dependabot and secret-scanning alert listing require security-alert permissions such as `security_events`, `Dependabot alerts` read, or an equivalent admin/security-manager role. Reports only state that open alerts exist; they do not copy secret values or dependency names from GitHub alert payloads.
 
 Opt-in GitHub owner/org remote audit:
 

@@ -69,6 +69,13 @@ Supported GitHub hardening auth variables:
 
 These variables are optional unless you want fuller admin visibility for `--audit-github-hardening`.
 
+GitHub hardening coverage is tiered:
+
+- no auth: local `CODEOWNERS`, public repository metadata, and public private-vulnerability-reporting metadata when GitHub allows it
+- token-gated: branch protection, Actions permissions, default `GITHUB_TOKEN` workflow permissions, Dependabot alerts/security updates, secret scanning alerts/configuration, and immutable releases
+
+Use a token or authenticated `gh` session with repository admin/security permissions for the complete audit. The check remains audit-only and does not mutate GitHub settings.
+
 ## Artifacts and outputs
 
 Operational outputs remain local by default:

@@ -1296,7 +1296,11 @@ def build_github_tooling_check() -> ToolingCheck:
             name="github-auth",
             state="ready",
             blocking=False,
-            detail="GitHub hardening admin checks can use a configured token or GitHub CLI token.",
+            detail=(
+                "GitHub hardening token-gated checks can use a configured token or GitHub CLI token. "
+                "Branch protection, Actions, immutable releases, and security-alert checks may require "
+                "Administration(read), Dependabot alerts(read), or security_events-equivalent access."
+            ),
         )
 
     gh_available, gh_error = probe_command_available("gh")
@@ -1310,7 +1314,9 @@ def build_github_tooling_check() -> ToolingCheck:
             blocking=False,
             detail=(
                 "GitHub hardening audit will be partial until you configure "
-                "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, GH_TOKEN, or install/authenticate gh."
+                "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, GH_TOKEN, or install/authenticate gh. "
+                "Without auth, coverage is limited to public metadata, local CODEOWNERS, and any public "
+                "metadata endpoints GitHub allows unauthenticated."
             ),
             install_hint=install_hint,
             auto_install_command=install_command,
@@ -1322,7 +1328,10 @@ def build_github_tooling_check() -> ToolingCheck:
             name="github-auth",
             state="ready",
             blocking=False,
-            detail="GitHub hardening admin checks can use the authenticated GitHub CLI token.",
+            detail=(
+                "GitHub hardening token-gated checks can use the authenticated GitHub CLI token. "
+                "Repository admin/security permissions still determine which GitHub API checks are complete."
+            ),
         )
 
     return ToolingCheck(
@@ -7801,7 +7810,7 @@ class GuiApp:  # pragma: no cover
         if github_check and github_check.state == "warning" and not github_check.auto_install_command:
             self.messagebox.showinfo(
                 "GitHub Authentication Still Needed",
-                "GitHub CLI is installed, but admin-only hardening checks still need authentication.\n\n"
+                "GitHub CLI is installed, but token-gated hardening checks still need authentication.\n\n"
                 "Run `gh auth login`, or set REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN.",
             )
 
@@ -8626,14 +8635,14 @@ def make_parser() -> argparse.ArgumentParser:
         help="Enable supply-chain incident audit checks for LiteLLM March-2026 indicators",
     )
     parser.add_argument(
-        "--audit-github-hardening",
-        action="store_true",
-        help=(
-            "Enable optional GitHub repository settings audit for GitHub remotes. "
-            "Uses read-only GitHub API calls; admin-only checks require "
-            "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN."
-        ),
-    )
+            "--audit-github-hardening",
+            action="store_true",
+            help=(
+                "Enable optional GitHub repository settings audit for GitHub remotes. "
+                "Uses read-only GitHub API calls; token-gated checks require "
+                "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, GH_TOKEN, or authenticated gh."
+            ),
+        )
     parser.add_argument(
         "--github-owner",
         help=(
