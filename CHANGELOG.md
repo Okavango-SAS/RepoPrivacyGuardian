@@ -4,6 +4,19 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.3.7] - 2026-04-26
+
+CLI/GUI parity regression hardening update.
+
+### Added
+
+- Added a testable CLI parser-to-runtime config adapter so CLI and GUI `GuardRunConfig` mapping can be compared without executing a full audit.
+- Added field-level parity regression coverage that compares GUI repair inputs against equivalent CLI flags for every shared `GuardRunConfig` field.
+
+### Changed
+
+- Documented the current field-level CLI/GUI parity guard in the engineering decisions matrix.
+
 ## [1.3.6] - 2026-04-26
 
 First-run onboarding and CLI help clarity update.

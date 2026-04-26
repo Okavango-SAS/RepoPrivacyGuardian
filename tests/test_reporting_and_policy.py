@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import types
+from dataclasses import fields
 from datetime import datetime
 from pathlib import Path
 
@@ -2993,6 +2994,7 @@ def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
         noreply_email="12345+octocat@users.noreply.github.com",
         placeholder_email=rpg.DEFAULT_PLACEHOLDER,
         max_matches=75,
+        audit_litellm_incident=True,
         audit_github_hardening=True,
         open_report=True,
         confirm_each_repo_fix=True,
@@ -3011,38 +3013,10 @@ def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
     assert cli_config.mode == "cli"
     assert gui_config.mode == "gui"
 
-    same_fields = [
-        "root",
-        "policy",
-        "repos",
-        "public_only",
-        "fix",
-        "push",
-        "dry_run",
-        "redact_third_party_emails",
-        "purge_detected_secret_files",
-        "purge_all_detected_secret_files",
-        "rewrite_personal_paths",
-        "low_confidence_email_mode",
-        "owner_name",
-        "owner_emails",
-        "noreply_email",
-        "placeholder_email",
-        "max_matches",
-        "audit_github_hardening",
-        "open_report",
-        "confirm_each_repo_fix",
-        "allow_non_owner_push",
-        "allowed_remote_owners",
-        "replace_text_file",
-        "report_json",
-        "github_owner",
-        "github_include_forks",
-        "github_fast",
-        "github_jobs",
-    ]
-    for field in same_fields:
-        assert getattr(cli_config, field) == getattr(gui_config, field)
+    for field in fields(rpg.GuardRunConfig):
+        if field.name == "mode":
+            continue
+        assert getattr(cli_config, field.name) == getattr(gui_config, field.name)
 
 
 def test_execute_guard_pipeline_purge_all_implies_detected(tmp_path: Path, monkeypatch) -> None:

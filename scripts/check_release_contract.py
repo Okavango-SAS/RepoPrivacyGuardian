@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.3.6"
-CURRENT_VERSION_DESCRIPTION = "first-run onboarding and CLI help clarity"
+CURRENT_VERSION = "1.3.7"
+CURRENT_VERSION_DESCRIPTION = "CLI/GUI parity regression hardening"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",

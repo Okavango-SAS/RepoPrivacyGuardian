@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import fields
 from pathlib import Path
 
 import pytest
@@ -765,6 +766,123 @@ def test_gui_run_worker_passes_github_owner_remote_audit_options(tmp_path: Path,
     assert config.push is False
     assert config.replace_text_file is None
     assert config.rewrite_personal_paths is False
+
+
+def test_gui_local_repair_config_matches_cli_config_for_same_options(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class DummyVar:
+        def __init__(self, value):
+            self.value = value
+
+        def get(self):
+            return self.value
+
+    class DummyRoot:
+        def after(self, _delay, callback):
+            callback()
+
+    captured: dict[str, object] = {}
+
+    def fake_execute_guard_pipeline(*, config, artifacts, logger, results_dir, **kwargs):  # type: ignore[no-untyped-def]
+        del artifacts, logger, results_dir, kwargs
+        captured["config"] = config
+        return 0
+
+    monkeypatch.setattr(rpg, "execute_guard_pipeline", fake_execute_guard_pipeline)
+
+    policy = tmp_path / "POLICY.md"
+    policy.write_text("# Policy\n", encoding="utf-8")
+    report_json = tmp_path / "Audit_Results" / "extra.json"
+
+    app = object.__new__(rpg.GuiApp)
+    app.root = DummyRoot()
+    app.root_var = DummyVar(str(tmp_path))
+    app.policy_var = DummyVar(str(policy))
+    app.owner_emails_var = DummyVar("dev@example.com")
+    app.allowed_remote_owners_var = DummyVar("axeljackal")
+    app.report_dir_var = DummyVar(str(tmp_path / "Audit_Results"))
+    app.report_json_var = DummyVar(str(report_json))
+    app.replace_text_file_var = DummyVar("ops/replace-text.txt")
+    app.public_only_var = DummyVar(True)
+    app.github_owner_var = DummyVar("")
+    app.github_repo_filters_var = DummyVar("")
+    app.github_include_forks_var = DummyVar(False)
+    app.github_fast_var = DummyVar(False)
+    app.github_jobs_var = DummyVar("4")
+    app.push_var = DummyVar(True)
+    app.redact_var = DummyVar(True)
+    app.rewrite_personal_paths_var = DummyVar(True)
+    app.purge_detected_secret_files_var = DummyVar(True)
+    app.purge_all_detected_secret_files_var = DummyVar(False)
+    app.dry_run_var = DummyVar(True)
+    app.low_confidence_blocking_var = DummyVar(True)
+    app.audit_litellm_incident_var = DummyVar(True)
+    app.audit_github_hardening_var = DummyVar(True)
+    app.open_report_var = DummyVar(True)
+    app.confirm_each_repo_fix_var = DummyVar(False)
+    app.allow_non_owner_push_var = DummyVar(False)
+    app.owner_name_var = DummyVar("Alice")
+    app.noreply_var = DummyVar(rpg.DEFAULT_NOREPLY)
+    app.placeholder_var = DummyVar(rpg.DEFAULT_PLACEHOLDER)
+    app.max_matches_var = DummyVar("37")
+    app._active_cancel_token = None
+    app.log = lambda _msg: None
+    app._on_gui_run_finished = lambda *args, **kwargs: None
+
+    app._run_worker(["repo-a", "repo-b"], 37, True, ("repo-a", "repo-b"))
+
+    cli_args = rpg.make_parser().parse_args(
+        [
+            "--root",
+            str(tmp_path),
+            "--policy",
+            str(policy),
+            "--repos",
+            "repo-a",
+            "repo-b",
+            "--public-only",
+            "--fix",
+            "--push",
+            "--dry-run",
+            "--redact-third-party-emails",
+            "--purge-detected-secret-files",
+            "--rewrite-personal-paths",
+            "--low-confidence-email-mode",
+            "blocking",
+            "--audit-litellm-incident",
+            "--audit-github-hardening",
+            "--owner-name",
+            "Alice",
+            "--owner-email",
+            "dev@example.com",
+            "--noreply-email",
+            rpg.DEFAULT_NOREPLY,
+            "--placeholder-email",
+            rpg.DEFAULT_PLACEHOLDER,
+            "--max-matches",
+            "37",
+            "--report-json",
+            str(report_json),
+            "--replace-text-file",
+            "ops/replace-text.txt",
+            "--open-report",
+            "--no-confirm-each-repo",
+            "--allow-remote-owner",
+            "axeljackal",
+        ]
+    )
+    cli_config = rpg.build_cli_guard_run_config(cli_args)
+    gui_config = captured["config"]
+
+    assert isinstance(gui_config, rpg.GuardRunConfig)
+    assert cli_config.mode == "cli"
+    assert gui_config.mode == "gui"
+    for field in fields(rpg.GuardRunConfig):
+        if field.name == "mode":
+            continue
+        assert getattr(gui_config, field.name) == getattr(cli_config, field.name)
 
 
 def test_gui_cancel_run_clicked_marks_token_and_logs() -> None:

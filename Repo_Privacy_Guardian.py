@@ -10354,14 +10354,11 @@ def make_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
-    root = Path(args.root)
-    policy = Path(args.policy)
-
-    config = build_guard_run_config(
+def build_cli_guard_run_config(args: argparse.Namespace) -> GuardRunConfig:
+    return build_guard_run_config(
         mode="cli",
-        root=root,
-        policy=policy,
+        root=Path(args.root),
+        policy=Path(args.policy),
         repos=args.repos,
         public_only=args.public_only,
         fix=args.fix,
@@ -10390,6 +10387,10 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         audit_litellm_incident=args.audit_litellm_incident,
         audit_github_hardening=args.audit_github_hardening,
     )
+
+
+def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
+    config = build_cli_guard_run_config(args)
 
     tooling_checks = build_cli_tooling_checks(config)
     if args.install_missing_tools:

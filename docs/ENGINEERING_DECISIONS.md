@@ -73,6 +73,7 @@ This file captures key design decisions and their rationale.
 | Extra JSON export | Yes | Yes | No |
 | Report output directory selection | Yes | Yes | No |
 | Runtime pipeline implementation | Shared | Shared | No |
+| `GuardRunConfig` runtime fields | Shared builder + parser adapter | Shared builder + GUI adapter | No |
 | GitHub owner/org remote audit inputs | Yes | Yes | No |
 | GitHub owner/org audit-only enforcement | Yes | Yes | No |
 
@@ -82,6 +83,8 @@ This file captures key design decisions and their rationale.
 - Added `build_run_settings()` to normalize persisted run metadata.
 - Added `parse_positive_int()` so GUI and CLI validate `max_matches` with the same rule.
 - Added shared `build_guard_run_config()` so CLI and GUI normalize/infer run options through one path.
+- Added `build_cli_guard_run_config()` so parser-to-runtime mapping is testable without executing a run.
+- Added field-level regression coverage that compares every shared `GuardRunConfig` dataclass field from CLI and GUI repair inputs; `mode` is the only intentional value difference.
 - Extended GUI inputs with:
   - results directory
   - optional extra JSON export path
@@ -107,7 +110,7 @@ This file captures key design decisions and their rationale.
 - Clarified the GUI target surface for GitHub owner/org mode so local repository validation errors do not compete with an active remote audit target, and the Repair review summary distinguishes blocking, advisory/manual-review, and safe fixture/documentation context.
 - Added centralized contextual help for non-obvious GUI controls, using hover tooltips and visible `i` badges in advanced Settings and Repair areas without changing run-config mappings.
 - Added presentation-only GUI localization with English and Spanish (Latin America) catalogs. Locale is persisted as non-secret GUI state and must not rename CLI flags, report fields, policy keys, or shared `GuardRunConfig` mappings.
-- Added parity regression tests for argument validation, defaults, confirmation gate, fix/re-audit flow, and runtime error handling.
+- Added parity regression tests for argument validation, defaults, confirmation gate, fix/re-audit flow, runtime error handling, and full shared run-config mapping.
 
 ### Residual risk and follow-up
 
