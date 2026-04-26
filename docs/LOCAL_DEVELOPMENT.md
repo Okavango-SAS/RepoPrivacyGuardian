@@ -29,6 +29,9 @@ python -m pytest -q
 python scripts/check_release_contract.py
 python -m ruff check .
 pyright -p pyrightconfig.json
+python -m pip_audit -r config/requirements/requirements-dev.txt
+python -m pip_audit -r config/requirements/requirements-gui.txt
+python -m pip_audit -r config/requirements/requirements-remediation.txt
 python tests/release_smoke_cli.py
 python -m Repo_Privacy_Guardian --help
 ```
@@ -102,9 +105,10 @@ The tracked repo-owned quality gate today is intentionally practical:
 
 - `ruff check`
 - `pyright` (runtime, artifacts, GitHub, and repo-owned support-script scope from `pyrightconfig.json`)
+- `pip-audit` against dev, GUI, and remediation requirement files
 - `pytest`
 - smoke scripts
 - packaging/build checks
 - self-audit
 
-There is still no separate repo-owned typecheck command. If you add one in the future, keep it stable enough that it improves release confidence instead of adding noise.
+The repo-owned typecheck command is `pyright -p pyrightconfig.json`. Keep any future typecheck expansion stable enough that it improves release confidence instead of adding noise.

@@ -27,6 +27,11 @@ DEFAULT_TIMEOUTS = {
     "install": 900,
     "audit": 900,
 }
+DEPENDENCY_AUDIT_REQUIREMENT_FILES = (
+    "config/requirements/requirements-dev.txt",
+    "config/requirements/requirements-gui.txt",
+    "config/requirements/requirements-remediation.txt",
+)
 BUILD_ARTIFACT_CLEANUP_ATTEMPTS = 5
 BUILD_ARTIFACT_CLEANUP_RETRY_SECONDS = 1.0
 
@@ -54,6 +59,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--skip-self-audit",
         action="store_true",
         help="Skip the final self-audit run.",
+    )
+    parser.add_argument(
+        "--skip-dependency-audit",
+        action="store_true",
+        help="Skip pip-audit vulnerability checks for pinned requirement files.",
     )
     parser.add_argument(
         "--self-audit-root",
@@ -232,6 +242,16 @@ def build_release_pytest_artifact_paths(runtime_dir: Path) -> tuple[Path, Path]:
     return runtime_dir / "pytest", runtime_dir / ".coverage"
 
 
+def run_dependency_audits(repo_root: Path) -> None:
+    for rel_path in DEPENDENCY_AUDIT_REQUIREMENT_FILES:
+        run_named_command(
+            f"Auditing Python dependencies ({rel_path})",
+            [sys.executable, "-m", "pip_audit", "-r", rel_path],
+            cwd=repo_root,
+            timeout=DEFAULT_TIMEOUTS["quick"],
+        )
+
+
 def run_release_verification_steps(
     repo_root: Path,
     args: argparse.Namespace,
@@ -278,6 +298,10 @@ def run_release_verification_steps(
         cwd=repo_root,
         timeout=DEFAULT_TIMEOUTS["quick"],
     )
+    if args.skip_dependency_audit:
+        log("Skipping dependency vulnerability audit by request.")
+    else:
+        run_dependency_audits(repo_root)
     run_named_command(
         "Running tracked pytest suite",
         [

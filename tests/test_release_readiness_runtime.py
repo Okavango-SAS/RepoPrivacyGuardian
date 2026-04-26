@@ -90,3 +90,22 @@ def test_cleanup_release_runtime_workspace_removes_readonly_files(tmp_path: Path
     module.cleanup_release_runtime_workspace(runtime_dir)
 
     assert runtime_dir.exists() is False
+
+
+def test_run_dependency_audits_covers_all_requirement_groups(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_release_readiness_module()
+    calls: list[tuple[str, list[str], Path, int]] = []
+
+    def fake_run_named_command(name: str, cmd: list[str], *, cwd: Path, timeout: int, env=None) -> None:
+        del env
+        calls.append((name, cmd, cwd, timeout))
+
+    monkeypatch.setattr(module, "run_named_command", fake_run_named_command)
+
+    module.run_dependency_audits(tmp_path)
+
+    audited_files = [call[1][-1] for call in calls]
+    assert audited_files == list(module.DEPENDENCY_AUDIT_REQUIREMENT_FILES)
+    assert all(call[1][:3] == [module.sys.executable, "-m", "pip_audit"] for call in calls)
+    assert all(call[2] == tmp_path for call in calls)
+    assert all(call[3] == module.DEFAULT_TIMEOUTS["quick"] for call in calls)

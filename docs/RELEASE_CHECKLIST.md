@@ -62,6 +62,7 @@ Use this checklist before tagging a public release.
 
 - Required checks pass.
 - `python -m ruff check .` passes locally.
+- `python -m pip_audit -r config/requirements/requirements-dev.txt`, `requirements-gui.txt`, and `requirements-remediation.txt` report no known vulnerabilities, or any outage/exception is recorded.
 - `python scripts/release_readiness.py` passes locally, or any intentionally skipped parts are documented.
 - Clean-clone validation passes: `python -m pip install .`, `repo-privacy-guardian --help`, `python -m pip install ".[test]"`, `python -m pytest`.
 - Package build succeeds (`python -m build`) and both `wheel` and `sdist` installs complete cleanly.

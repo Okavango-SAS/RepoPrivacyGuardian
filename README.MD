@@ -53,7 +53,7 @@ Choose the path that matches what you need right now:
 
 - automatic CI smoke: push-time Ubuntu/Python `3.13` checks for help paths, `python scripts/check_release_contract.py`, and CLI smoke
 - manual extended CI: `workflow_dispatch` validation for `ruff`, `pyright`, tracked `pytest`, package smoke, and Windows GUI smoke
-- local maintainer release gate: `python scripts/release_readiness.py` before public release or tag creation
+- local maintainer release gate: `python scripts/release_readiness.py` before public release or tag creation, including dependency vulnerability audit of dev/GUI/remediation requirement files
 
 ## 🔍 What It Audits
 
@@ -506,7 +506,7 @@ Validation tiers for this repository:
 
 - automatic CI smoke: `repo-privacy-guardian --help`, module/direct-script help, `python scripts/check_release_contract.py`, and `python tests/release_smoke_cli.py`
 - manual extended CI: `ruff`, `pyright`, tracked `pytest`, package smoke for `wheel` and `sdist`, plus Windows GUI smoke
-- local maintainer release gate: `python scripts/release_readiness.py`
+- local maintainer release gate: `python scripts/release_readiness.py`, including `pip-audit` checks for dev/GUI/remediation requirement files
 
 ## 📚 Release Engineering Docs
 

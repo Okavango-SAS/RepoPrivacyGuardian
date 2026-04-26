@@ -2,10 +2,10 @@
 
 ## Current limitations
 
-1. Content scans may flag test fixtures and documentation examples.
+1. Real-shaped examples without obvious placeholders may still require manual classification.
 
-Impact: medium.
-Workaround: verify context before applying destructive fixes.
+Impact: low.
+Workaround: use obvious placeholders in tests/docs/examples so findings land in the non-blocking fixture or safe-documentation buckets; verify context before applying destructive fixes.
 
 1. Exfil indicator heuristic is keyword-based and can over-report in backend/service repos.
 

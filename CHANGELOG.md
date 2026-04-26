@@ -17,6 +17,7 @@ Secret taxonomy and evidence-classification hardening update.
 - Expanded high-confidence secret detection for modern GitHub, GitLab, Cloudflare, OpenAI, Anthropic, Google, Slack, Discord, Stripe, Datadog, Twilio, Mailgun, provider assignment, auth-header, webhook, credentialed URL, and Git metadata credential patterns.
 - Added explicit non-blocking buckets for low-confidence generic secret assignments, synthetic fixtures, and safe documentation examples in CLI, JSON, and HTML reports.
 - Expanded sensitive filename coverage for provider credential files such as `.npmrc`, `.pypirc`, `.netrc`, `.docker/config.json`, `.aws/credentials`, `.kube/config`, `kubeconfig`, and modern SSH key names.
+- Added `pip-audit` dependency vulnerability checks to the local release-readiness harness for dev, GUI, and remediation requirement files.
 
 ### Changed
 
@@ -24,6 +25,7 @@ Secret taxonomy and evidence-classification hardening update.
 - Tightened agentic audit guidance to require finding classification before remediation and to avoid pasting raw sensitive evidence.
 - Clarified GitHub hardening operator messages and documentation so unauthenticated checks, token-gated checks, and required admin/security permissions are explicit.
 - Kept generic `password`, `api_key`, token, DSN, connection-string, and webhook assignments advisory unless they also match a provider-specific high-confidence pattern.
+- Clarified the local validation contract so `pyright -p pyrightconfig.json` is documented as the repo-owned typecheck command.
 
 ### Fixed
 
@@ -31,6 +33,7 @@ Secret taxonomy and evidence-classification hardening update.
 - Bounded run-artifact directory collision handling so report initialization fails visibly instead of looping indefinitely under pathological timestamp/name collisions.
 - Report optional GUI drag-and-drop dependency readiness separately so `--check-tooling --gui` diagnoses missing DnD support without blocking the desktop fallback path.
 - Redacted credentialed remote URLs and low-confidence assignment values consistently in logs, JSON, and HTML artifacts.
+- Included `config/requirements/**` in CI path filters so dependency policy changes trigger the automatic smoke/release-contract workflow.
 
 ## [1.3.1] - 2026-04-25
 

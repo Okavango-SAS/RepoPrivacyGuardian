@@ -168,15 +168,19 @@ def test_operational_docs_cover_release_harness_env_and_recovery() -> None:
     assert "python scripts/check_release_contract.py" in local_development
     assert "python -m pytest -q" in local_development
     assert "python -m ruff check ." in local_development
-    assert "There is still no separate repo-owned typecheck command." in local_development
+    assert "pyright -p pyrightconfig.json" in local_development
+    assert "python -m pip_audit -r config/requirements/requirements-dev.txt" in local_development
+    assert "The repo-owned typecheck command is `pyright -p pyrightconfig.json`." in local_development
     assert "python scripts/release_readiness.py" in operations
     assert "python scripts/check_release_contract.py" in operations
+    assert "runs `pip-audit` against dev, GUI, and remediation requirement files" in operations
     assert "Repo Privacy Guardian does not auto-load a `.env` file." in operations
     assert "The tracked `.env.example` file is only a reference template" in operations
     assert "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN" in operations
     assert "git clone path/to/<repo>-pre-publication-fix-<timestamp>.bundle recovered-repo" in operations
     assert "GUI does not include pause/resume controls." in known_issues
     assert "GUI supports cooperative cancellation" in known_issues
+    assert "non-blocking fixture or safe-documentation buckets" in known_issues
     assert "Release harness skips the self-audit" in troubleshooting
     assert "Build artifacts look stale" in troubleshooting
     assert "GUI stop feels delayed" in troubleshooting
@@ -278,6 +282,14 @@ def test_dev_pytest_floor_is_patched_against_known_alert() -> None:
     assert "pytest>=8.0,<9" not in dev_requirements
 
 
+def test_dev_requirements_include_dependency_audit_tool() -> None:
+    pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
+    dev_requirements = (_repo_root() / "config" / "requirements" / "requirements-dev.txt").read_text(encoding="utf-8")
+
+    assert "pip-audit>=2.10,<3" in pyproject
+    assert "pip-audit>=2.10,<3" in dev_requirements
+
+
 def test_coverage_targets_package_code_not_local_ops_scripts() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
 
@@ -352,6 +364,7 @@ def test_ci_workflow_matches_cost_first_validation_contract() -> None:
         '"docs/RELEASE_CHECKLIST.md"',
         '"docs/TROUBLESHOOTING.md"',
         '"docs/VERSIONING.md"',
+        '"config/requirements/**"',
         '"scripts/check_release_contract.py"',
         '"scripts/release_readiness.py"',
         '"tests/**"',

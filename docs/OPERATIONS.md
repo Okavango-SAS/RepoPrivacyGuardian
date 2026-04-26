@@ -42,6 +42,8 @@ By default the script:
 - removes stale `dist/`, `build/`, and `*.egg-info/` outputs before the final build
 - byte-compiles `Repo_Privacy_Guardian.py`
 - runs `ruff check`
+- runs `pyright -p pyrightconfig.json`
+- runs `pip-audit` against dev, GUI, and remediation requirement files
 - runs tracked `pytest`
 - runs CLI and GUI smoke scripts
 - verifies module help and direct-script help
@@ -52,6 +54,7 @@ By default the script:
 Useful flags:
 
 - `--skip-gui-smoke`: skip the GUI smoke path when a desktop session is not available
+- `--skip-dependency-audit`: skip vulnerability checks for dependency files when the advisory service is unavailable or the environment is intentionally offline
 - `--skip-self-audit`: skip the final self-audit, useful while the worktree still has local changes
 - `--skip-clean-build-artifacts`: keep existing build outputs if you intentionally want to inspect them
 

@@ -45,6 +45,7 @@ remediation = ["git-filter-repo>=2.45,<3"]
 rewrite = ["git-filter-repo>=2.45,<3"]
 test = [
   "build>=1.2,<2",
+  "pip-audit>=2.10,<3",
   "pyright>=1.1.408,<2",
   "pytest>=9.0.3,<10",
   "pytest-cov>=5.0,<6",
@@ -55,6 +56,7 @@ dev = [
   "tkinterdnd2>=0.4.3,<0.5",
   "git-filter-repo>=2.45,<3",
   "build>=1.2,<2",
+  "pip-audit>=2.10,<3",
   "pyright>=1.1.408,<2",
   "pytest>=9.0.3,<10",
   "pytest-cov>=5.0,<6",

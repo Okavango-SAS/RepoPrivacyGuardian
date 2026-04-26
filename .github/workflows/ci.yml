@@ -16,6 +16,7 @@ on:
       - "docs/TROUBLESHOOTING.md"
       - "docs/VERSIONING.md"
       - "docs/prompts/**"
+      - "config/requirements/**"
       - "pyproject.toml"
       - "Repo_Privacy_Guardian.py"
       - "repo_privacy_guardian*.py"

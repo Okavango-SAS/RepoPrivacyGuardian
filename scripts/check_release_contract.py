@@ -26,6 +26,7 @@ README_REQUIREMENTS = [
 CHECKLIST_REQUIREMENTS = [
     "Automatic CI smoke is green.",
     "manual extended CI suite has been run",
+    "python -m pip_audit -r config/requirements/requirements-dev.txt",
     "validation tiers documented in README",
     "branch protection required status checks match the current automatic CI smoke job names",
     "Classify each finding as confirmed leak",
@@ -79,6 +80,7 @@ WORKFLOW_REQUIREMENTS = [
     '- "docs/TROUBLESHOOTING.md"',
     '- "docs/VERSIONING.md"',
     '- "docs/prompts/**"',
+    '- "config/requirements/**"',
     '- "scripts/check_release_contract.py"',
     '- "scripts/release_readiness.py"',
     '- "tests/**"',
