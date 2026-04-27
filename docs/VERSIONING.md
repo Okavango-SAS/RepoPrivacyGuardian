@@ -44,6 +44,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.4.0` is an additive minor release on top of `1.3.10`. It rebuilds the GUI presentation layer as a CLI companion with `Audit`, `Reports`, `Prompts`, `Settings`, and gated `Repair` tabs, adds a bilingual agentic prompt registry, and preserves the existing CLI contract, report schema, policy keys, and `GuardRunConfig` parity.
 
+`1.4.1` is a release-readiness patch on top of `1.4.0`. It aligns the roadmap with the `1.4.x` GUI companion stage and expands automatic CI path filters so release-contract documentation, roadmap, design guidance, and CODEOWNERS changes trigger the smoke/release-contract gate.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

@@ -1,6 +1,6 @@
 # ROADMAP
 
-This roadmap reflects the current stable `1.3.x` stage of the repository instead of the early pre-`1.0` milestone labels that no longer describe reality.
+This roadmap reflects the current stable `1.4.x` stage of the repository instead of the early pre-`1.0` milestone labels that no longer describe reality.
 
 ## Current baseline
 
@@ -12,6 +12,7 @@ The repository is already stable in these areas:
 - package build and install smoke for `wheel` and `sdist`
 - local tooling readiness checks and optional install helpers
 - opt-in GitHub owner/org remote audits with temporary local clones
+- companion-style GUI with Audit, Reports, Prompts, Settings, and gated Repair views on the shared CLI backend
 - stable repo-owned `ruff check` gate
 - local release harness and operator runbooks
 - documented versioning, release checklist, and public changelog
@@ -22,6 +23,7 @@ These are the next improvements that still fit the current product scope:
 
 - expand synthetic integration coverage for rewrite-planning and redaction edge cases
 - expand target-resolution and preflight regression coverage further as local and GitHub owner/org repo-selection modes evolve
+- keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract
 - keep docs, help text, packaged policy, and smoke fixtures aligned as defaults evolve
 - improve internal code navigation further if the single-file module grows materially
 
@@ -31,7 +33,7 @@ These ideas may still be useful later, but they are not the current focus:
 
 - organization-scoped allowlists or suppression profiles
 - batched fleet execution profiles for many repositories at once
-- broader GUI redesign beyond the current staged desktop wrapper
+- GUI-only workflows that bypass the shared CLI backend
 - provider-specific secret rotation integrations
 
 ## Out of scope

@@ -78,7 +78,8 @@ Choose the path that matches what you need right now:
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
 - `v1.2.3` is the public-release stabilization and GUI UX update.
 - `v1.3.10` formalized CLI/GUI parity as a repository rule.
-- `v1.4.0` is the current minor release with the GUI rebuilt as a CLI companion with Reports and Prompts tabs.
+- `v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs.
+- `v1.4.1` is the current patch release with release-readiness roadmap and CI trigger hardening.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.

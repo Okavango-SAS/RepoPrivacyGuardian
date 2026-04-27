@@ -5,13 +5,13 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.4.0"
-CURRENT_VERSION_DESCRIPTION = "the GUI rebuilt as a CLI companion with Reports and Prompts tabs"
+CURRENT_VERSION = "1.4.1"
+CURRENT_VERSION_DESCRIPTION = "release-readiness roadmap and CI trigger hardening"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
     "manual extended CI",
-    f"`v{CURRENT_VERSION}` is the current minor release with {CURRENT_VERSION_DESCRIPTION}",
+    f"`v{CURRENT_VERSION}` is the current patch release with {CURRENT_VERSION_DESCRIPTION}",
     "## ⚡ 60-Second First Run",
     "How to read the first result:",
     "malformed non-email identity tokens",
@@ -74,6 +74,14 @@ VERSIONING_REQUIREMENTS = [
     "manual extended CI",
     "`1.3.10`",
     "`1.4.0`",
+    "`1.4.1`",
+]
+
+ROADMAP_REQUIREMENTS = [
+    "current stable `1.4.x`",
+    "companion-style GUI with Audit, Reports, Prompts, Settings, and gated Repair views",
+    "keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract",
+    "GUI-only workflows that bypass the shared CLI backend",
 ]
 
 AGENTS_REQUIREMENTS = [
@@ -115,9 +123,12 @@ WORKFLOW_REQUIREMENTS = [
     'run: python scripts/check_release_contract.py',
     'run: python tests/release_smoke_cli.py',
     'run: python tests/release_smoke_gui.py',
+    '- ".github/CODEOWNERS"',
     '- "AGENTS.MD"',
     '- "CHANGELOG.md"',
+    '- "DESIGN.md"',
     '- "README.MD"',
+    '- "docs/**"',
     '- "docs/DOGFOODING.md"',
     '- "docs/KNOWN_ISSUES.md"',
     '- "docs/POLICY.md"',
@@ -175,6 +186,7 @@ def validate_release_contract() -> list[str]:
     policy = _read("docs/POLICY.md")
     troubleshooting = _read("docs/TROUBLESHOOTING.md")
     versioning = _read("docs/VERSIONING.md")
+    roadmap = _read("docs/ROADMAP.md")
     operations = _read("docs/OPERATIONS.md")
     design = _read("DESIGN.md")
     agents = _read("AGENTS.MD")
@@ -192,6 +204,7 @@ def validate_release_contract() -> list[str]:
     errors.extend(_require_contains(policy, POLICY_REQUIREMENTS, "docs/POLICY.md"))
     errors.extend(_require_contains(troubleshooting, TROUBLESHOOTING_REQUIREMENTS, "docs/TROUBLESHOOTING.md"))
     errors.extend(_require_contains(versioning, VERSIONING_REQUIREMENTS, "docs/VERSIONING.md"))
+    errors.extend(_require_contains(roadmap, ROADMAP_REQUIREMENTS, "docs/ROADMAP.md"))
     errors.extend(_require_contains(operations, OPERATIONS_REQUIREMENTS, "docs/OPERATIONS.md"))
     errors.extend(_require_contains(design, DESIGN_REQUIREMENTS, "DESIGN.md"))
     errors.extend(_require_contains(agents, AGENTS_REQUIREMENTS, "AGENTS.MD"))
@@ -223,6 +236,7 @@ def validate_release_contract() -> list[str]:
         or "`v1.2.3` is the current patch-level" in readme
         or "`v1.3.0` is the current minor release" in readme
         or "`v1.3.10` is the current patch release" in readme
+        or "`v1.4.0` is the current minor release" in readme
     ):
         errors.append("README.MD: stale current release reference")
     if "GUI does not include pause/resume or cancellation controls." in known_issues:

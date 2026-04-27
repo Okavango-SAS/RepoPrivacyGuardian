@@ -4,6 +4,15 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-04-27
+
+Release-readiness roadmap and CI trigger hardening update.
+
+### Changed
+
+- Updated the roadmap to the `1.4.x` stage and documented the GUI companion baseline after the `1.4.0` rebuild.
+- Expanded automatic CI path filters so release-contract docs, roadmap, design guidance, and CODEOWNERS changes trigger the smoke/release-contract gate.
+
 ## [1.4.0] - 2026-04-26
 
 GUI companion reconstruction update.
