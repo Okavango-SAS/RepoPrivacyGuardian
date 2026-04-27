@@ -158,6 +158,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.3.7`" in versioning
     assert "`1.3.8`" in versioning
     assert "`1.3.9`" in versioning
+    assert "`1.3.10`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "Validation evidence" in release_notes
 
@@ -273,6 +274,8 @@ def test_changelog_records_stable_release() -> None:
     assert "GitHub owner audit mode and GUI/CLI parity update." in changelog
     assert "## [1.3.1] - 2026-04-25" in changelog
     assert "Release-readiness reliability hardening update." in changelog
+    assert "## [1.3.10] - 2026-04-26" in changelog
+    assert "CLI/GUI parity repository-rule documentation update." in changelog
     assert "## [1.3.9] - 2026-04-26" in changelog
     assert "DESIGN.md supply-chain hygiene documentation update." in changelog
     assert "## [1.3.8] - 2026-04-26" in changelog
@@ -307,9 +310,9 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.3.9"' in pyproject
+    assert 'version = "1.3.10"' in pyproject
     assert "Current release line: `v1.3.x`." in readme
-    assert "`v1.3.9` is the current patch release with pinned DESIGN.md supply-chain hygiene documentation." in readme
+    assert "`v1.3.10` is the current patch release with CLI/GUI parity formalized as a repository rule." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme
@@ -370,6 +373,22 @@ def test_gui_contract_docs_use_audit_repair_labels() -> None:
             offenders.append(rel)
 
     assert not offenders, "Legacy GUI labels still present in docs/prompts:\n" + "\n".join(offenders)
+
+
+def test_cli_gui_parity_is_documented_as_release_blocking_repo_rule() -> None:
+    root = _repo_root()
+    readme = (root / "README.MD").read_text(encoding="utf-8")
+    agents = (root / "AGENTS.MD").read_text(encoding="utf-8")
+    architecture = (root / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    decisions = (root / "docs" / "ENGINEERING_DECISIONS.md").read_text(encoding="utf-8")
+
+    assert "CLI/GUI parity is release-blocking" in readme
+    assert "CLI/GUI parity is a repository rule and release-blocking invariant" in agents
+    assert "CLI/GUI parity is a repository rule" in architecture
+    assert "CLI/GUI parity is a repository rule and release-blocking invariant" in decisions
+    assert "Every new audit, report, GitHub hardening, remote-audit, locale-visible, or repair behavior must" in decisions
+    assert "Presentation-only GUI features and launcher-only CLI flags" in decisions
+    assert "regression coverage for parser/config mapping and GUI run-config mapping" in decisions
 
 
 def test_repo_gitignore_covers_local_packaging_and_backup_artifacts() -> None:

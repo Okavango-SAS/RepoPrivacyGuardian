@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.3.9"
-CURRENT_VERSION_DESCRIPTION = "pinned DESIGN.md supply-chain hygiene documentation"
+CURRENT_VERSION = "1.3.10"
+CURRENT_VERSION_DESCRIPTION = "CLI/GUI parity formalized as a repository rule"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
@@ -20,6 +20,7 @@ README_REQUIREMENTS = [
     "Codex, Claude Code, Antigravity, GitHub Copilot, Cursor",
     "06_PREPARACION_ENTORNO_AGENTICA.prompt.md",
     "07_AUDITORIA_REPARACION_AGENTICA.prompt.md",
+    "CLI/GUI parity is release-blocking",
     "confirmed leaks, intentional fixtures/examples",
     "Token-gated coverage",
     "secret scanning configuration",
@@ -70,7 +71,24 @@ VERSIONING_REQUIREMENTS = [
     "validation tiers",
     "automatic CI smoke",
     "manual extended CI",
-    "`1.3.9`",
+    "`1.3.10`",
+]
+
+AGENTS_REQUIREMENTS = [
+    "CLI/GUI parity is a repository rule and release-blocking invariant",
+    "same internal configuration/policy keys",
+    "covered by regression tests",
+]
+
+ARCHITECTURE_REQUIREMENTS = [
+    "CLI/GUI parity is a repository rule",
+    "shared runtime/config/report path",
+]
+
+ENGINEERING_DECISIONS_REQUIREMENTS = [
+    "CLI/GUI parity is a repository rule and release-blocking invariant",
+    "Every new audit, report, GitHub hardening, remote-audit, locale-visible, or repair behavior must",
+    "Presentation-only GUI features and launcher-only CLI flags",
 ]
 
 OPERATIONS_REQUIREMENTS = [
@@ -156,6 +174,9 @@ def validate_release_contract() -> list[str]:
     versioning = _read("docs/VERSIONING.md")
     operations = _read("docs/OPERATIONS.md")
     design = _read("DESIGN.md")
+    agents = _read("AGENTS.MD")
+    architecture = _read("docs/ARCHITECTURE.md")
+    engineering_decisions = _read("docs/ENGINEERING_DECISIONS.md")
     dogfooding = _read("docs/DOGFOODING.md")
     dogfooding_prompt = _read("docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md")
     workflow = _read(".github/workflows/ci.yml")
@@ -170,6 +191,15 @@ def validate_release_contract() -> list[str]:
     errors.extend(_require_contains(versioning, VERSIONING_REQUIREMENTS, "docs/VERSIONING.md"))
     errors.extend(_require_contains(operations, OPERATIONS_REQUIREMENTS, "docs/OPERATIONS.md"))
     errors.extend(_require_contains(design, DESIGN_REQUIREMENTS, "DESIGN.md"))
+    errors.extend(_require_contains(agents, AGENTS_REQUIREMENTS, "AGENTS.MD"))
+    errors.extend(_require_contains(architecture, ARCHITECTURE_REQUIREMENTS, "docs/ARCHITECTURE.md"))
+    errors.extend(
+        _require_contains(
+            engineering_decisions,
+            ENGINEERING_DECISIONS_REQUIREMENTS,
+            "docs/ENGINEERING_DECISIONS.md",
+        )
+    )
     errors.extend(_require_contains(dogfooding, DOGFOODING_REQUIREMENTS, "docs/DOGFOODING.md"))
     errors.extend(
         _require_contains(

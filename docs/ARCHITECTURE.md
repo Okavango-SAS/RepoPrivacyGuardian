@@ -126,6 +126,7 @@ GUI flow uses the same backend pipeline, but keeps the visible staged contract:
 - Destructive operations require explicit flags.
 - Reports are treated as sensitive local artifacts.
 - CLI remains the primary contract; GUI is a parity wrapper, not a separate product surface.
+- CLI/GUI parity is a repository rule: new behavior must stay mapped through the shared runtime/config/report path or be documented as a non-behavioral presentation/launcher exception.
 
 ## Current technical debt
 

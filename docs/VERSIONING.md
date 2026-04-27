@@ -40,6 +40,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.3.9` is a supply-chain documentation patch on top of `1.3.8`. It records the root `DESIGN.md` as following the public Google Labs `google-labs-code/design.md` format pinned to release `0.1.0`, and documents least-privilege, no-secret, pinned-tooling rules for any optional upstream validation.
 
+`1.3.10` is a CLI/GUI parity governance patch on top of `1.3.9`. It formalizes CLI/GUI parity as a release-blocking repository rule for audit, report, GitHub hardening, remote-audit, locale-visible, and repair behavior without changing runtime semantics.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

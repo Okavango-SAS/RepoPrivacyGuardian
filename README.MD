@@ -77,7 +77,7 @@ Choose the path that matches what you need right now:
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
 - `v1.2.3` is the public-release stabilization and GUI UX update.
-- `v1.3.9` is the current patch release with pinned DESIGN.md supply-chain hygiene documentation.
+- `v1.3.10` is the current patch release with CLI/GUI parity formalized as a repository rule.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -415,6 +415,8 @@ GUI and CLI share:
 - the same JSON, HTML, and log artifacts
 - the same destructive-action guardrails
 - the same advanced replace-text remediation path for reviewed substitutions
+
+Repository rule: CLI/GUI parity is release-blocking. Any new audit, report, GitHub hardening, remote-audit, locale-visible, or repair behavior must expose equivalent operator control in CLI and GUI, map to the same internal configuration/policy/report fields, and add or update regression tests. Presentation-only GUI features and launcher-only CLI flags are allowed only when they are documented as non-behavioral exceptions.
 
 The GUI keeps the staged safety contract:
 

@@ -41,8 +41,20 @@ This file captures key design decisions and their rationale.
 ## DEC-007 - GUI/CLI parity through a shared execution pipeline
 
 - Status: accepted
-- Decision: move GUI and CLI runtime to a single shared pipeline function and keep run settings symmetric across interfaces.
-- Rationale: removes duplicated flow logic and prevents future feature drift.
+- Decision: move GUI and CLI runtime to a single shared pipeline function and keep run settings symmetric across interfaces. CLI/GUI parity is a repository rule and release-blocking invariant.
+- Rationale: removes duplicated flow logic, prevents future feature drift, and preserves operator choice without creating separate product semantics.
+
+### Repo Rule
+
+Every new audit, report, GitHub hardening, remote-audit, locale-visible, or repair behavior must:
+
+- expose equivalent operator control in CLI and GUI;
+- map to the same internal configuration, policy, and report fields;
+- preserve the same artifact semantics for JSON, HTML, and log output;
+- keep destructive-action guardrails equivalent across interfaces;
+- add or update regression coverage for parser/config mapping and GUI run-config mapping.
+
+Presentation-only GUI features and launcher-only CLI flags are permitted only when they are documented as non-behavioral exceptions and cannot affect `GuardRunConfig`, policy keys, report schemas, or remediation semantics.
 
 ### Parity matrix (before)
 

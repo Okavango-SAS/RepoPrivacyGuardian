@@ -4,6 +4,15 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.3.10] - 2026-04-26
+
+CLI/GUI parity repository-rule documentation update.
+
+### Added
+
+- Documented CLI/GUI parity as a release-blocking repository rule in AGENTS, README, architecture notes, and engineering decisions.
+- Added regression coverage requiring the parity rule to stay present in public/operator docs.
+
 ## [1.3.9] - 2026-04-26
 
 DESIGN.md supply-chain hygiene documentation update.
