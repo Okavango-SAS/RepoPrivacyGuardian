@@ -43,6 +43,7 @@ from typing import Callable, Iterable, Mapping
 
 import repo_privacy_guardian_artifacts as artifact_helpers
 import repo_privacy_guardian_github as github_helpers
+import repo_privacy_guardian_prompts as prompt_helpers
 import repo_privacy_guardian_runtime as runtime
 from repo_privacy_guardian_runtime import (
     CancellationToken,
@@ -1692,6 +1693,13 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
     "repo_drop_area": (
         "Drag local repository folders here to set the Root and selection automatically. Browse/Refresh remains the fallback."
     ),
+    "reports_tab": "Shows the latest local artifact paths and quick-open actions without exposing raw sensitive evidence.",
+    "prompts_tab": "Copy vetted agentic IDE prompts that use the CLI-first audit and repair workflow.",
+    "open_settings_tab": "Moves advanced parity controls into Settings so Audit stays focused on choosing targets and running the scan.",
+    "repair_options_toggle": "Shows advanced Repair toggles. Keep them hidden until audited findings have been reviewed.",
+    "copy_prompt": "Copies the full prompt text to the clipboard so it can be pasted into an agentic IDE session.",
+    "copy_prompt_command": "Copies the recommended CLI command template for this prompt.",
+    "open_prompt_file": "Opens the tracked prompt file for review in the default local application.",
 }
 
 GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
@@ -1796,6 +1804,13 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
     "repo_drop_area": (
         "Arrastrá carpetas de repositorios locales acá para configurar Root y selección automáticamente. Buscar/Actualizar sigue disponible."
     ),
+    "reports_tab": "Muestra rutas de artefactos de la última corrida y acciones rápidas sin exponer evidencia sensible cruda.",
+    "prompts_tab": "Copia prompts revisados para IDEs agénticas que usan el flujo CLI-first de auditoría y reparación.",
+    "open_settings_tab": "Mueve controles avanzados de paridad a Configuración para que Auditar quede enfocado en objetivos y ejecución.",
+    "repair_options_toggle": "Muestra toggles avanzados de Reparar. Mantenelos ocultos hasta revisar los hallazgos auditados.",
+    "copy_prompt": "Copia el prompt completo al portapapeles para pegarlo en una sesión de IDE agéntica.",
+    "copy_prompt_command": "Copia el comando CLI recomendado para este prompt.",
+    "open_prompt_file": "Abre el archivo de prompt trackeado para revisarlo en la aplicación local predeterminada.",
 }
 
 GUI_TOOLTIP_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
@@ -1812,8 +1827,38 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "workflow_repair": "3 Repair if needed",
         "workflow_parity": "CLI parity: same backend",
         "tab_audit": "1. Audit",
-        "tab_repair": "2. Repair",
+        "tab_reports": "2. Reports",
+        "tab_prompts": "3. Prompts",
+        "tab_settings": "4. Settings",
+        "tab_repair": "5. Repair",
         "audit_target": "Audit Target",
+        "audit_target_body": "Choose local repositories here. Advanced policy, GitHub owner/org, and identity controls live in Settings.",
+        "open_settings_tab": "Open Settings",
+        "last_run": "Last run",
+        "last_run_none": "No GUI run has finished in this session yet.",
+        "reports_dashboard": "Reports Dashboard",
+        "reports_dashboard_body": "Open local evidence from the latest run. Treat artifacts as sensitive even when values are redacted.",
+        "latest_artifacts": "Latest artifacts",
+        "latest_artifacts_none": "Run Audit to create report.json, report.html, run.log, and run_state.json.",
+        "open_html_report_action": "Open HTML report",
+        "open_json_report_action": "Open report.json",
+        "open_run_log_action": "Open run.log",
+        "open_artifacts_folder_action": "Open artifacts folder",
+        "prompts_library": "Agentic Prompt Library",
+        "prompts_library_body": "Copy a vetted prompt into Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, or a similar agentic IDE. Prompts use the CLI-first workflow and avoid raw sensitive evidence.",
+        "copy_prompt": "Copy prompt",
+        "copy_command": "Copy command",
+        "open_prompt": "Open prompt",
+        "prompt_command": "Command",
+        "prompt_copied": "Prompt copied to clipboard.",
+        "prompt_command_copied": "Command copied to clipboard.",
+        "prompt_open_failed": "Could not open prompt file: {error}",
+        "settings_companion_title": "Advanced Settings",
+        "settings_companion_body": "These controls preserve CLI parity but stay out of the main audit path.",
+        "repair_advanced_toggle_show": "Show advanced Repair options",
+        "repair_advanced_toggle_hide": "Hide advanced Repair options",
+        "repair_advanced_hint_hidden": "Advanced write options are hidden. Review the audit summary first, then expand only if repair is needed.",
+        "repair_advanced_hint_visible": "Advanced Repair options are visible. Confirm the latest audit context before any write action.",
         "recommended_path": "Recommended path",
         "recommended_path_body": "Choose a local root or drop repository folders below. Then run Audit and review findings before Repair.",
         "repositories_root": "Repositories Root",
@@ -1894,6 +1939,8 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "latest_audit_summary": "Latest audit summary",
         "no_audit_results": "No audit results in this session yet. Run Audit first, then review the summary before applying write actions.",
         "repair_stays_disabled": "Repair stays disabled until Audit finishes and the review window completes.",
+        "repair_review_pending_note": "Review the audit summary first. Repair unlocks when the review window completes.",
+        "repair_ready_note": "Repair is available for reviewed cleanup actions. Keep destructive options off unless explicitly approved.",
         "repair_tab_locked": "Repair tab locked",
         "before_repair": "Before Repair, do this:",
         "repair_lock_step_1": "1. Run Audit and confirm the selected repositories are the ones you want to review.",
@@ -2059,8 +2106,38 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "workflow_repair": "3 Reparar si hace falta",
         "workflow_parity": "Paridad CLI: mismo backend",
         "tab_audit": "1. Auditar",
-        "tab_repair": "2. Reparar",
+        "tab_reports": "2. Reportes",
+        "tab_prompts": "3. Prompts",
+        "tab_settings": "4. Configuración",
+        "tab_repair": "5. Reparar",
         "audit_target": "Objetivo de auditoría",
+        "audit_target_body": "Elegí repositorios locales acá. Los controles avanzados de política, GitHub owner/org e identidad viven en Configuración.",
+        "open_settings_tab": "Abrir configuración",
+        "last_run": "Última corrida",
+        "last_run_none": "Todavía no terminó ninguna corrida GUI en esta sesión.",
+        "reports_dashboard": "Dashboard de reportes",
+        "reports_dashboard_body": "Abrí evidencia local de la última corrida. Tratá los artefactos como sensibles incluso cuando los valores estén redactados.",
+        "latest_artifacts": "Últimos artefactos",
+        "latest_artifacts_none": "Ejecutá Auditar para crear report.json, report.html, run.log y run_state.json.",
+        "open_html_report_action": "Abrir reporte HTML",
+        "open_json_report_action": "Abrir report.json",
+        "open_run_log_action": "Abrir run.log",
+        "open_artifacts_folder_action": "Abrir carpeta de artefactos",
+        "prompts_library": "Biblioteca de prompts agénticos",
+        "prompts_library_body": "Copiá un prompt revisado en Codex, Claude Code, Antigravity, GitHub Copilot, Cursor o una IDE agéntica similar. Los prompts usan el flujo CLI-first y evitan evidencia sensible cruda.",
+        "copy_prompt": "Copiar prompt",
+        "copy_command": "Copiar comando",
+        "open_prompt": "Abrir prompt",
+        "prompt_command": "Comando",
+        "prompt_copied": "Prompt copiado al portapapeles.",
+        "prompt_command_copied": "Comando copiado al portapapeles.",
+        "prompt_open_failed": "No se pudo abrir el archivo de prompt: {error}",
+        "settings_companion_title": "Configuración avanzada",
+        "settings_companion_body": "Estos controles preservan paridad CLI pero quedan fuera del camino principal de auditoría.",
+        "repair_advanced_toggle_show": "Mostrar opciones avanzadas de Reparar",
+        "repair_advanced_toggle_hide": "Ocultar opciones avanzadas de Reparar",
+        "repair_advanced_hint_hidden": "Las opciones avanzadas de escritura están ocultas. Revisá el resumen de auditoría y expandí sólo si hace falta reparar.",
+        "repair_advanced_hint_visible": "Las opciones avanzadas de Reparar están visibles. Confirmá el contexto de la última auditoría antes de cualquier acción de escritura.",
         "recommended_path": "Camino recomendado",
         "recommended_path_body": "Elegí una carpeta raíz local o arrastrá repositorios abajo. Después ejecutá Auditar y revisá hallazgos antes de Reparar.",
         "repositories_root": "Carpeta raíz de repositorios",
@@ -2144,6 +2221,8 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "latest_audit_summary": "Último resumen de auditoría",
         "no_audit_results": "Todavía no hay resultados de auditoría en esta sesión. Ejecutá Auditar primero y revisá el resumen antes de aplicar acciones de escritura.",
         "repair_stays_disabled": "Reparar queda deshabilitado hasta que Auditar termine y se complete la ventana de revisión.",
+        "repair_review_pending_note": "Revisá primero el resumen de auditoría. Reparar se habilita cuando termina la ventana de revisión.",
+        "repair_ready_note": "Reparar está disponible para limpiezas revisadas. Mantené apagadas las opciones destructivas salvo aprobación explícita.",
         "repair_tab_locked": "Pestaña Reparar bloqueada",
         "before_repair": "Antes de Reparar, hacé esto:",
         "repair_lock_step_1": "1. Ejecutá Auditar y confirmá que seleccionaste los repositorios correctos.",
@@ -6962,6 +7041,7 @@ class GuiApp:  # pragma: no cover
         self._secondary_button_text = "#123C3F"
         self._disabled_button_fg = "#B8C6D5"
         self._disabled_button_text = "#64748B"
+        self.root.configure(fg_color=self._page_bg)
 
         self._gui_settings_path = default_gui_settings_path()
         self._gui_settings = load_gui_settings(self._gui_settings_path)
@@ -7040,6 +7120,9 @@ class GuiApp:  # pragma: no cover
         self._workflow_strip = None
         self._workflow_strip_visible = True
         self._audit_tab_name = self._t("tab_audit")
+        self._reports_tab_name = self._t("tab_reports")
+        self._prompts_tab_name = self._t("tab_prompts")
+        self._settings_tab_name = self._t("tab_settings")
         self._repair_tab_name = self._t("tab_repair")
         self._setup_settings_visible = not setup_completed
         self._setup_settings_toggle_button = None
@@ -7075,6 +7158,19 @@ class GuiApp:  # pragma: no cover
         self._repair_status_label = None
         self._repair_status_panel = None
         self._repair_status_badge = None
+        self._repair_gate_note_label = None
+        self._last_run_artifacts: artifact_helpers.RunArtifacts | None = None
+        self._last_run_exit_code: int | None = None
+        self._last_run_action = ""
+        self._reports_status_badge = None
+        self._reports_summary_label = None
+        self._reports_paths_label = None
+        self._reports_action_buttons: list[object] = []
+        self._prompt_cards_frame = None
+        self._repair_options_visible = False
+        self._repair_options_toggle_button = None
+        self._repair_options_hint_label = None
+        self._repair_options_card = None
 
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -7087,6 +7183,7 @@ class GuiApp:  # pragma: no cover
         )
         app.grid(row=0, column=0, sticky="nsew")
         app.grid_columnconfigure(0, weight=1)
+        self._app_frame = app
 
         header = ctk.CTkFrame(app, fg_color=self._header_fg, corner_radius=18)
         header.grid(row=0, column=0, sticky="we", padx=16, pady=(10, 8))
@@ -7138,16 +7235,102 @@ class GuiApp:  # pragma: no cover
         )
         flow_tabs.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 4))
         flow_tabs.add(self._audit_tab_name)
+        flow_tabs.add(self._reports_tab_name)
+        flow_tabs.add(self._prompts_tab_name)
+        flow_tabs.add(self._settings_tab_name)
         flow_tabs.add(self._repair_tab_name)
         self._flow_tabs = flow_tabs
 
         audit_tab = flow_tabs.tab(self._audit_tab_name)
+        reports_tab = flow_tabs.tab(self._reports_tab_name)
+        prompts_tab = flow_tabs.tab(self._prompts_tab_name)
+        settings_tab = flow_tabs.tab(self._settings_tab_name)
         repair_tab = flow_tabs.tab(self._repair_tab_name)
         audit_tab.grid_columnconfigure(0, weight=1)
+        audit_tab.grid_rowconfigure(1, weight=1)
+        reports_tab.grid_columnconfigure(0, weight=1)
+        prompts_tab.grid_columnconfigure(0, weight=1)
+        settings_tab.grid_columnconfigure(0, weight=1)
         repair_tab.grid_columnconfigure(0, weight=1)
 
-        top_row = ctk.CTkFrame(audit_tab, fg_color="transparent")
-        top_row.grid(row=0, column=0, sticky="we", padx=10, pady=(6, 0))
+        audit_target_card = ctk.CTkFrame(
+            audit_tab,
+            fg_color=self._surface_fg,
+            corner_radius=12,
+            border_width=1,
+            border_color=self._card_border,
+        )
+        audit_target_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
+        audit_target_card.grid_columnconfigure(1, weight=1)
+        self._localize_widget(ctk.CTkLabel(
+            audit_target_card,
+            text=self._t("audit_target"),
+            font=self._font(16, bold=True),
+            text_color=self._text_heading,
+        ), "text", "audit_target").grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 4))
+        self._localize_widget(ctk.CTkLabel(
+            audit_target_card,
+            text=self._t("audit_target_body"),
+            justify="left",
+            anchor="w",
+            wraplength=1100,
+            font=self._font(12),
+            text_color=self._text_muted,
+        ), "text", "audit_target_body").grid(row=1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 8))
+        self._add_directory_field(
+            audit_target_card,
+            row=2,
+            label_key="repositories_root",
+            variable=self.root_var,
+            title_key="choose_repositories_root",
+            tooltip_key="repositories_root",
+        )
+        audit_settings_row = ctk.CTkFrame(audit_target_card, fg_color="transparent")
+        audit_settings_row.grid(row=3, column=0, columnspan=3, sticky="we", padx=14, pady=(6, 12))
+        audit_settings_row.grid_columnconfigure(0, weight=1)
+        self._localize_widget(ctk.CTkLabel(
+            audit_settings_row,
+            text=self._t("recommended_path_body"),
+            justify="left",
+            anchor="w",
+            wraplength=860,
+            font=self._font(11),
+            text_color=self._text_muted,
+        ), "text", "recommended_path_body").grid(row=0, column=0, sticky="we")
+        settings_shortcut = ctk.CTkButton(
+            audit_settings_row,
+            text=self._t("open_settings_tab"),
+            command=lambda: self._set_active_flow_tab(self._settings_tab_name),
+            width=150,
+            height=32,
+            corner_radius=8,
+            **self._secondary_button_options(),
+        )
+        self._localize_widget(settings_shortcut, "text", "open_settings_tab")
+        self._bind_tooltip_key(settings_shortcut, "open_settings_tab")
+        settings_shortcut.grid(row=0, column=1, sticky="e", padx=(12, 0))
+
+        settings_intro = ctk.CTkFrame(settings_tab, fg_color="transparent")
+        settings_intro.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 0))
+        settings_intro.grid_columnconfigure(0, weight=1)
+        self._localize_widget(ctk.CTkLabel(
+            settings_intro,
+            text=self._t("settings_companion_title"),
+            font=self._font(18, bold=True),
+            text_color=self._text_heading,
+        ), "text", "settings_companion_title").grid(row=0, column=0, sticky="w")
+        self._localize_widget(ctk.CTkLabel(
+            settings_intro,
+            text=self._t("settings_companion_body"),
+            justify="left",
+            anchor="w",
+            wraplength=1100,
+            font=self._font(12),
+            text_color=self._text_muted,
+        ), "text", "settings_companion_body").grid(row=1, column=0, sticky="we", pady=(2, 8))
+
+        top_row = ctk.CTkFrame(settings_tab, fg_color="transparent")
+        top_row.grid(row=1, column=0, sticky="we", padx=10, pady=(0, 8))
         top_row.grid_columnconfigure(0, weight=2)
         top_row.grid_columnconfigure(1, weight=1)
         self._top_row = top_row
@@ -7164,10 +7347,10 @@ class GuiApp:  # pragma: no cover
         self._settings_card = settings_card
         self._localize_widget(ctk.CTkLabel(
             settings_card,
-            text=self._t("audit_target"),
+            text=self._t("setup_settings"),
             font=self._font(16, bold=True),
             text_color=self._text_heading,
-        ), "text", "audit_target").grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
+        ), "text", "setup_settings").grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
 
         quick_start = ctk.CTkFrame(
             settings_card,
@@ -7180,23 +7363,23 @@ class GuiApp:  # pragma: no cover
         quick_start.grid_columnconfigure(1, weight=1)
         self._localize_widget(ctk.CTkLabel(
             quick_start,
-            text=self._t("recommended_path"),
+            text=self._t("setup_settings"),
             height=28,
             corner_radius=14,
             fg_color=self._primary_button_fg,
             text_color="#F8FAFC",
             font=self._font(11, bold=True),
             padx=12,
-        ), "text", "recommended_path").grid(row=0, column=0, sticky="w", padx=10, pady=10)
+        ), "text", "setup_settings").grid(row=0, column=0, sticky="w", padx=10, pady=10)
         self._localize_widget(ctk.CTkLabel(
             quick_start,
-            text=self._t("recommended_path_body"),
+            text=self._t("settings_status"),
             justify="left",
             anchor="w",
             wraplength=820,
             font=self._font(12),
             text_color=self._text_body,
-        ), "text", "recommended_path_body").grid(row=0, column=1, sticky="we", padx=(0, 10), pady=10)
+        ), "text", "settings_status").grid(row=0, column=1, sticky="we", padx=(0, 10), pady=10)
 
         row = 2
         self._add_directory_field(
@@ -7702,6 +7885,41 @@ class GuiApp:  # pragma: no cover
         self._set_advanced_identity_visibility(False)
         self._set_setup_settings_visibility(self._setup_settings_visible)
 
+        self._build_reports_tab(reports_tab)
+        self._build_prompts_tab(prompts_tab)
+
+        repair_options_toggle = ctk.CTkFrame(
+            repair_tab,
+            fg_color="#FFF7ED",
+            corner_radius=10,
+            border_width=1,
+            border_color="#F5C58B",
+        )
+        repair_options_toggle.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
+        repair_options_toggle.grid_columnconfigure(0, weight=1)
+        self._repair_options_hint_label = ctk.CTkLabel(
+            repair_options_toggle,
+            text=self._t("repair_advanced_hint_hidden"),
+            justify="left",
+            anchor="w",
+            wraplength=860,
+            font=self._font(11),
+            text_color="#7A3E05",
+        )
+        self._localize_widget(self._repair_options_hint_label, "text", "repair_advanced_hint_hidden")
+        self._repair_options_hint_label.grid(row=0, column=0, sticky="we", padx=12, pady=10)
+        self._repair_options_toggle_button = ctk.CTkButton(
+            repair_options_toggle,
+            text=self._t("repair_advanced_toggle_show"),
+            command=self._toggle_repair_options,
+            width=230,
+            height=32,
+            corner_radius=8,
+            **self._secondary_button_options(),
+        )
+        self._bind_tooltip_key(self._repair_options_toggle_button, "repair_options_toggle")
+        self._repair_options_toggle_button.grid(row=0, column=1, sticky="e", padx=(10, 12), pady=10)
+
         options_card = ctk.CTkFrame(
             repair_tab,
             fg_color=self._surface_fg,
@@ -7709,10 +7927,11 @@ class GuiApp:  # pragma: no cover
             border_width=1,
             border_color=self._card_border,
         )
-        options_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
+        options_card.grid(row=1, column=0, sticky="we", padx=10, pady=(0, 8))
         options_card.grid_columnconfigure(0, weight=1)
         options_card.grid_columnconfigure(1, weight=1)
         self._options_card = options_card
+        self._repair_options_card = options_card
         self._localize_widget(ctk.CTkLabel(
             options_card,
             text=self._t("repair_plan_options"),
@@ -7956,6 +8175,7 @@ class GuiApp:  # pragma: no cover
         ), "text", "purge_body").grid(row=14, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 10))
         self._sync_purge_mode_controls()
         self._sync_push_guardrail_controls()
+        self._set_repair_options_visibility(False)
 
         repair_actions_card = ctk.CTkFrame(
             repair_tab,
@@ -7964,7 +8184,7 @@ class GuiApp:  # pragma: no cover
             border_width=1,
             border_color=self._card_border,
         )
-        repair_actions_card.grid(row=1, column=0, sticky="we", padx=10, pady=(0, 8))
+        repair_actions_card.grid(row=2, column=0, sticky="we", padx=10, pady=(0, 8))
         repair_actions_card.grid_columnconfigure(0, weight=1)
         self._localize_widget(ctk.CTkLabel(
             repair_actions_card,
@@ -8023,14 +8243,15 @@ class GuiApp:  # pragma: no cover
         )
         self._bind_tooltip_key(self._repair_button, "repair_button")
         self._repair_button.grid(row=0, column=0, sticky="w")
-        self._localize_widget(ctk.CTkLabel(
+        self._repair_gate_note_label = ctk.CTkLabel(
             repair_controls,
             text=self._t("repair_stays_disabled"),
             justify="left",
             anchor="w",
             font=self._font(11),
             text_color="#6B7F93",
-        ), "text", "repair_stays_disabled").grid(row=0, column=1, sticky="w", padx=(10, 0), pady=6)
+        )
+        self._repair_gate_note_label.grid(row=0, column=1, sticky="w", padx=(10, 0), pady=6)
 
         blocker_overlay = ctk.CTkFrame(
             repair_tab,
@@ -8105,8 +8326,8 @@ class GuiApp:  # pragma: no cover
             hover_color=self._primary_button_hover,
         ), "text", "go_to_audit").grid(row=6, column=0, pady=(14, 22))
 
-        results_row = ctk.CTkFrame(app, fg_color="transparent")
-        results_row.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 14))
+        results_row = ctk.CTkFrame(audit_tab, fg_color="transparent")
+        results_row.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 14))
         results_row.grid_columnconfigure(0, weight=1)
         results_row.grid_columnconfigure(1, weight=1)
         results_row.grid_rowconfigure(0, weight=1)
@@ -8348,6 +8569,344 @@ class GuiApp:  # pragma: no cover
             "text_color": self._secondary_button_text,
         }
 
+    def _build_reports_tab(self, reports_tab) -> None:
+        ctk = self.ctk
+        reports_card = ctk.CTkFrame(
+            reports_tab,
+            fg_color=self._surface_fg,
+            corner_radius=12,
+            border_width=1,
+            border_color=self._card_border,
+        )
+        reports_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
+        reports_card.grid_columnconfigure(0, weight=1)
+        self._localize_widget(ctk.CTkLabel(
+            reports_card,
+            text=self._t("reports_dashboard"),
+            font=self._font(18, bold=True),
+            text_color=self._text_heading,
+        ), "text", "reports_dashboard").grid(row=0, column=0, sticky="w", padx=14, pady=(12, 4))
+        self._localize_widget(ctk.CTkLabel(
+            reports_card,
+            text=self._t("reports_dashboard_body"),
+            justify="left",
+            anchor="w",
+            wraplength=1120,
+            font=self._font(12),
+            text_color=self._text_muted,
+        ), "text", "reports_dashboard_body").grid(row=1, column=0, sticky="we", padx=14, pady=(0, 10))
+
+        status_row = ctk.CTkFrame(reports_card, fg_color="#F2FBF8", corner_radius=10, border_width=1, border_color="#B9DDD3")
+        status_row.grid(row=2, column=0, sticky="we", padx=14, pady=(0, 10))
+        status_row.grid_columnconfigure(1, weight=1)
+        self._reports_status_badge = ctk.CTkLabel(
+            status_row,
+            text=self._t("last_run"),
+            height=28,
+            corner_radius=14,
+            fg_color="#D8F3EA",
+            text_color="#0F766E",
+            font=self._font(11, bold=True),
+            padx=12,
+        )
+        self._reports_status_badge.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 6))
+        self._localize_widget(ctk.CTkLabel(
+            status_row,
+            text=self._t("latest_artifacts"),
+            font=self._font(12, bold=True),
+            text_color=self._text_heading,
+        ), "text", "latest_artifacts").grid(row=0, column=1, sticky="w", padx=(0, 12), pady=(10, 6))
+        self._reports_summary_label = ctk.CTkLabel(
+            status_row,
+            text=self._t("last_run_none"),
+            justify="left",
+            anchor="w",
+            wraplength=980,
+            font=self._font(12),
+            text_color=self._text_body,
+        )
+        self._reports_summary_label.grid(row=1, column=0, columnspan=2, sticky="we", padx=12, pady=(0, 8))
+        self._reports_paths_label = ctk.CTkLabel(
+            status_row,
+            text=self._t("latest_artifacts_none"),
+            justify="left",
+            anchor="w",
+            wraplength=980,
+            font=self._font(11, mono=True),
+            text_color=self._text_muted,
+        )
+        self._reports_paths_label.grid(row=2, column=0, columnspan=2, sticky="we", padx=12, pady=(0, 12))
+
+        actions = ctk.CTkFrame(reports_card, fg_color="transparent")
+        actions.grid(row=3, column=0, sticky="w", padx=14, pady=(0, 12))
+        report_actions = [
+            ("open_html_report_action", lambda: self._open_last_artifact("html")),
+            ("open_json_report_action", lambda: self._open_last_artifact("json")),
+            ("open_run_log_action", lambda: self._open_last_artifact("log")),
+            ("open_artifacts_folder_action", lambda: self._open_last_artifact("folder")),
+        ]
+        self._reports_action_buttons = []
+        for idx, (text_key, command) in enumerate(report_actions):
+            button = ctk.CTkButton(
+                actions,
+                text=self._t(text_key),
+                command=command,
+                height=32,
+                corner_radius=8,
+                **self._secondary_button_options(),
+            )
+            self._localize_widget(button, "text", text_key)
+            self._bind_tooltip_key(button, "reports_tab")
+            button.grid(row=0, column=idx, sticky="w", padx=(0, 8))
+            self._reports_action_buttons.append(button)
+        self._refresh_reports_tab()
+
+    def _build_prompts_tab(self, prompts_tab) -> None:
+        ctk = self.ctk
+        prompts_card = ctk.CTkFrame(
+            prompts_tab,
+            fg_color=self._surface_fg,
+            corner_radius=12,
+            border_width=1,
+            border_color=self._card_border,
+        )
+        prompts_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
+        prompts_card.grid_columnconfigure(0, weight=1)
+        self._localize_widget(ctk.CTkLabel(
+            prompts_card,
+            text=self._t("prompts_library"),
+            font=self._font(18, bold=True),
+            text_color=self._text_heading,
+        ), "text", "prompts_library").grid(row=0, column=0, sticky="w", padx=14, pady=(12, 4))
+        self._localize_widget(ctk.CTkLabel(
+            prompts_card,
+            text=self._t("prompts_library_body"),
+            justify="left",
+            anchor="w",
+            wraplength=1120,
+            font=self._font(12),
+            text_color=self._text_muted,
+        ), "text", "prompts_library_body").grid(row=1, column=0, sticky="we", padx=14, pady=(0, 10))
+        self._prompt_cards_frame = ctk.CTkFrame(prompts_card, fg_color="transparent")
+        self._prompt_cards_frame.grid(row=2, column=0, sticky="we", padx=14, pady=(0, 12))
+        self._prompt_cards_frame.grid_columnconfigure((0, 1), weight=1)
+        self._refresh_prompt_cards()
+
+    def _refresh_prompt_cards(self) -> None:
+        cards_frame = getattr(self, "_prompt_cards_frame", None)
+        if cards_frame is None:
+            return
+        for child in cards_frame.winfo_children():
+            child.destroy()
+
+        repo_root = Path(__file__).resolve().parent
+        for idx, prompt in enumerate(prompt_helpers.agentic_prompt_cards(self._current_locale())):
+            row = idx // 2
+            column = idx % 2
+            card = self.ctk.CTkFrame(
+                cards_frame,
+                fg_color="#F8FCFA",
+                corner_radius=10,
+                border_width=1,
+                border_color="#D6E7E1",
+            )
+            card.grid(row=row, column=column, sticky="nsew", padx=(0 if column == 0 else 8, 8 if column == 0 else 0), pady=(0, 8))
+            card.grid_columnconfigure(0, weight=1)
+            self.ctk.CTkLabel(
+                card,
+                text=prompt.title,
+                font=self._font(14, bold=True),
+                text_color=self._text_heading,
+                anchor="w",
+                justify="left",
+            ).grid(row=0, column=0, sticky="we", padx=12, pady=(10, 2))
+            self.ctk.CTkLabel(
+                card,
+                text=prompt.description,
+                font=self._font(11),
+                text_color=self._text_muted,
+                anchor="w",
+                justify="left",
+                wraplength=500,
+            ).grid(row=1, column=0, sticky="we", padx=12, pady=(0, 8))
+            self.ctk.CTkLabel(
+                card,
+                text=f"{self._t('prompt_command')}: {prompt.command}",
+                font=self._font(10, mono=True),
+                text_color=self._text_body,
+                anchor="w",
+                justify="left",
+                wraplength=520,
+            ).grid(row=2, column=0, sticky="we", padx=12, pady=(0, 8))
+
+            actions = self.ctk.CTkFrame(card, fg_color="transparent")
+            actions.grid(row=3, column=0, sticky="w", padx=12, pady=(0, 12))
+            copy_prompt_button = self.ctk.CTkButton(
+                actions,
+                text=self._t("copy_prompt"),
+                command=lambda item=prompt: self._copy_prompt_to_clipboard(item),
+                height=30,
+                corner_radius=8,
+                fg_color=self._primary_button_fg,
+                hover_color=self._primary_button_hover,
+            )
+            self._bind_tooltip_key(copy_prompt_button, "copy_prompt")
+            copy_prompt_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
+            copy_command_button = self.ctk.CTkButton(
+                actions,
+                text=self._t("copy_command"),
+                command=lambda item=prompt: self._copy_text_to_clipboard(item.command, self._t("prompt_command_copied")),
+                height=30,
+                corner_radius=8,
+                **self._secondary_button_options(),
+            )
+            self._bind_tooltip_key(copy_command_button, "copy_prompt_command")
+            copy_command_button.grid(row=0, column=1, sticky="w", padx=(0, 8))
+            open_prompt_button = self.ctk.CTkButton(
+                actions,
+                text=self._t("open_prompt"),
+                command=lambda item=prompt: self._open_prompt_file(item, repo_root),
+                height=30,
+                corner_radius=8,
+                **self._secondary_button_options(),
+            )
+            self._bind_tooltip_key(open_prompt_button, "open_prompt_file")
+            open_prompt_button.grid(row=0, column=2, sticky="w")
+
+    def _copy_text_to_clipboard(self, text: str, success_message: str) -> None:
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
+            self.root.update_idletasks()
+            self.log(f"[INFO] {success_message}")
+        except Exception as exc:
+            self.log(f"[WARN] Clipboard copy failed: {exc}")
+
+    def _copy_prompt_to_clipboard(self, prompt: prompt_helpers.AgenticPrompt) -> None:
+        repo_root = Path(__file__).resolve().parent
+        try:
+            text = prompt_helpers.read_prompt_text(prompt, repo_root)
+        except Exception as exc:
+            self.log(f"[WARN] Unable to read prompt file: {exc}")
+            return
+        self._copy_text_to_clipboard(text, self._t("prompt_copied"))
+
+    def _open_prompt_file(self, prompt: prompt_helpers.AgenticPrompt, repo_root: Path) -> None:
+        try:
+            self._open_local_path(prompt.path(repo_root))
+        except Exception as exc:
+            self.log(f"[WARN] {self._t('prompt_open_failed', error=exc)}")
+
+    def _open_local_path(self, path: Path) -> None:
+        if not path.exists():
+            raise FileNotFoundError(path)
+        opened = bool(webbrowser.open(path.resolve().as_uri()))
+        if not opened:
+            raise RuntimeError(f"local opener returned false for {path}")
+
+    def _open_last_artifact(self, kind: str) -> None:
+        artifacts = getattr(self, "_last_run_artifacts", None)
+        if artifacts is None:
+            self.log(f"[INFO] {self._t('latest_artifacts_none')}")
+            return
+        targets = {
+            "html": artifacts.html_path,
+            "json": artifacts.json_path,
+            "log": artifacts.log_path,
+            "folder": artifacts.run_dir,
+        }
+        target = targets.get(kind)
+        if target is None:
+            return
+        try:
+            self._open_local_path(target)
+        except Exception as exc:
+            self.log(f"[WARN] Could not open {target}: {exc}")
+
+    def _refresh_reports_tab(self) -> None:
+        badge = getattr(self, "_reports_status_badge", None)
+        summary_label = getattr(self, "_reports_summary_label", None)
+        paths_label = getattr(self, "_reports_paths_label", None)
+        artifacts = getattr(self, "_last_run_artifacts", None)
+        if badge is None or summary_label is None or paths_label is None:
+            return
+        if artifacts is None:
+            badge.configure(text=self._t("last_run"), fg_color="#D8F3EA", text_color="#0F766E")
+            summary_label.configure(text=self._t("last_run_none"))
+            paths_label.configure(text=self._t("latest_artifacts_none"))
+            for button in getattr(self, "_reports_action_buttons", []):
+                button.configure(state="disabled")
+            return
+
+        failed = sum(1 for item in self._last_audit_reports_payload if item.get("status") == "FAIL")
+        exit_code = getattr(self, "_last_run_exit_code", None)
+        if failed or exit_code == EXIT_POLICY_FAILED:
+            badge_text = "FAIL"
+            badge_fg = "#FEE2E2"
+            badge_text_color = "#991B1B"
+        elif exit_code == EXIT_RUNTIME_ERROR:
+            badge_text = "ERROR"
+            badge_fg = "#FEE2E2"
+            badge_text_color = "#991B1B"
+        elif exit_code == EXIT_ABORTED:
+            badge_text = "ABORTED"
+            badge_fg = "#FEF3C7"
+            badge_text_color = "#92400E"
+        else:
+            badge_text = "PASS/REVIEW"
+            badge_fg = "#DCFCE7"
+            badge_text_color = "#166534"
+
+        summary = self._build_repair_status_summary(self._last_audit_reports_payload)
+        if not self._last_audit_reports_payload:
+            summary = self._t("last_run_none") if exit_code is None else f"{self._last_run_action or 'run'} finished with exit code {exit_code}."
+        badge.configure(text=badge_text, fg_color=badge_fg, text_color=badge_text_color)
+        summary_label.configure(text=summary)
+        paths_label.configure(
+            text=(
+                f"run_dir: {artifacts.run_dir}\n"
+                f"report.json: {artifacts.json_path}\n"
+                f"report.html: {artifacts.html_path}\n"
+                f"run.log: {artifacts.log_path}\n"
+                f"run_state.json: {artifacts.state_path}"
+            )
+        )
+        for button in getattr(self, "_reports_action_buttons", []):
+            button.configure(state="normal")
+
+    def _remember_last_run_artifacts(
+        self,
+        artifacts: artifact_helpers.RunArtifacts,
+        *,
+        run_fix: bool,
+        exit_code: int,
+        reports_payload: list[dict[str, object]],
+    ) -> None:
+        self._last_run_artifacts = artifacts
+        self._last_run_exit_code = exit_code
+        self._last_run_action = self._t("action_repair" if run_fix else "action_audit")
+        if reports_payload:
+            self._last_audit_reports_payload = reports_payload
+        self._refresh_reports_tab()
+
+    def _set_repair_options_visibility(self, visible: bool) -> None:
+        self._repair_options_visible = visible
+        card = getattr(self, "_repair_options_card", None)
+        if card is not None:
+            if visible:
+                card.grid()
+            else:
+                card.grid_remove()
+        button = getattr(self, "_repair_options_toggle_button", None)
+        if button is not None:
+            button.configure(text=self._t("repair_advanced_toggle_hide" if visible else "repair_advanced_toggle_show"))
+        hint = getattr(self, "_repair_options_hint_label", None)
+        if hint is not None:
+            hint.configure(text=self._t("repair_advanced_hint_visible" if visible else "repair_advanced_hint_hidden"))
+
+    def _toggle_repair_options(self) -> None:
+        self._set_repair_options_visibility(not getattr(self, "_repair_options_visible", False))
+
     def _current_locale(self) -> str:
         return normalize_gui_locale(getattr(self, "_gui_locale", GUI_LOCALE_DEFAULT))
 
@@ -8397,8 +8956,14 @@ class GuiApp:  # pragma: no cover
         if flow_tabs is None:
             return
         desired_audit_name = self._t("tab_audit")
+        desired_reports_name = self._t("tab_reports")
+        desired_prompts_name = self._t("tab_prompts")
+        desired_settings_name = self._t("tab_settings")
         desired_repair_name = self._t("tab_repair")
         current_audit_name = getattr(self, "_audit_tab_name", desired_audit_name)
+        current_reports_name = getattr(self, "_reports_tab_name", desired_reports_name)
+        current_prompts_name = getattr(self, "_prompts_tab_name", desired_prompts_name)
+        current_settings_name = getattr(self, "_settings_tab_name", desired_settings_name)
         current_repair_name = getattr(self, "_repair_tab_name", desired_repair_name)
         active_tab = None
         try:
@@ -8409,24 +8974,54 @@ class GuiApp:  # pragma: no cover
             if current_audit_name != desired_audit_name:
                 flow_tabs.rename(current_audit_name, desired_audit_name)
                 self._audit_tab_name = desired_audit_name
+            if current_reports_name != desired_reports_name:
+                flow_tabs.rename(current_reports_name, desired_reports_name)
+                self._reports_tab_name = desired_reports_name
+            if current_prompts_name != desired_prompts_name:
+                flow_tabs.rename(current_prompts_name, desired_prompts_name)
+                self._prompts_tab_name = desired_prompts_name
+            if current_settings_name != desired_settings_name:
+                flow_tabs.rename(current_settings_name, desired_settings_name)
+                self._settings_tab_name = desired_settings_name
             if current_repair_name != desired_repair_name:
                 flow_tabs.rename(current_repair_name, desired_repair_name)
                 self._repair_tab_name = desired_repair_name
+            if hasattr(flow_tabs, "_name_list"):
+                flow_tabs._name_list = [  # noqa: SLF001 - CustomTkinter rename preserves visual order but appends internally.
+                    desired_audit_name,
+                    desired_reports_name,
+                    desired_prompts_name,
+                    desired_settings_name,
+                    desired_repair_name,
+                ]
         except Exception:
             self._audit_tab_name = desired_audit_name
+            self._reports_tab_name = desired_reports_name
+            self._prompts_tab_name = desired_prompts_name
+            self._settings_tab_name = desired_settings_name
             self._repair_tab_name = desired_repair_name
             return
         if active_tab == current_repair_name:
             self._set_active_flow_tab(desired_repair_name)
         elif active_tab == current_audit_name:
             self._set_active_flow_tab(desired_audit_name)
+        elif active_tab == current_reports_name:
+            self._set_active_flow_tab(desired_reports_name)
+        elif active_tab == current_prompts_name:
+            self._set_active_flow_tab(desired_prompts_name)
+        elif active_tab == current_settings_name:
+            self._set_active_flow_tab(desired_settings_name)
 
     def _apply_gui_locale(self) -> None:
         self._refresh_locale_menu()
         self._refresh_flow_tab_locale()
         self._refresh_localized_widgets()
+        self._refresh_prompt_cards()
+        self._refresh_reports_tab()
+        self._set_repair_options_visibility(getattr(self, "_repair_options_visible", False))
         self._set_setup_settings_visibility(getattr(self, "_setup_settings_visible", True))
         self._set_advanced_identity_visibility(getattr(self, "_advanced_identity_visible", False))
+        self._update_repair_gate_note()
         if getattr(self, "_run_in_progress", False):
             self._update_repo_summary()
             self._update_run_buttons_state()
@@ -8698,10 +9293,13 @@ class GuiApp:  # pragma: no cover
         if visible == self._workflow_strip_visible:
             return
         self._workflow_strip_visible = visible
-        if visible:
-            self._workflow_strip.grid()
+        try:
+            if visible:
+                self._workflow_strip.grid()
+                return
+            self._workflow_strip.grid_remove()
+        except Exception:
             return
-        self._workflow_strip.grid_remove()
 
     def _current_gui_settings_payload(self, *, setup_completed: bool) -> dict[str, object]:
         return {
@@ -8941,6 +9539,10 @@ class GuiApp:  # pragma: no cover
             return
         try:
             self._flow_tabs.set(tab_name)
+            app_frame = getattr(self, "_app_frame", None)
+            parent_canvas = getattr(app_frame, "_parent_canvas", None)
+            if parent_canvas is not None:
+                parent_canvas.yview_moveto(0)
         except Exception:
             pass
 
@@ -9444,6 +10046,21 @@ class GuiApp:  # pragma: no cover
             pass
         self._repair_cooldown_after_id = None
 
+    def _update_repair_gate_note(self) -> None:
+        note_label = getattr(self, "_repair_gate_note_label", None)
+        if note_label is None:
+            return
+        if getattr(self, "_repair_ready", False):
+            text_key = "repair_ready_note"
+            text_color = "#166534"
+        elif getattr(self, "_last_audit_reports_payload", []):
+            text_key = "repair_review_pending_note"
+            text_color = "#7A4B13"
+        else:
+            text_key = "repair_stays_disabled"
+            text_color = "#6B7F93"
+        note_label.configure(text=self._t(text_key), text_color=text_color)
+
     def _update_run_buttons_state(self) -> None:
         audit_button = getattr(self, "_audit_button", None)
         if audit_button is not None:
@@ -9480,6 +10097,7 @@ class GuiApp:  # pragma: no cover
 
         state = "normal" if (self._repair_ready and not self._run_in_progress) else "disabled"
         repair_button.configure(state=state, text=self._repair_button_text)
+        self._update_repair_gate_note()
 
     def _update_repo_selection_controls(self) -> None:
         has_targets = bool(getattr(self, "_repo_items", []))
@@ -9764,13 +10382,13 @@ class GuiApp:  # pragma: no cover
 
         if selection_signature and selection_signature[0] == "github-owner":
             self._lock_repair_until_next_audit(self._t("lock_repair_remote"))
-            self._set_active_flow_tab(self._audit_tab_name)
-            self.log("[INFO] Flow: GitHub owner/org audit finished. Remote audit mode is audit-only.")
+            self._set_active_flow_tab(self._reports_tab_name)
+            self.log("[INFO] Flow: GitHub owner/org audit finished. Review artifacts in the Reports tab. Remote audit mode is audit-only.")
             return
 
         self._start_repair_cooldown(reports_payload, selection_signature)
-        self._set_active_flow_tab(self._repair_tab_name)
-        self.log("[INFO] Flow: audit finished. Review the findings, then continue from the Repair tab.")
+        self._set_active_flow_tab(self._reports_tab_name)
+        self.log("[INFO] Flow: audit finished. Review artifacts in the Reports tab, then continue to Repair only if needed.")
 
     def log(self, msg: str) -> None:
         self.output.insert("end", msg + "\n")
@@ -10161,6 +10779,12 @@ class GuiApp:  # pragma: no cover
                     reports_payload = []
 
             def _finish_ui() -> None:
+                self._remember_last_run_artifacts(
+                    artifacts,
+                    run_fix=run_fix,
+                    exit_code=exit_code,
+                    reports_payload=reports_payload,
+                )
                 self._on_gui_run_finished(run_fix, selection_signature, reports_payload, exit_code)
                 if exit_code != 0:
                     self.log(f"[INFO] Run finished with exit code: {exit_code}")

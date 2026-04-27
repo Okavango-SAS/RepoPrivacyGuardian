@@ -4,6 +4,22 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-04-26
+
+GUI companion reconstruction update.
+
+### Added
+
+- Added a GUI Reports tab for the latest local `report.json`, `report.html`, `run.log`, and `run_state.json` artifacts.
+- Added a GUI Prompts tab backed by a versioned agentic prompt registry for CLI-first environment setup, audit-only, audit-and-repair, and compact CLI delegation workflows.
+- Added English prompt files under `docs/prompts/en/` while keeping the existing Spanish prompt library.
+
+### Changed
+
+- Rebuilt the GUI information architecture around `Audit`, `Reports`, `Prompts`, `Settings`, and gated `Repair` tabs.
+- Moved advanced parity controls into Settings and kept advanced Repair write options collapsed by default without changing `GuardRunConfig`, CLI flags, report fields, or remediation semantics.
+- Updated release contract, docs, and tests for the `1.4.0` minor release line.
+
 ## [1.3.10] - 2026-04-26
 
 CLI/GUI parity repository-rule documentation update.

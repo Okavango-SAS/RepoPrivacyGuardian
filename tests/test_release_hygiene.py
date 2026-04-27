@@ -144,7 +144,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     versioning = (root / "docs" / "VERSIONING.md").read_text(encoding="utf-8")
     release_notes = (root / "docs" / "RELEASE_NOTES_TEMPLATE.md").read_text(encoding="utf-8")
 
-    assert "`1.3.x`" in versioning
+    assert "`1.4.x`" in versioning
     assert "`1.0.0`" in versioning
     assert "`1.2.0`" in versioning
     assert "`1.2.1`" in versioning
@@ -159,6 +159,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.3.8`" in versioning
     assert "`1.3.9`" in versioning
     assert "`1.3.10`" in versioning
+    assert "`1.4.0`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "Validation evidence" in release_notes
 
@@ -235,7 +236,13 @@ def test_docs_cover_agentic_ide_prompt_library() -> None:
     setup_prompt = (root / "docs" / "prompts" / "06_PREPARACION_ENTORNO_AGENTICA.prompt.md").read_text(
         encoding="utf-8"
     )
+    setup_prompt_en = (root / "docs" / "prompts" / "en" / "06_AGENTIC_ENVIRONMENT_SETUP.prompt.md").read_text(
+        encoding="utf-8"
+    )
     repair_prompt = (root / "docs" / "prompts" / "07_AUDITORIA_REPARACION_AGENTICA.prompt.md").read_text(
+        encoding="utf-8"
+    )
+    repair_prompt_en = (root / "docs" / "prompts" / "en" / "07_AGENTIC_AUDIT_AND_REPAIR.prompt.md").read_text(
         encoding="utf-8"
     )
 
@@ -245,10 +252,17 @@ def test_docs_cover_agentic_ide_prompt_library() -> None:
         assert "07_AUDITORIA_REPARACION_AGENTICA.prompt.md" in text
 
     assert "repo-privacy-guardian --check-tooling" in setup_prompt
+    assert "repo-privacy-guardian --check-tooling" in setup_prompt_en
     assert "python -m pip install ." in setup_prompt
+    assert "python -m pip install ." in setup_prompt_en
     assert "repo-privacy-guardian --root <repos-root> --repos <target-repo> --dry-run --yes" in repair_prompt
+    assert "repo-privacy-guardian --root <repos-root> --repos <target-repo> --dry-run --yes" in repair_prompt_en
     assert "repo-privacy-guardian --root <repos-root> --repos <target-repo> --fix --dry-run --yes" in repair_prompt
+    assert "repo-privacy-guardian --root <repos-root> --repos <target-repo> --fix --dry-run --yes" in repair_prompt_en
     assert "No ejecutar `--push` sin aprobacion explicita" in repair_prompt
+    assert "Do not run `--push` without explicit approval" in repair_prompt_en
+    assert "Prompts" in readme
+    assert "docs/prompts/en/06_AGENTIC_ENVIRONMENT_SETUP.prompt.md" in readme
 
 
 def test_docs_cover_secret_taxonomy_confidence_buckets() -> None:
@@ -271,6 +285,8 @@ def test_changelog_records_stable_release() -> None:
     changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
 
     assert "## [1.3.0] - 2026-04-25" in changelog
+    assert "## [1.4.0] - 2026-04-26" in changelog
+    assert "GUI companion reconstruction update." in changelog
     assert "GitHub owner audit mode and GUI/CLI parity update." in changelog
     assert "## [1.3.1] - 2026-04-25" in changelog
     assert "Release-readiness reliability hardening update." in changelog
@@ -310,9 +326,9 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.3.10"' in pyproject
-    assert "Current release line: `v1.3.x`." in readme
-    assert "`v1.3.10` is the current patch release with CLI/GUI parity formalized as a repository rule." in readme
+    assert 'version = "1.4.0"' in pyproject
+    assert "Current release line: `v1.4.x`." in readme
+    assert "`v1.4.0` is the current minor release with the GUI rebuilt as a CLI companion with Reports and Prompts tabs." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme

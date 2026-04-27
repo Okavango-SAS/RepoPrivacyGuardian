@@ -168,6 +168,18 @@ Presentation-only GUI features and launcher-only CLI flags are permitted only wh
   - base install remains minimal;
   - `gui` extra enables desktop dependencies;
   - `remediation` extra enables rewrite tooling;
+
+## DEC-012 - GUI is a CLI companion, not a second control plane
+
+- Status: accepted
+- Decision: rebuild the GUI presentation around `Audit`, `Reports`, `Prompts`, `Settings`, and gated `Repair` tabs while preserving the same backend pipeline and `GuardRunConfig` parity.
+- Rationale: the primary automation use case is agentic CLI execution. The desktop UI should make manual audit, evidence review, prompt copying, and reviewed repair easier without exposing a separate product semantics surface.
+- Implementation notes:
+  - `Audit` keeps target selection, drag-and-drop, run, stop, refresh, and execution log visible;
+  - `Reports` opens the latest local JSON/HTML/log/run-state artifacts without rendering raw sensitive evidence in the GUI;
+  - `Prompts` reads the tracked bilingual prompt registry and copies CLI-first workflows for agentic IDEs;
+  - `Settings` contains advanced parity controls that still map to the same internal fields;
+  - `Repair` remains locked until a valid audit context exists, and advanced write toggles start collapsed.
   - `dev` bundles test and release tooling.
 
 ## Future candidates

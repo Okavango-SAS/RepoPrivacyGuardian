@@ -9,8 +9,9 @@ There are now three intentionally small support modules:
 - `repo_privacy_guardian_runtime.py` for shared run-exit semantics plus root/target discovery helpers used by both CLI and GUI
 - `repo_privacy_guardian_artifacts.py` for run-artifact creation, run-state persistence, and log-writing helpers shared by CLI and GUI flow
 - `repo_privacy_guardian_github.py` for GitHub remote parsing, API access, and release-hardening audit helpers
+- `repo_privacy_guardian_prompts.py` for the GUI/README agentic prompt registry without importing desktop GUI dependencies
 
-They exist to remove high-risk runtime/preflight and network helper glue from the monolith without fragmenting the core audit/remediation engine.
+They exist to remove high-risk runtime/preflight, network, prompt-library, and artifact helper glue from the monolith without fragmenting the core audit/remediation engine.
 
 ## Runtime surfaces
 
@@ -71,7 +72,7 @@ Read the file in this order when orienting yourself:
 
 10. Optional GUI wrapper
 - `GuiApp`
-- GUI state management, audit/repair staging, and parity wiring
+- GUI state management, Reports/Prompts/Settings presentation, audit/repair staging, and parity wiring
 
 11. CLI/parser entrypoint
 - `make_parser()`
@@ -105,11 +106,13 @@ Normal CLI flow:
 7. optional fix path executes only when explicitly requested
 8. reports are persisted and optionally opened
 
-GUI flow uses the same backend pipeline, but keeps the visible staged contract:
+GUI flow uses the same backend pipeline, but keeps a companion-style staged contract:
 
 1. `Audit`
-2. review findings and plan
-3. `Repair` only after audit context unlocks it
+2. review local evidence in `Reports`
+3. copy CLI-first agentic workflows from `Prompts` when delegating work
+4. keep advanced parity controls in `Settings`
+5. `Repair` only after audit context unlocks it
 
 ## Operationally important files outside the main module
 
@@ -126,6 +129,7 @@ GUI flow uses the same backend pipeline, but keeps the visible staged contract:
 - Destructive operations require explicit flags.
 - Reports are treated as sensitive local artifacts.
 - CLI remains the primary contract; GUI is a parity wrapper, not a separate product surface.
+- GUI is a CLI companion for manual audit, evidence review, prompt copying, settings, and gated repair; it must not duplicate scanner or remediation logic.
 - CLI/GUI parity is a repository rule: new behavior must stay mapped through the shared runtime/config/report path or be documented as a non-behavioral presentation/launcher exception.
 
 ## Current technical debt

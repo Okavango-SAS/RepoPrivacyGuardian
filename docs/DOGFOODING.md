@@ -20,6 +20,7 @@ Prompt library:
 - environment preparation after cloning this tool: `docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md`
 - audit-only dogfooding: `docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md`
 - reviewed audit and repair: `docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md`
+- English equivalents: `docs/prompts/en/06_AGENTIC_ENVIRONMENT_SETUP.prompt.md`, `docs/prompts/en/05_DOGFOODING_AUDIT_ONLY.prompt.md`, and `docs/prompts/en/07_AGENTIC_AUDIT_AND_REPAIR.prompt.md`
 
 ## CLI Contract
 
@@ -34,7 +35,7 @@ The maintained automation contract is CLI-first:
 7. run real fixes only with explicit operator approval
 8. re-run audit until `PASS` or until the remaining blocker is documented
 
-The GUI is a parity wrapper for manual use. Agentic dogfooding should prefer CLI so commands, artifacts, and outcomes are reproducible.
+The GUI is a parity companion for manual use. Agentic dogfooding should prefer CLI so commands, artifacts, and outcomes are reproducible; the GUI `Prompts` tab exists to copy the same maintained CLI-first workflows into agentic IDE sessions.
 
 ## Baseline Commands
 

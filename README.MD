@@ -72,12 +72,13 @@ Choose the path that matches what you need right now:
 
 ## 📈 Release Posture
 
-- Current release line: `v1.3.x`.
+- Current release line: `v1.4.x`.
 - `v1.0.0` established the stable CLI, packaging, and release contract within the current local-first scope.
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
 - `v1.2.3` is the public-release stabilization and GUI UX update.
-- `v1.3.10` is the current patch release with CLI/GUI parity formalized as a repository rule.
+- `v1.3.10` formalized CLI/GUI parity as a repository rule.
+- `v1.4.0` is the current minor release with the GUI rebuilt as a CLI companion with Reports and Prompts tabs.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -418,13 +419,17 @@ GUI and CLI share:
 
 Repository rule: CLI/GUI parity is release-blocking. Any new audit, report, GitHub hardening, remote-audit, locale-visible, or repair behavior must expose equivalent operator control in CLI and GUI, map to the same internal configuration/policy/report fields, and add or update regression tests. Presentation-only GUI features and launcher-only CLI flags are allowed only when they are documented as non-behavioral exceptions.
 
+The GUI is now a CLI companion for manual use: Audit stays simple, Reports keeps the latest local evidence visible, Prompts helps copy the maintained agentic CLI workflows, Settings holds advanced parity controls, and Repair remains gated.
+
 The GUI keeps the staged safety contract:
 
 1. `Audit`
-2. review findings
-3. `Repair` only after audit context unlocks it
+2. review findings in `Reports`
+3. copy agentic workflows from `Prompts` when delegating CLI work
+4. adjust advanced options only in `Settings`
+5. `Repair` only after audit context unlocks it
 
-After setup is saved, the GUI keeps advanced parity controls collapsed in Settings. This changes visibility only; GUI runs still build the same `GuardRunConfig` fields as CLI runs.
+After setup is saved, the GUI keeps advanced parity controls collapsed in Settings and advanced Repair options hidden until needed. This changes visibility only; GUI runs still build the same `GuardRunConfig` fields as CLI runs.
 
 When GitHub owner/org remote audit is active, the repository picker switches to a dedicated audit-only state instead of showing local Root errors. The local list is ignored, temporary clones are cleaned up after the run, and `Repair` remains locked for remote targets.
 
@@ -518,11 +523,12 @@ For dogfooding against another repository, use [DOGFOODING](docs/DOGFOODING.md).
 
 Reusable copy/paste prompts:
 
-| Situation | Prompt |
-| --- | --- |
-| Prepare this tool after cloning | [`06_PREPARACION_ENTORNO_AGENTICA.prompt.md`](docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md) |
-| Audit another repository without fixes | [`05_DOGFOODING_AUDIT_ONLY.prompt.md`](docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md) |
-| Audit, review, and repair after approval | [`07_AUDITORIA_REPARACION_AGENTICA.prompt.md`](docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md) |
+| Situation | Español | English |
+| --- | --- | --- |
+| Prepare this tool after cloning | [`06_PREPARACION_ENTORNO_AGENTICA.prompt.md`](docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md) | [`06_AGENTIC_ENVIRONMENT_SETUP.prompt.md`](docs/prompts/en/06_AGENTIC_ENVIRONMENT_SETUP.prompt.md) |
+| Audit another repository without fixes | [`05_DOGFOODING_AUDIT_ONLY.prompt.md`](docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md) | [`05_DOGFOODING_AUDIT_ONLY.prompt.md`](docs/prompts/en/05_DOGFOODING_AUDIT_ONLY.prompt.md) |
+| Audit, review, and repair after approval | [`07_AUDITORIA_REPARACION_AGENTICA.prompt.md`](docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md) | [`07_AGENTIC_AUDIT_AND_REPAIR.prompt.md`](docs/prompts/en/07_AGENTIC_AUDIT_AND_REPAIR.prompt.md) |
+| Compact agentic CLI workflow | [`04_EJECUCION_AGENTICA_CLI.prompt.md`](docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md) | [`04_AGENTIC_CLI_EXECUTION.prompt.md`](docs/prompts/en/04_AGENTIC_CLI_EXECUTION.prompt.md) |
 
 ### Recommended agent prompt template
 
@@ -537,7 +543,7 @@ re-run the audit until the repository is PASS, and preserve audit artifacts unde
 Do not push or rewrite history without explicit approval.
 ```
 
-The repository also includes reusable prompt files under `docs/prompts/` for environment setup, audit-only dogfooding, reviewed repair, GUI/CLI parity, and release-readiness workflows.
+The desktop GUI exposes the same prompt library in its `Prompts` tab. Locale only changes the presentation and prompt choice; it never renames CLI flags, report fields, policy keys, or run-config mappings.
 
 ## 🧰 Headless and Desktop Diagnostics
 

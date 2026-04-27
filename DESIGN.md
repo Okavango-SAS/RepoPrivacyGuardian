@@ -85,7 +85,7 @@ components:
 
 Repo Privacy Guardian is a security utility, not a dashboard or marketing page. The desktop UI should feel quiet, compact, and operational: a user chooses repositories, runs Audit, reviews results, and only then enters Repair.
 
-The main screen should optimize for the default path. Setup, GitHub owner/org audit, output overrides, identity controls, and repair write options are available but should not compete with the primary Audit action.
+The main screen should optimize for the default path. Setup, GitHub owner/org audit, output overrides, identity controls, and repair write options are available but should not compete with the primary Audit action. The GUI is a CLI companion: it should make manual audit, artifact review, prompt copying, settings, and gated repair easy without becoming a second scanner control plane.
 
 ## Colors
 
@@ -100,8 +100,9 @@ Use system UI fonts with Inter-style proportions where available. Headings shoul
 Keep the first viewport simple after setup:
 
 - visible: repository root, repository list/drop target, Audit action, stop/refresh controls, and execution log
+- separate tabs: Reports for latest artifacts, Prompts for agentic CLI workflows, Settings for advanced parity controls, and Repair for reviewed write actions
 - collapsed: policy path, report paths, GitHub owner/org discovery, clone worker tuning, identity setup, and repair write actions
-- staged: Repair remains locked until a completed Audit creates review context
+- staged: Repair remains locked until a completed Audit creates review context; advanced repair toggles remain collapsed until needed
 
 ## Components
 

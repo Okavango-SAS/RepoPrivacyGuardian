@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 import Repo_Privacy_Guardian as rpg
+import repo_privacy_guardian_prompts as prompt_helpers
 
 
 SUBPROCESS_TEST_TIMEOUT_SECONDS = 60
@@ -1207,6 +1208,45 @@ def test_gui_setup_settings_are_collapsible() -> None:
     assert frame.actions[-1] == "grid"
 
 
+def test_gui_repair_options_are_collapsible() -> None:
+    class DummyWidget:
+        def __init__(self) -> None:
+            self.actions: list[str] = []
+            self.kwargs: dict[str, object] = {}
+
+        def configure(self, **kwargs: object) -> None:
+            self.kwargs.update(kwargs)
+
+        def grid(self) -> None:
+            self.actions.append("grid")
+
+        def grid_remove(self) -> None:
+            self.actions.append("grid_remove")
+
+    card = DummyWidget()
+    button = DummyWidget()
+    hint = DummyWidget()
+    app = object.__new__(rpg.GuiApp)
+    app._repair_options_visible = True
+    app._repair_options_card = card
+    app._repair_options_toggle_button = button
+    app._repair_options_hint_label = hint
+
+    app._set_repair_options_visibility(False)
+
+    assert app._repair_options_visible is False
+    assert card.actions == ["grid_remove"]
+    assert button.kwargs["text"] == "Show advanced Repair options"
+    assert "hidden" in str(hint.kwargs["text"])
+
+    app._toggle_repair_options()
+
+    assert app._repair_options_visible is True
+    assert card.actions[-1] == "grid"
+    assert button.kwargs["text"] == "Hide advanced Repair options"
+    assert "visible" in str(hint.kwargs["text"])
+
+
 def test_gui_settings_payload_excludes_identity_secrets() -> None:
     class DummyVar:
         def __init__(self, value: object) -> None:
@@ -1328,6 +1368,7 @@ def test_on_gui_run_finished_keeps_repair_locked_after_remote_github_audit() -> 
     )
     app.log = lambda message: seen.append(("log", message))
     app._audit_tab_name = "1. Audit"
+    app._reports_tab_name = "2. Reports"
     app._repair_tab_name = "2. Repair"
 
     app._on_gui_run_finished(False, ("github-owner", "acme"), [{"name": "repo-a"}], rpg.EXIT_OK)
@@ -1335,7 +1376,7 @@ def test_on_gui_run_finished_keeps_repair_locked_after_remote_github_audit() -> 
     assert app._run_in_progress is False
     assert app._active_cancel_token is None
     assert ("lock", "Repair (remote audit is audit-only)") in seen
-    assert ("tab", "1. Audit") in seen
+    assert ("tab", "2. Reports") in seen
     assert any("remote audit mode is audit-only" in value.lower() for kind, value in seen if kind == "log")
     assert not any(kind == "cooldown" for kind, _value in seen)
 
@@ -1530,6 +1571,60 @@ def test_gui_ui_locale_catalogs_have_parallel_keys() -> None:
     assert base_keys
     for locale, catalog in rpg.GUI_UI_TEXT_BY_LOCALE.items():
         assert set(catalog) == base_keys, locale
+
+
+def test_agentic_prompt_registry_has_parallel_locales_and_existing_files() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    by_locale: dict[str, set[str]] = {}
+    for prompt in prompt_helpers.PROMPT_REGISTRY:
+        by_locale.setdefault(prompt.locale, set()).add(prompt.prompt_id)
+        path = prompt.path(repo_root)
+        assert path.exists(), path
+        assert prompt.title.strip()
+        assert prompt.description.strip()
+        assert prompt.command.startswith("repo-privacy-guardian")
+
+    assert by_locale["en"] == by_locale["es-419"]
+    assert {prompt.prompt_id for prompt in prompt_helpers.agentic_prompt_cards("en")} == by_locale["en"]
+    assert {prompt.prompt_id for prompt in prompt_helpers.agentic_prompt_cards("es-419")} == by_locale["es-419"]
+
+
+def test_agentic_prompt_copy_text_has_no_broken_template_markers() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    for prompt in prompt_helpers.PROMPT_REGISTRY:
+        text = prompt_helpers.read_prompt_text(prompt, repo_root)
+        assert "{{" not in text
+        assert "}}" not in text
+        assert "TODO" not in text
+        assert "NPM_TOKEN" not in text
+        assert "GITHUB_TOKEN=" not in text
+
+
+def test_gui_repair_gate_note_tracks_repair_state() -> None:
+    class DummyLabel:
+        def __init__(self) -> None:
+            self.config: dict[str, object] = {}
+
+        def configure(self, **kwargs: object) -> None:
+            self.config.update(kwargs)
+
+    label = DummyLabel()
+    app = object.__new__(rpg.GuiApp)
+    app._gui_locale = rpg.GUI_LOCALE_ES_419
+    app._repair_gate_note_label = label
+    app._repair_ready = False
+    app._last_audit_reports_payload = []
+
+    app._update_repair_gate_note()
+    assert label.config["text"] == rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]["repair_stays_disabled"]
+
+    app._last_audit_reports_payload = [{"name": "SampleRepo", "status": "PASS"}]
+    app._update_repair_gate_note()
+    assert label.config["text"] == rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]["repair_review_pending_note"]
+
+    app._repair_ready = True
+    app._update_repair_gate_note()
+    assert label.config["text"] == rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]["repair_ready_note"]
 
 
 def test_gui_lock_default_text_is_english() -> None:

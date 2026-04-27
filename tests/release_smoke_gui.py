@@ -43,8 +43,22 @@ def main() -> int:
             os.environ[rpg.GUI_SETTINGS_ENV_VAR] = str(settings_path)
             app = rpg.GuiApp()
             assert app._current_locale() == rpg.GUI_LOCALE_ES_419
+            assert getattr(app._flow_tabs, "_name_list", []) == [
+                "1. Auditar",
+                "2. Reportes",
+                "3. Prompts",
+                "4. Configuración",
+                "5. Reparar",
+            ]
             app._on_gui_locale_selected("English")
             assert app._current_locale() == rpg.GUI_LOCALE_DEFAULT
+            assert getattr(app._flow_tabs, "_name_list", []) == [
+                "1. Audit",
+                "2. Reports",
+                "3. Prompts",
+                "4. Settings",
+                "5. Repair",
+            ]
             app.root.after(100, app.root.update_idletasks)
             app.root.after(250, app.root.destroy)
             app.run()

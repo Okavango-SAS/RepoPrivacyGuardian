@@ -5,13 +5,13 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.3.10"
-CURRENT_VERSION_DESCRIPTION = "CLI/GUI parity formalized as a repository rule"
+CURRENT_VERSION = "1.4.0"
+CURRENT_VERSION_DESCRIPTION = "the GUI rebuilt as a CLI companion with Reports and Prompts tabs"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
     "manual extended CI",
-    f"`v{CURRENT_VERSION}` is the current patch release with {CURRENT_VERSION_DESCRIPTION}",
+    f"`v{CURRENT_VERSION}` is the current minor release with {CURRENT_VERSION_DESCRIPTION}",
     "## ⚡ 60-Second First Run",
     "How to read the first result:",
     "malformed non-email identity tokens",
@@ -19,6 +19,7 @@ README_REQUIREMENTS = [
     "DOGFOODING",
     "Codex, Claude Code, Antigravity, GitHub Copilot, Cursor",
     "06_PREPARACION_ENTORNO_AGENTICA.prompt.md",
+    "docs/prompts/en/06_AGENTIC_ENVIRONMENT_SETUP.prompt.md",
     "07_AUDITORIA_REPARACION_AGENTICA.prompt.md",
     "CLI/GUI parity is release-blocking",
     "confirmed leaks, intentional fixtures/examples",
@@ -72,6 +73,7 @@ VERSIONING_REQUIREMENTS = [
     "automatic CI smoke",
     "manual extended CI",
     "`1.3.10`",
+    "`1.4.0`",
 ]
 
 AGENTS_REQUIREMENTS = [
@@ -143,6 +145,7 @@ DOGFOODING_REQUIREMENTS = [
     "Codex, Claude Code, Antigravity, GitHub Copilot, Cursor",
     "06_PREPARACION_ENTORNO_AGENTICA.prompt.md",
     "07_AUDITORIA_REPARACION_AGENTICA.prompt.md",
+    "docs/prompts/en/07_AGENTIC_AUDIT_AND_REPAIR.prompt.md",
 ]
 
 DOGFOODING_PROMPT_REQUIREMENTS = [
@@ -219,6 +222,7 @@ def validate_release_contract() -> list[str]:
         or "`v1.2.2` is the current patch-level" in readme
         or "`v1.2.3` is the current patch-level" in readme
         or "`v1.3.0` is the current minor release" in readme
+        or "`v1.3.10` is the current patch release" in readme
     ):
         errors.append("README.MD: stale current release reference")
     if "GUI does not include pause/resume or cancellation controls." in known_issues:

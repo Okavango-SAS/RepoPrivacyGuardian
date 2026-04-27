@@ -107,6 +107,18 @@ After:
 
 ![Repair post-audit after](ux-audit/after/repair-post-audit-after.png)
 
+### Reports Dashboard
+
+After:
+
+![Reports desktop after](ux-audit/after/reports-desktop-after.png)
+
+### Prompts Library
+
+After:
+
+![Prompts desktop after](ux-audit/after/prompts-desktop-after.png)
+
 ### Compact Desktop Layout
 
 Before:
@@ -178,3 +190,14 @@ The localization pass added a presentation-only language selector without wideni
 - Persisted the locale as non-secret GUI setup state while keeping tokens, identity secrets, and repair bypass controls out of saved settings.
 - Kept CLI parity by mapping localized labels back to the same internal variables and `GuardRunConfig` fields; tests assert locale changes do not alter run-config payloads.
 - Left CLI help, report field names, JSON/HTML schema, policy keys, and backend log semantics unchanged.
+
+## 2026-04-26 GUI Companion Reconstruction
+
+The next GUI pass re-centered the desktop app around the primary agentic CLI use case:
+
+- Rebuilt the information architecture as `Audit`, `Reports`, `Prompts`, `Settings`, and gated `Repair`.
+- Kept the first Audit path focused on local target selection, drag-and-drop, run/stop/refresh, and execution log.
+- Added a Reports dashboard for the latest local `report.json`, `report.html`, `run.log`, and `run_state.json` paths, with quick-open actions but no raw sensitive evidence rendering.
+- Added a Prompts tab backed by a tracked bilingual prompt registry for environment setup, audit-only, reviewed audit-and-repair, and compact CLI delegation workflows.
+- Moved policy/output/GitHub/identity parity controls into Settings and kept advanced Repair write options collapsed by default.
+- Preserved the shared backend and `GuardRunConfig` mapping; the change is presentation and workflow organization, not a new execution engine.

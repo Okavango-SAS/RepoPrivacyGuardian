@@ -8,6 +8,7 @@ This document defines how coding agents should use Repo Privacy Guardian from CL
 - GUI and CLI are parity paths for checks and policy logic.
 - GUI parity includes staged interaction: `Audit` first, then `Repair` after audit context unlocks the visual repair gate.
 - CLI/GUI parity is a repository rule and release-blocking invariant. New audit, report, hardening, remote-audit, or repair behavior must be exposed in both CLI and GUI, mapped through the same internal configuration/policy keys, and covered by regression tests.
+- The GUI is a CLI companion for manual use: `Audit` for targets/runs, `Reports` for local evidence, `Prompts` for agentic CLI workflows, `Settings` for advanced parity controls, and `Repair` for gated reviewed writes.
 - Prefer CLI in agentic IDE workflows (Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, and similar tools). This is the primary automation use case.
 
 ## CLI First Workflow
@@ -38,6 +39,7 @@ Repo Privacy Guardian is meant to be easy to delegate to coding agents while pre
 - For a fresh clone of this tool, use `docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md`.
 - For audit-only dogfooding against another repository, use `docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md`.
 - For reviewed audit-and-repair work, use `docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md`.
+- English equivalents live under `docs/prompts/en/`, and the GUI `Prompts` tab exposes the locale-matched library without changing CLI behavior.
 - Keep the first pass audit-only and classify findings before requesting writes.
 - Do not paste raw secrets, private paths, private hostnames, or unredacted logs into agent chat.
 
