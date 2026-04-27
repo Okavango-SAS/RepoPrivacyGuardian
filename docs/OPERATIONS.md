@@ -53,7 +53,7 @@ By default the script:
 - runs the CLI tooling preflight first
 - checks workflow/docs/version alignment via `python scripts/check_release_contract.py`
 - removes stale `dist/`, `build/`, and `*.egg-info/` outputs before the final build
-- byte-compiles `Repo_Privacy_Guardian.py`
+- byte-compiles every packaged Python module and release helper script
 - runs `ruff check`
 - runs `pyright -p pyrightconfig.json`
 - runs `pip-audit` against dev, GUI, and remediation requirement files

@@ -4,6 +4,15 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-04-27
+
+Release harness byte-compile coverage hardening update.
+
+### Fixed
+
+- Updated the local release harness byte-compile gate to cover every packaged Python module, including the GUI prompt registry module.
+- Corrected architecture documentation to reflect the four support modules currently extracted from the monolith.
+
 ## [1.4.1] - 2026-04-27
 
 Release-readiness roadmap and CI trigger hardening update.

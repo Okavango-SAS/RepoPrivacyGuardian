@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 import importlib.util
+import re
 import shutil
 from pathlib import Path
 
@@ -109,3 +111,24 @@ def test_run_dependency_audits_covers_all_requirement_groups(tmp_path: Path, mon
     assert all(call[1][:3] == [module.sys.executable, "-m", "pip_audit"] for call in calls)
     assert all(call[2] == tmp_path for call in calls)
     assert all(call[3] == module.DEFAULT_TIMEOUTS["quick"] for call in calls)
+
+
+def test_release_byte_compile_paths_cover_packaged_modules_and_scripts() -> None:
+    module = _load_release_readiness_module()
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r"py-modules\s*=\s*(\[[^\n]+\])", pyproject)
+    assert match is not None
+    packaged_modules = ast.literal_eval(match.group(1))
+
+    expected_paths = {f"{name}.py" for name in packaged_modules}
+    expected_paths.update(
+        {
+            "scripts/check_release_contract.py",
+            "scripts/release_readiness.py",
+        }
+    )
+
+    configured_paths = set(module.RELEASE_BYTE_COMPILE_PATHS)
+    assert expected_paths <= configured_paths
+    for rel_path in configured_paths:
+        assert (REPO_ROOT / rel_path).exists(), rel_path

@@ -65,7 +65,7 @@ The harness currently validates:
 - CLI tooling preflight
 - release contract alignment via `python scripts/check_release_contract.py`
 - isolated pytest temp/coverage artifacts per release-readiness run
-- byte-compilation of the main module
+- byte-compilation of packaged Python modules and release helper scripts
 - `ruff check`
 - `pyright -p pyrightconfig.json`
 - tracked pytest suite

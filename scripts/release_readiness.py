@@ -32,6 +32,15 @@ DEPENDENCY_AUDIT_REQUIREMENT_FILES = (
     "config/requirements/requirements-gui.txt",
     "config/requirements/requirements-remediation.txt",
 )
+RELEASE_BYTE_COMPILE_PATHS = (
+    "Repo_Privacy_Guardian.py",
+    "repo_privacy_guardian_artifacts.py",
+    "repo_privacy_guardian_github.py",
+    "repo_privacy_guardian_prompts.py",
+    "repo_privacy_guardian_runtime.py",
+    "scripts/check_release_contract.py",
+    "scripts/release_readiness.py",
+)
 BUILD_ARTIFACT_CLEANUP_ATTEMPTS = 5
 BUILD_ARTIFACT_CLEANUP_RETRY_SECONDS = 1.0
 
@@ -272,16 +281,12 @@ def run_release_verification_steps(
         timeout=DEFAULT_TIMEOUTS["quick"],
     )
     run_named_command(
-        "Byte-compiling the main module",
+        "Byte-compiling release Python surfaces",
         [
             sys.executable,
             "-m",
             "py_compile",
-            "Repo_Privacy_Guardian.py",
-            "repo_privacy_guardian_artifacts.py",
-            "repo_privacy_guardian_github.py",
-            "repo_privacy_guardian_runtime.py",
-            "scripts/check_release_contract.py",
+            *RELEASE_BYTE_COMPILE_PATHS,
         ],
         cwd=repo_root,
         timeout=DEFAULT_TIMEOUTS["quick"],

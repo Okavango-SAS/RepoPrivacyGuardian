@@ -79,7 +79,8 @@ Choose the path that matches what you need right now:
 - `v1.2.3` is the public-release stabilization and GUI UX update.
 - `v1.3.10` formalized CLI/GUI parity as a repository rule.
 - `v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs.
-- `v1.4.1` is the current patch release with release-readiness roadmap and CI trigger hardening.
+- `v1.4.1` hardened roadmap and CI trigger coverage for release-readiness docs.
+- `v1.4.2` is the current patch release with release harness byte-compile coverage hardening.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.

@@ -4,7 +4,7 @@ Repo Privacy Guardian is still intentionally centered on one Python module: `Rep
 
 That is a tradeoff, not an accident. The repository optimizes for a self-contained CLI/Desktop tool with a small packaging surface. Maintainability depends on keeping clear section boundaries inside that file and documenting where each concern lives.
 
-There are now three intentionally small support modules:
+There are now four intentionally small support modules:
 
 - `repo_privacy_guardian_runtime.py` for shared run-exit semantics plus root/target discovery helpers used by both CLI and GUI
 - `repo_privacy_guardian_artifacts.py` for run-artifact creation, run-state persistence, and log-writing helpers shared by CLI and GUI flow

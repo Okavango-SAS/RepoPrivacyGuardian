@@ -46,6 +46,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.4.1` is a release-readiness patch on top of `1.4.0`. It aligns the roadmap with the `1.4.x` GUI companion stage and expands automatic CI path filters so release-contract documentation, roadmap, design guidance, and CODEOWNERS changes trigger the smoke/release-contract gate.
 
+`1.4.2` is a release-readiness hardening patch on top of `1.4.1`. It updates the local release harness byte-compile gate to cover every packaged Python module, including the GUI prompt registry, and corrects architecture documentation for the four extracted support modules.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

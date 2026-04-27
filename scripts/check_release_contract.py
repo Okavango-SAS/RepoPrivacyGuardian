@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.4.1"
-CURRENT_VERSION_DESCRIPTION = "release-readiness roadmap and CI trigger hardening"
+CURRENT_VERSION = "1.4.2"
+CURRENT_VERSION_DESCRIPTION = "release harness byte-compile coverage hardening"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
@@ -75,6 +75,7 @@ VERSIONING_REQUIREMENTS = [
     "`1.3.10`",
     "`1.4.0`",
     "`1.4.1`",
+    "`1.4.2`",
 ]
 
 ROADMAP_REQUIREMENTS = [
@@ -91,6 +92,7 @@ AGENTS_REQUIREMENTS = [
 ]
 
 ARCHITECTURE_REQUIREMENTS = [
+    "There are now four intentionally small support modules:",
     "CLI/GUI parity is a repository rule",
     "shared runtime/config/report path",
 ]
@@ -102,6 +104,7 @@ ENGINEERING_DECISIONS_REQUIREMENTS = [
 ]
 
 OPERATIONS_REQUIREMENTS = [
+    "byte-compiles every packaged Python module and release helper script",
     "External design-spec hygiene",
     "google-labs-code/design.md",
     "@google/design.md@0.1.0",
@@ -237,6 +240,7 @@ def validate_release_contract() -> list[str]:
         or "`v1.3.0` is the current minor release" in readme
         or "`v1.3.10` is the current patch release" in readme
         or "`v1.4.0` is the current minor release" in readme
+        or "`v1.4.1` is the current patch release" in readme
     ):
         errors.append("README.MD: stale current release reference")
     if "GUI does not include pause/resume or cancellation controls." in known_issues:
