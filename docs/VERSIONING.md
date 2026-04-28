@@ -48,7 +48,7 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.4.2` is a release-readiness hardening patch on top of `1.4.1`. It updates the local release harness byte-compile gate to cover every packaged Python module, including the GUI prompt registry, and corrects architecture documentation for the four extracted support modules.
 
-`1.4.3` is a GUI parity and agentic publication-readiness patch on top of `1.4.2`. It makes agentic CLI delegation the primary first-run documentation path, clarifies the intentional GUI confirmation-gate treatment for CLI-only prompt bypasses, and fixes GUI locale refresh for the gated Repair state without changing CLI behavior, report schema, or backend policy keys.
+`1.4.3` is a GUI parity and agentic publication-readiness patch on top of `1.4.2`. It makes agentic CLI delegation the primary first-run documentation path, clarifies the intentional GUI confirmation-gate treatment for CLI-only prompt bypasses, fixes GUI locale refresh for the gated Repair state, and aligns package metadata with the Okavango-SAS organization repository location without changing CLI behavior, report schema, or backend policy keys.
 
 ## Versioning rules
 

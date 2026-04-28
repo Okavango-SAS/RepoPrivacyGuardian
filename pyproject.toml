@@ -34,10 +34,10 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/axeljackal/RepoPrivacyGuardian"
-Issues = "https://github.com/axeljackal/RepoPrivacyGuardian/issues"
-Source = "https://github.com/axeljackal/RepoPrivacyGuardian"
-Changelog = "https://github.com/axeljackal/RepoPrivacyGuardian/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Okavango-SAS/RepoPrivacyGuardian"
+Issues = "https://github.com/Okavango-SAS/RepoPrivacyGuardian/issues"
+Source = "https://github.com/Okavango-SAS/RepoPrivacyGuardian"
+Changelog = "https://github.com/Okavango-SAS/RepoPrivacyGuardian/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 gui = ["customtkinter>=5.2.2,<6", "tkinterdnd2>=0.4.3,<0.5"]

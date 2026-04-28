@@ -12,6 +12,7 @@ GUI parity and agentic publication readiness hardening update.
 
 - Updated the first-run README path so agentic CLI delegation is the primary onboarding flow, with manual CLI and GUI review kept as fallback paths.
 - Documented the CLI/GUI parity interpretation for GUI confirmation gates versus CLI-only prompt-bypass affordances.
+- Updated package project URLs for the Okavango-SAS organization repository location.
 
 ### Fixed
 

@@ -370,6 +370,13 @@ def test_dev_requirements_include_dependency_audit_tool() -> None:
     assert "pip-audit>=2.10,<3" in dev_requirements
 
 
+def test_package_project_urls_point_to_release_org() -> None:
+    pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert "https://github.com/Okavango-SAS/RepoPrivacyGuardian" in pyproject
+    assert "https://github.com/axeljackal/RepoPrivacyGuardian" not in pyproject
+
+
 def test_coverage_targets_package_code_not_local_ops_scripts() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
 
