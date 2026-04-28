@@ -81,11 +81,16 @@ The harness currently validates:
 Start here when changing behavior:
 
 - `Repo_Privacy_Guardian.py`: main CLI, audit engine, remediation flow, reporting, and optional GUI
+- `repo_privacy_guardian_runtime.py`: shared run-exit semantics, root validation, cancellation, and target discovery helpers
 - `repo_privacy_guardian_artifacts.py`: typed run-artifact and run-state helper slice extracted from the monolith
+- `repo_privacy_guardian_github.py`: GitHub remote parsing, API access, remote discovery, and hardening audit helpers
+- `repo_privacy_guardian_prompts.py`: GUI/README agentic prompt registry without importing desktop GUI dependencies
 - `tests/`: tracked regression tests plus release smoke coverage
 - `scripts/release_readiness.py`: owned end-to-end validation harness for local release readiness
 - `repo_privacy_guardian_resources/POLICY.md`: packaged policy resource used by installed builds
 - `docs/`: runbooks, architecture notes, policy, prompts, and release guidance
+
+The repository root is intentionally small and allowlisted by release-hygiene tests. Keep support docs, prompts, requirements, scripts, screenshots, generated reports, build outputs, and agent scratch material in their documented subfolders instead of adding new tracked root files.
 
 Repo-building prompts, scratch instructions, and one-off agent meta notes should stay under `.local-meta/`, which is intentionally ignored. Keep only reusable operator prompts under `docs/prompts/`.
 

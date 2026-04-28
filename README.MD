@@ -105,7 +105,8 @@ Choose the path that matches what you need right now:
 - `v1.4.1` hardened roadmap and CI trigger coverage for release-readiness docs.
 - `v1.4.2` hardened release harness byte-compile coverage.
 - `v1.4.3` hardened GUI parity and agentic publication readiness.
-- `v1.4.4` is the current patch release with public prompt-library hygiene hardening.
+- `v1.4.4` hardened public prompt-library hygiene.
+- `v1.4.5` is the current patch release with root layout allowlist hardening.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -624,22 +625,30 @@ Validation tiers for this repository:
 ## 🏗️ Repository Layout
 
 - `Repo_Privacy_Guardian.py`: main script, core CLI, and optional GUI implementation
+- `repo_privacy_guardian_runtime.py`: shared run-exit semantics, root validation, cancellation, and target discovery helpers
 - `repo_privacy_guardian_artifacts.py`: typed run-artifact and run-state helpers shared by CLI and GUI flow
+- `repo_privacy_guardian_github.py`: GitHub remote parsing, API access, remote discovery, and hardening audit helpers
+- `repo_privacy_guardian_prompts.py`: GUI/README agentic prompt registry without desktop GUI imports
 - `repo_privacy_guardian_resources/`: packaged policy resource used by installed builds
 - `config/requirements/`: compatibility dependency manifests
 - `docs/`: policy, dogfooding runbook, prompts, release docs, and engineering rationale
 - `tests/`: tracked regression, packaging, smoke coverage, and release hygiene
 - `.github/workflows/ci.yml`: cost-first automatic CLI smoke plus manual extended validation and Windows GUI smoke
 
-Files that intentionally remain in the repository root:
+Root is intentionally small and allowlisted by tests. Files that intentionally remain in the repository root are:
 
+- `.editorconfig`, `.env.example`, `.gitignore`, and `pyrightconfig.json` for editor, environment, ignore, and type-checker conventions
+- `AGENTS.MD`
 - `CHANGELOG.md`
+- `DESIGN.md`
+- `LICENSE`
+- `NOTICE`
 - `README.MD`
 - `Repo_Privacy_Guardian.py`
 - `pyproject.toml`
-- `AGENTS.MD`
-- `LICENSE`
-- `NOTICE`
+- `repo_privacy_guardian_*.py` support modules published as `py-modules`
+
+Generated outputs, local agent meta material, release bundles, coverage files, build outputs, and audit artifacts belong in ignored local paths such as `.local-meta/`, `Audit_Results/`, `dist/`, and `*.egg-info/`, not in the public tracked root.
 
 ## ⚠️ Limitations
 

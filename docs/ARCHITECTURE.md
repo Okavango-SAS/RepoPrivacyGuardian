@@ -13,6 +13,8 @@ There are now four intentionally small support modules:
 
 They exist to remove high-risk runtime/preflight, network, prompt-library, and artifact helper glue from the monolith without fragmenting the core audit/remediation engine.
 
+The support modules intentionally remain at the repository root in the current `1.x` line because they are packaged as `py-modules`, imported by the direct script/module entry paths, and covered by release smoke tests. Moving them into a package would be a broader import and packaging migration, not a cosmetic root cleanup.
+
 ## Runtime surfaces
 
 The project exposes three practical entry paths:

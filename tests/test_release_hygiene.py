@@ -33,12 +33,40 @@ ROOT_LAYOUT_OFFENDERS = [
     "prompts",
 ]
 
+ROOT_LAYOUT_ALLOWED_TOP_LEVEL = {
+    ".editorconfig",
+    ".env.example",
+    ".github",
+    ".gitignore",
+    "AGENTS.MD",
+    "CHANGELOG.md",
+    "DESIGN.md",
+    "LICENSE",
+    "NOTICE",
+    "README.MD",
+    "Repo_Privacy_Guardian.py",
+    "config",
+    "docs",
+    "pyproject.toml",
+    "pyrightconfig.json",
+    "repo_privacy_guardian_artifacts.py",
+    "repo_privacy_guardian_github.py",
+    "repo_privacy_guardian_prompts.py",
+    "repo_privacy_guardian_resources",
+    "repo_privacy_guardian_runtime.py",
+    "scripts",
+    "tests",
+}
+
 ROOT_LAYOUT_REQUIRED = [
     "CHANGELOG.md",
     ".env.example",
     "Repo_Privacy_Guardian.py",
     "README.MD",
     "repo_privacy_guardian_artifacts.py",
+    "repo_privacy_guardian_github.py",
+    "repo_privacy_guardian_prompts.py",
+    "repo_privacy_guardian_runtime.py",
     "config/requirements/requirements.txt",
     "config/requirements/requirements-gui.txt",
     "config/requirements/requirements-remediation.txt",
@@ -151,6 +179,13 @@ def test_support_files_are_moved_out_of_root() -> None:
     assert not missing, "Expected organized support files are missing:\n" + "\n".join(missing)
 
 
+def test_tracked_repository_root_layout_is_allowlisted() -> None:
+    tracked_top_level = {path.relative_to(_repo_root()).as_posix().split("/", 1)[0] for path in _tracked_paths()}
+    unexpected = sorted(tracked_top_level - ROOT_LAYOUT_ALLOWED_TOP_LEVEL)
+
+    assert not unexpected, "Unexpected tracked root entries:\n" + "\n".join(unexpected)
+
+
 def test_repo_build_metaprompts_are_not_public_docs() -> None:
     root = _repo_root()
     gitignore = (root / ".gitignore").read_text(encoding="utf-8")
@@ -191,6 +226,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.4.2`" in versioning
     assert "`1.4.3`" in versioning
     assert "`1.4.4`" in versioning
+    assert "`1.4.5`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "current stable `1.4.x`" in roadmap
     assert "companion-style GUI with Audit, Reports, Prompts, Settings, and gated Repair views" in roadmap
@@ -321,6 +357,8 @@ def test_changelog_records_stable_release() -> None:
     changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
 
     assert "## [1.3.0] - 2026-04-25" in changelog
+    assert "## [1.4.5] - 2026-04-28" in changelog
+    assert "Root layout allowlist hardening update." in changelog
     assert "## [1.4.4] - 2026-04-28" in changelog
     assert "Public prompt-library hygiene hardening update." in changelog
     assert "## [1.4.3] - 2026-04-28" in changelog
@@ -370,13 +408,14 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.4.4"' in pyproject
+    assert 'version = "1.4.5"' in pyproject
     assert "Current release line: `v1.4.x`." in readme
     assert "`v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs." in readme
     assert "`v1.4.1` hardened roadmap and CI trigger coverage for release-readiness docs." in readme
     assert "`v1.4.2` hardened release harness byte-compile coverage." in readme
     assert "`v1.4.3` hardened GUI parity and agentic publication readiness." in readme
-    assert "`v1.4.4` is the current patch release with public prompt-library hygiene hardening." in readme
+    assert "`v1.4.4` hardened public prompt-library hygiene." in readme
+    assert "`v1.4.5` is the current patch release with root layout allowlist hardening." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme

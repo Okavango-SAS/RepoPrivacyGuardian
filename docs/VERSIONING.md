@@ -52,6 +52,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.4.4` is a public prompt-library hygiene patch on top of `1.4.3`. It keeps reusable operator prompts in the public docs, moves repo-building metaprompts to ignored local-only workspace material, and adds regression coverage so internal agent instructions do not ship as public user workflows.
 
+`1.4.5` is a root-layout hygiene patch on top of `1.4.4`. It documents which files intentionally remain in the repository root, explains why the direct script and support `py-modules` are not moved during the stable `1.x` line, and adds an allowlist regression so unexpected tracked root entries do not accumulate.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

@@ -4,6 +4,19 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-04-28
+
+Root layout allowlist hardening update.
+
+### Changed
+
+- Documented the intentional root layout, including why the direct script and support `py-modules` stay in the repository root for the current stable line.
+- Expanded the repository map so all root-level support modules and ignored local artifact homes are accounted for.
+
+### Fixed
+
+- Added release-hygiene regression coverage that fails when unexpected tracked root entries are introduced.
+
 ## [1.4.4] - 2026-04-28
 
 Public prompt-library hygiene hardening update.
