@@ -9,6 +9,7 @@ All notable public-release changes to this project are documented here.
 - Updated README attribution to reflect Okavango SAS as the project maintainer while preserving original author and CTO credit.
 - Added a sanitized desktop GUI preview screenshot to the README.
 - Reordered and simplified README onboarding so audit scope appears earlier and repeated first-run guidance is reduced.
+- Compacted the README agentic section into a prompt library to avoid repeating the first-run flow.
 
 ## [1.4.5] - 2026-04-28
 

@@ -498,31 +498,9 @@ Human or agent review is still required when the tool cannot safely infer intent
 
 Practical rule: let the tool perform mechanical Git-safe rewrites, but keep semantic source edits and any non-obvious substitution under reviewed operator control.
 
-## 🤖 Agentic CLI Workflow
+## 🤖 Agentic Prompt Library
 
-Repo Privacy Guardian is designed to be comfortable in multiple modes, but the primary automation use case is an agentic IDE or coding agent running the CLI. This includes Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, and similar tools.
-
-The recommended agentic shape is:
-
-- the human chooses the target repository and risk tolerance
-- the agent runs Repo Privacy Guardian from CLI
-- the first pass is audit-only
-- findings are classified before any repair
-- destructive remediation requires explicit approval
-- artifacts remain local under `Audit_Results/<run_id>/`
-
-A safe default pattern is:
-
-1. `repo-privacy-guardian --help`
-2. `repo-privacy-guardian --check-tooling`
-3. dry-run audit
-4. reviewed dry-run fix plan
-5. real fix only for the reviewed repos
-6. re-run until `PASS`
-
-For dogfooding against another repository, use [DOGFOODING](docs/DOGFOODING.md). That runbook keeps the first pass audit-only, requires classification of confirmed leaks versus intentional fixtures/examples, and treats `Audit_Results/<run_id>/` artifacts as sensitive local evidence even when redacted.
-
-Reusable copy/paste prompts:
+The 60-second flow above is the primary agentic path: run the CLI locally, keep the first pass audit-only, classify findings, and require explicit approval before writes or pushes. For longer handoffs, use these reusable prompts:
 
 | Situation | Español | English |
 | --- | --- | --- |
@@ -530,6 +508,8 @@ Reusable copy/paste prompts:
 | Audit another repository without fixes | [`05_DOGFOODING_AUDIT_ONLY.prompt.md`](docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md) | [`05_DOGFOODING_AUDIT_ONLY.prompt.md`](docs/prompts/en/05_DOGFOODING_AUDIT_ONLY.prompt.md) |
 | Audit, review, and repair after approval | [`07_AUDITORIA_REPARACION_AGENTICA.prompt.md`](docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md) | [`07_AGENTIC_AUDIT_AND_REPAIR.prompt.md`](docs/prompts/en/07_AGENTIC_AUDIT_AND_REPAIR.prompt.md) |
 | Compact agentic CLI workflow | [`04_EJECUCION_AGENTICA_CLI.prompt.md`](docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md) | [`04_AGENTIC_CLI_EXECUTION.prompt.md`](docs/prompts/en/04_AGENTIC_CLI_EXECUTION.prompt.md) |
+
+For dogfooding against another repository, use [DOGFOODING](docs/DOGFOODING.md). It keeps artifact handling, fixture/leak classification, and redacted evidence review explicit.
 
 ### Recommended agent prompt template
 
