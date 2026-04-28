@@ -391,6 +391,14 @@ def test_repo_declares_single_owner_codeowners_file() -> None:
     assert "* @axeljackal" in codeowners
 
 
+def test_repo_declares_security_policy() -> None:
+    security_policy = (_repo_root() / ".github" / "SECURITY.md").read_text(encoding="utf-8")
+
+    assert "Security Policy" in security_policy
+    assert "private vulnerability reporting" in security_policy
+    assert "Do not include real secrets" in security_policy
+
+
 def test_packaged_policy_resource_matches_repo_policy() -> None:
     root = _repo_root()
     docs_policy = (root / "docs" / "POLICY.md").read_text(encoding="utf-8")
