@@ -377,6 +377,16 @@ def test_package_project_urls_point_to_release_org() -> None:
     assert "https://github.com/axeljackal/RepoPrivacyGuardian" not in pyproject
 
 
+def test_readme_release_banner_is_tracked_asset() -> None:
+    root = _repo_root()
+    readme = (root / "README.MD").read_text(encoding="utf-8")
+    banner = root / "docs" / "assets" / "repo-privacy-guardian-banner.jpg"
+
+    assert "![Repo Privacy Guardian release readiness banner](docs/assets/repo-privacy-guardian-banner.jpg)" in readme
+    assert banner.is_file()
+    assert banner.stat().st_size > 0
+
+
 def test_coverage_targets_package_code_not_local_ops_scripts() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
 
