@@ -11,6 +11,18 @@
 
 It is designed for repeatable CLI execution first, with an optional desktop GUI that runs on the same underlying pipeline. Developed and maintained by **Okavango SAS**.
 
+## 🔍 What It Audits
+
+- leaked Git identity metadata
+- secrets in tracked content, history, and Git metadata, including high-confidence provider tokens, webhooks, auth headers, and credentialed URLs
+- low-confidence generic secret assignments as advisory review items, with synthetic fixtures and safe documentation examples separated from blocking findings
+- personal or local absolute paths
+- sensitive filenames in history
+- tracked-but-ignored files and `.gitignore` drift
+- advisory outbound or exfil-capable code indicators
+- optional GitHub repository hardening posture for public GitHub remotes
+- LiteLLM March 2026 supply-chain indicators
+
 ## 🌎 Language / Idioma
 
 **Español (Latinoamérica).** Repo Privacy Guardian te ayuda a revisar repositorios Git antes de publicarlos: detecta secretos, metadatos de identidad Git, rutas personales, archivos sensibles e inconsistencias de `.gitignore`, y genera evidencia local en JSON, HTML y log. La CLI se mantiene en inglés para preservar compatibilidad con automatizaciones, pero la GUI permite elegir `Español (Latinoamérica)` sin cambiar el comportamiento ni los reportes.
@@ -35,6 +47,13 @@ The desktop GUI is optional and shares the same audit engine, policy keys, repor
 ## ⚡ 60-Second First Run
 
 Use this when you cloned the repository and want a coding agent to check whether another repo is safe to publish. The agent still runs the CLI locally; the human keeps control over fixes, history rewrites, and pushes.
+
+Typical first run for a coding agent/operator pair:
+
+1. install the base CLI
+2. run the first audit without writes
+3. inspect `Audit_Results/<run_id>/report.html`
+4. approve fixes only after findings are classified
 
 One-time setup in the agent environment:
 
@@ -72,15 +91,6 @@ How to read the first result:
 
 All run evidence stays local under `Audit_Results/<run_id>/` as `report.json`, `report.html`, and `run.log`.
 
-## ✨ Why This Exists
-
-- Catch sensitive Git identity metadata before it leaks.
-- Detect secrets, personal paths, tracked-but-ignored files, and risky history artifacts.
-- Keep remediation explicit, reviewable, and safe-by-default.
-- Generate local JSON, HTML, and log artifacts for release traceability.
-
-**GUI is optional.** The core product value is the reproducible CLI audit and remediation workflow.
-
 ## 🧭 Start Here
 
 Choose the path that matches what you need right now:
@@ -98,43 +108,6 @@ Choose the path that matches what you need right now:
 - Linux GUI desktop: best-effort and depends on Tk availability plus a graphical session
 - macOS GUI: best-effort / not a release priority
 - Headless and CI environments: CLI only
-
-## 📈 Release Posture
-
-- Current release line: `v1.4.x`.
-- `v1.0.0` established the stable CLI, packaging, and release contract within the current local-first scope.
-- `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
-- `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
-- `v1.2.3` is the public-release stabilization and GUI UX update.
-- `v1.3.10` formalized CLI/GUI parity as a repository rule.
-- `v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs.
-- `v1.4.1` hardened roadmap and CI trigger coverage for release-readiness docs.
-- `v1.4.2` hardened release harness byte-compile coverage.
-- `v1.4.3` hardened GUI parity and agentic publication readiness.
-- `v1.4.4` hardened public prompt-library hygiene.
-- `v1.4.5` is the current patch release with root layout allowlist hardening.
-- Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
-- Built package validation covers both `sdist` and `wheel` install paths.
-- GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
-- Stable does not mean "does everything"; it means the current publication-gate scope, defaults, and operator expectations are now intentionally stable for `1.x`.
-
-## 🧪 Validation Tiers
-
-- automatic CI smoke: push-time Ubuntu/Python `3.13` checks for help paths, `python scripts/check_release_contract.py`, and CLI smoke
-- manual extended CI: `workflow_dispatch` validation for `ruff`, `pyright`, tracked `pytest`, package smoke, and Windows GUI smoke
-- local maintainer release gate: `python scripts/release_readiness.py` before public release or tag creation, including dependency vulnerability audit of dev/GUI/remediation requirement files
-
-## 🔍 What It Audits
-
-- leaked Git identity metadata
-- secrets in tracked content, history, and Git metadata, including high-confidence provider tokens, webhooks, auth headers, and credentialed URLs
-- low-confidence generic secret assignments as advisory review items, with synthetic fixtures and safe documentation examples separated from blocking findings
-- personal or local absolute paths
-- sensitive filenames in history
-- tracked-but-ignored files and `.gitignore` drift
-- advisory outbound or exfil-capable code indicators
-- optional GitHub repository hardening posture for public GitHub remotes
-- LiteLLM March 2026 supply-chain indicators
 
 ## ✅ Product Contract
 
@@ -293,7 +266,7 @@ python scripts/release_readiness.py --skip-self-audit
 
 Use [LOCAL_DEVELOPMENT](docs/LOCAL_DEVELOPMENT.md) for the maintained contributor workflow, repository map, and validation variants.
 
-## 🚀 Quick Start
+## 🚀 Command Reference
 
 Main script in this repository:
 
@@ -304,16 +277,6 @@ Recommended execution order:
 - `repo-privacy-guardian ...`: installed console entry point
 - `python -m Repo_Privacy_Guardian ...`: module execution
 - `python Repo_Privacy_Guardian.py ...`: direct compatibility path from the repository root
-
-Typical first run for a coding agent/operator pair:
-
-1. install the base CLI in the agent environment
-2. give the agent the target repository, root folder, and the 60-second prompt above
-3. have the agent verify `--help` and run `repo-privacy-guardian --check-tooling`
-4. have the agent run a dry-run audit against one repository
-5. inspect the generated JSON, HTML, and log artifacts
-6. approve a dry-run fix preview only after findings are classified
-7. approve real fixes, history rewrites, or pushes only after reviewing the preview
 
 Tooling preflight:
 
@@ -582,6 +545,25 @@ Do not push or rewrite history without explicit approval.
 ```
 
 The desktop GUI exposes the same prompt library in its `Prompts` tab. Locale only changes the presentation and prompt choice; it never renames CLI flags, report fields, policy keys, or run-config mappings.
+
+## 📈 Release Posture
+
+- Current release line: `v1.4.x`.
+- `v1.0.0` established the stable CLI, packaging, and release contract within the current local-first scope.
+- `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
+- `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
+- `v1.2.3` is the public-release stabilization and GUI UX update.
+- `v1.3.10` formalized CLI/GUI parity as a repository rule.
+- `v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs.
+- `v1.4.1` hardened roadmap and CI trigger coverage for release-readiness docs.
+- `v1.4.2` hardened release harness byte-compile coverage.
+- `v1.4.3` hardened GUI parity and agentic publication readiness.
+- `v1.4.4` hardened public prompt-library hygiene.
+- `v1.4.5` is the current patch release with root layout allowlist hardening.
+- Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
+- Built package validation covers both `sdist` and `wheel` install paths.
+- GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
+- Stable does not mean "does everything"; it means the current publication-gate scope, defaults, and operator expectations are now intentionally stable for `1.x`.
 
 ## 🧰 Headless and Desktop Diagnostics
 
