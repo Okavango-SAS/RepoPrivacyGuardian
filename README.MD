@@ -5,7 +5,7 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 ![License](https://img.shields.io/badge/license-Apache%202.0-f97316)
 
-![Repo Privacy Guardian release readiness banner](docs/assets/repo-privacy-guardian-banner.jpg)
+![Repo Privacy Guardian release readiness banner](docs/assets/repo-privacy-guardian-banner.png)
 
 🔒 Repo Privacy Guardian is a local-first publication gate for auditing and hardening Git repositories before public release.
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import struct
 import subprocess
 from pathlib import Path
 
@@ -72,6 +73,13 @@ UX_SCREENSHOT_PRIVATE_TOKENS = [
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def _png_size(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()
+    assert data.startswith(b"\x89PNG\r\n\x1a\n")
+    width, height = struct.unpack(">II", data[16:24])
+    return width, height
 
 
 def _tracked_paths() -> list[Path]:
@@ -380,11 +388,12 @@ def test_package_project_urls_point_to_release_org() -> None:
 def test_readme_release_banner_is_tracked_asset() -> None:
     root = _repo_root()
     readme = (root / "README.MD").read_text(encoding="utf-8")
-    banner = root / "docs" / "assets" / "repo-privacy-guardian-banner.jpg"
+    banner = root / "docs" / "assets" / "repo-privacy-guardian-banner.png"
 
-    assert "![Repo Privacy Guardian release readiness banner](docs/assets/repo-privacy-guardian-banner.jpg)" in readme
+    assert "![Repo Privacy Guardian release readiness banner](docs/assets/repo-privacy-guardian-banner.png)" in readme
     assert banner.is_file()
-    assert banner.stat().st_size > 0
+    assert banner.stat().st_size > 1_000_000
+    assert _png_size(banner) == (1536, 1024)
 
 
 def test_coverage_targets_package_code_not_local_ops_scripts() -> None:
