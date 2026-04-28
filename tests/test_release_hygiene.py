@@ -163,6 +163,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.4.0`" in versioning
     assert "`1.4.1`" in versioning
     assert "`1.4.2`" in versioning
+    assert "`1.4.3`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "current stable `1.4.x`" in roadmap
     assert "companion-style GUI with Audit, Reports, Prompts, Settings, and gated Repair views" in roadmap
@@ -293,6 +294,8 @@ def test_changelog_records_stable_release() -> None:
     changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
 
     assert "## [1.3.0] - 2026-04-25" in changelog
+    assert "## [1.4.3] - 2026-04-28" in changelog
+    assert "GUI parity and agentic publication readiness hardening update." in changelog
     assert "## [1.4.2] - 2026-04-27" in changelog
     assert "Release harness byte-compile coverage hardening update." in changelog
     assert "## [1.4.1] - 2026-04-27" in changelog
@@ -338,11 +341,12 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.4.2"' in pyproject
+    assert 'version = "1.4.3"' in pyproject
     assert "Current release line: `v1.4.x`." in readme
     assert "`v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs." in readme
     assert "`v1.4.1` hardened roadmap and CI trigger coverage for release-readiness docs." in readme
-    assert "`v1.4.2` is the current patch release with release harness byte-compile coverage hardening." in readme
+    assert "`v1.4.2` hardened release harness byte-compile coverage." in readme
+    assert "`v1.4.3` is the current patch release with GUI parity and agentic publication readiness hardening." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme
@@ -420,6 +424,7 @@ def test_cli_gui_parity_is_documented_as_release_blocking_repo_rule() -> None:
     assert "Every new audit, report, GitHub hardening, remote-audit, locale-visible, or repair behavior must" in decisions
     assert "Presentation-only GUI features and launcher-only CLI flags" in decisions
     assert "regression coverage for parser/config mapping and GUI run-config mapping" in decisions
+    assert "CLI-only prompt-bypass affordances such as `--yes`" in readme
 
 
 def test_repo_gitignore_covers_local_packaging_and_backup_artifacts() -> None:

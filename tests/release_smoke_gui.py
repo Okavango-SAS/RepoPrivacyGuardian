@@ -50,6 +50,11 @@ def main() -> int:
                 "4. Configuración",
                 "5. Reparar",
             ]
+            assert app._audit_button.cget("text") == app._t("run_audit")
+            assert app._audit_button.cget("state") == "normal"
+            assert app._repair_button.cget("text") == app._t("lock_repair_default")
+            assert app._repair_button.cget("state") == "disabled"
+            assert app._repair_status_label.cget("text") == app._t("no_audit_results")
             app._on_gui_locale_selected("English")
             assert app._current_locale() == rpg.GUI_LOCALE_DEFAULT
             assert getattr(app._flow_tabs, "_name_list", []) == [
@@ -59,6 +64,11 @@ def main() -> int:
                 "4. Settings",
                 "5. Repair",
             ]
+            assert app._audit_button.cget("text") == app._t("run_audit")
+            assert app._audit_button.cget("state") == "normal"
+            assert app._repair_button.cget("text") == app._t("lock_repair_default")
+            assert app._repair_button.cget("state") == "disabled"
+            assert app._repair_status_label.cget("text") == app._t("no_audit_results")
             app.root.after(100, app.root.update_idletasks)
             app.root.after(250, app.root.destroy)
             app.run()

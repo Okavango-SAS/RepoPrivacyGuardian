@@ -7110,6 +7110,9 @@ class GuiApp:  # pragma: no cover
         self._run_in_progress = False
         self._active_cancel_token: CancellationToken | None = None
         self._repair_ready = False
+        self._repair_button_text_key = "lock_repair_default"
+        self._repair_button_text_kwargs: dict[str, object] = {}
+        self._repair_lock_reason_key: str | None = "lock_repair_default"
         self._repair_button_text = self._t("lock_repair_default")
         self._repair_cooldown_seconds = 10
         self._repair_cooldown_remaining = 0
@@ -9018,6 +9021,7 @@ class GuiApp:  # pragma: no cover
         self._refresh_localized_widgets()
         self._refresh_prompt_cards()
         self._refresh_reports_tab()
+        self._refresh_repair_locale_state()
         self._set_repair_options_visibility(getattr(self, "_repair_options_visible", False))
         self._set_setup_settings_visibility(getattr(self, "_setup_settings_visible", True))
         self._set_advanced_identity_visibility(getattr(self, "_advanced_identity_visible", False))
@@ -10130,21 +10134,58 @@ class GuiApp:  # pragma: no cover
                 text_color_disabled=disabled_text,
             )
 
-    def _lock_repair_until_next_audit(self, reason: str | None = None) -> None:
-        default_reason = self._t("lock_repair_default")
-        lock_reason = reason or default_reason
+    def _set_repair_button_text_key(self, key: str | None, **kwargs: object) -> None:
+        self._repair_button_text_key = key
+        self._repair_button_text_kwargs = dict(kwargs)
+        if key:
+            self._repair_button_text = self._t(key, **kwargs)
+
+    def _apply_repair_locked_status(self, reason_key: str | None, reason: str | None = None) -> None:
+        default_reason_key = "lock_repair_default"
+        lock_reason = reason or self._t(reason_key or default_reason_key)
+        is_default = (reason_key or default_reason_key) == default_reason_key
+        self._set_repair_status(
+            self._t("no_audit_results")
+            if is_default
+            else self._t("lock_repair_message", reason=lock_reason),
+            text_color="#5C6F82",
+            badge_text=self._t("audit_required" if is_default else "audit_again_required"),
+        )
+        self._set_repair_tab_visual_lock(True, lock_reason)
+
+    def _refresh_repair_locale_state(self) -> None:
+        key = getattr(self, "_repair_button_text_key", None)
+        kwargs = getattr(self, "_repair_button_text_kwargs", {})
+        if key:
+            self._repair_button_text = self._t(key, **kwargs)
+
+        lock_reason_key = getattr(self, "_repair_lock_reason_key", None)
+        if (
+            lock_reason_key
+            and not getattr(self, "_repair_ready", False)
+            and getattr(self, "_repair_cooldown_remaining", 0) == 0
+        ):
+            self._apply_repair_locked_status(lock_reason_key)
+
+    def _lock_repair_until_next_audit(
+        self,
+        reason: str | None = None,
+        *,
+        reason_key: str | None = None,
+    ) -> None:
+        resolved_reason_key = reason_key or ("lock_repair_default" if reason is None else None)
+        lock_reason = reason or self._t(resolved_reason_key or "lock_repair_default")
         self._cancel_repair_cooldown()
         self._repair_ready = False
         self._repair_cooldown_remaining = 0
-        self._repair_button_text = lock_reason
-        self._set_repair_status(
-            self._t("no_audit_results")
-            if lock_reason == default_reason
-            else self._t("lock_repair_message", reason=lock_reason),
-            text_color="#5C6F82",
-            badge_text=self._t("audit_required" if lock_reason == default_reason else "audit_again_required"),
-        )
-        self._set_repair_tab_visual_lock(True, lock_reason)
+        self._repair_lock_reason_key = resolved_reason_key
+        if resolved_reason_key:
+            self._set_repair_button_text_key(resolved_reason_key)
+        else:
+            self._repair_button_text_key = None
+            self._repair_button_text_kwargs = {}
+            self._repair_button_text = lock_reason
+        self._apply_repair_locked_status(resolved_reason_key, lock_reason)
         self._update_run_buttons_state()
 
     def _start_repair_cooldown(
@@ -10156,13 +10197,14 @@ class GuiApp:  # pragma: no cover
         self._last_audit_selection_signature = selection_signature
 
         if not reports_payload:
-            self._lock_repair_until_next_audit(self._t("lock_repair_no_results"))
+            self._lock_repair_until_next_audit(reason_key="lock_repair_no_results")
             return
 
         self._cancel_repair_cooldown()
         self._repair_ready = False
         self._repair_cooldown_remaining = self._repair_cooldown_seconds
-        self._repair_button_text = self._t("repair_wait", seconds=self._repair_cooldown_remaining)
+        self._repair_lock_reason_key = None
+        self._set_repair_button_text_key("repair_wait", seconds=self._repair_cooldown_remaining)
         self._set_repair_status(
             self._build_repair_status_summary(reports_payload)
             + self._t("repair_unlocks_after_review"),
@@ -10185,7 +10227,8 @@ class GuiApp:  # pragma: no cover
         if self._repair_cooldown_remaining <= 1:
             self._repair_ready = True
             self._repair_cooldown_remaining = 0
-            self._repair_button_text = self._t("repair")
+            self._repair_lock_reason_key = None
+            self._set_repair_button_text_key("repair")
             failed = sum(1 for item in self._last_audit_reports_payload if item.get("status") == "FAIL")
             self._set_repair_status(
                 self._build_repair_status_summary(self._last_audit_reports_payload)
@@ -10202,7 +10245,8 @@ class GuiApp:  # pragma: no cover
             return
 
         self._repair_cooldown_remaining -= 1
-        self._repair_button_text = self._t("repair_wait", seconds=self._repair_cooldown_remaining)
+        self._repair_lock_reason_key = None
+        self._set_repair_button_text_key("repair_wait", seconds=self._repair_cooldown_remaining)
         self._set_repair_status(
             self._build_repair_status_summary(self._last_audit_reports_payload)
             + self._t("repair_unlocks_in", seconds=self._repair_cooldown_remaining),
@@ -10364,24 +10408,24 @@ class GuiApp:  # pragma: no cover
         self._run_in_progress = False
         self._active_cancel_token = None
         if run_fix:
-            self._lock_repair_until_next_audit(self._t("lock_repair_run_again"))
+            self._lock_repair_until_next_audit(reason_key="lock_repair_run_again")
             self._set_active_flow_tab(self._repair_tab_name)
             return
 
         if exit_code == EXIT_ABORTED:
-            self._lock_repair_until_next_audit(self._t("lock_repair_cancelled"))
+            self._lock_repair_until_next_audit(reason_key="lock_repair_cancelled")
             self._set_active_flow_tab(self._audit_tab_name)
             self.log("[INFO] Flow: audit cancelled. Run Audit again when you are ready to continue.")
             return
 
         if exit_code == EXIT_RUNTIME_ERROR:
-            self._lock_repair_until_next_audit(self._t("lock_repair_failed"))
+            self._lock_repair_until_next_audit(reason_key="lock_repair_failed")
             self._set_active_flow_tab(self._audit_tab_name)
             self.log("[INFO] Flow: audit ended with an operational error. Repair remains locked.")
             return
 
         if selection_signature and selection_signature[0] == "github-owner":
-            self._lock_repair_until_next_audit(self._t("lock_repair_remote"))
+            self._lock_repair_until_next_audit(reason_key="lock_repair_remote")
             self._set_active_flow_tab(self._reports_tab_name)
             self.log("[INFO] Flow: GitHub owner/org audit finished. Review artifacts in the Reports tab. Remote audit mode is audit-only.")
             return
@@ -10641,7 +10685,7 @@ class GuiApp:  # pragma: no cover
                 return
 
         if not run_fix:
-            self._lock_repair_until_next_audit(self._t("lock_repair_in_progress"))
+            self._lock_repair_until_next_audit(reason_key="lock_repair_in_progress")
 
         self._save_gui_setup_settings(setup_completed=True)
         self._set_setup_settings_visibility(False)

@@ -101,7 +101,8 @@ Choose the path that matches what you need right now:
 - `v1.3.10` formalized CLI/GUI parity as a repository rule.
 - `v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs.
 - `v1.4.1` hardened roadmap and CI trigger coverage for release-readiness docs.
-- `v1.4.2` is the current patch release with release harness byte-compile coverage hardening.
+- `v1.4.2` hardened release harness byte-compile coverage.
+- `v1.4.3` is the current patch release with GUI parity and agentic publication readiness hardening.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -442,6 +443,8 @@ GUI and CLI share:
 - the same advanced replace-text remediation path for reviewed substitutions
 
 Repository rule: CLI/GUI parity is release-blocking. Any new audit, report, GitHub hardening, remote-audit, locale-visible, or repair behavior must expose equivalent operator control in CLI and GUI, map to the same internal configuration/policy/report fields, and add or update regression tests. Presentation-only GUI features and launcher-only CLI flags are allowed only when they are documented as non-behavioral exceptions.
+
+Behavioral parity means the GUI preserves the same audit, report, hardening, remote-audit, and repair configuration surface through reviewed visual controls. CLI-only prompt-bypass affordances such as `--yes` are intentionally not mirrored as one-click GUI bypasses; the GUI keeps visual confirmation gates instead.
 
 The GUI is now a CLI companion for manual use: Audit stays simple, Reports keeps the latest local evidence visible, Prompts helps copy the maintained agentic CLI workflows, Settings holds advanced parity controls, and Repair remains gated.
 

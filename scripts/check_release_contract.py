@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.4.2"
-CURRENT_VERSION_DESCRIPTION = "release harness byte-compile coverage hardening"
+CURRENT_VERSION = "1.4.3"
+CURRENT_VERSION_DESCRIPTION = "GUI parity and agentic publication readiness hardening"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
@@ -76,6 +76,7 @@ VERSIONING_REQUIREMENTS = [
     "`1.4.0`",
     "`1.4.1`",
     "`1.4.2`",
+    "`1.4.3`",
 ]
 
 ROADMAP_REQUIREMENTS = [

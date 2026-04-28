@@ -1036,7 +1036,10 @@ def test_gui_run_clicked_ignores_invalid_github_jobs_when_remote_owner_is_empty(
     app._repo_items = [("RepoPrivacyGuardian", "RepoPrivacyGuardian")]
     app.repo_list = DummyListbox()
     app.messagebox = DummyMessageBox()
-    app._lock_repair_until_next_audit = lambda reason: started.setdefault("lock", reason)
+    app._lock_repair_until_next_audit = lambda *args, **kwargs: started.setdefault(
+        "lock",
+        kwargs.get("reason_key") or (args[0] if args else None),
+    )
     app._update_run_buttons_state = lambda: started.setdefault("buttons", True)
     app._run_worker = lambda *args: None
 
@@ -1336,7 +1339,9 @@ def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
     app = object.__new__(rpg.GuiApp)
     app._run_in_progress = True
     app._active_cancel_token = rpg.CancellationToken()
-    app._lock_repair_until_next_audit = lambda reason: seen.append(("lock", reason))
+    app._lock_repair_until_next_audit = lambda *args, **kwargs: seen.append(
+        ("lock", str(kwargs.get("reason_key") or (args[0] if args else None)))
+    )
     app._set_active_flow_tab = lambda tab: seen.append(("tab", tab))
     app._start_repair_cooldown = lambda reports_payload, selection_signature: seen.append(  # type: ignore[assignment]
         ("cooldown", str((reports_payload, selection_signature)))
@@ -1349,7 +1354,7 @@ def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
 
     assert app._run_in_progress is False
     assert app._active_cancel_token is None
-    assert ("lock", "Repair (audit cancelled)") in seen
+    assert ("lock", "lock_repair_cancelled") in seen
     assert ("tab", "1. Audit") in seen
     assert any(item == ("log", "[INFO] Flow: audit cancelled. Run Audit again when you are ready to continue.") for item in seen)
     assert not any(kind == "cooldown" for kind, _value in seen)
@@ -1361,7 +1366,9 @@ def test_on_gui_run_finished_keeps_repair_locked_after_remote_github_audit() -> 
     app = object.__new__(rpg.GuiApp)
     app._run_in_progress = True
     app._active_cancel_token = rpg.CancellationToken()
-    app._lock_repair_until_next_audit = lambda reason: seen.append(("lock", reason))
+    app._lock_repair_until_next_audit = lambda *args, **kwargs: seen.append(
+        ("lock", str(kwargs.get("reason_key") or (args[0] if args else None)))
+    )
     app._set_active_flow_tab = lambda tab: seen.append(("tab", tab))
     app._start_repair_cooldown = lambda reports_payload, selection_signature: seen.append(  # type: ignore[assignment]
         ("cooldown", str((reports_payload, selection_signature)))
@@ -1375,7 +1382,7 @@ def test_on_gui_run_finished_keeps_repair_locked_after_remote_github_audit() -> 
 
     assert app._run_in_progress is False
     assert app._active_cancel_token is None
-    assert ("lock", "Repair (remote audit is audit-only)") in seen
+    assert ("lock", "lock_repair_remote") in seen
     assert ("tab", "2. Reports") in seen
     assert any("remote audit mode is audit-only" in value.lower() for kind, value in seen if kind == "log")
     assert not any(kind == "cooldown" for kind, _value in seen)

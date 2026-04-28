@@ -4,6 +4,20 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-04-28
+
+GUI parity and agentic publication readiness hardening update.
+
+### Changed
+
+- Updated the first-run README path so agentic CLI delegation is the primary onboarding flow, with manual CLI and GUI review kept as fallback paths.
+- Documented the CLI/GUI parity interpretation for GUI confirmation gates versus CLI-only prompt-bypass affordances.
+
+### Fixed
+
+- Fixed GUI locale switching so the gated Repair button and initial Repair status text relocalize when changing between English and Spanish.
+- Hardened the GUI smoke test to verify first-screen workflow tabs, active Audit action, locked Repair action, and localized initial Repair status.
+
 ## [1.4.2] - 2026-04-27
 
 Release harness byte-compile coverage hardening update.
