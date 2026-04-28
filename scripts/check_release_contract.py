@@ -32,6 +32,7 @@ README_REQUIREMENTS = [
     "git_metadata_secret_low_confidence",
     "Root is intentionally small and allowlisted by tests",
     "Developed and maintained by **Okavango SAS**",
+    "docs/ux-audit/after/audit-default-desktop-after.png",
 ]
 
 CHECKLIST_REQUIREMENTS = [

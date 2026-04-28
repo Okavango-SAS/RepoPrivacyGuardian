@@ -26,6 +26,12 @@ Luego abrí `Settings` (`Configuración`) → `GUI Language` (`Idioma de la GUI`
 
 **English.** Repo Privacy Guardian audits Git repositories before public release: it detects secrets, Git identity metadata, personal paths, sensitive files, and `.gitignore` drift, then writes local JSON, HTML, and log evidence. The CLI remains English for automation compatibility, while the GUI can switch between `English` and `Español (Latinoamérica)` without changing behavior or reports.
 
+## 🖥️ Desktop GUI Preview
+
+![Repo Privacy Guardian desktop GUI audit screen](docs/ux-audit/after/audit-default-desktop-after.png)
+
+The desktop GUI is optional and shares the same audit engine, policy keys, report schema, and safety gates as the CLI. Maintained, sanitized GUI screenshots live under `docs/ux-audit/`.
+
 ## ⚡ 60-Second First Run
 
 Use this when you cloned the repository and want a coding agent to check whether another repo is safe to publish. The agent still runs the CLI locally; the human keeps control over fixes, history rewrites, and pushes.

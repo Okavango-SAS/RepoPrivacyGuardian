@@ -2168,6 +2168,7 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "Developed and maintained by **Okavango SAS**",
         "Original author",
         "Axel E. Sacca, CTO of Okavango SAS",
+        "docs/ux-audit/after/audit-default-desktop-after.png",
         "Español (Latinoamérica)",
         "La CLI se mantiene en inglés para preservar compatibilidad con automatizaciones",
         'python -m pip install ".[gui]"',
