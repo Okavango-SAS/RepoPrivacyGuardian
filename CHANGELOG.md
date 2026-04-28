@@ -10,6 +10,7 @@ All notable public-release changes to this project are documented here.
 - Added a sanitized desktop GUI preview screenshot to the README.
 - Reordered and simplified README onboarding so audit scope appears earlier and repeated first-run guidance is reduced.
 - Compacted the README agentic section into a prompt library to avoid repeating the first-run flow.
+- Clarified README start paths by role and when optional installation extras are needed.
 
 ## [1.4.5] - 2026-04-28
 

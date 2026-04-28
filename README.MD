@@ -93,13 +93,17 @@ All run evidence stays local under `Audit_Results/<run_id>/` as `report.json`, `
 
 ## 🧭 Start Here
 
-Choose the path that matches what you need right now:
+Pick the shortest path for your role. Most users only need the first two rows; the rest of the README is reference material.
 
-- First-time operator: delegate the 60-second agent prompt above, then inspect `Audit_Results/<run_id>/report.html`.
-- Contributor working from a checkout: use [LOCAL_DEVELOPMENT](docs/LOCAL_DEVELOPMENT.md) for setup, validation loops, and repo map.
-- Maintainer preparing a release: use [OPERATIONS](docs/OPERATIONS.md), [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md), and `python scripts/release_readiness.py`.
+| Need | Start with | Outcome |
+| --- | --- | --- |
+| Audit another repo fast, especially through an agentic IDE | `60-Second First Run` above | Local dry-run artifacts under `Audit_Results/<run_id>/` |
+| Run manually from a terminal | `Installation`, then `Command Reference` | Repeatable CLI audit with explicit report paths |
+| Use the desktop companion | `Desktop GUI Preview`, then `GUI Contract` | Same audit engine with visual review and prompts |
+| Work on this repository | [LOCAL_DEVELOPMENT](docs/LOCAL_DEVELOPMENT.md) | Dev setup, validation loops, and repo map |
+| Prepare a release | [OPERATIONS](docs/OPERATIONS.md), [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md), then `python scripts/release_readiness.py` | Release-readiness gates and recovery notes |
 
-## 🧭 Support Matrix
+## 🧱 Support Matrix
 
 - Linux CLI: supported; automatic CI smoke runs on Ubuntu with Python `3.13`
 - Windows CLI: supported target; validate through the manual extended CI suite plus local release validation before public release
@@ -187,6 +191,8 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - `DESIGN.md` follows the public Google Labs `google-labs-code/design.md` format pinned to release `0.1.0`; optional upstream validation must use pinned tooling such as `npx --yes @google/design.md@0.1.0 lint DESIGN.md`, a sanitized environment with no GitHub/npm secrets, and read-only least-privilege execution.
 
 ## 📦 Installation
+
+For most users, the base CLI install is enough. Add GUI, remediation, test, or dev extras only when you need those surfaces.
 
 Recommended verified path for a cloned checkout:
 
@@ -512,6 +518,8 @@ The 60-second flow above is the primary agentic path: run the CLI locally, keep 
 For dogfooding against another repository, use [DOGFOODING](docs/DOGFOODING.md). It keeps artifact handling, fixture/leak classification, and redacted evidence review explicit.
 
 ### Recommended agent prompt template
+
+Use this compact handoff form when the agent already has the tool installed. For a first-time setup, use the full 60-second prompt near the top of this README.
 
 ```text
 Act as a release/security engineer. Work only on <target-repo>.
