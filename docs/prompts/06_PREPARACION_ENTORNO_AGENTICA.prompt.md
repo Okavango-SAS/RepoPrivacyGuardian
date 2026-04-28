@@ -16,11 +16,11 @@ Dejar Repo Privacy Guardian listo para ser usado desde una IDE agentica o coding
 4. Instalar el paquete en modo local:
    - uso CLI minimo: `python -m pip install .`
    - uso GUI opcional: `python -m pip install ".[gui]"`
-   - desarrollo/release: `python -m pip install ".[dev,gui,remediation]"`
+   - desarrollo y validacion completa: `python -m pip install ".[dev,gui,remediation]"`
 5. Ejecutar:
    - `repo-privacy-guardian --help`
    - `repo-privacy-guardian --check-tooling`
-6. Si estas preparando el repo para contribuir o release, ejecutar tambien:
+6. Si estas validando el checkout para contribuir, ejecutar tambien:
    - `python scripts/check_release_contract.py`
    - `python -m pytest -q`
 7. Si falta tooling, reportar el bloqueo y pedir aprobacion antes de usar `--install-missing-tools` o instalar dependencias de sistema.

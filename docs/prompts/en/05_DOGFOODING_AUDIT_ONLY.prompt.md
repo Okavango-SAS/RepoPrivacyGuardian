@@ -21,7 +21,7 @@ Prepare a repository for publication or deployment with traceable evidence, with
    - indeterminate/manual-review
    - advisory hardening
    - tooling/runtime issue
-6. If the repository lives on GitHub and the operator requested release readiness review, run:
+6. If the repository lives on GitHub and the operator requested a pre-publication settings review, run:
    `repo-privacy-guardian --root <root> --repos <repo> --dry-run --yes --audit-github-hardening`
 7. Do not run `--fix`, `--push`, `--purge-all-detected-secret-files`, or `--replace-text-file` without explicit approval after review.
 

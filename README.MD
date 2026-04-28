@@ -101,13 +101,13 @@ Pick the shortest path for your role. Most users only need the first two rows; t
 | Run manually from a terminal | `Installation`, then `Command Reference` | Repeatable CLI audit with explicit report paths |
 | Use the desktop companion | `Desktop GUI Preview`, then `GUI Contract` | Same audit engine with visual review and prompts |
 | Work on this repository | [LOCAL_DEVELOPMENT](docs/LOCAL_DEVELOPMENT.md) | Dev setup, validation loops, and repo map |
-| Prepare a release | [OPERATIONS](docs/OPERATIONS.md), [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md), then `python scripts/release_readiness.py` | Release-readiness gates and recovery notes |
+| Maintain this project | [OPERATIONS](docs/OPERATIONS.md), [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md), then `python scripts/release_readiness.py` | Validation gates and recovery notes |
 
 ## 🧱 Support Matrix
 
 - Linux CLI: supported; automatic CI smoke runs on Ubuntu with Python `3.13`
-- Windows CLI: supported target; validate through the manual extended CI suite plus local release validation before public release
-- macOS CLI: supported target; validate through local/manual release validation before public release
+- Windows CLI: supported target; validate through the manual extended CI suite plus local release validation before changing support claims
+- macOS CLI: supported target; validate through local/manual release validation before changing support claims
 - Windows GUI: supported; manual extended CI smoke runs on `windows-latest` with Python `3.11`
 - Linux GUI desktop: best-effort and depends on Tk availability plus a graphical session
 - macOS GUI: best-effort / not a release priority
@@ -322,7 +322,7 @@ repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes
 
 If `--root` already points at a git repository and `--repos` is omitted, the CLI audits that checkout as `Current Root`.
 
-Optional GitHub hardening audit for public-release settings:
+Optional GitHub hardening audit for public repository settings:
 
 ```sh
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening
@@ -443,7 +443,7 @@ Non-obvious GUI controls expose contextual help on hover, with visible `i` badge
 
 GUI localization is presentation-only. The selectable locales are English and Spanish (Latin America), persisted as a non-secret GUI preference. Adding another GUI language should add catalog entries with the same keys; it must not rename CLI flags, report fields, policy keys, or `GuardRunConfig` mappings.
 
-The GUI is intentionally privacy-first for public release. Maintained screenshots live under `docs/ux-audit/` and must use neutral visible paths so local usernames, private roots, and internal repository lists are not published in image pixels.
+The GUI documentation is intentionally privacy-first. Maintained screenshots live under `docs/ux-audit/` and must use neutral visible paths so local usernames, private roots, and internal repository lists are not published in image pixels.
 
 ## 🗂️ Artifacts
 
@@ -540,12 +540,12 @@ The desktop GUI exposes the same prompt library in its `Prompts` tab. Locale onl
 - `v1.0.0` established the stable CLI, packaging, and release contract within the current local-first scope.
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
-- `v1.2.3` is the public-release stabilization and GUI UX update.
+- `v1.2.3` is the publication-gate stabilization and GUI UX update.
 - `v1.3.10` formalized CLI/GUI parity as a repository rule.
 - `v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs.
-- `v1.4.1` hardened roadmap and CI trigger coverage for release-readiness docs.
+- `v1.4.1` hardened roadmap and CI trigger coverage for release-contract docs.
 - `v1.4.2` hardened release harness byte-compile coverage.
-- `v1.4.3` hardened GUI parity and agentic publication readiness.
+- `v1.4.3` hardened GUI parity and the agentic publication workflow.
 - `v1.4.4` hardened public prompt-library hygiene.
 - `v1.4.5` is the current patch release with root layout allowlist hardening.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
@@ -571,7 +571,7 @@ python tests/release_smoke_cli.py
 python -m build
 ```
 
-Preferred local pre-tag validation for this repository:
+Preferred local validation for maintainers:
 
 ```sh
 python scripts/release_readiness.py
@@ -624,7 +624,7 @@ Root is intentionally small and allowlisted by tests. Files that intentionally r
 - `pyproject.toml`
 - `repo_privacy_guardian_*.py` support modules published as `py-modules`
 
-Generated outputs, local agent meta material, release bundles, coverage files, build outputs, and audit artifacts belong in ignored local paths such as `.local-meta/`, `Audit_Results/`, `dist/`, and `*.egg-info/`, not in the public tracked root.
+Generated outputs, local agent scratch material, release bundles, coverage files, build outputs, and audit artifacts belong in ignored local paths such as `.local-meta/`, `Audit_Results/`, `dist/`, and `*.egg-info/`, not in the public tracked root.
 
 ## ⚠️ Limitations
 

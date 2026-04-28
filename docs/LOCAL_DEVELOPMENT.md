@@ -64,7 +64,7 @@ The harness currently validates:
 
 - CLI tooling preflight
 - release contract alignment via `python scripts/check_release_contract.py`
-- isolated pytest temp/coverage artifacts per release-readiness run
+- isolated pytest temp/coverage artifacts per validation run
 - byte-compilation of packaged Python modules and release helper scripts
 - `ruff check`
 - `pyright -p pyrightconfig.json`
@@ -86,13 +86,13 @@ Start here when changing behavior:
 - `repo_privacy_guardian_github.py`: GitHub remote parsing, API access, remote discovery, and hardening audit helpers
 - `repo_privacy_guardian_prompts.py`: GUI/README agentic prompt registry without importing desktop GUI dependencies
 - `tests/`: tracked regression tests plus release smoke coverage
-- `scripts/release_readiness.py`: owned end-to-end validation harness for local release readiness
+- `scripts/release_readiness.py`: owned end-to-end local validation harness
 - `repo_privacy_guardian_resources/POLICY.md`: packaged policy resource used by installed builds
 - `docs/`: runbooks, architecture notes, policy, prompts, and release guidance
 
 The repository root is intentionally small and allowlisted by release-hygiene tests. Keep support docs, prompts, requirements, scripts, screenshots, generated reports, build outputs, and agent scratch material in their documented subfolders instead of adding new tracked root files.
 
-Repo-building prompts, scratch instructions, and one-off agent meta notes should stay under `.local-meta/`, which is intentionally ignored. Keep only reusable operator prompts under `docs/prompts/`.
+One-off maintenance prompts and scratch instructions should stay under `.local-meta/`, which is intentionally ignored. Keep only reusable operator prompts under `docs/prompts/`.
 
 ## 5. Where to document changes
 
@@ -101,7 +101,7 @@ Update the docs that are closest to the real behavior you changed:
 - `README.MD`: entrypoint, install, usage, and repo-level navigation
 - `docs/ARCHITECTURE.md`: code navigation and subsystem boundaries
 - `docs/DOGFOODING.md`: audit-only workflow for using this repo against other repositories
-- `docs/OPERATIONS.md`: release/readiness runbook
+- `docs/OPERATIONS.md`: operations and validation runbook
 - `docs/TROUBLESHOOTING.md`: operator failure modes and recovery
 - `docs/ENGINEERING_DECISIONS.md`: behavior changes that settle a design tradeoff
 - `CHANGELOG.md`: public release notes only; use an `Unreleased` section until a version is cut

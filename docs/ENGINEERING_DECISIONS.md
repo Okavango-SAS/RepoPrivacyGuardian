@@ -149,11 +149,11 @@ Presentation-only GUI features and launcher-only CLI flags are permitted only wh
 - collection should not depend on editor scratch tests or ignored local files;
 - minimal CI must execute the same tracked suite from a clean checkout.
 
-## DEC-010 - Public release defaults are CLI-first and side-effect free
+## DEC-010 - Default entrypoints are CLI-first and side-effect free
 
 - Status: accepted
 - Decision: running the tool without flags prints CLI help instead of launching the GUI, and CLI browser opening is opt-in via `--open-report`.
-- Rationale: the public release target is automation-friendly desktop and headless CLI use. Auto-launching a GUI or browser from the default path is surprising, harder to script, and brittle in CI or remote shells.
+- Rationale: the primary automation target is desktop and headless CLI use. Auto-launching a GUI or browser from the default path is surprising, harder to script, and brittle in CI or remote shells.
 - Implementation notes:
   - `--gui` is required for desktop mode;
   - GUI dependencies remain optional and lazily imported;

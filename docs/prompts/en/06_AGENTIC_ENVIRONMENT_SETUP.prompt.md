@@ -16,11 +16,11 @@ Leave Repo Privacy Guardian ready for use from an agentic IDE or coding agent su
 4. Install the package locally:
    - minimum CLI use: `python -m pip install .`
    - optional GUI use: `python -m pip install ".[gui]"`
-   - development/release use: `python -m pip install ".[dev,gui,remediation]"`
+   - development/full validation use: `python -m pip install ".[dev,gui,remediation]"`
 5. Run:
    - `repo-privacy-guardian --help`
    - `repo-privacy-guardian --check-tooling`
-6. If preparing the repository for contribution or release, also run:
+6. If validating the checkout for contribution, also run:
    - `python scripts/check_release_contract.py`
    - `python -m pytest -q`
 7. If tooling is missing, report the blocker and ask for approval before using `--install-missing-tools` or installing system dependencies.

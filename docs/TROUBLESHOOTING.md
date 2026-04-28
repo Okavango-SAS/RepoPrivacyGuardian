@@ -1,6 +1,6 @@
 # TROUBLESHOOTING
 
-This page covers the most common local failures when running Repo Privacy Guardian or preparing a release from the repository checkout.
+This page covers the most common local failures when running Repo Privacy Guardian or validating a repository checkout.
 
 ## `git` is missing
 

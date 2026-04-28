@@ -1,6 +1,6 @@
 # CHANGELOG
 
-All notable public-release changes to this project are documented here.
+All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
@@ -11,6 +11,7 @@ All notable public-release changes to this project are documented here.
 - Reordered and simplified README onboarding so audit scope appears earlier and repeated first-run guidance is reduced.
 - Compacted the README agentic section into a prompt library to avoid repeating the first-run flow.
 - Clarified README start paths by role and when optional installation extras are needed.
+- Removed overly internal launch-preparation wording from public docs while preserving publication-gate guidance.
 
 ## [1.4.5] - 2026-04-28
 
@@ -31,16 +32,16 @@ Public prompt-library hygiene hardening update.
 
 ### Changed
 
-- Kept reusable agentic operator prompts under `docs/prompts/` while moving repo-build metaprompts out of the tracked public documentation tree.
-- Documented `.local-meta/` as the ignored home for one-off agent notes, scratch instructions, and internal repo-building prompts.
+- Kept reusable agentic operator prompts under `docs/prompts/` while moving one-off maintenance prompts out of the tracked public documentation tree.
+- Documented `.local-meta/` as the ignored home for scratch instructions and local-only maintenance notes.
 
 ### Fixed
 
-- Added release-hygiene regression coverage so internal repo-building prompts do not get republished as public user workflows.
+- Added release-hygiene regression coverage so local-only maintenance prompts do not get republished as public user workflows.
 
 ## [1.4.3] - 2026-04-28
 
-GUI parity and agentic publication readiness hardening update.
+GUI parity and agentic publication workflow hardening update.
 
 ### Changed
 
@@ -64,7 +65,7 @@ Release harness byte-compile coverage hardening update.
 
 ## [1.4.1] - 2026-04-27
 
-Release-readiness roadmap and CI trigger hardening update.
+Release-contract roadmap and CI trigger hardening update.
 
 ### Changed
 
@@ -169,7 +170,7 @@ GUI target-mode and repair-review UX hardening update.
 
 - Clarified the GUI repository target surface when GitHub owner/org remote audit is active: the local repository list now shows an audit-only remote state instead of competing Root errors, and the Settings hint explicitly says remote mode ignores the local list.
 - Improved the staged Repair summary so operators see blocking failure categories, manual-review advisory signals, and fixture/documentation matches that were intentionally kept non-blocking before confirming write actions.
-- Documented the remote-audit GUI state and the updated Repair review guidance for public-release operators.
+- Documented the remote-audit GUI state and the updated Repair review guidance for operators.
 
 ### Fixed
 
@@ -188,7 +189,7 @@ Secret taxonomy and evidence-classification hardening update.
 - Expanded high-confidence secret detection for modern GitHub, GitLab, Cloudflare, OpenAI, Anthropic, Google, Slack, Discord, Stripe, Datadog, Twilio, Mailgun, provider assignment, auth-header, webhook, credentialed URL, and Git metadata credential patterns.
 - Added explicit non-blocking buckets for low-confidence generic secret assignments, synthetic fixtures, and safe documentation examples in CLI, JSON, and HTML reports.
 - Expanded sensitive filename coverage for provider credential files such as `.npmrc`, `.pypirc`, `.netrc`, `.docker/config.json`, `.aws/credentials`, `.kube/config`, `kubeconfig`, and modern SSH key names.
-- Added `pip-audit` dependency vulnerability checks to the local release-readiness harness for dev, GUI, and remediation requirement files.
+- Added `pip-audit` dependency vulnerability checks to the local validation harness for dev, GUI, and remediation requirement files.
 
 ### Changed
 
@@ -208,14 +209,14 @@ Secret taxonomy and evidence-classification hardening update.
 
 ## [1.3.1] - 2026-04-25
 
-Release-readiness reliability hardening update.
+Reliability validation hardening update.
 
 ### Highlights
 
 - Bounded GitHub CLI auth probing, owner/org repository pagination, and clone worker fan-out so opt-in remote audits fail closed instead of hanging or oversubscribing the host.
 - Hardened local persistence and cleanup paths with full lock-metadata writes, parent-directory fsync after atomic report writes, explicit symlink refusal for temp tree cleanup, and bounded cleanup retries.
 - Tightened repo-owned smoke/test subprocess helpers with non-interactive stdin and timeouts, and covered the tracked-test collection hook directly instead of relying on nested runner behavior.
-- Broadened CI path filters so changes to tests and release-readiness scripts still trigger the automatic smoke/release-contract signal.
+- Broadened CI path filters so changes to tests and validation scripts still trigger the automatic smoke/release-contract signal.
 
 ### Validation
 
@@ -240,7 +241,7 @@ GitHub owner audit mode and GUI/CLI parity update.
 
 ## [1.2.3] - 2026-04-24
 
-Public-release stabilization and GUI UX update.
+Publication-gate stabilization and GUI UX update.
 
 ### Highlights
 
@@ -260,16 +261,16 @@ Public-release stabilization and GUI UX update.
 - Requested `--repos` targets that do not resolve now fail cleanly instead of returning a false `PASS 0/0`.
 - Empty `--root` selections and `--public-only` runs that resolve to zero repositories now fail cleanly instead of returning a false `PASS 0/0`.
 - Invalid `--root` paths now return operator-facing validation errors without falling through to an unhandled traceback path.
-- Added a repo-owned `ruff check` gate to the development extras, release-readiness harness, and CI workflow.
+- Added a repo-owned `ruff check` gate to the development extras, validation harness, and CI workflow.
 - Aligned the default `.gitignore` baseline, policy docs, and smoke fixtures so tracked `.env.example` files are supported without creating tracked-but-ignored drift.
 - Added `.env.example` plus `docs/LOCAL_DEVELOPMENT.md` to make optional auth variables, local setup, validation loops, and repository navigation explicit.
 - Tightened the release harness with an explicit CLI tooling preflight and clearer step boundaries before the build/install validation path.
 - Hardened local file handling so reports and exports refuse symlink targets, rewrite helper files are removed after use, and tracked-file scans skip symlinked or oversized text files.
 - Added checkout bootstrap in `tests/conftest.py` so `pytest -q` and `python -m pytest -q` behave the same from a repository checkout.
 - Hardened automatic fix preconditions so dirty worktrees, `git fsck` failures, or incomplete audits fail closed instead of mutating a repository mid-recovery.
-- Replaced PID/timestamp stale-lock reclamation with OS-backed repository execution locks, disabled inherited stdin on repo-owned subprocesses, and isolated release-readiness temp/coverage artifacts per run.
+- Replaced PID/timestamp stale-lock reclamation with OS-backed repository execution locks, disabled inherited stdin on repo-owned subprocesses, and isolated validation temp/coverage artifacts per run.
 - Reduced `exfil_code_indicators` advisory noise by preferring active outbound sinks and contextual review terms while ignoring detector scaffolding, import-only lines, and test-meta fixture content.
-- Tightened Windows lock release diagnostics to read owner metadata from the active lock FD, and made release-readiness cleanup retry transient `dist/`/build artifact removal failures instead of aborting on the first file-handle race.
+- Tightened Windows lock release diagnostics to read owner metadata from the active lock FD, and made validation cleanup retry transient `dist/`/build artifact removal failures instead of aborting on the first file-handle race.
 
 ### Validation
 
@@ -352,7 +353,7 @@ Release-hardening and operator-playbook update.
 
 - Added optional `--audit-github-hardening` checks for GitHub-hosted repositories, with read-only remote inspection and token-gated admin checks.
 - Surfaced GitHub hardening findings and warnings consistently in CLI guidance, JSON exports, HTML reports, and the optional GUI path.
-- Documented a reusable GitHub public-release hardening playbook for operators and coding agents without changing the local-first product model.
+- Documented a reusable GitHub publication-hardening playbook for operators and coding agents without changing the local-first product model.
 - Preserved the existing `PASS`/`FAIL` contract by keeping GitHub hardening signals advisory/manual-review by default.
 
 ### Validation

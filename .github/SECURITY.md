@@ -1,6 +1,6 @@
 # Security Policy
 
-Repo Privacy Guardian is a local-first security and release-readiness tool. Please do not report suspected vulnerabilities by opening a public issue.
+Repo Privacy Guardian is a local-first security and publication-readiness tool. Please do not report suspected vulnerabilities by opening a public issue.
 
 ## Supported Versions
 

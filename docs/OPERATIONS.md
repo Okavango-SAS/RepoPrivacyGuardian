@@ -140,4 +140,4 @@ git bundle verify path/to/<repo>-pre-publication-fix-<timestamp>.bundle
 - Use dry-run audit before `--fix`.
 - Use dry-run fix before a real rewrite.
 - Keep `--push` off unless the remediation plan has already been reviewed.
-- Prefer the local release harness over ad hoc manual command sequences when validating a public release candidate.
+- Prefer the local release harness over ad hoc manual command sequences when validating a release candidate.

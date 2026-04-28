@@ -21,7 +21,7 @@ Preparar un repo para publicacion o despliegue con evidencia trazable, sin activ
    - indeterminado/manual-review
    - advisory hardening
    - tooling/runtime issue
-6. Si el repo vive en GitHub y el operador lo pidio o es parte de release readiness, ejecutar:
+6. Si el repo vive en GitHub y el operador pidio revisar su preparacion para publicacion, ejecutar:
    `repo-privacy-guardian --root <root> --repos <repo> --dry-run --yes --audit-github-hardening`
 7. No ejecutar `--fix`, `--push`, `--purge-all-detected-secret-files` ni `--replace-text-file` sin autorizacion explicita posterior a la revision.
 
@@ -62,4 +62,3 @@ Si hay confirmed leak:
 3. preparar un fix preview solo si el operador lo aprueba
 4. ejecutar fix real solo con aprobacion explicita
 5. re-auditar y registrar los nuevos artifacts
-

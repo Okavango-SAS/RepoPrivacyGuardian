@@ -43,7 +43,7 @@ Screens audited in the running GUI:
    The labels were present but too easy to miss, especially on the locked Repair screen.
 
 7. The tracked screenshot artifacts contained local machine paths in visible form fields in an earlier pass.
-   This is not detected by the text-based self-audit because the data is embedded in PNG pixels, so the docs assets needed to be regenerated with neutral paths before public release.
+   This is not detected by the text-based self-audit because the data is embedded in PNG pixels, so the docs assets needed to be regenerated with neutral paths before publication.
 
 ## Corrections Applied
 
@@ -165,7 +165,7 @@ The next UX pass reduces first-screen load further:
 
 ## 2026-04-26 Follow-Up
 
-The release-readiness UX pass focused on target-state clarity and safer review language:
+The UX follow-up pass focused on target-state clarity and safer review language:
 
 - When GitHub owner/org remote audit is active, the repository list now switches to a dedicated remote audit state instead of showing stale local repositories or Root validation errors.
 - The remote state explains that repositories are discovered through GitHub, cloned temporarily, cleaned up after the run, and remain audit-only with Repair locked.

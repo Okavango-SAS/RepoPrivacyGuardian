@@ -25,7 +25,7 @@ Notes:
 - Dogfooding runs for other repositories should follow `docs/DOGFOODING.md`: audit-only first, classify findings, preserve redacted evidence, and avoid pasting raw sensitive values into chat or tickets.
 - Treat `exfil_code_indicators` as advisory/manual-review by default. Review them, but do not expect them to flip PASS/FAIL on their own.
 - Treat low-confidence secret assignment fields (`tracked_secret_low_confidence`, `history_secret_low_confidence`, `git_metadata_secret_low_confidence`) as advisory/manual-review by default. `tracked_secret_matches`, `history_secret_matches`, and `git_metadata_secret_matches` are the high-confidence blocking buckets; fixture and documentation buckets are separated to reduce false positives.
-- Treat `github_hardening_findings` and `github_hardening_warnings` as advisory/manual-review by default. Use `--audit-github-hardening` when the target repo lives on GitHub and you want to inspect repository settings as part of release readiness.
+- Treat `github_hardening_findings` and `github_hardening_warnings` as advisory/manual-review by default. Use `--audit-github-hardening` when the target repo lives on GitHub and you want to inspect repository settings before publication.
 - For GitHub hardening token-gated checks, support either token environment variables or an authenticated GitHub CLI session. GitHub MCP is not required for standalone CLI/Desktop use.
 - Use `--github-owner` only for opt-in remote audit discovery. It clones matching GitHub repos into temporary local directories, audits them with the same pipeline, and remains audit-only; do not combine it with `--fix` or `--push`.
 - Release validation should come from tracked tests only so a clean clone reproduces the same `pytest` signal.

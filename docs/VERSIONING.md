@@ -18,11 +18,11 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.2.2` is an operations/readiness patch on top of `1.2.1`. It adds a repository-owned local release harness plus operator troubleshooting/runbook documentation without changing the CLI or local-first scope.
 
-`1.2.3` is a public-release stabilization patch on top of `1.2.2`. It restores release-governance alignment, tightens local/remote hardening audits, improves GUI onboarding and screenshot evidence, and preserves CLI/GUI parity without changing the CLI contract or report schema.
+`1.2.3` is a publication-gate stabilization patch on top of `1.2.2`. It restores release-governance alignment, tightens local/remote hardening audits, improves GUI onboarding and screenshot evidence, and preserves CLI/GUI parity without changing the CLI contract or report schema.
 
 `1.3.0` is an additive minor release on top of `1.2.3`. It adds opt-in GitHub owner/org remote audit mode, expands high-confidence secret detection, and restores GUI/CLI parity for the new remote-audit inputs while preserving the local-first default path.
 
-`1.3.1` is a release-readiness hardening patch on top of `1.3.0`. It bounds GitHub CLI auth probes, owner/org discovery pagination, clone worker fan-out, temp cleanup retries, atomic report writes, and subprocess-based smoke/test helpers without changing the CLI contract.
+`1.3.1` is a reliability hardening patch on top of `1.3.0`. It bounds GitHub CLI auth probes, owner/org discovery pagination, clone worker fan-out, temp cleanup retries, atomic report writes, and subprocess-based smoke/test helpers without changing the CLI contract.
 
 `1.3.2` is a secret-taxonomy hardening patch on top of `1.3.1`. It broadens modern provider/webhook/credentialed-URL/Git-metadata detection, separates low-confidence generic assignments from blocking high-confidence findings, and classifies synthetic fixtures and safe documentation examples without changing default remediation safety.
 
@@ -44,13 +44,13 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.4.0` is an additive minor release on top of `1.3.10`. It rebuilds the GUI presentation layer as a CLI companion with `Audit`, `Reports`, `Prompts`, `Settings`, and gated `Repair` tabs, adds a bilingual agentic prompt registry, and preserves the existing CLI contract, report schema, policy keys, and `GuardRunConfig` parity.
 
-`1.4.1` is a release-readiness patch on top of `1.4.0`. It aligns the roadmap with the `1.4.x` GUI companion stage and expands automatic CI path filters so release-contract documentation, roadmap, design guidance, and CODEOWNERS changes trigger the smoke/release-contract gate.
+`1.4.1` is a release-contract patch on top of `1.4.0`. It aligns the roadmap with the `1.4.x` GUI companion stage and expands automatic CI path filters so release-contract documentation, roadmap, design guidance, and CODEOWNERS changes trigger the smoke/release-contract gate.
 
-`1.4.2` is a release-readiness hardening patch on top of `1.4.1`. It updates the local release harness byte-compile gate to cover every packaged Python module, including the GUI prompt registry, and corrects architecture documentation for the four extracted support modules.
+`1.4.2` is a validation hardening patch on top of `1.4.1`. It updates the local release harness byte-compile gate to cover every packaged Python module, including the GUI prompt registry, and corrects architecture documentation for the four extracted support modules.
 
-`1.4.3` is a GUI parity and agentic publication-readiness patch on top of `1.4.2`. It makes agentic CLI delegation the primary first-run documentation path, clarifies the intentional GUI confirmation-gate treatment for CLI-only prompt bypasses, fixes GUI locale refresh for the gated Repair state, and aligns package metadata with the Okavango-SAS organization repository location without changing CLI behavior, report schema, or backend policy keys.
+`1.4.3` is a GUI parity and agentic publication-workflow patch on top of `1.4.2`. It makes agentic CLI delegation the primary first-run documentation path, clarifies the intentional GUI confirmation-gate treatment for CLI-only prompt bypasses, fixes GUI locale refresh for the gated Repair state, and aligns package metadata with the Okavango-SAS organization repository location without changing CLI behavior, report schema, or backend policy keys.
 
-`1.4.4` is a public prompt-library hygiene patch on top of `1.4.3`. It keeps reusable operator prompts in the public docs, moves repo-building metaprompts to ignored local-only workspace material, and adds regression coverage so internal agent instructions do not ship as public user workflows.
+`1.4.4` is a public prompt-library hygiene patch on top of `1.4.3`. It keeps reusable operator prompts in the public docs, moves one-off maintenance prompts to ignored local-only workspace material, and adds regression coverage so local-only agent instructions do not ship as public user workflows.
 
 `1.4.5` is a root-layout hygiene patch on top of `1.4.4`. It documents which files intentionally remain in the repository root, explains why the direct script and support `py-modules` are not moved during the stable `1.x` line, and adds an allowlist regression so unexpected tracked root entries do not accumulate.
 
@@ -70,7 +70,7 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 - automatic CI smoke: cheapest push-time signal for help paths, release-contract drift, and CLI smoke
 - manual extended CI: `workflow_dispatch` suite for `ruff`, `pyright`, tracked `pytest`, package smoke, and Windows GUI smoke
-- local maintainer release gate: `python scripts/release_readiness.py` before a public release
+- local maintainer release gate: `python scripts/release_readiness.py` before tagging
 
 ## Stable release baseline
 

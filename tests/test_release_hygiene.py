@@ -186,14 +186,56 @@ def test_tracked_repository_root_layout_is_allowlisted() -> None:
     assert not unexpected, "Unexpected tracked root entries:\n" + "\n".join(unexpected)
 
 
-def test_repo_build_metaprompts_are_not_public_docs() -> None:
+def test_local_only_maintenance_prompts_are_not_public_docs() -> None:
     root = _repo_root()
     gitignore = (root / ".gitignore").read_text(encoding="utf-8")
 
     offenders = [rel for rel in LOCAL_ONLY_PROMPT_OFFENDERS if (root / rel).exists()]
 
-    assert not offenders, "Repo-build metaprompts should stay local-only:\n" + "\n".join(offenders)
+    assert not offenders, "Local-only maintenance prompts should stay local-only:\n" + "\n".join(offenders)
     assert ".local-meta/" in gitignore
+
+
+def test_public_docs_avoid_internal_launch_preparation_wording() -> None:
+    root = _repo_root()
+    public_doc_paths = [
+        "README.MD",
+        "CHANGELOG.md",
+        "AGENTS.MD",
+        ".github/SECURITY.md",
+        "DESIGN.md",
+        "docs/LOCAL_DEVELOPMENT.md",
+        "docs/ENGINEERING_DECISIONS.md",
+        "docs/VERSIONING.md",
+        "docs/UX_UI_AUDIT.md",
+        "docs/OPERATIONS.md",
+        "docs/TROUBLESHOOTING.md",
+        "docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md",
+        "docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md",
+        "docs/prompts/en/05_DOGFOODING_AUDIT_ONLY.prompt.md",
+        "docs/prompts/en/06_AGENTIC_ENVIRONMENT_SETUP.prompt.md",
+    ]
+    blocked_snippets = [
+        "repo-build metaprompts",
+        "repo-building prompts",
+        "one-off agent meta",
+        "public release target",
+        "public-release operators",
+        "release-readiness UX pass",
+        "release readiness review",
+        "agentic publication readiness",
+        "release-readiness docs",
+        "preparing a release from the repository checkout",
+    ]
+
+    offenders = []
+    for rel_path in public_doc_paths:
+        text = (root / rel_path).read_text(encoding="utf-8").lower()
+        for snippet in blocked_snippets:
+            if snippet in text:
+                offenders.append(f"{rel_path}: {snippet}")
+
+    assert not offenders, "Public docs include internal launch-preparation wording:\n" + "\n".join(offenders)
 
 
 def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
@@ -362,16 +404,16 @@ def test_changelog_records_stable_release() -> None:
     assert "## [1.4.4] - 2026-04-28" in changelog
     assert "Public prompt-library hygiene hardening update." in changelog
     assert "## [1.4.3] - 2026-04-28" in changelog
-    assert "GUI parity and agentic publication readiness hardening update." in changelog
+    assert "GUI parity and agentic publication workflow hardening update." in changelog
     assert "## [1.4.2] - 2026-04-27" in changelog
     assert "Release harness byte-compile coverage hardening update." in changelog
     assert "## [1.4.1] - 2026-04-27" in changelog
-    assert "Release-readiness roadmap and CI trigger hardening update." in changelog
+    assert "Release-contract roadmap and CI trigger hardening update." in changelog
     assert "## [1.4.0] - 2026-04-26" in changelog
     assert "GUI companion reconstruction update." in changelog
     assert "GitHub owner audit mode and GUI/CLI parity update." in changelog
     assert "## [1.3.1] - 2026-04-25" in changelog
-    assert "Release-readiness reliability hardening update." in changelog
+    assert "Reliability validation hardening update." in changelog
     assert "## [1.3.10] - 2026-04-26" in changelog
     assert "CLI/GUI parity repository-rule documentation update." in changelog
     assert "## [1.3.9] - 2026-04-26" in changelog
@@ -391,7 +433,7 @@ def test_changelog_records_stable_release() -> None:
     assert "## [1.3.2] - 2026-04-26" in changelog
     assert "Secret taxonomy and evidence-classification hardening update." in changelog
     assert "## [1.2.3] - 2026-04-24" in changelog
-    assert "Public-release stabilization and GUI UX update." in changelog
+    assert "Publication-gate stabilization and GUI UX update." in changelog
     assert "## [1.2.2] - 2026-04-15" in changelog
     assert "Operations/readiness runbook update." in changelog
     assert "## [1.2.1] - 2026-04-14" in changelog
@@ -411,9 +453,9 @@ def test_pyproject_version_matches_current_release_line() -> None:
     assert 'version = "1.4.5"' in pyproject
     assert "Current release line: `v1.4.x`." in readme
     assert "`v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs." in readme
-    assert "`v1.4.1` hardened roadmap and CI trigger coverage for release-readiness docs." in readme
+    assert "`v1.4.1` hardened roadmap and CI trigger coverage for release-contract docs." in readme
     assert "`v1.4.2` hardened release harness byte-compile coverage." in readme
-    assert "`v1.4.3` hardened GUI parity and agentic publication readiness." in readme
+    assert "`v1.4.3` hardened GUI parity and the agentic publication workflow." in readme
     assert "`v1.4.4` hardened public prompt-library hygiene." in readme
     assert "`v1.4.5` is the current patch release with root layout allowlist hardening." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
