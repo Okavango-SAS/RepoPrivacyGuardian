@@ -6,7 +6,7 @@ All notable public-release changes to this project are documented here.
 
 ### Changed
 
-- Updated README attribution to reflect Okavango SAS as the project maintainer while preserving original author credit.
+- Updated README attribution to reflect Okavango SAS as the project maintainer while preserving original author and CTO credit.
 
 ## [1.4.5] - 2026-04-28
 

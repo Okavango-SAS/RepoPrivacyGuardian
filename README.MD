@@ -662,7 +662,7 @@ Generated outputs, local agent meta material, release bundles, coverage files, b
 
 Repo Privacy Guardian is developed and maintained by **Okavango SAS**.
 
-Original author: **Axel E. Sacca**.
+Original author: **Axel E. Sacca, CTO of Okavango SAS**.
 
 ## 📄 License
 

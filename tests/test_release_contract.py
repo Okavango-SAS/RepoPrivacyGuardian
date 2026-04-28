@@ -2167,7 +2167,7 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "1. install the base CLI",
         "Developed and maintained by **Okavango SAS**",
         "Original author",
-        "Axel E. Sacca",
+        "Axel E. Sacca, CTO of Okavango SAS",
         "Español (Latinoamérica)",
         "La CLI se mantiene en inglés para preservar compatibilidad con automatizaciones",
         'python -m pip install ".[gui]"',
