@@ -2165,6 +2165,8 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "python -m pip install .",
         "clear old `dist/`, `build/`, and `*.egg-info/` outputs",
         "1. install the base CLI",
+        "Developed and maintained by **Okavango SAS**",
+        "Original author",
         "Axel E. Sacca",
         "Español (Latinoamérica)",
         "La CLI se mantiene en inglés para preservar compatibilidad con automatizaciones",

@@ -31,6 +31,7 @@ README_REQUIREMENTS = [
     "tracked_secret_low_confidence",
     "git_metadata_secret_low_confidence",
     "Root is intentionally small and allowlisted by tests",
+    "Developed and maintained by **Okavango SAS**",
 ]
 
 CHECKLIST_REQUIREMENTS = [

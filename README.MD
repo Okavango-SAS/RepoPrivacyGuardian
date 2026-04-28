@@ -9,7 +9,7 @@
 
 🔒 Repo Privacy Guardian is a local-first publication gate for auditing and hardening Git repositories before public release.
 
-It is designed for repeatable CLI execution first, with an optional desktop GUI that runs on the same underlying pipeline. Built and maintained by **Axel E. Sacca**.
+It is designed for repeatable CLI execution first, with an optional desktop GUI that runs on the same underlying pipeline. Developed and maintained by **Okavango SAS**.
 
 ## 🌎 Language / Idioma
 
@@ -658,9 +658,11 @@ Generated outputs, local agent meta material, release bundles, coverage files, b
 - Leaked secrets still need rotation after cleanup.
 - `--push` should only be used after a reviewed dry-run.
 
-## 👤 Developer
+## 👤 Maintainer
 
-Repo Privacy Guardian is developed by **Axel E. Sacca**.
+Repo Privacy Guardian is developed and maintained by **Okavango SAS**.
+
+Original author: **Axel E. Sacca**.
 
 ## 📄 License
 
