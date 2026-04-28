@@ -4,6 +4,19 @@ All notable public-release changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-04-28
+
+Public prompt-library hygiene hardening update.
+
+### Changed
+
+- Kept reusable agentic operator prompts under `docs/prompts/` while moving repo-build metaprompts out of the tracked public documentation tree.
+- Documented `.local-meta/` as the ignored home for one-off agent notes, scratch instructions, and internal repo-building prompts.
+
+### Fixed
+
+- Added release-hygiene regression coverage so internal repo-building prompts do not get republished as public user workflows.
+
 ## [1.4.3] - 2026-04-28
 
 GUI parity and agentic publication readiness hardening update.

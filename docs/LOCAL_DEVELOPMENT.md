@@ -87,6 +87,8 @@ Start here when changing behavior:
 - `repo_privacy_guardian_resources/POLICY.md`: packaged policy resource used by installed builds
 - `docs/`: runbooks, architecture notes, policy, prompts, and release guidance
 
+Repo-building prompts, scratch instructions, and one-off agent meta notes should stay under `.local-meta/`, which is intentionally ignored. Keep only reusable operator prompts under `docs/prompts/`.
+
 ## 5. Where to document changes
 
 Update the docs that are closest to the real behavior you changed:

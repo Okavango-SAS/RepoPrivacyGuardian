@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.4.3"
-CURRENT_VERSION_DESCRIPTION = "GUI parity and agentic publication readiness hardening"
+CURRENT_VERSION = "1.4.4"
+CURRENT_VERSION_DESCRIPTION = "public prompt-library hygiene hardening"
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
@@ -77,6 +77,7 @@ VERSIONING_REQUIREMENTS = [
     "`1.4.1`",
     "`1.4.2`",
     "`1.4.3`",
+    "`1.4.4`",
 ]
 
 ROADMAP_REQUIREMENTS = [
@@ -242,6 +243,8 @@ def validate_release_contract() -> list[str]:
         or "`v1.3.10` is the current patch release" in readme
         or "`v1.4.0` is the current minor release" in readme
         or "`v1.4.1` is the current patch release" in readme
+        or "`v1.4.2` is the current patch release" in readme
+        or "`v1.4.3` is the current patch release" in readme
     ):
         errors.append("README.MD: stale current release reference")
     if "GUI does not include pause/resume or cancellation controls." in known_issues:

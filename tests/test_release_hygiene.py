@@ -21,7 +21,6 @@ GUI_CONTRACT_DOCS = [
     "docs/RELEASE_CHECKLIST.md",
     "docs/DOGFOODING.md",
     "docs/ROADMAP.md",
-    "docs/prompts/02_PARIDAD_GUI_CLI.prompt.md",
 ]
 
 CI_WORKFLOW = ".github/workflows/ci.yml"
@@ -49,11 +48,20 @@ ROOT_LAYOUT_REQUIRED = [
     "scripts/check_release_contract.py",
     "scripts/release_readiness.py",
     "docs/DOGFOODING.md",
+    "docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md",
+    "docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md",
+    "docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md",
+    "docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md",
+    "docs/prompts/en/04_AGENTIC_CLI_EXECUTION.prompt.md",
+    "docs/prompts/en/05_DOGFOODING_AUDIT_ONLY.prompt.md",
+    "docs/prompts/en/06_AGENTIC_ENVIRONMENT_SETUP.prompt.md",
+    "docs/prompts/en/07_AGENTIC_AUDIT_AND_REPAIR.prompt.md",
+]
+
+LOCAL_ONLY_PROMPT_OFFENDERS = [
     "docs/prompts/01_AUDITORIA_Y_SEGUIMIENTO.prompt.md",
     "docs/prompts/02_PARIDAD_GUI_CLI.prompt.md",
     "docs/prompts/03_MEJORA_GUI_GITHUB_EMAIL.prompt.md",
-    "docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md",
-    "docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md",
 ]
 
 RELEASE_DOCS_REQUIRED = [
@@ -143,6 +151,16 @@ def test_support_files_are_moved_out_of_root() -> None:
     assert not missing, "Expected organized support files are missing:\n" + "\n".join(missing)
 
 
+def test_repo_build_metaprompts_are_not_public_docs() -> None:
+    root = _repo_root()
+    gitignore = (root / ".gitignore").read_text(encoding="utf-8")
+
+    offenders = [rel for rel in LOCAL_ONLY_PROMPT_OFFENDERS if (root / rel).exists()]
+
+    assert not offenders, "Repo-build metaprompts should stay local-only:\n" + "\n".join(offenders)
+    assert ".local-meta/" in gitignore
+
+
 def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     root = _repo_root()
 
@@ -172,6 +190,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.4.1`" in versioning
     assert "`1.4.2`" in versioning
     assert "`1.4.3`" in versioning
+    assert "`1.4.4`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "current stable `1.4.x`" in roadmap
     assert "companion-style GUI with Audit, Reports, Prompts, Settings, and gated Repair views" in roadmap
@@ -302,6 +321,8 @@ def test_changelog_records_stable_release() -> None:
     changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
 
     assert "## [1.3.0] - 2026-04-25" in changelog
+    assert "## [1.4.4] - 2026-04-28" in changelog
+    assert "Public prompt-library hygiene hardening update." in changelog
     assert "## [1.4.3] - 2026-04-28" in changelog
     assert "GUI parity and agentic publication readiness hardening update." in changelog
     assert "## [1.4.2] - 2026-04-27" in changelog
@@ -349,12 +370,13 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.4.3"' in pyproject
+    assert 'version = "1.4.4"' in pyproject
     assert "Current release line: `v1.4.x`." in readme
     assert "`v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs." in readme
     assert "`v1.4.1` hardened roadmap and CI trigger coverage for release-readiness docs." in readme
     assert "`v1.4.2` hardened release harness byte-compile coverage." in readme
-    assert "`v1.4.3` is the current patch release with GUI parity and agentic publication readiness hardening." in readme
+    assert "`v1.4.3` hardened GUI parity and agentic publication readiness." in readme
+    assert "`v1.4.4` is the current patch release with public prompt-library hygiene hardening." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme
