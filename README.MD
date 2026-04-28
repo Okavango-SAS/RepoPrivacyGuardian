@@ -26,14 +26,35 @@ Luego abrí `Settings` (`Configuración`) → `GUI Language` (`Idioma de la GUI`
 
 ## ⚡ 60-Second First Run
 
-Use this when you cloned the repository and just want to know if another repo is safe to publish.
+Use this when you cloned the repository and want a coding agent to check whether another repo is safe to publish. The agent still runs the CLI locally; the human keeps control over fixes, history rewrites, and pushes.
+
+One-time setup in the agent environment:
+
+```sh
+python -m pip install .
+```
+
+Then paste this into Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, or a similar coding agent:
+
+```text
+Act as a release/security engineer. Work only on <target-repo>.
+Use Repo Privacy Guardian from CLI, not GUI.
+Start with repo-privacy-guardian --help, then run repo-privacy-guardian --check-tooling.
+Run the first audit without writes:
+repo-privacy-guardian --root <repos-root> --repos <target-repo> --dry-run --yes
+Read Audit_Results/<run_id>/report.json, report.html, and run.log.
+Classify findings as confirmed leak, intentional fixture/example, indeterminate/manual-review, advisory hardening, or tooling/runtime issue.
+Report risk, possible consequence, and one next action per finding group.
+Do not apply fixes, rewrite history, push, or paste raw secrets/private paths/unredacted logs unless I explicitly approve.
+```
+
+If you are running without an agent, execute the same first commands manually:
 
 | Goal | Command |
 | --- | --- |
-| Install the CLI from this checkout | `python -m pip install .` |
 | Check local prerequisites | `repo-privacy-guardian --check-tooling` |
 | Audit one repo without writing changes | `repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes` |
-| Open the desktop GUI | `python -m pip install ".[gui]"` then `repo-privacy-guardian --gui` |
+| Open the desktop GUI for manual review | `python -m pip install ".[gui]"` then `repo-privacy-guardian --gui` |
 
 How to read the first result:
 
@@ -56,7 +77,7 @@ All run evidence stays local under `Audit_Results/<run_id>/` as `report.json`, `
 
 Choose the path that matches what you need right now:
 
-- First-time operator: use the 60-second path above, then inspect `Audit_Results/<run_id>/report.html`.
+- First-time operator: delegate the 60-second agent prompt above, then inspect `Audit_Results/<run_id>/report.html`.
 - Contributor working from a checkout: use [LOCAL_DEVELOPMENT](docs/LOCAL_DEVELOPMENT.md) for setup, validation loops, and repo map.
 - Maintainer preparing a release: use [OPERATIONS](docs/OPERATIONS.md), [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md), and `python scripts/release_readiness.py`.
 
@@ -273,14 +294,15 @@ Recommended execution order:
 - `python -m Repo_Privacy_Guardian ...`: module execution
 - `python Repo_Privacy_Guardian.py ...`: direct compatibility path from the repository root
 
-Typical first run for a new user:
+Typical first run for a coding agent/operator pair:
 
-1. install the base CLI
-2. run `repo-privacy-guardian --check-tooling`
-3. verify `--help`
-4. run a dry-run audit against one repository
+1. install the base CLI in the agent environment
+2. give the agent the target repository, root folder, and the 60-second prompt above
+3. have the agent verify `--help` and run `repo-privacy-guardian --check-tooling`
+4. have the agent run a dry-run audit against one repository
 5. inspect the generated JSON, HTML, and log artifacts
-6. run a dry-run fix preview before any destructive action
+6. approve a dry-run fix preview only after findings are classified
+7. approve real fixes, history rewrites, or pushes only after reviewing the preview
 
 Tooling preflight:
 
@@ -516,10 +538,11 @@ The recommended agentic shape is:
 A safe default pattern is:
 
 1. `repo-privacy-guardian --help`
-2. dry-run audit
-3. reviewed dry-run fix plan
-4. real fix only for the reviewed repos
-5. re-run until `PASS`
+2. `repo-privacy-guardian --check-tooling`
+3. dry-run audit
+4. reviewed dry-run fix plan
+5. real fix only for the reviewed repos
+6. re-run until `PASS`
 
 For dogfooding against another repository, use [DOGFOODING](docs/DOGFOODING.md). That runbook keeps the first pass audit-only, requires classification of confirmed leaks versus intentional fixtures/examples, and treats `Audit_Results/<run_id>/` artifacts as sensitive local evidence even when redacted.
 

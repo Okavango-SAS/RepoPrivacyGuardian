@@ -10825,7 +10825,10 @@ def make_parser() -> argparse.ArgumentParser:
             "  repo-privacy-guardian --check-tooling\n"
             "  repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes\n"
             "  repo-privacy-guardian --root /path/to/repos --repos MyRepo --fix --dry-run --yes\n"
-            "  repo-privacy-guardian --gui"
+            "  repo-privacy-guardian --gui\n"
+            "\n"
+            "Agentic handoff:\n"
+            "  Paste the README 60-Second First Run prompt into your coding agent; keep fixes and pushes approval-gated."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
