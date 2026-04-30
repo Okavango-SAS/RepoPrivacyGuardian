@@ -8459,9 +8459,8 @@ class GuiApp:  # pragma: no cover
             width=120,
             corner_radius=8,
             command=self.refresh_repos,
-            fg_color=self._support_button_fg,
-            hover_color=self._support_button_hover,
             **self._button_asset_options("icon-refresh.png"),
+            **self._secondary_button_options(),
         )
         self._localize_widget(self._refresh_button, "text", "refresh")
         self._bind_tooltip_key(self._refresh_button, "refresh_repos")
@@ -10306,14 +10305,14 @@ class GuiApp:  # pragma: no cover
 
         refresh_button = getattr(self, "_refresh_button", None)
         if refresh_button is not None:
-            support_fg = getattr(self, "_support_button_fg", "#355C7D")
-            support_hover = getattr(self, "_support_button_hover", "#1E293B")
+            secondary_fg = getattr(self, "_secondary_button_fg", "#F8FAFC")
+            secondary_hover = getattr(self, "_secondary_button_hover", "#E6F0EC")
             disabled_fg = getattr(self, "_disabled_button_fg", "#B8C6D5")
             disabled_text = getattr(self, "_disabled_button_text", "#64748B")
             refresh_button.configure(
                 state="disabled" if run_in_progress else "normal",
-                fg_color=disabled_fg if run_in_progress else support_fg,
-                hover_color=disabled_fg if run_in_progress else support_hover,
+                fg_color=disabled_fg if run_in_progress else secondary_fg,
+                hover_color=disabled_fg if run_in_progress else secondary_hover,
                 text_color_disabled=disabled_text,
             )
 

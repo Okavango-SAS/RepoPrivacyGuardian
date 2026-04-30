@@ -7,6 +7,7 @@ All notable user-facing changes to this project are documented here.
 ### Changed
 
 - Added a packaged GUI raster asset set for the window icon, header watermark, repository empty state, reports, prompts, repair gate visuals, and DPI-aware action icons.
+- Adjusted the GUI Refresh action to secondary-button styling so its icon remains readable and added smoke coverage for visible Prompt cards.
 - Updated README attribution to reflect Okavango SAS as the project maintainer while preserving original author and CTO credit.
 - Added a sanitized desktop GUI preview screenshot to the README.
 - Reordered and simplified README onboarding so audit scope appears earlier and repeated first-run guidance is reduced.
