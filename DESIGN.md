@@ -108,6 +108,8 @@ Keep the first viewport simple after setup:
 
 Buttons should be short and action-oriented. Cards should be shallow, with 8-12px radius and clear grouping. Do not nest cards unless the inner element is a bounded tool area such as the repository drop/list shell or log output.
 
+Runtime image assets are allowed when they improve scanability without becoming decoration. Keep them small, local, and packaged with the GUI: app icon, subtle header watermark, empty-state visuals, evidence/prompt/repair pictograms. Do not embed text in images; labels must remain locale-driven.
+
 ## Do's and Don'ts
 
 - Do keep the common Audit path visible and brief.
@@ -115,6 +117,7 @@ Buttons should be short and action-oriented. Cards should be shallow, with 8-12p
 - Do keep advanced/security-sensitive options explicit and collapsed.
 - Do not persist tokens, private owner email lists, or push guardrail bypass settings in GUI setup preferences.
 - Do not make remote GitHub audit feel like the default local-first path.
+- Do not use full-window background images, QR codes, marketing banners, or image-only buttons inside the desktop GUI.
 
 ## External Spec Hygiene
 

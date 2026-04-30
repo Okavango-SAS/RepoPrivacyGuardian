@@ -250,6 +250,7 @@ External requirements:
 - `git-filter-repo` is required only for remediation that rewrites history
 - GitHub CLI (`gh`) is optional for local audits, can supply admin auth for `--audit-github-hardening`, and is required for cloning private repositories in `--github-owner` mode
 - Linux desktop GUI use may require a Tk package such as `python3-tk`
+- DPI-aware GUI image assets use Pillow, included in the optional GUI dependency set.
 - Desktop drag-and-drop uses `tkinterdnd2`, included in the optional GUI dependency set. If that runtime cannot initialize, the GUI keeps working with Browse/Refresh.
 
 Recommended support target:
@@ -605,6 +606,7 @@ Validation tiers for this repository:
 - `repo_privacy_guardian_artifacts.py`: typed run-artifact and run-state helpers shared by CLI and GUI flow
 - `repo_privacy_guardian_github.py`: GitHub remote parsing, API access, remote discovery, and hardening audit helpers
 - `repo_privacy_guardian_prompts.py`: GUI/README agentic prompt registry without desktop GUI imports
+- `repo_privacy_guardian_assets/`: packaged GUI raster assets for the optional desktop interface
 - `repo_privacy_guardian_resources/`: packaged policy resource used by installed builds
 - `config/requirements/`: compatibility dependency manifests
 - `docs/`: policy, dogfooding runbook, prompts, release docs, and engineering rationale
@@ -622,6 +624,7 @@ Root is intentionally small and allowlisted by tests. Files that intentionally r
 - `README.MD`
 - `Repo_Privacy_Guardian.py`
 - `pyproject.toml`
+- `repo_privacy_guardian_assets/` runtime GUI image assets
 - `repo_privacy_guardian_*.py` support modules published as `py-modules`
 
 Generated outputs, local agent scratch material, release bundles, coverage files, build outputs, and audit artifacts belong in ignored local paths such as `.local-meta/`, `Audit_Results/`, `dist/`, and `*.egg-info/`, not in the public tracked root.

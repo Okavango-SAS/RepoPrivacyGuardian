@@ -104,6 +104,24 @@ GUI_LOCALE_OPTIONS: tuple[tuple[str, str], ...] = (
     (GUI_LOCALE_DEFAULT, "English"),
     (GUI_LOCALE_ES_419, "Español (Latinoamérica)"),
 )
+GUI_ASSET_PACKAGE = "repo_privacy_guardian_assets"
+GUI_ASSET_FILENAMES: tuple[str, ...] = (
+    "app-icon.png",
+    "header-watermark.png",
+    "repo-dropzone.png",
+    "reports-evidence.png",
+    "prompts-workflow.png",
+    "repair-gate.png",
+    "icon-audit.png",
+    "icon-copy.png",
+    "icon-folder.png",
+    "icon-open.png",
+    "icon-refresh.png",
+    "icon-repair.png",
+    "icon-report.png",
+    "icon-settings.png",
+    "icon-stop.png",
+)
 WINGET_BOOTSTRAP_URL = "https://aka.ms/getwinget"
 WINGET_PACKAGE_FAMILY_NAME = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe"
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
@@ -115,6 +133,29 @@ REDACTED_IDENTITY_TOKEN = "<redacted-identity-token>"
 # Redaction placeholder, not a credential.
 REDACTED_SECRET = "<redacted-secret>"  # nosec B105
 REDACTED_PATH = "<redacted-path>"
+
+
+def gui_asset_path(filename: str) -> Path | None:
+    if filename not in GUI_ASSET_FILENAMES:
+        return None
+
+    source_tree_asset = Path(__file__).resolve().parent / GUI_ASSET_PACKAGE / filename
+    if source_tree_asset.exists():
+        return source_tree_asset
+
+    try:
+        from importlib import resources
+
+        packaged_asset = resources.files(GUI_ASSET_PACKAGE).joinpath(filename)
+        packaged_asset_path = Path(str(packaged_asset))
+        if packaged_asset_path.exists():
+            return packaged_asset_path
+    except (ImportError, ModuleNotFoundError, OSError):
+        pass
+
+    return None
+
+
 EMAIL_NOISE_DOMAINS = {
     "example.com",
     "example.org",
@@ -6993,6 +7034,9 @@ class GuiApp:  # pragma: no cover
                 "On Linux desktop, install python3-tk and start from a graphical session. "
                 "Otherwise, use the CLI."
             ) from exc
+        self._gui_asset_images = self._load_gui_assets()
+        self._gui_button_asset_images = self._load_gui_button_assets()
+        self._set_window_icon()
         self.root.title("Repo Privacy Guardian")
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
@@ -7170,6 +7214,11 @@ class GuiApp:  # pragma: no cover
         self._reports_paths_label = None
         self._reports_action_buttons: list[object] = []
         self._prompt_cards_frame = None
+        self._header_visual_label = None
+        self._reports_visual_label = None
+        self._prompts_visual_label = None
+        self._repo_empty_state_visual_label = None
+        self._repair_gate_visual_label = None
         self._repair_options_visible = False
         self._repair_options_toggle_button = None
         self._repair_options_hint_label = None
@@ -7191,6 +7240,7 @@ class GuiApp:  # pragma: no cover
         header = ctk.CTkFrame(app, fg_color=self._header_fg, corner_radius=18)
         header.grid(row=0, column=0, sticky="we", padx=16, pady=(10, 8))
         header.grid_columnconfigure(0, weight=1)
+        header.grid_columnconfigure(1, weight=0)
         self._localize_widget(ctk.CTkLabel(
             header,
             text=self._t("header_title"),
@@ -7224,6 +7274,13 @@ class GuiApp:  # pragma: no cover
                 font=self._font(11, bold=True),
                 padx=12,
             ), "text", label_key).grid(row=0, column=idx, sticky="w", padx=(0, 8))
+        self._header_visual_label = self._make_asset_label(
+            header,
+            "header-watermark.png",
+            background=self._header_fg,
+        )
+        if self._header_visual_label is not None:
+            self._header_visual_label.grid(row=0, column=1, rowspan=3, sticky="e", padx=(8, 12), pady=8)
 
         flow_tabs = ctk.CTkTabview(
             app,
@@ -7307,6 +7364,7 @@ class GuiApp:  # pragma: no cover
             width=150,
             height=32,
             corner_radius=8,
+            **self._button_asset_options("icon-settings.png"),
             **self._secondary_button_options(),
         )
         self._localize_widget(settings_shortcut, "text", "open_settings_tab")
@@ -8243,6 +8301,7 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             fg_color="#B45309",
             hover_color="#92400E",
+            **self._button_asset_options("icon-repair.png"),
         )
         self._bind_tooltip_key(self._repair_button, "repair_button")
         self._repair_button.grid(row=0, column=0, sticky="w")
@@ -8276,13 +8335,20 @@ class GuiApp:  # pragma: no cover
         )
         blocker_card.grid(row=0, column=0, padx=28, pady=(28, 20), sticky="n")
         blocker_card.grid_columnconfigure(0, weight=1)
+        self._repair_gate_visual_label = self._make_asset_label(
+            blocker_card,
+            "repair-gate.png",
+            background="#FFFFFF",
+        )
+        if self._repair_gate_visual_label is not None:
+            self._repair_gate_visual_label.grid(row=0, column=0, padx=24, pady=(18, 0), sticky="ew")
         self._localize_widget(ctk.CTkLabel(
             blocker_card,
             text=self._t("repair_tab_locked"),
             justify="center",
             font=self._font(18, bold=True),
             text_color=self._text_heading,
-        ), "text", "repair_tab_locked").grid(row=0, column=0, padx=24, pady=(22, 8), sticky="ew")
+        ), "text", "repair_tab_locked").grid(row=1, column=0, padx=24, pady=(8, 8), sticky="ew")
         self._repair_tab_block_label = ctk.CTkLabel(
             blocker_card,
             text="",
@@ -8291,21 +8357,21 @@ class GuiApp:  # pragma: no cover
             text_color=self._text_heading,
             wraplength=620,
         )
-        self._repair_tab_block_label.grid(row=1, column=0, padx=24, pady=(0, 10), sticky="ew")
+        self._repair_tab_block_label.grid(row=2, column=0, padx=24, pady=(0, 10), sticky="ew")
         self._localize_widget(ctk.CTkLabel(
             blocker_card,
             text=self._t("before_repair"),
             justify="center",
             font=self._font(12, bold=True),
             text_color=self._text_muted,
-        ), "text", "before_repair").grid(row=2, column=0, padx=24, pady=(0, 6), sticky="ew")
+        ), "text", "before_repair").grid(row=3, column=0, padx=24, pady=(0, 6), sticky="ew")
         step_texts = [
             "repair_lock_step_1",
             "repair_lock_step_2",
             "repair_lock_step_3",
         ]
         self._repair_tab_block_steps = []
-        for idx, step_key in enumerate(step_texts, start=3):
+        for idx, step_key in enumerate(step_texts, start=4):
             step_label = ctk.CTkLabel(
                 blocker_card,
                 text=self._t(step_key),
@@ -8327,7 +8393,8 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             fg_color=self._primary_button_fg,
             hover_color=self._primary_button_hover,
-        ), "text", "go_to_audit").grid(row=6, column=0, pady=(14, 22))
+            **self._button_asset_options("icon-audit.png"),
+        ), "text", "go_to_audit").grid(row=7, column=0, pady=(14, 22))
 
         results_row = ctk.CTkFrame(audit_tab, fg_color="transparent")
         results_row.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 14))
@@ -8369,6 +8436,7 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             fg_color=self._primary_button_fg,
             hover_color=self._primary_button_hover,
+            **self._button_asset_options("icon-audit.png"),
         )
         self._bind_tooltip_key(self._audit_button, "run_audit")
         self._audit_button.pack(side="left", padx=(0, 8))
@@ -8379,6 +8447,7 @@ class GuiApp:  # pragma: no cover
             width=172,
             height=34,
             corner_radius=8,
+            **self._button_asset_options("icon-stop.png"),
             **self._secondary_button_options(),
         )
         self._bind_tooltip_key(self._cancel_button, "stop_after_current_step")
@@ -8392,6 +8461,7 @@ class GuiApp:  # pragma: no cover
             command=self.refresh_repos,
             fg_color=self._support_button_fg,
             hover_color=self._support_button_hover,
+            **self._button_asset_options("icon-refresh.png"),
         )
         self._localize_widget(self._refresh_button, "text", "refresh")
         self._bind_tooltip_key(self._refresh_button, "refresh_repos")
@@ -8456,6 +8526,13 @@ class GuiApp:  # pragma: no cover
             border_color=self._card_border,
         )
         self._repo_empty_state.grid_columnconfigure(0, weight=1)
+        self._repo_empty_state_visual_label = self._make_asset_label(
+            self._repo_empty_state,
+            "repo-dropzone.png",
+            background=self._surface_alt,
+        )
+        if self._repo_empty_state_visual_label is not None:
+            self._repo_empty_state_visual_label.grid(row=0, column=0, padx=18, pady=(14, 2), sticky="ew")
         self._repo_empty_state_title_label = ctk.CTkLabel(
             self._repo_empty_state,
             text=self._t("repo_targets_unavailable"),
@@ -8464,7 +8541,7 @@ class GuiApp:  # pragma: no cover
             font=self._font(14, bold=True),
             text_color=self._text_heading,
         )
-        self._repo_empty_state_title_label.grid(row=0, column=0, padx=18, pady=(16, 4), sticky="ew")
+        self._repo_empty_state_title_label.grid(row=1, column=0, padx=18, pady=(6, 4), sticky="ew")
         self._repo_empty_state_body_label = ctk.CTkLabel(
             self._repo_empty_state,
             text=self._t("choose_valid_root"),
@@ -8474,7 +8551,7 @@ class GuiApp:  # pragma: no cover
             text_color=self._text_muted,
             wraplength=420,
         )
-        self._repo_empty_state_body_label.grid(row=1, column=0, padx=18, pady=(0, 6), sticky="ew")
+        self._repo_empty_state_body_label.grid(row=2, column=0, padx=18, pady=(0, 6), sticky="ew")
         self._repo_empty_state_hint_label = ctk.CTkLabel(
             self._repo_empty_state,
             text=self._t("run_audit_available_hint"),
@@ -8484,7 +8561,7 @@ class GuiApp:  # pragma: no cover
             text_color=self._text_muted,
             wraplength=420,
         )
-        self._repo_empty_state_hint_label.grid(row=2, column=0, padx=18, pady=(0, 16), sticky="ew")
+        self._repo_empty_state_hint_label.grid(row=3, column=0, padx=18, pady=(0, 16), sticky="ew")
 
         run_controls = ctk.CTkFrame(repos_card, fg_color="transparent")
         run_controls.grid(row=3, column=0, columnspan=2, sticky="w", padx=14, pady=(4, 12))
@@ -8563,6 +8640,81 @@ class GuiApp:  # pragma: no cover
         family = self._mono_font_family if mono else self._ui_font_family
         return (family, size, "bold") if bold else (family, size)
 
+    def _load_gui_assets(self) -> dict[str, object]:
+        images: dict[str, object] = {}
+        for filename in GUI_ASSET_FILENAMES:
+            asset_path = gui_asset_path(filename)
+            if asset_path is None:
+                continue
+            try:
+                images[filename] = self.tk.PhotoImage(file=str(asset_path))
+            except Exception:
+                continue
+        return images
+
+    def _load_gui_button_assets(self) -> dict[str, object]:
+        ctk_image = getattr(self.ctk, "CTkImage", None)
+        if ctk_image is None:
+            return {}
+
+        try:
+            from PIL import Image
+        except Exception:
+            return {}
+
+        images: dict[str, object] = {}
+        for filename in GUI_ASSET_FILENAMES:
+            if not filename.startswith("icon-"):
+                continue
+            asset_path = gui_asset_path(filename)
+            if asset_path is None:
+                continue
+            try:
+                with Image.open(asset_path) as source:
+                    image = source.copy()
+                images[filename] = ctk_image(light_image=image, dark_image=image, size=(24, 24))
+            except Exception:
+                continue
+        return images
+
+    def _asset_image(self, filename: str):
+        return self._gui_asset_images.get(filename)
+
+    def _set_window_icon(self) -> None:
+        icon = self._asset_image("app-icon.png")
+        if icon is None:
+            return
+        try:
+            self.root.iconphoto(True, icon)
+        except Exception:
+            pass
+
+    def _make_asset_label(
+        self,
+        parent: object,
+        filename: str,
+        *,
+        background: str,
+    ):
+        image = self._asset_image(filename)
+        if image is None:
+            return None
+        return self.tk.Label(
+            parent,
+            image=image,
+            background=background,
+            borderwidth=0,
+            highlightthickness=0,
+            padx=0,
+            pady=0,
+        )
+
+    def _button_asset_options(self, filename: str) -> dict[str, object]:
+        image = self._gui_button_asset_images.get(filename)
+        if image is None:
+            return {}
+        return {"image": image, "compound": "left"}
+
     def _secondary_button_options(self) -> dict[str, object]:
         return {
             "fg_color": self._secondary_button_fg,
@@ -8583,6 +8735,7 @@ class GuiApp:  # pragma: no cover
         )
         reports_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
         reports_card.grid_columnconfigure(0, weight=1)
+        reports_card.grid_columnconfigure(1, weight=0)
         self._localize_widget(ctk.CTkLabel(
             reports_card,
             text=self._t("reports_dashboard"),
@@ -8598,9 +8751,16 @@ class GuiApp:  # pragma: no cover
             font=self._font(12),
             text_color=self._text_muted,
         ), "text", "reports_dashboard_body").grid(row=1, column=0, sticky="we", padx=14, pady=(0, 10))
+        self._reports_visual_label = self._make_asset_label(
+            reports_card,
+            "reports-evidence.png",
+            background=self._surface_fg,
+        )
+        if self._reports_visual_label is not None:
+            self._reports_visual_label.grid(row=0, column=1, rowspan=2, sticky="e", padx=(8, 14), pady=(10, 4))
 
         status_row = ctk.CTkFrame(reports_card, fg_color="#F2FBF8", corner_radius=10, border_width=1, border_color="#B9DDD3")
-        status_row.grid(row=2, column=0, sticky="we", padx=14, pady=(0, 10))
+        status_row.grid(row=2, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 10))
         status_row.grid_columnconfigure(1, weight=1)
         self._reports_status_badge = ctk.CTkLabel(
             status_row,
@@ -8641,21 +8801,22 @@ class GuiApp:  # pragma: no cover
         self._reports_paths_label.grid(row=2, column=0, columnspan=2, sticky="we", padx=12, pady=(0, 12))
 
         actions = ctk.CTkFrame(reports_card, fg_color="transparent")
-        actions.grid(row=3, column=0, sticky="w", padx=14, pady=(0, 12))
+        actions.grid(row=3, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 12))
         report_actions = [
-            ("open_html_report_action", lambda: self._open_last_artifact("html")),
-            ("open_json_report_action", lambda: self._open_last_artifact("json")),
-            ("open_run_log_action", lambda: self._open_last_artifact("log")),
-            ("open_artifacts_folder_action", lambda: self._open_last_artifact("folder")),
+            ("open_html_report_action", "icon-report.png", lambda: self._open_last_artifact("html")),
+            ("open_json_report_action", "icon-report.png", lambda: self._open_last_artifact("json")),
+            ("open_run_log_action", "icon-open.png", lambda: self._open_last_artifact("log")),
+            ("open_artifacts_folder_action", "icon-folder.png", lambda: self._open_last_artifact("folder")),
         ]
         self._reports_action_buttons = []
-        for idx, (text_key, command) in enumerate(report_actions):
+        for idx, (text_key, icon_filename, command) in enumerate(report_actions):
             button = ctk.CTkButton(
                 actions,
                 text=self._t(text_key),
                 command=command,
                 height=32,
                 corner_radius=8,
+                **self._button_asset_options(icon_filename),
                 **self._secondary_button_options(),
             )
             self._localize_widget(button, "text", text_key)
@@ -8675,6 +8836,7 @@ class GuiApp:  # pragma: no cover
         )
         prompts_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
         prompts_card.grid_columnconfigure(0, weight=1)
+        prompts_card.grid_columnconfigure(1, weight=0)
         self._localize_widget(ctk.CTkLabel(
             prompts_card,
             text=self._t("prompts_library"),
@@ -8690,8 +8852,15 @@ class GuiApp:  # pragma: no cover
             font=self._font(12),
             text_color=self._text_muted,
         ), "text", "prompts_library_body").grid(row=1, column=0, sticky="we", padx=14, pady=(0, 10))
+        self._prompts_visual_label = self._make_asset_label(
+            prompts_card,
+            "prompts-workflow.png",
+            background=self._surface_fg,
+        )
+        if self._prompts_visual_label is not None:
+            self._prompts_visual_label.grid(row=0, column=1, rowspan=2, sticky="e", padx=(8, 14), pady=(10, 4))
         self._prompt_cards_frame = ctk.CTkFrame(prompts_card, fg_color="transparent")
-        self._prompt_cards_frame.grid(row=2, column=0, sticky="we", padx=14, pady=(0, 12))
+        self._prompt_cards_frame.grid(row=2, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 12))
         self._prompt_cards_frame.grid_columnconfigure((0, 1), weight=1)
         self._refresh_prompt_cards()
 
@@ -8752,6 +8921,7 @@ class GuiApp:  # pragma: no cover
                 corner_radius=8,
                 fg_color=self._primary_button_fg,
                 hover_color=self._primary_button_hover,
+                **self._button_asset_options("icon-copy.png"),
             )
             self._bind_tooltip_key(copy_prompt_button, "copy_prompt")
             copy_prompt_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
@@ -8761,6 +8931,7 @@ class GuiApp:  # pragma: no cover
                 command=lambda item=prompt: self._copy_text_to_clipboard(item.command, self._t("prompt_command_copied")),
                 height=30,
                 corner_radius=8,
+                **self._button_asset_options("icon-copy.png"),
                 **self._secondary_button_options(),
             )
             self._bind_tooltip_key(copy_command_button, "copy_prompt_command")
@@ -8771,6 +8942,7 @@ class GuiApp:  # pragma: no cover
                 command=lambda item=prompt: self._open_prompt_file(item, repo_root),
                 height=30,
                 corner_radius=8,
+                **self._button_asset_options("icon-open.png"),
                 **self._secondary_button_options(),
             )
             self._bind_tooltip_key(open_prompt_button, "open_prompt_file")
@@ -9155,6 +9327,7 @@ class GuiApp:  # pragma: no cover
             width=92,
             height=32,
             corner_radius=8,
+            **self._button_asset_options("icon-folder.png"),
             **self._secondary_button_options(),
             command=lambda: self._browse_directory(variable, title=self._t(title_key) if title_key else (title or "")),
         )
@@ -9199,6 +9372,7 @@ class GuiApp:  # pragma: no cover
             width=92,
             height=32,
             corner_radius=8,
+            **self._button_asset_options("icon-open.png"),
             **self._secondary_button_options(),
             command=lambda: self._browse_existing_file(
                 variable,
@@ -9248,6 +9422,7 @@ class GuiApp:  # pragma: no cover
             width=92,
             height=32,
             corner_radius=8,
+            **self._button_asset_options("icon-folder.png"),
             **self._secondary_button_options(),
             command=lambda: self._browse_save_file(
                 variable,
@@ -9298,10 +9473,15 @@ class GuiApp:  # pragma: no cover
             return
         self._workflow_strip_visible = visible
         try:
+            header_visual = getattr(self, "_header_visual_label", None)
             if visible:
                 self._workflow_strip.grid()
+                if header_visual is not None:
+                    header_visual.grid()
                 return
             self._workflow_strip.grid_remove()
+            if header_visual is not None:
+                header_visual.grid_remove()
         except Exception:
             return
 
@@ -9627,6 +9807,9 @@ class GuiApp:  # pragma: no cover
         }
         theme = palette.get(self._repo_empty_reason, palette["no_repos"])
         repo_empty_state.configure(fg_color=theme["fg"], border_color=theme["border"])
+        visual_label = getattr(self, "_repo_empty_state_visual_label", None)
+        if visual_label is not None:
+            visual_label.configure(background=theme["fg"])
         if title_label is not None:
             title_label.configure(text=theme["title"], text_color=theme["title_color"])
         if body_label is not None and message:

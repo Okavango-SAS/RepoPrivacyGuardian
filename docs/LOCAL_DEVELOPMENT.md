@@ -85,6 +85,7 @@ Start here when changing behavior:
 - `repo_privacy_guardian_artifacts.py`: typed run-artifact and run-state helper slice extracted from the monolith
 - `repo_privacy_guardian_github.py`: GitHub remote parsing, API access, remote discovery, and hardening audit helpers
 - `repo_privacy_guardian_prompts.py`: GUI/README agentic prompt registry without importing desktop GUI dependencies
+- `repo_privacy_guardian_assets/`: packaged raster assets used only by the optional GUI
 - `tests/`: tracked regression tests plus release smoke coverage
 - `scripts/release_readiness.py`: owned end-to-end local validation harness
 - `repo_privacy_guardian_resources/POLICY.md`: packaged policy resource used by installed builds

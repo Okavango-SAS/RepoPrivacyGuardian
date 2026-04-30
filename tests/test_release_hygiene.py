@@ -52,6 +52,7 @@ ROOT_LAYOUT_ALLOWED_TOP_LEVEL = {
     "repo_privacy_guardian_artifacts.py",
     "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_prompts.py",
+    "repo_privacy_guardian_assets",
     "repo_privacy_guardian_resources",
     "repo_privacy_guardian_runtime.py",
     "scripts",
@@ -71,6 +72,22 @@ ROOT_LAYOUT_REQUIRED = [
     "config/requirements/requirements-gui.txt",
     "config/requirements/requirements-remediation.txt",
     "config/requirements/requirements-dev.txt",
+    "repo_privacy_guardian_assets/__init__.py",
+    "repo_privacy_guardian_assets/app-icon.png",
+    "repo_privacy_guardian_assets/header-watermark.png",
+    "repo_privacy_guardian_assets/icon-audit.png",
+    "repo_privacy_guardian_assets/icon-copy.png",
+    "repo_privacy_guardian_assets/icon-folder.png",
+    "repo_privacy_guardian_assets/icon-open.png",
+    "repo_privacy_guardian_assets/icon-refresh.png",
+    "repo_privacy_guardian_assets/icon-repair.png",
+    "repo_privacy_guardian_assets/icon-report.png",
+    "repo_privacy_guardian_assets/icon-settings.png",
+    "repo_privacy_guardian_assets/icon-stop.png",
+    "repo_privacy_guardian_assets/prompts-workflow.png",
+    "repo_privacy_guardian_assets/repair-gate.png",
+    "repo_privacy_guardian_assets/repo-dropzone.png",
+    "repo_privacy_guardian_assets/reports-evidence.png",
     "repo_privacy_guardian_resources/__init__.py",
     "repo_privacy_guardian_resources/POLICY.md",
     "scripts/check_release_contract.py",
@@ -497,6 +514,37 @@ def test_readme_release_banner_is_tracked_asset() -> None:
     assert banner.is_file()
     assert banner.stat().st_size > 1_000_000
     assert _png_size(banner) == (1536, 1024)
+
+
+def test_gui_runtime_assets_are_packaged_and_bounded() -> None:
+    root = _repo_root()
+    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
+    assets_dir = root / "repo_privacy_guardian_assets"
+    expected_sizes = {
+        "app-icon.png": (64, 64),
+        "header-watermark.png": (620, 150),
+        "repo-dropzone.png": (168, 112),
+        "reports-evidence.png": (168, 112),
+        "prompts-workflow.png": (168, 112),
+        "repair-gate.png": (168, 112),
+        "icon-audit.png": (24, 24),
+        "icon-copy.png": (24, 24),
+        "icon-folder.png": (24, 24),
+        "icon-open.png": (24, 24),
+        "icon-refresh.png": (24, 24),
+        "icon-repair.png": (24, 24),
+        "icon-report.png": (24, 24),
+        "icon-settings.png": (24, 24),
+        "icon-stop.png": (24, 24),
+    }
+
+    assert 'packages = ["repo_privacy_guardian_resources", "repo_privacy_guardian_assets"]' in pyproject
+    assert 'repo_privacy_guardian_assets = ["*.png"]' in pyproject
+    for filename, expected_size in expected_sizes.items():
+        asset = assets_dir / filename
+        assert asset.is_file()
+        assert _png_size(asset) == expected_size
+        assert asset.stat().st_size < 400_000
 
 
 def test_coverage_targets_package_code_not_local_ops_scripts() -> None:

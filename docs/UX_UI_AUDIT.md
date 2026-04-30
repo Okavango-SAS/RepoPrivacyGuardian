@@ -182,6 +182,16 @@ The next GUI pass focused on reducing uncertainty without reopening the first-sc
 - Kept the primary Audit path unchanged: repository selection, Audit, Stop, Refresh, and log remain the visible first-screen workflow.
 - Centralized tooltip copy in code and added regression coverage so future UI options must keep explanatory text.
 
+## 2026-04-30 Runtime Visual-Asset Pass
+
+The current GUI now uses a small packaged raster asset set instead of relying only on solid CustomTkinter surfaces:
+
+- Added a window icon and subtle header watermark that preserve the operational, local-first tone.
+- Added small state visuals for repository targeting, Reports evidence, Prompts workflows, and the gated Repair screen.
+- Added DPI-aware local icon assets to the most common actions: Audit, Stop, Refresh, Reports, Prompts, Settings, and Repair.
+- Kept all text in Tk labels/buttons instead of embedding text in images, so English/Spanish locale parity remains intact.
+- Kept assets local and bounded under `repo_privacy_guardian_assets/`; the GUI falls back to the existing solid-color layout if an asset cannot be loaded.
+
 ## 2026-04-26 GUI Locale Pass
 
 The localization pass added a presentation-only language selector without widening the CLI contract:

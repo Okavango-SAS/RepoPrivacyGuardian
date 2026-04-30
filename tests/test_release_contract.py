@@ -485,6 +485,15 @@ def test_load_gui_runtime_requires_display(monkeypatch) -> None:
         rpg.load_gui_runtime()
 
 
+def test_gui_runtime_assets_resolve_without_gui_imports() -> None:
+    for filename in rpg.GUI_ASSET_FILENAMES:
+        asset_path = rpg.gui_asset_path(filename)
+        assert asset_path is not None
+        assert asset_path.is_file()
+
+    assert rpg.gui_asset_path("../app-icon.png") is None
+
+
 def test_module_import_does_not_require_gui_dependencies() -> None:
     proc = subprocess.run(
         [sys.executable, "-c", "import Repo_Privacy_Guardian; print('ok')"],

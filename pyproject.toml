@@ -40,7 +40,7 @@ Source = "https://github.com/Okavango-SAS/RepoPrivacyGuardian"
 Changelog = "https://github.com/Okavango-SAS/RepoPrivacyGuardian/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-gui = ["customtkinter>=5.2.2,<6", "tkinterdnd2>=0.4.3,<0.5"]
+gui = ["customtkinter>=5.2.2,<6", "pillow>=10,<13", "tkinterdnd2>=0.4.3,<0.5"]
 remediation = ["git-filter-repo>=2.45,<3"]
 rewrite = ["git-filter-repo>=2.45,<3"]
 test = [
@@ -53,6 +53,7 @@ test = [
 ]
 dev = [
   "customtkinter>=5.2.2,<6",
+  "pillow>=10,<13",
   "tkinterdnd2>=0.4.3,<0.5",
   "git-filter-repo>=2.45,<3",
   "build>=1.2,<2",
@@ -68,10 +69,11 @@ repo-privacy-guardian = "Repo_Privacy_Guardian:main"
 
 [tool.setuptools]
 py-modules = ["Repo_Privacy_Guardian", "repo_privacy_guardian_artifacts", "repo_privacy_guardian_github", "repo_privacy_guardian_prompts", "repo_privacy_guardian_runtime"]
-packages = ["repo_privacy_guardian_resources"]
+packages = ["repo_privacy_guardian_resources", "repo_privacy_guardian_assets"]
 
 [tool.setuptools.package-data]
 repo_privacy_guardian_resources = ["POLICY.md"]
+repo_privacy_guardian_assets = ["*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

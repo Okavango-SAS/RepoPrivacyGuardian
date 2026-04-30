@@ -11,9 +11,13 @@ There are now four intentionally small support modules:
 - `repo_privacy_guardian_github.py` for GitHub remote parsing, API access, and release-hardening audit helpers
 - `repo_privacy_guardian_prompts.py` for the GUI/README agentic prompt registry without importing desktop GUI dependencies
 
-They exist to remove high-risk runtime/preflight, network, prompt-library, and artifact helper glue from the monolith without fragmenting the core audit/remediation engine.
+There is also one packaged GUI asset package:
 
-The support modules intentionally remain at the repository root in the current `1.x` line because they are packaged as `py-modules`, imported by the direct script/module entry paths, and covered by release smoke tests. Moving them into a package would be a broader import and packaging migration, not a cosmetic root cleanup.
+- `repo_privacy_guardian_assets/` for small raster visuals used by the optional desktop GUI
+
+They exist to remove high-risk runtime/preflight, network, prompt-library, artifact helper glue, and GUI packaging concerns from the monolith without fragmenting the core audit/remediation engine.
+
+The support modules intentionally remain at the repository root in the current `1.x` line because they are packaged as `py-modules`, imported by the direct script/module entry paths, and covered by release smoke tests. The GUI asset package is the only runtime package besides resources. Moving them into a package would be a broader import and packaging migration, not a cosmetic root cleanup.
 
 ## Runtime surfaces
 
