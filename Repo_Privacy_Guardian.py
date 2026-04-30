@@ -135,6 +135,14 @@ GUI_ASSET_FILENAMES: tuple[str, ...] = (
     "icon-settings.png",
     "icon-stop.png",
 )
+GUI_THEMEABLE_ASSET_FILENAMES: frozenset[str] = frozenset(
+    {
+        "prompts-workflow.png",
+        "repair-gate.png",
+        "repo-dropzone.png",
+        "reports-evidence.png",
+    }
+)
 WINGET_BOOTSTRAP_URL = "https://aka.ms/getwinget"
 WINGET_PACKAGE_FAMILY_NAME = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe"
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
@@ -167,6 +175,30 @@ def gui_asset_path(filename: str) -> Path | None:
         pass
 
     return None
+
+
+def parse_hex_rgb(color: str) -> tuple[int, int, int] | None:
+    value = color.strip()
+    if len(value) != 7 or not value.startswith("#"):
+        return None
+    try:
+        return (int(value[1:3], 16), int(value[3:5], 16), int(value[5:7], 16))
+    except ValueError:
+        return None
+
+
+def blend_near_white_gui_asset_background(image, background_rgb: tuple[int, int, int]):
+    output = image.convert("RGBA")
+    pixels = []
+    get_pixel_data = getattr(output, "get_flattened_data", output.getdata)
+    for red, green, blue, alpha in get_pixel_data():
+        is_low_saturation_light_pixel = min(red, green, blue) >= 232 and max(red, green, blue) - min(red, green, blue) <= 28
+        if alpha and is_low_saturation_light_pixel:
+            pixels.append((*background_rgb, alpha))
+        else:
+            pixels.append((red, green, blue, alpha))
+    output.putdata(pixels)
+    return output
 
 
 EMAIL_NOISE_DOMAINS = {
@@ -7093,6 +7125,7 @@ class GuiApp:  # pragma: no cover
                 "Otherwise, use the CLI."
             ) from exc
         self._gui_asset_images = self._load_gui_assets()
+        self._gui_themed_asset_images: dict[tuple[str, str, str], object] = {}
         self._gui_button_asset_images = self._load_gui_button_assets()
         self._set_window_icon()
         self.root.title("Repo Privacy Guardian")
@@ -8868,7 +8901,29 @@ class GuiApp:  # pragma: no cover
         tinted.putalpha(alpha_mask)
         return tinted
 
-    def _asset_image(self, filename: str):
+    def _asset_image(self, filename: str, *, background: str | None = None):
+        if (
+            background
+            and self._current_appearance() == GUI_APPEARANCE_DARK
+            and filename in GUI_THEMEABLE_ASSET_FILENAMES
+        ):
+            cache_key = (filename, self._current_appearance(), background)
+            cached_image = self._gui_themed_asset_images.get(cache_key)
+            if cached_image is not None:
+                return cached_image
+            background_rgb = parse_hex_rgb(background)
+            asset_path = gui_asset_path(filename)
+            if background_rgb is not None and asset_path is not None:
+                try:
+                    from PIL import Image, ImageTk
+
+                    with Image.open(asset_path) as source:
+                        themed_source = blend_near_white_gui_asset_background(source, background_rgb)
+                    themed_image = ImageTk.PhotoImage(themed_source)
+                    self._gui_themed_asset_images[cache_key] = themed_image
+                    return themed_image
+                except Exception:
+                    pass
         return self._gui_asset_images.get(filename)
 
     def _set_window_icon(self) -> None:
@@ -8887,7 +8942,7 @@ class GuiApp:  # pragma: no cover
         *,
         background: str,
     ):
-        image = self._asset_image(filename)
+        image = self._asset_image(filename, background=background)
         if image is None:
             return None
         return self.tk.Label(

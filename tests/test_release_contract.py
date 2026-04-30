@@ -494,6 +494,26 @@ def test_gui_runtime_assets_resolve_without_gui_imports() -> None:
     assert rpg.gui_asset_path("../app-icon.png") is None
 
 
+def test_themeable_gui_asset_background_blends_near_white_pixels() -> None:
+    image_module = pytest.importorskip("PIL.Image")
+    image = image_module.new("RGBA", (3, 1))
+    image.putdata(
+        [
+            (250, 250, 250, 255),
+            (16, 160, 150, 255),
+            (250, 220, 190, 255),
+        ]
+    )
+
+    blended = rpg.blend_near_white_gui_asset_background(image, (21, 39, 45))
+
+    assert blended.getpixel((0, 0)) == (21, 39, 45, 255)
+    assert blended.getpixel((1, 0)) == (16, 160, 150, 255)
+    assert blended.getpixel((2, 0)) == (250, 220, 190, 255)
+    assert rpg.parse_hex_rgb("#15272D") == (21, 39, 45)
+    assert rpg.parse_hex_rgb("not-a-color") is None
+
+
 def test_module_import_does_not_require_gui_dependencies() -> None:
     proc = subprocess.run(
         [sys.executable, "-c", "import Repo_Privacy_Guardian; print('ok')"],

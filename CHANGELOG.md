@@ -9,6 +9,7 @@ All notable user-facing changes to this project are documented here.
 - Added a packaged GUI raster asset set for the window icon, header watermark, repository empty state, reports, prompts, repair gate visuals, and DPI-aware action icons.
 - Adjusted the GUI Refresh action to secondary-button styling so its icon remains readable and added smoke coverage for visible Prompt cards.
 - Added a presentation-only GUI theme selector for Light and Dark startup modes with settings persistence, locale-aware labels, dark-mode icon contrast, and parity coverage that keeps CLI flags, reports, and policy behavior unchanged.
+- Blended themeable GUI pictogram backgrounds in memory on dark startup so packaged assets sit cleanly on dark panels without adding duplicate image files.
 - Updated README attribution to reflect Okavango SAS as the project maintainer while preserving original author and CTO credit.
 - Added a sanitized desktop GUI preview screenshot to the README.
 - Reordered and simplified README onboarding so audit scope appears earlier and repeated first-run guidance is reduced.
