@@ -36,6 +36,7 @@ def main() -> int:
                         "schema_version": rpg.GUI_SETTINGS_SCHEMA_VERSION,
                         "setup_completed": False,
                         "gui_locale": rpg.GUI_LOCALE_ES_419,
+                        "gui_appearance": rpg.GUI_APPEARANCE_LIGHT,
                     }
                 ),
                 encoding="utf-8",
@@ -45,6 +46,7 @@ def main() -> int:
             app.root.update_idletasks()
             app.root.update()
             assert app._current_locale() == rpg.GUI_LOCALE_ES_419
+            assert app._current_appearance() == rpg.GUI_APPEARANCE_LIGHT
             assert getattr(app._flow_tabs, "_name_list", []) == [
                 "1. Auditar",
                 "2. Reportes",
@@ -55,6 +57,7 @@ def main() -> int:
             assert app._audit_button.cget("text") == app._t("run_audit")
             assert app._audit_button.cget("state") == "normal"
             assert app._refresh_button.cget("fg_color") == app._secondary_button_fg
+            assert app._appearance_menu.cget("values") == ["Claro", "Oscuro"]
             assert app._repair_button.cget("text") == app._t("lock_repair_default")
             assert app._repair_button.cget("state") == "disabled"
             assert app._repair_status_label.cget("text") == app._t("no_audit_results")
@@ -75,6 +78,7 @@ def main() -> int:
             assert app._audit_button.cget("text") == app._t("run_audit")
             assert app._audit_button.cget("state") == "normal"
             assert app._refresh_button.cget("fg_color") == app._secondary_button_fg
+            assert app._appearance_menu.cget("values") == ["Light", "Dark"]
             assert app._repair_button.cget("text") == app._t("lock_repair_default")
             assert app._repair_button.cget("state") == "disabled"
             assert app._repair_status_label.cget("text") == app._t("no_audit_results")

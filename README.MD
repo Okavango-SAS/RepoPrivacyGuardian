@@ -187,6 +187,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - `--check-tooling --gui` reports drag-and-drop readiness as an optional warning, not as a GUI startup blocker.
 - GUI and CLI expose the same audit inputs for local repositories, GitHub owner/org remote audits, GitHub hardening, LiteLLM incident checks, report outputs, low-confidence email mode, and repair-only write options. GitHub owner/org remote audit remains audit-only in both paths.
 - The GUI language selector supports English and Spanish (Latin America). Locale affects GUI labels, dialogs, and contextual help only; CLI flags, run settings, reports, and backend behavior stay unchanged.
+- The GUI theme selector supports Light and Dark startup modes. Theme is presentation-only and does not change CLI flags, run settings, report fields, or policy behavior.
 - The tracked `DESIGN.md` defines the desktop visual tokens and UX constraints used for GUI changes.
 - `DESIGN.md` follows the public Google Labs `google-labs-code/design.md` format pinned to release `0.1.0`; optional upstream validation must use pinned tooling such as `npx --yes @google/design.md@0.1.0 lint DESIGN.md`, a sanitized environment with no GitHub/npm secrets, and read-only least-privilege execution.
 
@@ -442,7 +443,7 @@ When GitHub owner/org remote audit is active, the repository picker switches to 
 
 Non-obvious GUI controls expose contextual help on hover, with visible `i` badges next to advanced settings and repair options that need extra operator context.
 
-GUI localization is presentation-only. The selectable locales are English and Spanish (Latin America), persisted as a non-secret GUI preference. Adding another GUI language should add catalog entries with the same keys; it must not rename CLI flags, report fields, policy keys, or `GuardRunConfig` mappings.
+GUI localization and theme are presentation-only. The selectable locales are English and Spanish (Latin America), and the selectable startup themes are Light and Dark. Both preferences are stored as non-secret GUI setup state; adding another GUI language should add catalog entries with the same keys, and no presentation preference may rename CLI flags, report fields, policy keys, or `GuardRunConfig` mappings.
 
 The GUI documentation is intentionally privacy-first. Maintained screenshots live under `docs/ux-audit/` and must use neutral visible paths so local usernames, private roots, and internal repository lists are not published in image pixels.
 

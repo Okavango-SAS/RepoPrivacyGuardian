@@ -89,7 +89,7 @@ The main screen should optimize for the default path. Setup, GitHub owner/org au
 
 ## Colors
 
-The palette uses soft green-gray surfaces with teal primary actions and slate secondary actions. Amber is reserved for repair/write-risk areas. Avoid decorative gradients, large hero artwork, and single-hue saturation.
+The palette uses soft green-gray surfaces with teal primary actions and slate secondary actions. Amber is reserved for repair/write-risk areas. Light and dark GUI themes should share semantic palette tokens so presentation changes never alter audit behavior or operator choices. Avoid decorative gradients, large hero artwork, and single-hue saturation.
 
 ## Typography
 

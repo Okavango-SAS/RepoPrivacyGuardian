@@ -104,6 +104,19 @@ GUI_LOCALE_OPTIONS: tuple[tuple[str, str], ...] = (
     (GUI_LOCALE_DEFAULT, "English"),
     (GUI_LOCALE_ES_419, "Español (Latinoamérica)"),
 )
+GUI_APPEARANCE_LIGHT = "light"
+GUI_APPEARANCE_DARK = "dark"
+GUI_APPEARANCE_DEFAULT = GUI_APPEARANCE_LIGHT
+GUI_APPEARANCE_OPTIONS_BY_LOCALE: dict[str, tuple[tuple[str, str], ...]] = {
+    GUI_LOCALE_DEFAULT: (
+        (GUI_APPEARANCE_LIGHT, "Light"),
+        (GUI_APPEARANCE_DARK, "Dark"),
+    ),
+    GUI_LOCALE_ES_419: (
+        (GUI_APPEARANCE_LIGHT, "Claro"),
+        (GUI_APPEARANCE_DARK, "Oscuro"),
+    ),
+}
 GUI_ASSET_PACKAGE = "repo_privacy_guardian_assets"
 GUI_ASSET_FILENAMES: tuple[str, ...] = (
     "app-icon.png",
@@ -1667,6 +1680,7 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
         "higher values aid deep triage."
     ),
     "gui_language": "Language for GUI labels, contextual help, and dialogs. This does not change CLI flags, reports, or behavior.",
+    "gui_appearance": "Light or dark GUI theme applied on the next GUI launch. This is presentation-only and does not change CLI flags, reports, or policy behavior.",
     "save_setup": "Stores only non-secret GUI preferences and collapses setup controls so the main view stays focused on Audit.",
     "advanced_identity": (
         "Shows optional Git identity and GitHub email privacy controls used when Repair rewrites or redacts identity metadata."
@@ -1778,6 +1792,7 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
         "valores altos ayudan en triage profundo."
     ),
     "gui_language": "Idioma de etiquetas, ayuda contextual y diálogos de la GUI. No cambia flags, reportes ni contrato CLI.",
+    "gui_appearance": "Tema claro u oscuro aplicado en el próximo inicio de la GUI. Es sólo presentación y no cambia flags, reportes ni política.",
     "save_setup": "Guarda sólo preferencias no secretas de la GUI y colapsa la configuración para enfocar la vista principal en Auditar.",
     "advanced_identity": (
         "Muestra controles opcionales de identidad Git y privacidad de email GitHub usados cuando Reparar reescribe o redacta metadatos."
@@ -1910,6 +1925,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "setup_settings": "Setup & Settings",
         "settings_status": "Use these controls for policy/output overrides, GitHub owner audits, and advanced identity setup.",
         "gui_language": "GUI Language",
+        "gui_appearance": "GUI Theme",
         "policy_file": "Policy File",
         "choose_policy_file": "Choose a policy file",
         "audit_results_folder": "Audit Results Folder",
@@ -2189,6 +2205,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "setup_settings": "Setup y configuración",
         "settings_status": "Usá estos controles para política/salida, auditorías GitHub owner/org e identidad avanzada.",
         "gui_language": "Idioma de la GUI",
+        "gui_appearance": "Tema de la GUI",
         "policy_file": "Archivo de política",
         "choose_policy_file": "Elegir un archivo de política",
         "audit_results_folder": "Carpeta de resultados",
@@ -6688,6 +6705,41 @@ def gui_locale_from_label(label: str) -> str:
     return normalize_gui_locale(label)
 
 
+def normalize_gui_appearance(value: object) -> str:
+    if not isinstance(value, str):
+        return GUI_APPEARANCE_DEFAULT
+    normalized = value.strip().lower().replace("_", "-")
+    if normalized in {"dark", "oscuro", "noche"}:
+        return GUI_APPEARANCE_DARK
+    if normalized in {"light", "claro", "day", "dia", "día"}:
+        return GUI_APPEARANCE_LIGHT
+    return GUI_APPEARANCE_DEFAULT
+
+
+def gui_appearance_options(locale: str) -> tuple[tuple[str, str], ...]:
+    normalized_locale = normalize_gui_locale(locale)
+    return GUI_APPEARANCE_OPTIONS_BY_LOCALE.get(
+        normalized_locale,
+        GUI_APPEARANCE_OPTIONS_BY_LOCALE[GUI_LOCALE_DEFAULT],
+    )
+
+
+def gui_appearance_label(appearance: str, locale: str) -> str:
+    normalized_appearance = normalize_gui_appearance(appearance)
+    for option, label in gui_appearance_options(locale):
+        if option == normalized_appearance:
+            return label
+    return gui_appearance_options(locale)[0][1]
+
+
+def gui_appearance_from_label(label: str) -> str:
+    for options in GUI_APPEARANCE_OPTIONS_BY_LOCALE.values():
+        for appearance, display_label in options:
+            if label == display_label:
+                return appearance
+    return normalize_gui_appearance(label)
+
+
 def parse_tk_drop_paths(raw_data: str, splitter: Callable[[str], Iterable[str]] | None = None) -> list[Path]:
     raw_value = raw_data.strip()
     if not raw_value:
@@ -7019,7 +7071,13 @@ class GuiApp:  # pragma: no cover
     def __init__(self) -> None:
         tk, messagebox, filedialog, ctk, tcl_error = load_gui_runtime()
 
-        ctk.set_appearance_mode("light")
+        self._gui_settings_path = default_gui_settings_path()
+        self._gui_settings = load_gui_settings(self._gui_settings_path)
+        self._gui_locale = normalize_gui_locale(gui_setting_str(self._gui_settings, "gui_locale", GUI_LOCALE_DEFAULT))
+        self._gui_appearance = normalize_gui_appearance(
+            gui_setting_str(self._gui_settings, "gui_appearance", GUI_APPEARANCE_DEFAULT)
+        )
+        ctk.set_appearance_mode(self._gui_appearance)
         ctk.set_default_color_theme("blue")
 
         self.tk = tk
@@ -7064,35 +7122,14 @@ class GuiApp:  # pragma: no cover
         font_options = gui_font_candidates()
         self._ui_font_family = choose_gui_font_family(font_options["ui"], available_families)
         self._mono_font_family = choose_gui_font_family(font_options["mono"], available_families)
-        self._page_bg = "#EEF5F2"
-        self._surface_fg = "#FBFEFC"
-        self._surface_alt = "#F5FAF8"
-        self._card_border = "#CFE0DA"
-        self._text_heading = "#0B2F32"
-        self._text_body = "#132F36"
-        self._text_muted = "#526A70"
-        self._header_fg = "#0B3D3F"
-        self._header_chip_fg = "#144F4E"
-        self._header_chip_border = "#2E7D75"
-        self._header_chip_text = "#D8FFF3"
-        self._primary_button_fg = "#0F766E"
-        self._primary_button_hover = "#0B5F59"
-        self._support_button_fg = "#334155"
-        self._support_button_hover = "#1E293B"
-        self._secondary_button_fg = "#F8FAFC"
-        self._secondary_button_hover = "#E6F0EF"
-        self._secondary_button_border = "#9AB6B2"
-        self._secondary_button_text = "#123C3F"
-        self._disabled_button_fg = "#B8C6D5"
-        self._disabled_button_text = "#64748B"
+        self._configure_gui_theme_palette()
         self.root.configure(fg_color=self._page_bg)
 
-        self._gui_settings_path = default_gui_settings_path()
-        self._gui_settings = load_gui_settings(self._gui_settings_path)
-        self._gui_locale = normalize_gui_locale(gui_setting_str(self._gui_settings, "gui_locale", GUI_LOCALE_DEFAULT))
         self.locale_var = tk.StringVar(value=gui_locale_label(self._gui_locale))
+        self.appearance_var = tk.StringVar(value=gui_appearance_label(self._gui_appearance, self._current_locale()))
         self._localized_config_targets: list[tuple[object, str, str, dict[str, object]]] = []
         self._locale_menu = None
+        self._appearance_menu = None
         setup_completed = gui_setting_bool(self._gui_settings, "setup_completed", False)
         self._setup_completed = setup_completed
 
@@ -7284,13 +7321,13 @@ class GuiApp:  # pragma: no cover
 
         flow_tabs = ctk.CTkTabview(
             app,
-            fg_color="#F6FBF8",
+            fg_color=self._tabview_fg,
             corner_radius=14,
-            segmented_button_fg_color="#DDEBE7",
-            segmented_button_selected_color="#D8F3EA",
-            segmented_button_selected_hover_color="#C6E8DE",
-            segmented_button_unselected_color="#EEF5F2",
-            segmented_button_unselected_hover_color="#DDEBE7",
+            segmented_button_fg_color=self._tab_segment_fg,
+            segmented_button_selected_color=self._tab_selected_fg,
+            segmented_button_selected_hover_color=self._tab_selected_hover,
+            segmented_button_unselected_color=self._tab_unselected_fg,
+            segmented_button_unselected_hover_color=self._tab_unselected_hover,
             text_color=self._text_heading,
         )
         flow_tabs.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 4))
@@ -7415,10 +7452,10 @@ class GuiApp:  # pragma: no cover
 
         quick_start = ctk.CTkFrame(
             settings_card,
-            fg_color="#E7F6F1",
+            fg_color=self._success_panel_fg,
             corner_radius=10,
             border_width=1,
-            border_color="#B9DDD3",
+            border_color=self._success_panel_border,
         )
         quick_start.grid(row=1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 10))
         quick_start.grid_columnconfigure(1, weight=1)
@@ -7455,10 +7492,10 @@ class GuiApp:  # pragma: no cover
         row += 1
         setup_toggle_row = ctk.CTkFrame(
             settings_card,
-            fg_color="#F8FCFA",
+            fg_color=self._surface_alt,
             corner_radius=10,
             border_width=1,
-            border_color="#D6E7E1",
+            border_color=self._card_border,
         )
         setup_toggle_row.grid(row=row, column=0, columnspan=3, sticky="we", padx=14, pady=(6, 12))
         setup_toggle_row.grid_columnconfigure(0, weight=1)
@@ -7488,10 +7525,10 @@ class GuiApp:  # pragma: no cover
         row += 1
         setup_settings_frame = ctk.CTkFrame(
             settings_card,
-            fg_color="#FBFEFC",
+            fg_color=self._surface_fg,
             corner_radius=10,
             border_width=1,
-            border_color="#D6E7E1",
+            border_color=self._card_border,
         )
         setup_settings_frame.grid(row=row, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
         setup_settings_frame.grid_columnconfigure(1, weight=1)
@@ -7537,6 +7574,27 @@ class GuiApp:  # pragma: no cover
         self._locale_menu.grid(row=settings_row, column=1, sticky="w", pady=4)
 
         settings_row += 1
+        self._make_field_label(
+            setup_settings_frame,
+            text_key="gui_appearance",
+            tooltip_key="gui_appearance",
+        ).grid(row=settings_row, column=0, sticky="w", padx=(14, 8), pady=4)
+        self._appearance_menu = ctk.CTkOptionMenu(
+            setup_settings_frame,
+            variable=self.appearance_var,
+            values=[label for _appearance, label in gui_appearance_options(self._current_locale())],
+            command=self._on_gui_appearance_selected,
+            height=32,
+            corner_radius=8,
+            fg_color=self._secondary_button_fg,
+            button_color=self._support_button_fg,
+            button_hover_color=self._support_button_hover,
+            text_color=self._secondary_button_text,
+        )
+        self._bind_tooltip_key(self._appearance_menu, "gui_appearance")
+        self._appearance_menu.grid(row=settings_row, column=1, sticky="w", pady=4)
+
+        settings_row += 1
         self._add_file_field(
             setup_settings_frame,
             row=settings_row,
@@ -7572,10 +7630,10 @@ class GuiApp:  # pragma: no cover
         settings_row += 1
         github_remote_card = ctk.CTkFrame(
             setup_settings_frame,
-            fg_color="#F6FAFE",
+            fg_color=self._info_panel_fg,
             corner_radius=10,
             border_width=1,
-            border_color="#C9DDEE",
+            border_color=self._info_panel_border,
         )
         github_remote_card.grid(row=settings_row, column=0, columnspan=3, sticky="we", padx=14, pady=(4, 10))
         github_remote_card.grid_columnconfigure(1, weight=1)
@@ -7629,7 +7687,7 @@ class GuiApp:  # pragma: no cover
             text=self._t("include_forks"),
             variable=self.github_include_forks_var,
             font=self._font(12),
-            text_color="#1E293B",
+            text_color=self._text_body,
         )
         self._localize_widget(github_include_forks_checkbox, "text", "include_forks")
         self._bind_tooltip_key(github_include_forks_checkbox, "github_include_forks")
@@ -7639,7 +7697,7 @@ class GuiApp:  # pragma: no cover
             text=self._t("fast_shallow_clone"),
             variable=self.github_fast_var,
             font=self._font(12),
-            text_color="#1E293B",
+            text_color=self._text_body,
         )
         self._localize_widget(github_fast_checkbox, "text", "fast_shallow_clone")
         self._bind_tooltip_key(github_fast_checkbox, "github_fast")
@@ -7689,10 +7747,10 @@ class GuiApp:  # pragma: no cover
 
         advanced_identity_row = ctk.CTkFrame(
             setup_settings_frame,
-            fg_color="#F8FCFA",
+            fg_color=self._surface_alt,
             corner_radius=10,
             border_width=1,
-            border_color="#D6E7E1",
+            border_color=self._card_border,
         )
         advanced_identity_row.grid(row=settings_row + 3, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
         advanced_identity_row.grid_columnconfigure(0, weight=1)
@@ -7951,10 +8009,10 @@ class GuiApp:  # pragma: no cover
 
         repair_options_toggle = ctk.CTkFrame(
             repair_tab,
-            fg_color="#FFF7ED",
+            fg_color=self._warning_panel_fg,
             corner_radius=10,
             border_width=1,
-            border_color="#F5C58B",
+            border_color=self._warning_panel_border,
         )
         repair_options_toggle.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
         repair_options_toggle.grid_columnconfigure(0, weight=1)
@@ -7965,7 +8023,7 @@ class GuiApp:  # pragma: no cover
             anchor="w",
             wraplength=860,
             font=self._font(11),
-            text_color="#7A3E05",
+            text_color=self._warning_text,
         )
         self._localize_widget(self._repair_options_hint_label, "text", "repair_advanced_hint_hidden")
         self._repair_options_hint_label.grid(row=0, column=0, sticky="we", padx=12, pady=10)
@@ -8002,10 +8060,10 @@ class GuiApp:  # pragma: no cover
 
         safe_options = ctk.CTkFrame(
             options_card,
-            fg_color="#F2FBF8",
+            fg_color=self._success_panel_fg,
             corner_radius=10,
             border_width=1,
-            border_color="#B9DDD3",
+            border_color=self._success_panel_border,
         )
         safe_options.grid(row=1, column=0, sticky="nsew", padx=(14, 7), pady=(0, 12))
         safe_options.grid_columnconfigure(0, weight=1)
@@ -8015,7 +8073,7 @@ class GuiApp:  # pragma: no cover
             safe_options,
             text=self._t("review_output_options"),
             font=self._font(13, bold=True),
-            text_color="#0E4F4A",
+            text_color=self._success_text,
         ), "text", "review_output_options").grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
         self._make_info_badge(
             safe_options,
@@ -8038,7 +8096,7 @@ class GuiApp:  # pragma: no cover
                 text=self._t(label_key),
                 variable=var,
                 font=self._font(12),
-                text_color="#1E293B",
+                text_color=self._text_body,
             )
             self._localize_widget(checkbox, "text", label_key)
             self._bind_tooltip_key(checkbox, tooltip_key)
@@ -8047,10 +8105,10 @@ class GuiApp:  # pragma: no cover
 
         destructive_options = ctk.CTkFrame(
             options_card,
-            fg_color="#FFF7ED",
+            fg_color=self._warning_panel_fg,
             corner_radius=10,
             border_width=1,
-            border_color="#F5C58B",
+            border_color=self._warning_panel_border,
         )
         destructive_options.grid(row=1, column=1, sticky="nsew", padx=(7, 14), pady=(0, 12))
         destructive_options.grid_columnconfigure(0, weight=1)
@@ -8061,7 +8119,7 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text=self._t("repair_write_actions"),
             font=self._font(13, bold=True),
-            text_color="#7A3E05",
+            text_color=self._warning_text,
         ), "text", "repair_write_actions").grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
         self._make_info_badge(
             destructive_options,
@@ -8071,7 +8129,7 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text=self._t("repair_write_body"),
             font=self._font(11),
-            text_color="#8A4B10",
+            text_color=self._warning_strong_text,
         ), "text", "repair_write_body").grid(row=1, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 8))
 
         self._rewrite_paths_checkbox = ctk.CTkCheckBox(
@@ -8079,7 +8137,7 @@ class GuiApp:  # pragma: no cover
             text=self._t("rewrite_personal_paths"),
             variable=self.rewrite_personal_paths_var,
             font=self._font(12),
-            text_color="#1E293B",
+            text_color=self._text_body,
         )
         self._localize_widget(self._rewrite_paths_checkbox, "text", "rewrite_personal_paths")
         self._bind_tooltip_key(self._rewrite_paths_checkbox, "rewrite_personal_paths")
@@ -8094,7 +8152,7 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text=self._t("rewrite_personal_paths_body"),
             font=self._font(11),
-            text_color="#8A4B10",
+            text_color=self._warning_strong_text,
         ), "text", "rewrite_personal_paths_body").grid(row=3, column=0, columnspan=2, sticky="w", padx=36, pady=(0, 6))
 
         self._make_field_label(
@@ -8133,7 +8191,7 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text=self._t("replace_text_rules_body"),
             font=self._font(11),
-            text_color="#8A4B10",
+            text_color=self._warning_strong_text,
         ), "text", "replace_text_rules_body").grid(row=6, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
 
         self._push_checkbox = ctk.CTkCheckBox(
@@ -8141,7 +8199,7 @@ class GuiApp:  # pragma: no cover
             text=self._t("force_push"),
             variable=self.push_var,
             font=self._font(12),
-            text_color="#1E293B",
+            text_color=self._text_body,
         )
         self._localize_widget(self._push_checkbox, "text", "force_push")
         self._bind_tooltip_key(self._push_checkbox, "force_push")
@@ -8154,7 +8212,7 @@ class GuiApp:  # pragma: no cover
             variable=self.allow_non_owner_push_var,
             command=self._on_allow_non_owner_push_toggled,
             font=self._font(12),
-            text_color="#1E293B",
+            text_color=self._text_body,
         )
         self._localize_widget(self._allow_non_owner_push_checkbox, "text", "bypass_remote_owner_guardrail")
         self._bind_tooltip_key(self._allow_non_owner_push_checkbox, "bypass_remote_owner_guardrail")
@@ -8190,7 +8248,7 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text=self._t("allowed_remote_owners_body"),
             font=self._font(11),
-            text_color="#8A4B10",
+            text_color=self._warning_strong_text,
         ), "text", "allowed_remote_owners_body").grid(row=11, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
 
         self._purge_safe_checkbox = ctk.CTkCheckBox(
@@ -8199,7 +8257,7 @@ class GuiApp:  # pragma: no cover
             variable=self.purge_detected_secret_files_var,
             command=self._on_purge_safe_toggled,
             font=self._font(12),
-            text_color="#1E293B",
+            text_color=self._text_body,
         )
         self._localize_widget(self._purge_safe_checkbox, "text", "purge_safe_secret_files")
         self._bind_tooltip_key(self._purge_safe_checkbox, "purge_safe_secret_files")
@@ -8217,7 +8275,7 @@ class GuiApp:  # pragma: no cover
             variable=self.purge_all_detected_secret_files_var,
             command=self._on_purge_risky_toggled,
             font=self._font(12),
-            text_color="#1E293B",
+            text_color=self._text_body,
         )
         self._localize_widget(self._purge_risky_checkbox, "text", "purge_risky_secret_files")
         self._bind_tooltip_key(self._purge_risky_checkbox, "purge_risky_secret_files")
@@ -8232,7 +8290,7 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             text=self._t("purge_body"),
             font=self._font(11),
-            text_color="#8A4B10",
+            text_color=self._warning_strong_text,
         ), "text", "purge_body").grid(row=14, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 10))
         self._sync_purge_mode_controls()
         self._sync_push_guardrail_controls()
@@ -8251,14 +8309,14 @@ class GuiApp:  # pragma: no cover
             repair_actions_card,
             text=self._t("repair_flow"),
             font=self._font(14, bold=True),
-            text_color="#7A3E05",
+            text_color=self._warning_text,
         ), "text", "repair_flow").grid(row=0, column=0, sticky="w", padx=14, pady=(10, 4))
         self._repair_status_panel = ctk.CTkFrame(
             repair_actions_card,
-            fg_color="#F2FBF8",
+            fg_color=self._success_panel_fg,
             corner_radius=10,
             border_width=1,
-            border_color="#B9DDD3",
+            border_color=self._success_panel_border,
         )
         self._repair_status_panel.grid(row=1, column=0, sticky="we", padx=14, pady=(0, 8))
         self._repair_status_panel.grid_columnconfigure(1, weight=1)
@@ -8267,8 +8325,8 @@ class GuiApp:  # pragma: no cover
             text=self._t("audit_required"),
             height=28,
             corner_radius=14,
-            fg_color="#D8F3EA",
-            text_color="#0F766E",
+            fg_color=self._success_badge_fg,
+            text_color=self._success_text,
             font=self._font(11, bold=True),
             padx=12,
         )
@@ -8277,7 +8335,7 @@ class GuiApp:  # pragma: no cover
             self._repair_status_panel,
             text=self._t("latest_audit_summary"),
             font=self._font(12, bold=True),
-            text_color="#173A5E",
+            text_color=self._info_text,
         ), "text", "latest_audit_summary").grid(row=0, column=1, sticky="w", padx=(0, 12), pady=(10, 6))
         self._repair_status_label = ctk.CTkLabel(
             self._repair_status_panel,
@@ -8286,7 +8344,7 @@ class GuiApp:  # pragma: no cover
             anchor="w",
             wraplength=1080,
             font=self._font(12),
-            text_color="#5C6F82",
+            text_color=self._text_muted,
         )
         self._repair_status_label.grid(row=1, column=0, columnspan=2, sticky="we", padx=12, pady=(0, 12))
         repair_controls = ctk.CTkFrame(repair_actions_card, fg_color="transparent")
@@ -8311,13 +8369,13 @@ class GuiApp:  # pragma: no cover
             justify="left",
             anchor="w",
             font=self._font(11),
-            text_color="#6B7F93",
+            text_color=self._text_muted,
         )
         self._repair_gate_note_label.grid(row=0, column=1, sticky="w", padx=(10, 0), pady=6)
 
         blocker_overlay = ctk.CTkFrame(
             repair_tab,
-            fg_color="#EEF5F2",
+            fg_color=self._surface_alt,
             corner_radius=10,
             border_width=1,
             border_color=self._card_border,
@@ -8328,7 +8386,7 @@ class GuiApp:  # pragma: no cover
 
         blocker_card = ctk.CTkFrame(
             blocker_overlay,
-            fg_color="#FFFFFF",
+            fg_color=self._white_panel_fg,
             corner_radius=14,
             border_width=1,
             border_color=self._card_border,
@@ -8338,7 +8396,7 @@ class GuiApp:  # pragma: no cover
         self._repair_gate_visual_label = self._make_asset_label(
             blocker_card,
             "repair-gate.png",
-            background="#FFFFFF",
+            background=self._white_panel_fg,
         )
         if self._repair_gate_visual_label is not None:
             self._repair_gate_visual_label.grid(row=0, column=0, padx=24, pady=(18, 0), sticky="ew")
@@ -8379,7 +8437,7 @@ class GuiApp:  # pragma: no cover
                 anchor="w",
                 wraplength=620,
                 font=self._font(12),
-                text_color="#334155",
+                text_color=self._text_body,
             )
             self._localize_widget(step_label, "text", step_key)
             step_label.grid(row=idx, column=0, padx=24, pady=2, sticky="ew")
@@ -8477,7 +8535,7 @@ class GuiApp:  # pragma: no cover
 
         list_shell = ctk.CTkFrame(
             repos_card,
-            fg_color="#FFFFFF",
+            fg_color=self._white_panel_fg,
             corner_radius=10,
             border_width=1,
             border_color=self._card_border,
@@ -8504,10 +8562,10 @@ class GuiApp:  # pragma: no cover
             borderwidth=0,
             highlightthickness=0,
             activestyle="none",
-            background="#FFFFFF",
-            foreground="#0F172A",
+            background=self._list_fg,
+            foreground=self._list_text,
             selectbackground=self._primary_button_fg,
-            selectforeground="#F8FAFC",
+            selectforeground=self._list_select_text,
             font=self._font(11),
         )
         self._bind_tooltip_key(self.repo_list, "repo_drop_area")
@@ -8620,8 +8678,8 @@ class GuiApp:  # pragma: no cover
         ), "text", "execution_log").grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
         self.output = ctk.CTkTextbox(
             output_card,
-            fg_color="#0B1720",
-            text_color="#DDEDEA",
+            fg_color=self._output_fg,
+            text_color=self._output_text,
             corner_radius=10,
             border_width=0,
             wrap="word",
@@ -8634,6 +8692,124 @@ class GuiApp:  # pragma: no cover
         self.root.after(0, self._apply_responsive_layout)
         self._lock_repair_until_next_audit()
         self._set_active_flow_tab(self._audit_tab_name)
+
+    def _current_appearance(self) -> str:
+        return normalize_gui_appearance(getattr(self, "_gui_appearance", GUI_APPEARANCE_DEFAULT))
+
+    def _ensure_gui_theme_palette(self) -> None:
+        if not hasattr(self, "_text_muted"):
+            self._configure_gui_theme_palette()
+
+    def _configure_gui_theme_palette(self) -> None:
+        if self._current_appearance() == GUI_APPEARANCE_DARK:
+            self._page_bg = "#0F1D22"
+            self._surface_fg = "#15272D"
+            self._surface_alt = "#102026"
+            self._card_border = "#2E4A4F"
+            self._text_heading = "#E8F5F2"
+            self._text_body = "#D2E2DE"
+            self._text_muted = "#98ADA9"
+            self._header_fg = "#082F31"
+            self._header_chip_fg = "#123F41"
+            self._header_chip_border = "#2B6D69"
+            self._header_chip_text = "#D8FFF3"
+            self._primary_button_fg = "#14A096"
+            self._primary_button_hover = "#0D7F78"
+            self._support_button_fg = "#2D4250"
+            self._support_button_hover = "#243541"
+            self._secondary_button_fg = "#1B3036"
+            self._secondary_button_hover = "#223D43"
+            self._secondary_button_border = "#4B6A6E"
+            self._secondary_button_text = "#E7F4F0"
+            self._disabled_button_fg = "#3A4D55"
+            self._disabled_button_text = "#A1B3B8"
+            self._tabview_fg = "#112329"
+            self._tab_segment_fg = "#263C42"
+            self._tab_selected_fg = "#145C55"
+            self._tab_selected_hover = "#1A7169"
+            self._tab_unselected_fg = "#1A2F35"
+            self._tab_unselected_hover = "#263C42"
+            self._success_panel_fg = "#12342F"
+            self._success_panel_border = "#2A6B5F"
+            self._success_badge_fg = "#174B43"
+            self._success_text = "#9BE9D7"
+            self._pass_badge_fg = "#173F2E"
+            self._pass_badge_text = "#86EFAC"
+            self._info_panel_fg = "#122D3A"
+            self._info_panel_border = "#315D76"
+            self._info_text = "#B8D8EA"
+            self._warning_panel_fg = "#3A2814"
+            self._warning_panel_border = "#8A5A24"
+            self._warning_text = "#F3C98B"
+            self._warning_strong_text = "#F8D6A3"
+            self._warning_badge_fg = "#4A3418"
+            self._warning_badge_text = "#F8D6A3"
+            self._repair_warning_badge_fg = "#5A3B1A"
+            self._danger_text = "#F2A3A3"
+            self._failure_badge_fg = "#4C1D1D"
+            self._failure_badge_text = "#FCA5A5"
+            self._white_panel_fg = "#172A30"
+            self._white_panel_border = "#35545A"
+            self._list_fg = "#0F1E24"
+            self._list_text = "#E8F5F2"
+            self._list_select_text = "#F8FAFC"
+            self._output_fg = "#071116"
+            self._output_text = "#DDEDEA"
+            return
+
+        self._page_bg = "#EEF5F2"
+        self._surface_fg = "#FBFEFC"
+        self._surface_alt = "#F5FAF8"
+        self._card_border = "#CFE0DA"
+        self._text_heading = "#0B2F32"
+        self._text_body = "#132F36"
+        self._text_muted = "#526A70"
+        self._header_fg = "#0B3D3F"
+        self._header_chip_fg = "#144F4E"
+        self._header_chip_border = "#2E7D75"
+        self._header_chip_text = "#D8FFF3"
+        self._primary_button_fg = "#0F766E"
+        self._primary_button_hover = "#0B5F59"
+        self._support_button_fg = "#334155"
+        self._support_button_hover = "#1E293B"
+        self._secondary_button_fg = "#F8FAFC"
+        self._secondary_button_hover = "#E6F0EF"
+        self._secondary_button_border = "#9AB6B2"
+        self._secondary_button_text = "#123C3F"
+        self._disabled_button_fg = "#B8C6D5"
+        self._disabled_button_text = "#64748B"
+        self._tabview_fg = "#F6FBF8"
+        self._tab_segment_fg = "#DDEBE7"
+        self._tab_selected_fg = "#D8F3EA"
+        self._tab_selected_hover = "#C6E8DE"
+        self._tab_unselected_fg = "#EEF5F2"
+        self._tab_unselected_hover = "#DDEBE7"
+        self._success_panel_fg = "#F2FBF8"
+        self._success_panel_border = "#B9DDD3"
+        self._success_badge_fg = "#D8F3EA"
+        self._success_text = "#0F766E"
+        self._pass_badge_fg = "#DCFCE7"
+        self._pass_badge_text = "#166534"
+        self._info_panel_fg = "#F6FAFE"
+        self._info_panel_border = "#C9DDEE"
+        self._info_text = "#173A5E"
+        self._warning_panel_fg = "#FFF7ED"
+        self._warning_panel_border = "#F5C58B"
+        self._warning_text = "#7A3E05"
+        self._warning_strong_text = "#8A4B10"
+        self._warning_badge_fg = "#FEF3C7"
+        self._warning_badge_text = "#92400E"
+        self._repair_warning_badge_fg = "#FBD7A2"
+        self._danger_text = "#7B1E1E"
+        self._failure_badge_fg = "#FEE2E2"
+        self._failure_badge_text = "#991B1B"
+        self._white_panel_fg = "#FFFFFF"
+        self._white_panel_border = self._card_border
+        self._list_fg = "#FFFFFF"
+        self._list_text = "#0F172A"
+        self._list_select_text = "#F8FAFC"
+        self._output_fg = "#0B1720"
+        self._output_text = "#DDEDEA"
 
     def _font(self, size: int, *, bold: bool = False, mono: bool = False):
         family = self._mono_font_family if mono else self._ui_font_family
@@ -8657,11 +8833,12 @@ class GuiApp:  # pragma: no cover
             return {}
 
         try:
-            from PIL import Image
+            from PIL import Image, ImageColor
         except Exception:
             return {}
 
         images: dict[str, object] = {}
+        dark_icon_color = "#E7F4F0"
         for filename in GUI_ASSET_FILENAMES:
             if not filename.startswith("icon-"):
                 continue
@@ -8670,11 +8847,26 @@ class GuiApp:  # pragma: no cover
                 continue
             try:
                 with Image.open(asset_path) as source:
-                    image = source.copy()
-                images[filename] = ctk_image(light_image=image, dark_image=image, size=(24, 24))
+                    image = source.convert("RGBA").copy()
+                dark_image = self._tint_gui_icon(image, ImageColor.getrgb(dark_icon_color))
+                images[filename] = ctk_image(light_image=image, dark_image=dark_image, size=(24, 24))
             except Exception:
                 continue
         return images
+
+    def _tint_gui_icon(self, image, color: tuple[int, int, int]):
+        try:
+            from PIL import Image, ImageChops
+        except Exception:
+            return image
+
+        source = image.convert("RGBA")
+        luminance = source.convert("L")
+        darkness_mask = Image.eval(luminance, lambda pixel: 255 - pixel)
+        alpha_mask = ImageChops.multiply(darkness_mask, source.getchannel("A"))
+        tinted = Image.new("RGBA", image.size, color + (0,))
+        tinted.putalpha(alpha_mask)
+        return tinted
 
     def _asset_image(self, filename: str):
         return self._gui_asset_images.get(filename)
@@ -8758,7 +8950,13 @@ class GuiApp:  # pragma: no cover
         if self._reports_visual_label is not None:
             self._reports_visual_label.grid(row=0, column=1, rowspan=2, sticky="e", padx=(8, 14), pady=(10, 4))
 
-        status_row = ctk.CTkFrame(reports_card, fg_color="#F2FBF8", corner_radius=10, border_width=1, border_color="#B9DDD3")
+        status_row = ctk.CTkFrame(
+            reports_card,
+            fg_color=self._success_panel_fg,
+            corner_radius=10,
+            border_width=1,
+            border_color=self._success_panel_border,
+        )
         status_row.grid(row=2, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 10))
         status_row.grid_columnconfigure(1, weight=1)
         self._reports_status_badge = ctk.CTkLabel(
@@ -8766,8 +8964,8 @@ class GuiApp:  # pragma: no cover
             text=self._t("last_run"),
             height=28,
             corner_radius=14,
-            fg_color="#D8F3EA",
-            text_color="#0F766E",
+            fg_color=self._success_badge_fg,
+            text_color=self._success_text,
             font=self._font(11, bold=True),
             padx=12,
         )
@@ -8876,10 +9074,10 @@ class GuiApp:  # pragma: no cover
             column = idx % 2
             card = self.ctk.CTkFrame(
                 cards_frame,
-                fg_color="#F8FCFA",
+                fg_color=self._surface_alt,
                 corner_radius=10,
                 border_width=1,
-                border_color="#D6E7E1",
+                border_color=self._card_border,
             )
             card.grid(row=row, column=column, sticky="nsew", padx=(0 if column == 0 else 8, 8 if column == 0 else 0), pady=(0, 8))
             card.grid_columnconfigure(0, weight=1)
@@ -9005,7 +9203,7 @@ class GuiApp:  # pragma: no cover
         if badge is None or summary_label is None or paths_label is None:
             return
         if artifacts is None:
-            badge.configure(text=self._t("last_run"), fg_color="#D8F3EA", text_color="#0F766E")
+            badge.configure(text=self._t("last_run"), fg_color=self._success_badge_fg, text_color=self._success_text)
             summary_label.configure(text=self._t("last_run_none"))
             paths_label.configure(text=self._t("latest_artifacts_none"))
             for button in getattr(self, "_reports_action_buttons", []):
@@ -9016,20 +9214,20 @@ class GuiApp:  # pragma: no cover
         exit_code = getattr(self, "_last_run_exit_code", None)
         if failed or exit_code == EXIT_POLICY_FAILED:
             badge_text = "FAIL"
-            badge_fg = "#FEE2E2"
-            badge_text_color = "#991B1B"
+            badge_fg = self._failure_badge_fg
+            badge_text_color = self._failure_badge_text
         elif exit_code == EXIT_RUNTIME_ERROR:
             badge_text = "ERROR"
-            badge_fg = "#FEE2E2"
-            badge_text_color = "#991B1B"
+            badge_fg = self._failure_badge_fg
+            badge_text_color = self._failure_badge_text
         elif exit_code == EXIT_ABORTED:
             badge_text = "ABORTED"
-            badge_fg = "#FEF3C7"
-            badge_text_color = "#92400E"
+            badge_fg = self._warning_badge_fg
+            badge_text_color = self._warning_badge_text
         else:
             badge_text = "PASS/REVIEW"
-            badge_fg = "#DCFCE7"
-            badge_text_color = "#166534"
+            badge_fg = self._pass_badge_fg
+            badge_text_color = self._pass_badge_text
 
         summary = self._build_repair_status_summary(self._last_audit_reports_payload)
         if not self._last_audit_reports_payload:
@@ -9125,6 +9323,20 @@ class GuiApp:  # pragma: no cover
             except Exception:
                 pass
 
+    def _refresh_appearance_menu(self) -> None:
+        appearance_var = getattr(self, "appearance_var", None)
+        if appearance_var is not None:
+            appearance_var.set(gui_appearance_label(self._current_appearance(), self._current_locale()))
+        appearance_menu = getattr(self, "_appearance_menu", None)
+        if appearance_menu is not None:
+            try:
+                appearance_menu.configure(
+                    values=[label for _appearance, label in gui_appearance_options(self._current_locale())]
+                )
+                appearance_menu.set(gui_appearance_label(self._current_appearance(), self._current_locale()))
+            except Exception:
+                pass
+
     def _refresh_flow_tab_locale(self) -> None:
         flow_tabs = getattr(self, "_flow_tabs", None)
         if flow_tabs is None:
@@ -9188,6 +9400,7 @@ class GuiApp:  # pragma: no cover
 
     def _apply_gui_locale(self) -> None:
         self._refresh_locale_menu()
+        self._refresh_appearance_menu()
         self._refresh_flow_tab_locale()
         self._refresh_localized_widgets()
         self._refresh_prompt_cards()
@@ -9211,6 +9424,12 @@ class GuiApp:  # pragma: no cover
         self._gui_locale = gui_locale_from_label(selected_label)
         self._apply_gui_locale()
         self._save_gui_setup_settings(setup_completed=bool(getattr(self, "_setup_completed", False)))
+
+    def _on_gui_appearance_selected(self, selected_label: str) -> None:
+        self._gui_appearance = gui_appearance_from_label(selected_label)
+        self._refresh_appearance_menu()
+        self._save_gui_setup_settings(setup_completed=bool(getattr(self, "_setup_completed", False)))
+        self.log(f"[INFO] GUI theme saved as {self._current_appearance()}. Restart the GUI to apply it.")
 
     def _tooltip_text(self, key: str) -> str:
         catalog = GUI_TOOLTIP_TEXT_BY_LOCALE.get(self._current_locale(), GUI_TOOLTIP_TEXT)
@@ -9488,6 +9707,7 @@ class GuiApp:  # pragma: no cover
         return {
             "setup_completed": setup_completed,
             "gui_locale": self._current_locale(),
+            "gui_appearance": self._current_appearance(),
             "root": self.root_var.get().strip(),
             "policy": self.policy_var.get().strip(),
             "report_dir": self.report_dir_var.get().strip(),
@@ -9733,16 +9953,21 @@ class GuiApp:  # pragma: no cover
         self,
         message: str,
         *,
-        text_color: str = "#5C6F82",
+        text_color: str | None = None,
         badge_text: str = "Audit required",
-        panel_fg: str = "#F2FBF8",
-        panel_border: str = "#B9DDD3",
-        badge_fg: str = "#D8F3EA",
-        badge_text_color: str = "#0F766E",
+        panel_fg: str | None = None,
+        panel_border: str | None = None,
+        badge_fg: str | None = None,
+        badge_text_color: str | None = None,
     ) -> None:
         repair_status_label = getattr(self, "_repair_status_label", None)
         if repair_status_label is None:
             return
+        text_color = text_color or self._text_muted
+        panel_fg = panel_fg or self._success_panel_fg
+        panel_border = panel_border or self._success_panel_border
+        badge_fg = badge_fg or self._success_badge_fg
+        badge_text_color = badge_text_color or self._success_text
         repair_status_label.configure(text=message, text_color=text_color)
         repair_status_panel = getattr(self, "_repair_status_panel", None)
         if repair_status_panel is not None:
@@ -9765,6 +9990,7 @@ class GuiApp:  # pragma: no cover
         repo_empty_state = getattr(self, "_repo_empty_state", None)
         if repo_empty_state is None:
             return
+        self._ensure_gui_theme_palette()
         if not visible:
             self._repo_empty_reason = None
             try:
@@ -9781,26 +10007,26 @@ class GuiApp:  # pragma: no cover
         palette = {
             "invalid_root": {
                 "title": self._t("repo_empty_invalid_root_title"),
-                "fg": "#FFF8F1",
-                "border": "#F2C48D",
-                "title_color": "#8A3B12",
-                "body_color": "#7C5A35",
+                "fg": self._warning_panel_fg,
+                "border": self._warning_panel_border,
+                "title_color": self._warning_text,
+                "body_color": self._warning_strong_text,
                 "hint": self._t("repo_empty_invalid_root_hint"),
             },
             "no_repos": {
                 "title": self._t("repo_empty_no_repos_title"),
-                "fg": "#F6FAFE",
-                "border": "#C9DDEE",
-                "title_color": "#143A5A",
-                "body_color": "#526679",
+                "fg": self._info_panel_fg,
+                "border": self._info_panel_border,
+                "title_color": self._info_text,
+                "body_color": self._text_muted,
                 "hint": self._t("repo_empty_no_repos_hint"),
             },
             "github_remote": {
                 "title": self._t("repo_empty_github_remote_title"),
-                "fg": "#F2FBF8",
-                "border": "#B9DDD3",
-                "title_color": "#0E4F4A",
-                "body_color": "#385B5A",
+                "fg": self._success_panel_fg,
+                "border": self._success_panel_border,
+                "title_color": self._success_text,
+                "body_color": self._text_muted,
                 "hint": self._t("repo_empty_github_remote_hint"),
             },
         }
@@ -9814,7 +10040,7 @@ class GuiApp:  # pragma: no cover
         if body_label is not None and message:
             body_label.configure(text=message, text_color=theme["body_color"])
         if hint_label is not None:
-            hint_label.configure(text=theme["hint"], text_color="#6B7F93")
+            hint_label.configure(text=theme["hint"], text_color=self._text_muted)
         try:
             self.repo_list.configure(state="disabled")
         except Exception:
@@ -10050,8 +10276,8 @@ class GuiApp:  # pragma: no cover
             width=22,
             height=22,
             corner_radius=11,
-            fg_color="#D8F3EA",
-            text_color="#0F766E",
+            fg_color=self._success_badge_fg,
+            text_color=self._success_text,
             font=self._font(12, bold=True),
         )
         self._bind_tooltip(badge, message)
@@ -10236,15 +10462,16 @@ class GuiApp:  # pragma: no cover
         note_label = getattr(self, "_repair_gate_note_label", None)
         if note_label is None:
             return
+        self._ensure_gui_theme_palette()
         if getattr(self, "_repair_ready", False):
             text_key = "repair_ready_note"
-            text_color = "#166534"
+            text_color = self._pass_badge_text
         elif getattr(self, "_last_audit_reports_payload", []):
             text_key = "repair_review_pending_note"
-            text_color = "#7A4B13"
+            text_color = self._warning_text
         else:
             text_key = "repair_stays_disabled"
-            text_color = "#6B7F93"
+            text_color = self._text_muted
         note_label.configure(text=self._t(text_key), text_color=text_color)
 
     def _update_run_buttons_state(self) -> None:
@@ -10323,6 +10550,7 @@ class GuiApp:  # pragma: no cover
             self._repair_button_text = self._t(key, **kwargs)
 
     def _apply_repair_locked_status(self, reason_key: str | None, reason: str | None = None) -> None:
+        self._ensure_gui_theme_palette()
         default_reason_key = "lock_repair_default"
         lock_reason = reason or self._t(reason_key or default_reason_key)
         is_default = (reason_key or default_reason_key) == default_reason_key
@@ -10330,7 +10558,7 @@ class GuiApp:  # pragma: no cover
             self._t("no_audit_results")
             if is_default
             else self._t("lock_repair_message", reason=lock_reason),
-            text_color="#5C6F82",
+            text_color=self._text_muted,
             badge_text=self._t("audit_required" if is_default else "audit_again_required"),
         )
         self._set_repair_tab_visual_lock(True, lock_reason)
@@ -10390,12 +10618,12 @@ class GuiApp:  # pragma: no cover
         self._set_repair_status(
             self._build_repair_status_summary(reports_payload)
             + self._t("repair_unlocks_after_review"),
-            text_color="#7A4B13",
+            text_color=self._warning_text,
             badge_text=self._t("review_window"),
-            panel_fg="#FFF7ED",
-            panel_border="#F5C58B",
-            badge_fg="#FBD7A2",
-            badge_text_color="#7A4B13",
+            panel_fg=self._warning_panel_fg,
+            panel_border=self._warning_panel_border,
+            badge_fg=self._repair_warning_badge_fg,
+            badge_text_color=self._warning_text,
         )
         self._set_repair_tab_visual_lock(False)
         self._update_run_buttons_state()
@@ -10415,12 +10643,12 @@ class GuiApp:  # pragma: no cover
             self._set_repair_status(
                 self._build_repair_status_summary(self._last_audit_reports_payload)
                 + self._t("repair_now_available"),
-                text_color="#7B1E1E",
+                text_color=self._danger_text if failed else self._success_text,
                 badge_text=self._t("repair_ready" if failed else "optional_cleanup"),
-                panel_fg="#FFF7ED" if failed else "#F0FDF4",
-                panel_border="#F5C58B" if failed else "#BBF7D0",
-                badge_fg="#FBD7A2" if failed else "#DCFCE7",
-                badge_text_color="#7A4B13" if failed else "#166534",
+                panel_fg=self._warning_panel_fg if failed else self._success_panel_fg,
+                panel_border=self._warning_panel_border if failed else self._success_panel_border,
+                badge_fg=self._repair_warning_badge_fg if failed else self._pass_badge_fg,
+                badge_text_color=self._warning_text if failed else self._pass_badge_text,
             )
             self._update_run_buttons_state()
             self.log("[INFO] Repair unlocked.")
@@ -10432,12 +10660,12 @@ class GuiApp:  # pragma: no cover
         self._set_repair_status(
             self._build_repair_status_summary(self._last_audit_reports_payload)
             + self._t("repair_unlocks_in", seconds=self._repair_cooldown_remaining),
-            text_color="#7A4B13",
+            text_color=self._warning_text,
             badge_text=self._t("review_window"),
-            panel_fg="#FFF7ED",
-            panel_border="#F5C58B",
-            badge_fg="#FBD7A2",
-            badge_text_color="#7A4B13",
+            panel_fg=self._warning_panel_fg,
+            panel_border=self._warning_panel_border,
+            badge_fg=self._repair_warning_badge_fg,
+            badge_text_color=self._warning_text,
         )
         self._update_run_buttons_state()
         self._repair_cooldown_after_id = self.root.after(1000, self._tick_repair_cooldown)

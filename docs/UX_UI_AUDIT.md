@@ -192,6 +192,17 @@ The current GUI now uses a small packaged raster asset set instead of relying on
 - Kept all text in Tk labels/buttons instead of embedding text in images, so English/Spanish locale parity remains intact.
 - Kept assets local and bounded under `repo_privacy_guardian_assets/`; the GUI falls back to the existing solid-color layout if an asset cannot be loaded.
 
+## 2026-04-30 GUI Theme Pass
+
+The theme pass added a presentation-only Light/Dark startup selector without widening the CLI contract:
+
+- Replaced visible light-only surfaces with a shared GUI palette so Audit, Reports, Prompts, Settings, Repair, lists, logs, badges, and gated states render coherently in both startup modes.
+- Persisted only the non-secret `gui_appearance` GUI preference alongside locale and setup state.
+- Kept theme labels locale-aware while preserving the same CLI flags, policy keys, report fields, and `GuardRunConfig` mappings.
+- Added dark-mode button icon tinting in memory so local packaged assets remain readable without introducing separate tracked icon copies.
+- Added regression coverage for theme helper normalization, settings persistence, tooltip copy, smoke startup, and locale/theme independence from run-config parity.
+- Manually QAed fresh live-window screenshots in both Light and Dark modes before release validation.
+
 ## 2026-04-26 GUI Locale Pass
 
 The localization pass added a presentation-only language selector without widening the CLI contract:

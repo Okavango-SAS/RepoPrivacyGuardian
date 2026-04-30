@@ -1284,11 +1284,13 @@ def test_gui_settings_payload_excludes_identity_secrets() -> None:
     app.audit_litellm_incident_var = DummyVar(False)
     app.audit_github_hardening_var = DummyVar(True)
     app.open_report_var = DummyVar(False)
+    app._gui_appearance = rpg.GUI_APPEARANCE_DARK
 
     payload = app._current_gui_settings_payload(setup_completed=True)
 
     assert payload["setup_completed"] is True
     assert payload["gui_locale"] == rpg.GUI_LOCALE_DEFAULT
+    assert payload["gui_appearance"] == rpg.GUI_APPEARANCE_DARK
     assert payload["github_owner"] == "Acme"
     assert "owner_emails" not in payload
     assert "noreply_email" not in payload
@@ -1304,6 +1306,7 @@ def test_gui_settings_roundtrip_uses_private_json(tmp_path: Path) -> None:
         {
             "setup_completed": True,
             "gui_locale": "es-419",
+            "gui_appearance": "dark",
             "root": "C:/repos",
             "github_owner": "Acme",
         },
@@ -1314,6 +1317,7 @@ def test_gui_settings_roundtrip_uses_private_json(tmp_path: Path) -> None:
     assert loaded["schema_version"] == rpg.GUI_SETTINGS_SCHEMA_VERSION
     assert loaded["setup_completed"] is True
     assert loaded["gui_locale"] == "es-419"
+    assert loaded["gui_appearance"] == "dark"
     assert loaded["root"] == "C:/repos"
     assert loaded["github_owner"] == "Acme"
 
@@ -1340,6 +1344,18 @@ def test_gui_locale_helpers_normalize_supported_languages() -> None:
     assert rpg.normalize_gui_locale("Español") == rpg.GUI_LOCALE_ES_419
     assert rpg.normalize_gui_locale("pt-BR") == rpg.GUI_LOCALE_DEFAULT
     assert rpg.gui_locale_from_label("Español (Latinoamérica)") == rpg.GUI_LOCALE_ES_419
+
+
+def test_gui_appearance_helpers_normalize_supported_modes() -> None:
+    assert rpg.normalize_gui_appearance("dark") == rpg.GUI_APPEARANCE_DARK
+    assert rpg.normalize_gui_appearance("Oscuro") == rpg.GUI_APPEARANCE_DARK
+    assert rpg.normalize_gui_appearance("noche") == rpg.GUI_APPEARANCE_DARK
+    assert rpg.normalize_gui_appearance("light") == rpg.GUI_APPEARANCE_LIGHT
+    assert rpg.normalize_gui_appearance("Claro") == rpg.GUI_APPEARANCE_LIGHT
+    assert rpg.normalize_gui_appearance("unknown") == rpg.GUI_APPEARANCE_DEFAULT
+    assert rpg.gui_appearance_from_label("Claro") == rpg.GUI_APPEARANCE_LIGHT
+    assert rpg.gui_appearance_from_label("Dark") == rpg.GUI_APPEARANCE_DARK
+    assert rpg.gui_appearance_label(rpg.GUI_APPEARANCE_DARK, rpg.GUI_LOCALE_ES_419) == "Oscuro"
 
 
 def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
@@ -1538,6 +1554,7 @@ def test_gui_tooltip_catalog_covers_non_obvious_controls() -> None:
         "github_fast",
         "max_findings",
         "gui_language",
+        "gui_appearance",
         "save_setup",
         "advanced_identity",
         "noreply_email",
@@ -2085,6 +2102,7 @@ def test_gui_locale_does_not_change_run_config_payload_mapping() -> None:
     def make_app(locale: str):
         app = object.__new__(rpg.GuiApp)
         app._gui_locale = locale
+        app._gui_appearance = rpg.GUI_APPEARANCE_DEFAULT
         app.root_var = DummyVar("C:/repos")
         app.policy_var = DummyVar("docs/POLICY.md")
         app.report_dir_var = DummyVar("Audit_Results")
@@ -2105,12 +2123,15 @@ def test_gui_locale_does_not_change_run_config_payload_mapping() -> None:
 
     english_payload = make_app(rpg.GUI_LOCALE_DEFAULT)._current_gui_settings_payload(setup_completed=True)
     spanish_payload = make_app(rpg.GUI_LOCALE_ES_419)._current_gui_settings_payload(setup_completed=True)
-    english_without_locale = {key: value for key, value in english_payload.items() if key != "gui_locale"}
-    spanish_without_locale = {key: value for key, value in spanish_payload.items() if key != "gui_locale"}
+    presentation_keys = {"gui_locale", "gui_appearance"}
+    english_without_locale = {key: value for key, value in english_payload.items() if key not in presentation_keys}
+    spanish_without_locale = {key: value for key, value in spanish_payload.items() if key not in presentation_keys}
 
     assert english_without_locale == spanish_without_locale
     assert english_payload["gui_locale"] == rpg.GUI_LOCALE_DEFAULT
     assert spanish_payload["gui_locale"] == rpg.GUI_LOCALE_ES_419
+    assert english_payload["gui_appearance"] == rpg.GUI_APPEARANCE_DEFAULT
+    assert spanish_payload["gui_appearance"] == rpg.GUI_APPEARANCE_DEFAULT
 
 
 def test_cli_defaults_follow_current_working_directory(tmp_path: Path) -> None:
