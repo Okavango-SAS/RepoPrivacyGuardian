@@ -691,8 +691,8 @@ def _make_path_writable_and_retry_remove(
 def remove_private_temp_tree(path: Path, *, required_prefix: str) -> tuple[bool, str | None]:
     if not path.name.startswith(required_prefix):
         return False, f"refusing to remove unexpected temporary directory path: {path}"
-    if path.is_symlink():
-        return False, f"refusing to recursively remove symlinked temporary directory path: {path}"
+    if _path_has_existing_symlink_ancestor(path):
+        return False, f"refusing to recursively remove temporary directory path with symlinked path component: {path}"
 
     last_error: str | None = None
     for attempt in range(1, TEMP_TREE_CLEANUP_ATTEMPTS + 1):

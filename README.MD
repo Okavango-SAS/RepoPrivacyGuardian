@@ -162,6 +162,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - Tracked-file scanners skip symlinked files and oversized text candidates to reduce accidental local file disclosure and unbounded memory reads.
 - Local auto-discovery skips symlinked child directories. Audit symlinked checkouts only by explicit operator-selected target so the scanned set stays predictable.
 - Report/export writes, report-directory creation, and `.gitignore` remediation refuse symlinked target paths instead of following them.
+- Temporary clone cleanup refuses symlinked path components before recursive removal.
 - Repository execution is serialized with an OS-backed lock file in the Git metadata directory so overlapping audits/fixes do not mutate the same checkout concurrently, and crashed owners do not need PID/timestamp stale-lock reclamation.
 - GitHub owner/org discovery and clone work are bounded: `gh auth token` probes use a short non-interactive timeout, paginated repository discovery fails closed at the page limit, and clone parallelism is capped.
 

@@ -3352,6 +3352,31 @@ def test_remove_private_temp_tree_refuses_unexpected_prefix(tmp_path: Path) -> N
     assert temp_root.exists() is True
 
 
+def test_remove_private_temp_tree_refuses_symlinked_ancestor(tmp_path: Path, monkeypatch) -> None:
+    linked_parent = tmp_path / "linked-parent"
+    temp_root = linked_parent / "repo-privacy-guardian-github-test"
+    temp_root.mkdir(parents=True)
+    (temp_root / "artifact.txt").write_text("payload", encoding="utf-8")
+    original_is_symlink = Path.is_symlink
+
+    def fake_is_symlink(self: Path) -> bool:
+        if self == linked_parent:
+            return True
+        return original_is_symlink(self)
+
+    monkeypatch.setattr(Path, "is_symlink", fake_is_symlink)
+
+    removed, error = rpg.remove_private_temp_tree(
+        temp_root,
+        required_prefix="repo-privacy-guardian-github-",
+    )
+
+    assert removed is False
+    assert "symlinked path component" in str(error)
+    assert temp_root.exists() is True
+    assert (temp_root / "artifact.txt").exists()
+
+
 def test_clone_github_remote_repository_private_requires_gh(tmp_path: Path) -> None:
     remote = rpg_github.GitHubRemoteRepository(
         name="private-repo",
