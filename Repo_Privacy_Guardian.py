@@ -1783,6 +1783,7 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
     "reports_tab": "Shows the latest local artifact paths and quick-open actions without exposing raw sensitive evidence.",
     "prompts_tab": "Copy vetted agentic IDE prompts that use the CLI-first audit and repair workflow.",
     "open_settings_tab": "Moves advanced parity controls into Settings so Audit stays focused on choosing targets and running the scan.",
+    "open_agent_prompts_tab": "Opens the agent prompt library for CLI-first audit, evidence review, and approved repair delegation.",
     "repair_options_toggle": "Shows advanced Repair toggles. Keep them hidden until audited findings have been reviewed.",
     "copy_agent_handoff": (
         "Copies a privacy-safe agent handoff prompt that references the latest redacted artifacts without pasting raw findings."
@@ -1898,6 +1899,7 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
     "reports_tab": "Muestra rutas de artefactos de la última corrida y acciones rápidas sin exponer evidencia sensible cruda.",
     "prompts_tab": "Copia prompts revisados para IDEs agénticas que usan el flujo CLI-first de auditoría y reparación.",
     "open_settings_tab": "Mueve controles avanzados de paridad a Configuración para que Auditar quede enfocado en objetivos y ejecución.",
+    "open_agent_prompts_tab": "Abre la biblioteca de prompts para delegar auditoría CLI-first, revisión de evidencia y reparación aprobada.",
     "repair_options_toggle": "Muestra toggles avanzados de Reparar. Mantenelos ocultos hasta revisar los hallazgos auditados.",
     "copy_agent_handoff": (
         "Copia un prompt seguro de traspaso agéntico que referencia los últimos artefactos redactados sin pegar hallazgos crudos."
@@ -1915,10 +1917,11 @@ GUI_TOOLTIP_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
 GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
     GUI_LOCALE_DEFAULT: {
         "header_title": "Repo Privacy Guardian",
-        "header_subtitle": "Start with Audit: choose a root, review findings, then Repair only after the safety gate unlocks.",
-        "workflow_audit": "1 Audit",
-        "workflow_review": "2 Review findings",
-        "workflow_repair": "3 Repair if needed",
+        "header_subtitle": "Agent-first workflow: audit locally, review redacted evidence, hand off to an IDE agent, then Repair only after approval.",
+        "workflow_audit": "1 Audit locally",
+        "workflow_review": "2 Review evidence",
+        "workflow_agent": "3 Agent handoff",
+        "workflow_repair": "4 Gated Repair",
         "workflow_parity": "CLI parity: same backend",
         "tab_audit": "1. Audit",
         "tab_reports": "2. Reports",
@@ -1926,8 +1929,9 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "tab_settings": "4. Settings",
         "tab_repair": "5. Repair",
         "audit_target": "Audit Target",
-        "audit_target_body": "Choose local repositories here. Advanced policy, GitHub owner/org, and identity controls live in Settings.",
+        "audit_target_body": "Choose local repositories here. Advanced policy, GitHub owner/org, and identity controls live in Settings. Agent prompts stay one click away.",
         "open_settings_tab": "Open Settings",
+        "open_agent_prompts_tab": "Agent prompts",
         "last_run": "Last run",
         "last_run_none": "No GUI run has finished in this session yet.",
         "reports_dashboard": "Reports Dashboard",
@@ -1951,8 +1955,10 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "open_json_report_action": "Open report.json",
         "open_run_log_action": "Open run.log",
         "open_artifacts_folder_action": "Open artifacts folder",
-        "prompts_library": "Agentic Prompt Library",
-        "prompts_library_body": "Copy a vetted prompt into Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, or a similar agentic IDE. Prompts use the CLI-first workflow and avoid raw sensitive evidence.",
+        "prompts_library": "Agent Workflow Prompts",
+        "prompts_library_body": "Copy a vetted prompt into Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, or a similar agentic IDE. This is the orchestration layer for analysis, classification, and reviewed repair.",
+        "agent_workflow_title": "How to use this tab",
+        "agent_workflow_body": "Prepare the environment once, run audit-only first, review local artifacts in Reports, then copy a handoff or repair prompt only after findings are classified.",
         "copy_prompt": "Copy prompt",
         "copy_command": "Copy command",
         "open_prompt": "Open prompt",
@@ -1967,7 +1973,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "repair_advanced_hint_hidden": "Advanced write options are hidden. Review the audit summary first, then expand only if repair is needed.",
         "repair_advanced_hint_visible": "Advanced Repair options are visible. Confirm the latest audit context before any write action.",
         "recommended_path": "Recommended path",
-        "recommended_path_body": "Choose a local root or drop repository folders below. Then run Audit and review findings before Repair.",
+        "recommended_path_body": "Choose a local root or drop repository folders below. Run Audit first; use Reports and Agent prompts for evidence review and repair orchestration.",
         "repositories_root": "Repositories Root",
         "choose_repositories_root": "Choose the repositories root directory",
         "setup_initial_hint": "Initial setup is open. Save it once, then the main screen stays focused on Audit.",
@@ -2074,8 +2080,9 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "clear_log": "Clear Log",
         "execution_log": "Execution Log",
         "execution_log_empty": (
-            "Audit output will appear here.\n"
-            "Run Audit to stream progress, then open report.html, report.json, or run.log from Reports."
+            "Ready for audit.\n"
+            "Run Audit to stream progress here.\n"
+            "Reports keeps artifacts and the agent handoff."
         ),
         "browse": "Browse…",
         "save_as": "Save As…",
@@ -2212,10 +2219,11 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
     },
     GUI_LOCALE_ES_419: {
         "header_title": "Repo Privacy Guardian",
-        "header_subtitle": "Empezá por Auditar: elegí una carpeta raíz, revisá hallazgos y usá Reparar sólo cuando se libere el gate de seguridad.",
-        "workflow_audit": "1 Auditar",
-        "workflow_review": "2 Revisar hallazgos",
-        "workflow_repair": "3 Reparar si hace falta",
+        "header_subtitle": "Flujo agent-first: auditá localmente, revisá evidencia redactada, pasala a una IDE agéntica y Repará sólo con aprobación.",
+        "workflow_audit": "1 Auditar local",
+        "workflow_review": "2 Revisar evidencia",
+        "workflow_agent": "3 Traspaso IA",
+        "workflow_repair": "4 Reparar gated",
         "workflow_parity": "Paridad CLI: mismo backend",
         "tab_audit": "1. Auditar",
         "tab_reports": "2. Reportes",
@@ -2223,8 +2231,9 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "tab_settings": "4. Configuración",
         "tab_repair": "5. Reparar",
         "audit_target": "Objetivo de auditoría",
-        "audit_target_body": "Elegí repositorios locales acá. Los controles avanzados de política, GitHub owner/org e identidad viven en Configuración.",
+        "audit_target_body": "Elegí repositorios locales acá. Los controles avanzados de política, GitHub owner/org e identidad viven en Configuración. Los prompts agénticos quedan a un clic.",
         "open_settings_tab": "Abrir configuración",
+        "open_agent_prompts_tab": "Prompts IA",
         "last_run": "Última corrida",
         "last_run_none": "Todavía no terminó ninguna corrida GUI en esta sesión.",
         "reports_dashboard": "Dashboard de reportes",
@@ -2248,8 +2257,10 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "open_json_report_action": "Abrir report.json",
         "open_run_log_action": "Abrir run.log",
         "open_artifacts_folder_action": "Abrir carpeta de artefactos",
-        "prompts_library": "Biblioteca de prompts agénticos",
-        "prompts_library_body": "Copiá un prompt revisado en Codex, Claude Code, Antigravity, GitHub Copilot, Cursor o una IDE agéntica similar. Los prompts usan el flujo CLI-first y evitan evidencia sensible cruda.",
+        "prompts_library": "Prompts para flujo agéntico",
+        "prompts_library_body": "Copiá un prompt revisado en Codex, Claude Code, Antigravity, GitHub Copilot, Cursor o una IDE agéntica similar. Esta es la capa de orquestación para análisis, clasificación y reparación revisada.",
+        "agent_workflow_title": "Cómo usar esta pestaña",
+        "agent_workflow_body": "Prepará el entorno una vez, ejecutá primero audit-only, revisá artefactos locales en Reportes y recién después copiá un handoff o prompt de reparación cuando los hallazgos estén clasificados.",
         "copy_prompt": "Copiar prompt",
         "copy_command": "Copiar comando",
         "open_prompt": "Abrir prompt",
@@ -2264,7 +2275,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "repair_advanced_hint_hidden": "Las opciones avanzadas de escritura están ocultas. Revisá el resumen de auditoría y expandí sólo si hace falta reparar.",
         "repair_advanced_hint_visible": "Las opciones avanzadas de Reparar están visibles. Confirmá el contexto de la última auditoría antes de cualquier acción de escritura.",
         "recommended_path": "Camino recomendado",
-        "recommended_path_body": "Elegí una carpeta raíz local o arrastrá repositorios abajo. Después ejecutá Auditar y revisá hallazgos antes de Reparar.",
+        "recommended_path_body": "Elegí una carpeta raíz local o arrastrá repositorios abajo. Ejecutá Auditar primero; usá Reportes y Prompts IA para revisar evidencia y orquestar reparaciones.",
         "repositories_root": "Carpeta raíz de repositorios",
         "choose_repositories_root": "Elegir la carpeta raíz de repositorios",
         "setup_initial_hint": "La configuración inicial está abierta. Guardala una vez y la pantalla principal queda enfocada en Auditar.",
@@ -2374,8 +2385,9 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "clear_log": "Limpiar log",
         "execution_log": "Log de ejecución",
         "execution_log_empty": (
-            "La salida de Auditar va a aparecer acá.\n"
-            "Ejecutá Auditar para ver el progreso y luego abrí report.html, report.json o run.log desde Reportes."
+            "Listo para auditar.\n"
+            "Ejecutá Auditar para ver el progreso acá.\n"
+            "Reportes conserva artefactos y el handoff agéntico."
         ),
         "browse": "Buscar…",
         "save_as": "Guardar como…",
@@ -7312,6 +7324,7 @@ class GuiApp:  # pragma: no cover
         self._select_all_button = None
         self._clear_selection_button = None
         self._refresh_button = None
+        self._agent_prompts_shortcut = None
         self._repair_status_label = None
         self._repair_status_panel = None
         self._repair_status_badge = None
@@ -7377,6 +7390,7 @@ class GuiApp:  # pragma: no cover
         workflow_items = [
             "workflow_audit",
             "workflow_review",
+            "workflow_agent",
             "workflow_repair",
             "workflow_parity",
         ]
@@ -7473,7 +7487,7 @@ class GuiApp:  # pragma: no cover
             wraplength=860,
             font=self._font(11),
             text_color=self._text_muted,
-        ), "text", "recommended_path_body").grid(row=0, column=0, sticky="we")
+        ), "text", "recommended_path_body").grid(row=0, column=0, columnspan=3, sticky="we", pady=(0, 8))
         settings_shortcut = ctk.CTkButton(
             audit_settings_row,
             text=self._t("open_settings_tab"),
@@ -7486,7 +7500,21 @@ class GuiApp:  # pragma: no cover
         )
         self._localize_widget(settings_shortcut, "text", "open_settings_tab")
         self._bind_tooltip_key(settings_shortcut, "open_settings_tab")
-        settings_shortcut.grid(row=0, column=1, sticky="e", padx=(12, 0))
+        settings_shortcut.grid(row=1, column=2, sticky="e", padx=(8, 0))
+        agent_prompts_shortcut = ctk.CTkButton(
+            audit_settings_row,
+            text=self._t("open_agent_prompts_tab"),
+            command=lambda: self._set_active_flow_tab(self._prompts_tab_name),
+            width=150,
+            height=32,
+            corner_radius=8,
+            **self._button_asset_options("icon-copy.png"),
+            **self._secondary_button_options(),
+        )
+        self._agent_prompts_shortcut = agent_prompts_shortcut
+        self._localize_widget(agent_prompts_shortcut, "text", "open_agent_prompts_tab")
+        self._bind_tooltip_key(agent_prompts_shortcut, "open_agent_prompts_tab")
+        agent_prompts_shortcut.grid(row=1, column=1, sticky="e", padx=(12, 0))
 
         settings_intro = ctk.CTkFrame(settings_tab, fg_color="transparent")
         settings_intro.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 0))
@@ -8775,7 +8803,7 @@ class GuiApp:  # pragma: no cover
         )
         self.output.grid(row=1, column=0, sticky="nsew", padx=14, pady=(0, 12))
         self._output_empty_state_label = ctk.CTkLabel(
-            output_card,
+            self.output,
             text=self._t("execution_log_empty"),
             justify="center",
             anchor="center",
@@ -9212,8 +9240,36 @@ class GuiApp:  # pragma: no cover
         )
         if self._prompts_visual_label is not None:
             self._prompts_visual_label.grid(row=0, column=1, rowspan=2, sticky="e", padx=(8, 14), pady=(10, 4))
+        workflow_guide = ctk.CTkFrame(
+            prompts_card,
+            fg_color=self._info_panel_fg,
+            corner_radius=10,
+            border_width=1,
+            border_color=self._info_panel_border,
+        )
+        workflow_guide.grid(row=2, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 12))
+        workflow_guide.grid_columnconfigure(1, weight=1)
+        self._localize_widget(ctk.CTkLabel(
+            workflow_guide,
+            text=self._t("agent_workflow_title"),
+            height=28,
+            corner_radius=14,
+            fg_color=self._success_badge_fg,
+            text_color=self._success_text,
+            font=self._font(11, bold=True),
+            padx=12,
+        ), "text", "agent_workflow_title").grid(row=0, column=0, sticky="w", padx=10, pady=10)
+        self._localize_widget(ctk.CTkLabel(
+            workflow_guide,
+            text=self._t("agent_workflow_body"),
+            justify="left",
+            anchor="w",
+            wraplength=1040,
+            font=self._font(12),
+            text_color=self._text_body,
+        ), "text", "agent_workflow_body").grid(row=0, column=1, sticky="we", padx=(0, 10), pady=10)
         self._prompt_cards_frame = ctk.CTkFrame(prompts_card, fg_color="transparent")
-        self._prompt_cards_frame.grid(row=2, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 12))
+        self._prompt_cards_frame.grid(row=3, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 12))
         self._prompt_cards_frame.grid_columnconfigure((0, 1), weight=1)
         self._refresh_prompt_cards()
 
@@ -9239,7 +9295,7 @@ class GuiApp:  # pragma: no cover
             card.grid_columnconfigure(0, weight=1)
             self.ctk.CTkLabel(
                 card,
-                text=prompt.title,
+                text=f"{idx + 1}. {prompt.title}",
                 font=self._font(14, bold=True),
                 text_color=self._text_heading,
                 anchor="w",
@@ -9857,15 +9913,7 @@ class GuiApp:  # pragma: no cover
             width = int(width_text)
         except ValueError:
             width = self.root.winfo_width()
-
-        scale = 1.0
-        try:
-            scale = float(self.ctk.ScalingTracker.get_window_scaling(self.root))
-        except Exception:
-            pass
-
-        safe_scale = scale if scale > 0 else 1.0
-        return int(round(width / safe_scale))
+        return max(0, int(width))
 
     def _on_root_resize(self, event) -> None:
         del event
@@ -10171,7 +10219,7 @@ class GuiApp:  # pragma: no cover
         if label is None or output is None:
             return
         if visible:
-            label.place(in_=output, relx=0.5, rely=0.5, anchor="center")
+            label.place(relx=0.5, rely=0.5, anchor="center")
             label.lift()
             return
         label.place_forget()

@@ -6,6 +6,9 @@ All notable user-facing changes to this project are documented here.
 
 ### Changed
 
+- Reframed the GUI first-screen hierarchy around the agent-first workflow: local audit, redacted evidence review, agent handoff, and gated repair.
+- Added an Audit-screen shortcut into the GUI Prompts tab and a prompt-library guide that makes the agentic orchestration layer visible without changing CLI behavior.
+- Refreshed tracked GUI screenshots after the agent-first visual QA pass, keeping visible paths sanitized.
 - Added a packaged GUI raster asset set for the window icon, header watermark, repository empty state, reports, prompts, repair gate visuals, and DPI-aware action icons.
 - Adjusted the GUI Refresh action to secondary-button styling so its icon remains readable and added smoke coverage for visible Prompt cards.
 - Added a presentation-only GUI theme selector for Light and Dark startup modes with settings persistence, locale-aware labels, dark-mode icon contrast, and parity coverage that keeps CLI flags, reports, and policy behavior unchanged.
@@ -24,6 +27,11 @@ All notable user-facing changes to this project are documented here.
 - Compacted the README agentic section into a prompt library to avoid repeating the first-run flow.
 - Clarified README start paths by role and when optional installation extras are needed.
 - Removed overly internal launch-preparation wording from public docs while preserving publication-gate guidance.
+
+### Fixed
+
+- Fixed the GUI execution-log empty state so it renders above the log textbox in both light and dark mode.
+- Fixed GUI responsive width detection on high-DPI Windows so wide desktop windows do not incorrectly fall into compact layout.
 
 ## [1.4.5] - 2026-04-28
 

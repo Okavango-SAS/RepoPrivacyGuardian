@@ -58,6 +58,7 @@ def main() -> int:
             ]
             assert app._audit_button.cget("text") == app._t("run_audit")
             assert app._audit_button.cget("state") == "normal"
+            assert app._agent_prompts_shortcut.cget("text") == app._t("open_agent_prompts_tab")
             assert app._refresh_button.cget("fg_color") == app._secondary_button_fg
             assert getattr(app._app_frame._scrollbar, "_button_color", None) == app._scrollbar_thumb
             assert getattr(app._repo_scrollbar, "_button_color", None) == app._scrollbar_thumb
@@ -137,6 +138,7 @@ def main() -> int:
             ]
             assert app._audit_button.cget("text") == app._t("run_audit")
             assert app._audit_button.cget("state") == "normal"
+            assert app._agent_prompts_shortcut.cget("text") == app._t("open_agent_prompts_tab")
             assert app._refresh_button.cget("fg_color") == app._secondary_button_fg
             assert getattr(app._app_frame._scrollbar, "_button_color", None) == app._scrollbar_thumb
             assert getattr(app._repo_scrollbar, "_button_color", None) == app._scrollbar_thumb

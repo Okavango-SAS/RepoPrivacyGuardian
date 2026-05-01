@@ -228,3 +228,29 @@ The next GUI pass re-centered the desktop app around the primary agentic CLI use
 - Added a Prompts tab backed by a tracked bilingual prompt registry for environment setup, audit-only, reviewed audit-and-repair, and compact CLI delegation workflows.
 - Moved policy/output/GitHub/identity parity controls into Settings and kept advanced Repair write options collapsed by default.
 - Preserved the shared backend and `GuardRunConfig` mapping; the change is presentation and workflow organization, not a new execution engine.
+
+## 2026-05-01 Agent-First Visual QA Pass
+
+This pass checked whether the desktop companion still matched the repo's real usage model after the public release: CLI automation first, human evidence review, then coding-agent orchestration and gated repair.
+
+Findings:
+
+- The Audit screen was clean but still underplayed the mandatory agentic workflow. A new user could run an audit, then miss that `Reports` and `Prompts` are the intended bridge into Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, or similar IDEs.
+- The execution log empty state existed in code but could render underneath the `CTkTextbox`, making the right-hand panel look blank in the first-run screenshot.
+- High-DPI Windows windows could be classified as compact because Tk geometry was divided by the CustomTkinter scaling factor even though Tk already reports the real window geometry. This hid the header workflow chips on wide desktop screenshots.
+- Light and dark themes both worked without new raster assets. The current asset set already supports the needed state visuals; this pass needed hierarchy and responsive fixes, not additional generated imagery.
+
+Corrections applied:
+
+- Rewrote the GUI header around the explicit `Audit locally -> Review evidence -> Agent handoff -> Gated Repair` path.
+- Added a direct `Agent prompts` shortcut from Audit to the Prompts tab so the agent-first workflow is discoverable without making the first screen heavier.
+- Added a short guide at the top of the Prompts tab and numbered prompt cards so the operator sees environment prep, audit-only, reviewed repair, and compact CLI delegation as one staged flow.
+- Moved the execution-log empty label into the textbox overlay layer so it is visible until real output is written.
+- Fixed logical window-width detection to use Tk geometry directly, avoiding DPI double-scaling and preserving the desktop layout on high-DPI displays.
+- Refreshed the tracked light-mode screenshots with neutral paths and kept a local dark-mode QA capture under ignored workspace metadata.
+
+Validation notes:
+
+- Presentation changed only labels, layout, and helper actions. No CLI flags, report fields, policy keys, or `GuardRunConfig` mappings changed.
+- The same backend still owns Audit, Reports, GitHub hardening, remote audit, and Repair behavior.
+- The GUI still keeps Repair locked until a valid audit context exists.

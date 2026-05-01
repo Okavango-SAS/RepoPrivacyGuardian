@@ -1144,6 +1144,20 @@ def test_gui_header_flow_strip_hides_on_compact_layout() -> None:
     assert strip.actions == ["grid_remove", "grid"]
 
 
+def test_gui_logical_window_width_uses_tk_geometry_without_dpi_double_scaling() -> None:
+    class DummyRoot:
+        def wm_geometry(self) -> str:
+            return "1440x860+30+30"
+
+        def winfo_width(self) -> int:
+            return 900
+
+    app = object.__new__(rpg.GuiApp)
+    app.root = DummyRoot()
+
+    assert app._get_logical_window_width() == 1440
+
+
 def test_gui_advanced_identity_settings_are_collapsible() -> None:
     class DummyWidget:
         def __init__(self) -> None:
