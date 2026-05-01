@@ -654,6 +654,26 @@ def test_design_md_external_spec_hygiene_is_pinned_and_least_privilege() -> None
     assert "repository-write permissions" in design
 
 
+def test_design_md_adapts_frontend_guidance_to_desktop_gui_contract() -> None:
+    root = _repo_root()
+    design = (root / "DESIGN.md").read_text(encoding="utf-8")
+    ux_audit = (root / "docs" / "UX_UI_AUDIT.md").read_text(encoding="utf-8")
+
+    for text in (design, ux_audit):
+        assert "desktop" in text.lower()
+        assert "agent-first" in text
+        assert "light" in text.lower()
+        assert "dark" in text.lower()
+
+    assert "Desktop Visual QA Method" in design
+    assert "`customtkinter` desktop companion" in design
+    assert "Do not migrate the GUI to React, Vite, browser routing" in design
+    assert "UI text code-native and locale-driven" in design
+    assert "preserve CLI/GUI parity" in design
+    assert "browser-only QA as the GUI acceptance gate" in ux_audit
+    assert "React/Vite or web-app migration as a default path" in ux_audit
+
+
 def test_ci_workflow_matches_cost_first_validation_contract() -> None:
     workflow = (_repo_root() / CI_WORKFLOW).read_text(encoding="utf-8")
 

@@ -118,6 +118,26 @@ Empty states that represent a normal first-run path should include a safe next a
 
 Agentic handoff UI should reference redacted local evidence and safe next actions, not raw findings. When copying prompts from the GUI, prefer repository-relative artifact paths when available and redact personal absolute paths otherwise.
 
+## Desktop Visual QA Method
+
+Repo Privacy Guardian can borrow useful product-design discipline from web-app frontend workflows, but the implementation target remains a `customtkinter` desktop companion. Do not migrate the GUI to React, Vite, browser routing, or web-only QA just to satisfy visual design guidance.
+
+Use the transferable parts:
+
+- define visual tokens before changing widgets: palette, spacing, type scale, icon treatment, surface density, and states
+- design the complete desktop surface or state being changed, including empty, loaded, disabled, compact, light, dark, and localized states when relevant
+- keep UI text code-native and locale-driven; generated or raster assets must not carry required interface copy
+- verify real desktop screenshots after implementation, preferably both light and dark modes, and compare hierarchy, spacing, typography, assets, icon contrast, and first-run clarity against the intended state
+- preserve the agent-first product model: CLI automation is primary, GUI supports manual review, local evidence, prompt copying, settings, and gated repair
+- preserve CLI/GUI parity: presentation changes must not rename flags, policy keys, report fields, or `GuardRunConfig` mappings
+
+Discard web-specific workflow parts:
+
+- browser viewport fidelity as the only QA signal
+- React/Vite component architecture as a default target
+- landing-page hero patterns, marketing sections, decorative page backgrounds, or web dashboard density that makes the desktop audit path harder to understand
+- visual concepts that require non-local assets, telemetry, or network calls at runtime
+
 ## Do's and Don'ts
 
 - Do keep the common Audit path visible and brief.

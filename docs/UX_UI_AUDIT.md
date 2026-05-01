@@ -255,3 +255,33 @@ Validation notes:
 - Presentation changed only labels, layout, and helper actions. No CLI flags, report fields, policy keys, or `GuardRunConfig` mappings changed.
 - The same backend still owns Audit, Reports, GitHub hardening, remote audit, and Repair behavior.
 - The GUI still keeps Repair locked until a valid audit context exists.
+
+## 2026-05-01 Desktop Design-Method Pass
+
+This pass reviewed whether modern frontend-design guidance should change the GUI process. The useful parts are now documented as desktop-adapted rules in `DESIGN.md`; the web-specific parts remain intentionally out of scope.
+
+Adopted:
+
+- design tokens before widget changes
+- complete-state review instead of isolated control tweaks
+- screenshot QA for real desktop states, including light/dark and compact layouts when UI changes touch those surfaces
+- code-native, locale-driven text rather than text embedded in raster assets
+- agent-first hierarchy: local audit, redacted evidence, agent handoff, then gated repair
+
+Rejected:
+
+- browser-only QA as the GUI acceptance gate
+- React/Vite or web-app migration as a default path
+- landing-page hero patterns, marketing sections, or decorative full-window backgrounds
+- any runtime visual dependency that would require network access or telemetry
+
+Functional correction from the same audit:
+
+- Report-directory enforcement now preserves symlinked results paths long enough for artifact creation to fail closed instead of resolving and writing through the symlink destination.
+- CLI now reports artifact-creation failures as a controlled runtime error before entering the audit pipeline.
+
+Validation notes:
+
+- The desktop GUI remains the optional companion to the CLI backend.
+- The design method changes documentation and maintenance criteria only; it does not add GUI-only behavior.
+- New report-directory hardening is covered by regression tests for symlinked requested/default results paths and CLI pre-pipeline failure handling.

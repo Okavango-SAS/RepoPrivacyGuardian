@@ -28,6 +28,7 @@ All notable user-facing changes to this project are documented here.
 - Compacted the README agentic section into a prompt library to avoid repeating the first-run flow.
 - Clarified README start paths by role and when optional installation extras are needed.
 - Removed overly internal launch-preparation wording from public docs while preserving publication-gate guidance.
+- Documented the desktop-adapted visual QA method for GUI work: keep `customtkinter`, use design tokens and real desktop screenshots, and reject web-app/React migration as a default path.
 
 ### Fixed
 

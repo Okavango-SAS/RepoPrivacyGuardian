@@ -121,6 +121,11 @@ OPERATIONS_REQUIREMENTS = [
 
 DESIGN_REQUIREMENTS = [
     "External Spec Hygiene",
+    "Desktop Visual QA Method",
+    "customtkinter` desktop companion",
+    "React, Vite, browser routing",
+    "code-native and locale-driven",
+    "preserve CLI/GUI parity",
     "google-labs-code/design.md",
     "@google/design.md@0.1.0",
     "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN",
