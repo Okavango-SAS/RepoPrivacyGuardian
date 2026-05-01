@@ -116,6 +116,8 @@ Large operational panes such as logs should have a quiet empty state before data
 
 Empty states that represent a normal first-run path should include a safe next action when one exists. Prefer a single primary action such as `Run Audit` / `Go to Audit` over extra explanatory copy.
 
+Agentic handoff UI should reference redacted local evidence and safe next actions, not raw findings. When copying prompts from the GUI, prefer repository-relative artifact paths when available and redact personal absolute paths otherwise.
+
 ## Do's and Don'ts
 
 - Do keep the common Audit path visible and brief.

@@ -204,6 +204,8 @@ The theme pass added a presentation-only Light/Dark startup selector without wid
 - Tuned global and repository-list scrollbars with semantic low-contrast tokens, and compacted the locked Repair gate so its guidance remains visible in the first viewport.
 - Added a localized empty-state overlay to the Execution Log so the first Audit screen no longer presents a large unexplained blank panel before any run starts.
 - Added a localized `Go to Audit` action to the Reports empty state so first-time users are not left on a dead-end panel before any run artifacts exist.
+- Added a localized Reports action that copies a privacy-safe agent handoff prompt using repository-relative artifact paths when available, so GUI users can move from visual evidence to agentic review without pasting raw findings.
+- Updated Reports artifact labels to prefer repository-relative paths when available, reducing long path noise and avoiding visible personal absolute paths in normal repo-local runs.
 - Added regression coverage for theme helper normalization, settings persistence, tooltip copy, smoke startup, and locale/theme independence from run-config parity.
 - Manually QAed fresh live-window screenshots in both Light and Dark modes before release validation.
 

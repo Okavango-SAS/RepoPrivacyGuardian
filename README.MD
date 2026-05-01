@@ -429,6 +429,8 @@ Behavioral parity means the GUI preserves the same audit, report, hardening, rem
 
 The GUI is now a CLI companion for manual use: Audit stays simple, Reports keeps the latest local evidence visible, Prompts helps copy the maintained agentic CLI workflows, Settings holds advanced parity controls, and Repair remains gated.
 
+After a GUI run, `Reports` can also copy a privacy-safe agent handoff prompt that references the latest local artifacts without pasting raw findings into chat. Artifact labels prefer repository-relative paths when possible; the open buttons still use the real local paths.
+
 The GUI keeps the staged safety contract:
 
 1. `Audit`

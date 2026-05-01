@@ -1784,6 +1784,9 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
     "prompts_tab": "Copy vetted agentic IDE prompts that use the CLI-first audit and repair workflow.",
     "open_settings_tab": "Moves advanced parity controls into Settings so Audit stays focused on choosing targets and running the scan.",
     "repair_options_toggle": "Shows advanced Repair toggles. Keep them hidden until audited findings have been reviewed.",
+    "copy_agent_handoff": (
+        "Copies a privacy-safe agent handoff prompt that references the latest redacted artifacts without pasting raw findings."
+    ),
     "copy_prompt": "Copies the full prompt text to the clipboard so it can be pasted into an agentic IDE session.",
     "copy_prompt_command": "Copies the recommended CLI command template for this prompt.",
     "open_prompt_file": "Opens the tracked prompt file for review in the default local application.",
@@ -1896,6 +1899,9 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
     "prompts_tab": "Copia prompts revisados para IDEs agénticas que usan el flujo CLI-first de auditoría y reparación.",
     "open_settings_tab": "Mueve controles avanzados de paridad a Configuración para que Auditar quede enfocado en objetivos y ejecución.",
     "repair_options_toggle": "Muestra toggles avanzados de Reparar. Mantenelos ocultos hasta revisar los hallazgos auditados.",
+    "copy_agent_handoff": (
+        "Copia un prompt seguro de traspaso agéntico que referencia los últimos artefactos redactados sin pegar hallazgos crudos."
+    ),
     "copy_prompt": "Copia el prompt completo al portapapeles para pegarlo en una sesión de IDE agéntica.",
     "copy_prompt_command": "Copia el comando CLI recomendado para este prompt.",
     "open_prompt_file": "Abre el archivo de prompt trackeado para revisarlo en la aplicación local predeterminada.",
@@ -1928,6 +1934,19 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "reports_dashboard_body": "Open local evidence from the latest run. Treat artifacts as sensitive even when values are redacted.",
         "latest_artifacts": "Latest artifacts",
         "latest_artifacts_none": "Run Audit to create report.json, report.html, run.log, and run_state.json.",
+        "copy_agent_handoff": "Copy agent handoff",
+        "agent_handoff_copied": "Agent handoff copied to clipboard.",
+        "agent_handoff_prompt": (
+            "Act as a release/security engineer. Review this Repo Privacy Guardian audit using the local artifacts below.\n\n"
+            "Classify findings as confirmed leaks, intentional fixtures/examples, indeterminate/manual-review, advisory hardening, "
+            "or tooling/runtime issues. Do not paste raw secrets, private emails, internal URLs, hostnames, or personal absolute paths into chat.\n\n"
+            "Artifacts:\n"
+            "- report.json: {json_path}\n"
+            "- report.html: {html_path}\n"
+            "- run.log: {log_path}\n"
+            "- run_state.json: {state_path}\n\n"
+            "Start audit-only. Propose repair steps only after reviewing redacted evidence."
+        ),
         "open_html_report_action": "Open HTML report",
         "open_json_report_action": "Open report.json",
         "open_run_log_action": "Open run.log",
@@ -2212,6 +2231,19 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "reports_dashboard_body": "Abrí evidencia local de la última corrida. Tratá los artefactos como sensibles incluso cuando los valores estén redactados.",
         "latest_artifacts": "Últimos artefactos",
         "latest_artifacts_none": "Ejecutá Auditar para crear report.json, report.html, run.log y run_state.json.",
+        "copy_agent_handoff": "Copiar contexto agéntico",
+        "agent_handoff_copied": "Contexto agéntico copiado al portapapeles.",
+        "agent_handoff_prompt": (
+            "Actuá como release/security engineer. Revisá esta auditoría de Repo Privacy Guardian usando los artefactos locales de abajo.\n\n"
+            "Clasificá hallazgos como leaks confirmados, fixtures/ejemplos intencionales, indeterminados/manual-review, hardening advisory "
+            "o issues de tooling/runtime. No pegues secretos crudos, emails privados, URLs internas, hostnames ni rutas absolutas personales en el chat.\n\n"
+            "Artefactos:\n"
+            "- report.json: {json_path}\n"
+            "- report.html: {html_path}\n"
+            "- run.log: {log_path}\n"
+            "- run_state.json: {state_path}\n\n"
+            "Empezá audit-only. Proponé reparaciones sólo después de revisar evidencia redactada."
+        ),
         "open_html_report_action": "Abrir reporte HTML",
         "open_json_report_action": "Abrir report.json",
         "open_run_log_action": "Abrir run.log",
@@ -7291,6 +7323,7 @@ class GuiApp:  # pragma: no cover
         self._reports_summary_label = None
         self._reports_paths_label = None
         self._reports_go_audit_button = None
+        self._reports_agent_handoff_button = None
         self._reports_action_buttons: list[object] = []
         self._prompt_cards_frame = None
         self._header_visual_label = None
@@ -9109,6 +9142,19 @@ class GuiApp:  # pragma: no cover
         self._localize_widget(self._reports_go_audit_button, "text", "go_to_audit")
         self._bind_tooltip_key(self._reports_go_audit_button, "run_audit")
         self._reports_go_audit_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self._reports_agent_handoff_button = ctk.CTkButton(
+            actions,
+            text=self._t("copy_agent_handoff"),
+            command=self._copy_agent_handoff_to_clipboard,
+            height=32,
+            corner_radius=8,
+            fg_color=self._primary_button_fg,
+            hover_color=self._primary_button_hover,
+            **self._button_asset_options("icon-copy.png"),
+        )
+        self._localize_widget(self._reports_agent_handoff_button, "text", "copy_agent_handoff")
+        self._bind_tooltip_key(self._reports_agent_handoff_button, "copy_agent_handoff")
+        self._reports_agent_handoff_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
         report_actions = [
             ("open_html_report_action", "icon-report.png", lambda: self._open_last_artifact("html")),
             ("open_json_report_action", "icon-report.png", lambda: self._open_last_artifact("json")),
@@ -9305,6 +9351,32 @@ class GuiApp:  # pragma: no cover
         except Exception as exc:
             self.log(f"[WARN] Could not open {target}: {exc}")
 
+    def _artifact_handoff_path(self, path: Path) -> str:
+        repo_root = Path(__file__).resolve().parent
+        try:
+            return path.resolve().relative_to(repo_root).as_posix()
+        except ValueError:
+            return redact_sensitive_text(str(path))
+
+    def _build_agent_handoff_text(self) -> str | None:
+        artifacts = getattr(self, "_last_run_artifacts", None)
+        if artifacts is None:
+            return None
+        return self._t(
+            "agent_handoff_prompt",
+            json_path=self._artifact_handoff_path(artifacts.json_path),
+            html_path=self._artifact_handoff_path(artifacts.html_path),
+            log_path=self._artifact_handoff_path(artifacts.log_path),
+            state_path=self._artifact_handoff_path(artifacts.state_path),
+        )
+
+    def _copy_agent_handoff_to_clipboard(self) -> None:
+        text = self._build_agent_handoff_text()
+        if text is None:
+            self.log(f"[INFO] {self._t('latest_artifacts_none')}")
+            return
+        self._copy_text_to_clipboard(text, self._t("agent_handoff_copied"))
+
     def _refresh_reports_tab(self) -> None:
         badge = getattr(self, "_reports_status_badge", None)
         summary_label = getattr(self, "_reports_summary_label", None)
@@ -9313,12 +9385,15 @@ class GuiApp:  # pragma: no cover
         if badge is None or summary_label is None or paths_label is None:
             return
         go_audit_button = getattr(self, "_reports_go_audit_button", None)
+        agent_handoff_button = getattr(self, "_reports_agent_handoff_button", None)
         if artifacts is None:
             badge.configure(text=self._t("last_run"), fg_color=self._success_badge_fg, text_color=self._success_text)
             summary_label.configure(text=self._t("last_run_none"))
             paths_label.configure(text=self._t("latest_artifacts_none"))
             if go_audit_button is not None:
                 go_audit_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
+            if agent_handoff_button is not None:
+                agent_handoff_button.grid_remove()
             for idx, button in enumerate(getattr(self, "_reports_action_buttons", [])):
                 button.grid_configure(row=0, column=idx + 1, sticky="w", padx=(0, 8))
                 button.configure(state="disabled")
@@ -9326,8 +9401,10 @@ class GuiApp:  # pragma: no cover
 
         if go_audit_button is not None:
             go_audit_button.grid_remove()
+        if agent_handoff_button is not None:
+            agent_handoff_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
         for idx, button in enumerate(getattr(self, "_reports_action_buttons", [])):
-            button.grid_configure(row=0, column=idx, sticky="w", padx=(0, 8))
+            button.grid_configure(row=0, column=idx + 1, sticky="w", padx=(0, 8))
 
         failed = sum(1 for item in self._last_audit_reports_payload if item.get("status") == "FAIL")
         exit_code = getattr(self, "_last_run_exit_code", None)
@@ -9355,11 +9432,11 @@ class GuiApp:  # pragma: no cover
         summary_label.configure(text=summary)
         paths_label.configure(
             text=(
-                f"run_dir: {artifacts.run_dir}\n"
-                f"report.json: {artifacts.json_path}\n"
-                f"report.html: {artifacts.html_path}\n"
-                f"run.log: {artifacts.log_path}\n"
-                f"run_state.json: {artifacts.state_path}"
+                f"run_dir: {self._artifact_handoff_path(artifacts.run_dir)}\n"
+                f"report.json: {self._artifact_handoff_path(artifacts.json_path)}\n"
+                f"report.html: {self._artifact_handoff_path(artifacts.html_path)}\n"
+                f"run.log: {self._artifact_handoff_path(artifacts.log_path)}\n"
+                f"run_state.json: {self._artifact_handoff_path(artifacts.state_path)}"
             )
         )
         for button in getattr(self, "_reports_action_buttons", []):

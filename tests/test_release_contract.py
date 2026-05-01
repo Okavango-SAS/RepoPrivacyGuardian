@@ -6,11 +6,13 @@ import os
 import subprocess
 import sys
 from dataclasses import fields
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_prompts as prompt_helpers
+from repo_privacy_guardian_artifacts import RunArtifacts
 
 
 SUBPROCESS_TEST_TIMEOUT_SECONDS = 60
@@ -1628,6 +1630,7 @@ def test_gui_tooltip_catalog_covers_non_obvious_controls() -> None:
         "clear_selection",
         "clear_log",
         "repo_drop_area",
+        "copy_agent_handoff",
     }
 
     assert required_keys <= set(rpg.GUI_TOOLTIP_TEXT)
@@ -1642,6 +1645,29 @@ def test_gui_ui_locale_catalogs_have_parallel_keys() -> None:
     assert base_keys
     for locale, catalog in rpg.GUI_UI_TEXT_BY_LOCALE.items():
         assert set(catalog) == base_keys, locale
+
+
+def test_gui_agent_handoff_uses_repo_relative_artifact_paths() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    run_dir = repo_root / "Audit_Results" / "agent-handoff-test"
+    app = object.__new__(rpg.GuiApp)
+    app._last_run_artifacts = RunArtifacts(
+        run_id="agent-handoff-test",
+        run_dir=run_dir,
+        json_path=run_dir / "report.json",
+        log_path=run_dir / "run.log",
+        html_path=run_dir / "report.html",
+        state_path=run_dir / "run_state.json",
+        started_at=datetime.now(),
+    )
+
+    handoff = app._build_agent_handoff_text()
+
+    assert handoff is not None
+    assert "Audit_Results/agent-handoff-test/report.json" in handoff
+    assert "Audit_Results/agent-handoff-test/run.log" in handoff
+    assert str(repo_root) not in handoff
+    assert "Do not paste raw secrets" in handoff
 
 
 def test_agentic_prompt_registry_has_parallel_locales_and_existing_files() -> None:
