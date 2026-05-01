@@ -4,6 +4,10 @@ All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.4.6] - 2026-05-01
+
+Post-release GUI, locale, and cleanup hardening update.
+
 ### Changed
 
 - Reframed the GUI first-screen hierarchy around the agent-first workflow: local audit, redacted evidence review, agent handoff, and gated repair.

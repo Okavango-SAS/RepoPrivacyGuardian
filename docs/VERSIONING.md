@@ -54,6 +54,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.4.5` is a root-layout hygiene patch on top of `1.4.4`. It documents which files intentionally remain in the repository root, explains why the direct script and support `py-modules` are not moved during the stable `1.x` line, and adds an allowlist regression so unexpected tracked root entries do not accumulate.
 
+`1.4.6` is a desktop GUI, locale, and cleanup-hardening patch on top of `1.4.5`. It refines the agent-first GUI companion workflow, packages and documents the current sanitized GUI screenshots/assets, polishes the Spanish (Latin America) GUI locale, and hardens report/build/temp cleanup paths without changing CLI flags, report schema, policy keys, or remediation defaults.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance
