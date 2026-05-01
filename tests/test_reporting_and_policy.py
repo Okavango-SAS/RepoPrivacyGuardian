@@ -2945,6 +2945,30 @@ def test_discover_repository_targets_deduplicates_equivalent_filters(tmp_path: P
     assert repos == [repo]
 
 
+def test_discover_repository_targets_does_not_auto_follow_symlinked_children(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    real_repo = tmp_path / "repo-a"
+    linked_repo = tmp_path / "linked-repo"
+    (real_repo / ".git").mkdir(parents=True)
+    (linked_repo / ".git").mkdir(parents=True)
+    original_is_symlink = Path.is_symlink
+
+    def fake_is_symlink(self: Path) -> bool:
+        if self == linked_repo:
+            return True
+        return original_is_symlink(self)
+
+    monkeypatch.setattr(Path, "is_symlink", fake_is_symlink)
+
+    repos, skipped, root_error = rpg.discover_repository_targets(tmp_path, repo_filters=None)
+
+    assert root_error is None
+    assert skipped == []
+    assert repos == [real_repo]
+
+
 def test_normalize_csv_values_and_text_values_helpers() -> None:
     assert rpg.normalize_csv_values("") == []
     assert rpg.normalize_csv_values(" alice@example.com, bob@example.com , alice@example.com ,, ") == [

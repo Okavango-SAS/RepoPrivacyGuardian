@@ -88,6 +88,8 @@ def discover_repository_targets(
 
     try:
         for child in sorted(root.iterdir()):
+            if child.is_symlink():
+                continue
             if child.is_dir() and is_git_repository(child):
                 append_repo_once(child)
     except OSError as exc:

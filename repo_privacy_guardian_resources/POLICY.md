@@ -196,6 +196,8 @@ Remote owner/org audit mode is opt-in and audit-only. It discovers repositories 
 
 The GUI exposes the same remote-audit controls as CLI: GitHub owner/org, optional remote repository filters, include forks, shallow clone mode, clone workers, and public-only filtering.
 
+Local repository discovery note: when `--repos` is omitted, local auto-discovery scans the root itself and direct child Git checkouts, but it does not follow symlinked child directories. If a symlinked checkout must be audited, select that target explicitly so the operator intent is clear.
+
 GUI localization is presentation-only. Switching between English and Spanish (Latin America) changes visible desktop labels, dialogs, and contextual help, but it must not rename CLI flags, report fields, policy keys, or shared run-config mappings.
 
 ### F) .gitignore policy and effectiveness

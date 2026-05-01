@@ -106,6 +106,7 @@ Treat audit artifacts and backup bundles as sensitive local outputs even when re
 The tool also applies a few local-safety defaults during normal operation:
 
 - report and export writes avoid symlink targets
+- local auto-discovery skips symlinked child directories unless the operator selects that target explicitly
 - run artifacts are created with private directory/file permissions where the platform supports them
 - run artifact directory collision handling is bounded and fails visibly instead of looping indefinitely
 - repository execution is guarded by an OS-backed lock file in the Git metadata directory to prevent overlapping runs on the same checkout without relying on PID/timestamp stale-lock reclamation
