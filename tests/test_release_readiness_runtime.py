@@ -67,6 +67,30 @@ def test_remove_tree_if_present_retries_transient_permission_error(tmp_path: Pat
     assert not target.exists()
 
 
+def test_remove_tree_if_present_refuses_symlink_before_resolving_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_release_readiness_module()
+    target = tmp_path / "dist"
+    target.mkdir()
+    (target / "artifact.txt").write_text("payload", encoding="utf-8")
+    original_is_symlink = Path.is_symlink
+
+    def fake_is_symlink(self: Path) -> bool:
+        if self == target:
+            return True
+        return original_is_symlink(self)
+
+    monkeypatch.setattr(Path, "is_symlink", fake_is_symlink)
+
+    with pytest.raises(RuntimeError, match="Refusing to recursively remove symlinked path"):
+        module._remove_tree_if_present(tmp_path, target)
+
+    assert target.exists()
+    assert (target / "artifact.txt").exists()
+
+
 def test_remove_tree_if_present_raises_after_retry_budget(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     module = _load_release_readiness_module()
     target = tmp_path / "dist"
