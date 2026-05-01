@@ -146,8 +146,22 @@ def _validate_cleanup_target(repo_root: Path, target: Path) -> Path:
     return resolved_target
 
 
+def _path_has_existing_symlink_component(path: Path) -> bool:
+    current = path
+    while True:
+        try:
+            if current.is_symlink():
+                return True
+        except OSError:
+            return True
+        parent = current.parent
+        if parent == current:
+            return False
+        current = parent
+
+
 def _remove_tree_if_present(repo_root: Path, target: Path) -> None:
-    if target.is_symlink():
+    if _path_has_existing_symlink_component(target):
         raise RuntimeError(f"Refusing to recursively remove symlinked path: {target}")
     if not target.exists():
         return

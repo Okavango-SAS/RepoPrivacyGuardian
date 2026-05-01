@@ -36,7 +36,7 @@ All notable user-facing changes to this project are documented here.
 - Fixed GUI responsive width detection on high-DPI Windows by normalizing Tk physical geometry back to one logical UI width.
 - Deduplicated equivalent local repository targets so repeated `--repos` entries or absolute/relative aliases do not audit the same checkout more than once.
 - Stopped automatic local repository discovery from following symlinked child directories outside the visible root.
-- Hardened release-readiness build cleanup so stale output removal refuses symlinked output roots before resolving paths.
+- Hardened release-readiness build cleanup so stale output removal refuses symlinked output path components before resolving paths.
 - Hardened report-directory enforcement so symlinked results paths fail closed and CLI reports artifact creation failures without entering the audit pipeline.
 - Hardened temporary clone cleanup so recursive removal refuses symlinked path components.
 - Hardened run logging so a failed UI/console sink cannot prevent durable `run.log` writes.

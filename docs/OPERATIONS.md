@@ -53,7 +53,7 @@ By default the script:
 - runs the CLI tooling preflight first
 - checks workflow/docs/version alignment via `python scripts/check_release_contract.py`
 - removes stale `dist/`, `build/`, and `*.egg-info/` outputs before the final build
-- refuses symlinked build-output roots before path resolution, so stale-output cleanup does not delete through a symlink
+- refuses symlinked build-output path components before path resolution, so stale-output cleanup does not delete through a symlink
 - byte-compiles every packaged Python module and release helper script
 - runs `ruff check`
 - runs `pyright -p pyrightconfig.json`
