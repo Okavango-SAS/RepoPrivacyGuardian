@@ -4494,9 +4494,14 @@ def create_run_artifacts(base_dir: Path) -> RunArtifacts:
 
 
 def enforce_results_dir(requested_dir: Path | None) -> tuple[Path, bool]:
-    base = default_results_dir().resolve()
+    logical_base = default_results_dir()
+    base = logical_base.resolve()
+    safe_base = logical_base if _path_has_existing_symlink_ancestor(logical_base) else base
     if requested_dir is None:
-        return base, False
+        return safe_base, False
+
+    if _path_has_existing_symlink_ancestor(requested_dir):
+        return requested_dir, False
 
     requested = requested_dir.resolve()
     if requested == base:
@@ -4506,7 +4511,7 @@ def enforce_results_dir(requested_dir: Path | None) -> tuple[Path, bool]:
         requested.relative_to(base)
         return requested, False
     except ValueError:
-        return base, True
+        return safe_base, True
 
 
 def resolve_optional_json_export_path(raw_value: str | None, default_name: str) -> Path | None:
@@ -11847,7 +11852,14 @@ def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
         return EXIT_POLICY_FAILED if blocking_failures else EXIT_OK
 
     enforced_results_dir, forced = enforce_results_dir(Path(args.report_dir))
-    artifacts = create_run_artifacts(enforced_results_dir)
+    try:
+        artifacts = create_run_artifacts(enforced_results_dir)
+    except Exception as exc:
+        print(
+            f"[ERROR] Could not create run artifacts under {enforced_results_dir}: {exc}",
+            file=sys.stderr,
+        )
+        return EXIT_RUNTIME_ERROR
     cli_logger = RunLogger(artifacts.log_path, sink=print)
     if forced:
         cli_logger(

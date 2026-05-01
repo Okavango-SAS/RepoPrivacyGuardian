@@ -1230,6 +1230,47 @@ def test_enforce_results_dir_variants(tmp_path: Path) -> None:
     assert forced is True
 
 
+def test_enforce_results_dir_preserves_symlinked_requested_path_for_artifact_refusal(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    report_dir = tmp_path / "Audit_Results" / "linked-results"
+    original_is_symlink = Path.is_symlink
+
+    def fake_is_symlink(self: Path) -> bool:
+        if self == report_dir:
+            return True
+        return original_is_symlink(self)
+
+    monkeypatch.setattr(Path, "is_symlink", fake_is_symlink)
+
+    resolved, forced = rpg.enforce_results_dir(report_dir)
+
+    assert resolved == report_dir
+    assert forced is False
+
+
+def test_enforce_results_dir_preserves_symlinked_default_for_artifact_refusal(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    default_dir = tmp_path / "Audit_Results"
+    original_is_symlink = Path.is_symlink
+
+    def fake_is_symlink(self: Path) -> bool:
+        if self == default_dir:
+            return True
+        return original_is_symlink(self)
+
+    monkeypatch.setattr(rpg, "default_results_dir", lambda: default_dir)
+    monkeypatch.setattr(Path, "is_symlink", fake_is_symlink)
+
+    resolved, forced = rpg.enforce_results_dir(None)
+
+    assert resolved == default_dir
+    assert forced is False
+
+
 def test_resolve_optional_json_export_path_variants(tmp_path: Path) -> None:
     assert rpg.resolve_optional_json_export_path(None, "report.json") is None
 

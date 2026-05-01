@@ -107,6 +107,7 @@ Treat audit artifacts and backup bundles as sensitive local outputs even when re
 The tool also applies a few local-safety defaults during normal operation:
 
 - report and export writes avoid symlink targets
+- report-directory creation preserves symlinked paths long enough to fail closed instead of silently writing to a resolved destination
 - local auto-discovery skips symlinked child directories unless the operator selects that target explicitly
 - run artifacts are created with private directory/file permissions where the platform supports them
 - run artifact directory collision handling is bounded and fails visibly instead of looping indefinitely

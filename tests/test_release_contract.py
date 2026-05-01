@@ -302,6 +302,41 @@ def test_run_cli_open_report_is_opt_in(tmp_path: Path, monkeypatch) -> None:
     assert captured["config"].open_report is True
 
 
+def test_run_cli_reports_artifact_creation_failure_without_pipeline(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(rpg, "build_cli_tooling_checks", lambda _config: [])
+    monkeypatch.setattr(
+        rpg,
+        "create_run_artifacts",
+        lambda _results_dir: (_ for _ in ()).throw(RuntimeError("refusing symlinked path")),
+    )
+    monkeypatch.setattr(
+        rpg,
+        "execute_guard_pipeline",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("pipeline should not run")),
+    )
+
+    parser = rpg.make_parser()
+    args = parser.parse_args(
+        [
+            "--root",
+            str(tmp_path),
+            "--repos",
+            "repo-a",
+        ]
+    )
+
+    exit_code = rpg.run_cli(args)
+    captured = capsys.readouterr()
+
+    assert exit_code == rpg.EXIT_RUNTIME_ERROR
+    assert "Could not create run artifacts" in captured.err
+    assert "refusing symlinked path" in captured.err
+
+
 def test_run_cli_passes_audit_github_hardening_flag_to_config(tmp_path: Path, monkeypatch) -> None:
     captured: dict[str, object] = {}
 

@@ -36,6 +36,7 @@ All notable user-facing changes to this project are documented here.
 - Deduplicated equivalent local repository targets so repeated `--repos` entries or absolute/relative aliases do not audit the same checkout more than once.
 - Stopped automatic local repository discovery from following symlinked child directories outside the visible root.
 - Hardened release-readiness build cleanup so stale output removal refuses symlinked output roots before resolving paths.
+- Hardened report-directory enforcement so symlinked results paths fail closed and CLI reports artifact creation failures without entering the audit pipeline.
 - Hardened run logging so a failed UI/console sink cannot prevent durable `run.log` writes.
 
 ## [1.4.5] - 2026-04-28
