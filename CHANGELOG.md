@@ -15,6 +15,8 @@ All notable user-facing changes to this project are documented here.
 - Added a localized `Go to Audit` empty-state action in the GUI Reports tab so first-time users have a clear next step before any artifacts exist.
 - Added a GUI Reports action to copy a privacy-safe agent handoff prompt with local artifact references for Codex, Claude Code, Cursor, GitHub Copilot, and similar IDE sessions.
 - Changed GUI Reports artifact labels to prefer repository-relative paths, keeping the screen cleaner and avoiding visible personal absolute paths when artifacts live under the repo.
+- Clarified the README opening and bilingual quick description so the agent-first CLI workflow is visible before deeper documentation sections.
+- Refreshed the tracked GUI Reports screenshot and added it to the README preview so the public docs show the local evidence and agent-handoff workflow.
 - Updated README attribution to reflect Okavango SAS as the project maintainer while preserving original author and CTO credit.
 - Added a sanitized desktop GUI preview screenshot to the README.
 - Refreshed the README desktop GUI preview screenshot against the current light-mode companion UI with neutral visible paths.

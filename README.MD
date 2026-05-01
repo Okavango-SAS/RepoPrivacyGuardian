@@ -7,9 +7,9 @@
 
 ![Repo Privacy Guardian release readiness banner](docs/assets/repo-privacy-guardian-banner.png)
 
-🔒 Repo Privacy Guardian is a local-first publication gate for auditing and hardening Git repositories before public release.
+🔒 Repo Privacy Guardian is an agent-first, local-first publication gate for auditing and hardening Git repositories before public release.
 
-It is designed for repeatable CLI execution first, with an optional desktop GUI that runs on the same underlying pipeline. Developed and maintained by **Okavango SAS**.
+It is built for coding-agent workflows in Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, and similar IDEs: run the CLI locally, keep redacted evidence, classify findings, and apply only reviewed fixes. The optional desktop GUI is a companion for manual review, reports, prompts, and gated repair on the same underlying pipeline. Developed and maintained by **Okavango SAS**.
 
 ## 🔍 What It Audits
 
@@ -25,7 +25,7 @@ It is designed for repeatable CLI execution first, with an optional desktop GUI 
 
 ## 🌎 Language / Idioma
 
-**Español (Latinoamérica).** Repo Privacy Guardian te ayuda a revisar repositorios Git antes de publicarlos: detecta secretos, metadatos de identidad Git, rutas personales, archivos sensibles e inconsistencias de `.gitignore`, y genera evidencia local en JSON, HTML y log. La CLI se mantiene en inglés para preservar compatibilidad con automatizaciones, pero la GUI permite elegir `Español (Latinoamérica)` sin cambiar el comportamiento ni los reportes.
+**Español (Latinoamérica).** Repo Privacy Guardian te ayuda a revisar repositorios Git antes de publicarlos: detecta secretos, metadatos de identidad Git, rutas personales, archivos sensibles e inconsistencias de `.gitignore`, y genera evidencia local en JSON, HTML y log. Está pensado para flujos con IDEs agénticas: primero auditoría local por CLI, después evidencia, clasificación y reparación revisada. La CLI se mantiene en inglés para preservar compatibilidad con automatizaciones, pero la GUI permite elegir `Español (Latinoamérica)` sin cambiar el comportamiento ni los reportes.
 
 Para abrir la GUI en español desde este checkout:
 
@@ -36,13 +36,15 @@ repo-privacy-guardian --gui
 
 Luego abrí `Settings` (`Configuración`) → `GUI Language` (`Idioma de la GUI`) → `Español (Latinoamérica)`.
 
-**English.** Repo Privacy Guardian audits Git repositories before public release: it detects secrets, Git identity metadata, personal paths, sensitive files, and `.gitignore` drift, then writes local JSON, HTML, and log evidence. The CLI remains English for automation compatibility, while the GUI can switch between `English` and `Español (Latinoamérica)` without changing behavior or reports.
+**English.** Repo Privacy Guardian audits Git repositories before public release: it detects secrets, Git identity metadata, personal paths, sensitive files, and `.gitignore` drift, then writes local JSON, HTML, and log evidence. It is optimized for agentic IDE workflows: local CLI audit first, then evidence, classification, and reviewed repair. The CLI remains English for automation compatibility, while the GUI can switch between `English` and `Español (Latinoamérica)` without changing behavior or reports.
 
 ## 🖥️ Desktop GUI Preview
 
-![Repo Privacy Guardian desktop GUI audit screen](docs/ux-audit/after/audit-default-desktop-after.png)
+| Audit | Reports and agent handoff |
+| --- | --- |
+| ![Repo Privacy Guardian desktop GUI audit screen](docs/ux-audit/after/audit-default-desktop-after.png) | ![Repo Privacy Guardian desktop GUI reports and agent handoff screen](docs/ux-audit/after/reports-desktop-after.png) |
 
-The desktop GUI is optional and shares the same audit engine, policy keys, report schema, and safety gates as the CLI. Maintained, sanitized GUI screenshots live under `docs/ux-audit/`.
+The desktop GUI is optional and shares the same audit engine, policy keys, report schema, and safety gates as the CLI. It is a companion for manual review: `Audit` starts the local run, `Reports` opens local evidence and can copy a privacy-safe agent handoff, `Prompts` exposes the maintained prompt library, and `Repair` stays gated. Maintained, sanitized GUI screenshots live under `docs/ux-audit/`.
 
 ## ⚡ 60-Second First Run
 

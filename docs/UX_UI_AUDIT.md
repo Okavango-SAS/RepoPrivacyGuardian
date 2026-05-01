@@ -107,11 +107,11 @@ After:
 
 ![Repair post-audit after](ux-audit/after/repair-post-audit-after.png)
 
-### Reports Dashboard
+### Reports Dashboard And Agent Handoff
 
 After:
 
-![Reports desktop after](ux-audit/after/reports-desktop-after.png)
+![Reports desktop after with agent handoff](ux-audit/after/reports-desktop-after.png)
 
 ### Prompts Library
 
