@@ -237,7 +237,7 @@ Findings:
 
 - The Audit screen was clean but still underplayed the mandatory agentic workflow. A new user could run an audit, then miss that `Reports` and `Prompts` are the intended bridge into Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, or similar IDEs.
 - The execution log empty state existed in code but could render underneath the `CTkTextbox`, making the right-hand panel look blank in the first-run screenshot.
-- High-DPI Windows windows could be classified as compact because Tk geometry was divided by the CustomTkinter scaling factor even though Tk already reports the real window geometry. This hid the header workflow chips on wide desktop screenshots.
+- High-DPI Windows windows need responsive decisions based on logical UI width, not raw physical pixels. Without that normalization, compact screenshots could keep desktop-only header chips visible and clip guidance.
 - Light and dark themes both worked without new raster assets. The current asset set already supports the needed state visuals; this pass needed hierarchy and responsive fixes, not additional generated imagery.
 
 Corrections applied:
@@ -245,8 +245,9 @@ Corrections applied:
 - Rewrote the GUI header around the explicit `Audit locally -> Review evidence -> Agent handoff -> Gated Repair` path.
 - Added a direct `Agent prompts` shortcut from Audit to the Prompts tab so the agent-first workflow is discoverable without making the first screen heavier.
 - Added a short guide at the top of the Prompts tab and numbered prompt cards so the operator sees environment prep, audit-only, reviewed repair, and compact CLI delegation as one staged flow.
+- Made Prompt cards responsive: two columns on wide desktop, one column near the compact minimum width, with the workflow guide stacked and the decorative visual hidden to preserve text width.
 - Moved the execution-log empty label into the textbox overlay layer so it is visible until real output is written.
-- Fixed logical window-width detection to use Tk geometry directly, avoiding DPI double-scaling and preserving the desktop layout on high-DPI displays.
+- Fixed logical window-width detection to normalize Tk physical geometry once through the CustomTkinter scaling factor, preserving desktop layout on wide windows and compact layout near the minimum width.
 - Refreshed the tracked light-mode screenshots with neutral paths and kept a local dark-mode QA capture under ignored workspace metadata.
 
 Validation notes:

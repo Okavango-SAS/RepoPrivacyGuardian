@@ -7190,6 +7190,7 @@ class GuiApp:  # pragma: no cover
         self._top_stack_width_threshold = 1220
         self._options_stack_width_threshold = 1220
         self._results_stack_width_threshold = 1240
+        self._prompts_stack_width_threshold = 1240
         self.root.geometry(f"{window_w}x{window_h}+{window_x}+{window_y}")
         self.root.minsize(min(1180, screen_w), min(700, screen_h))
         self.root.maxsize(screen_w, screen_h)
@@ -7339,6 +7340,12 @@ class GuiApp:  # pragma: no cover
         self._reports_agent_handoff_button = None
         self._reports_action_buttons: list[object] = []
         self._prompt_cards_frame = None
+        self._prompt_card_widgets: list[object] = []
+        self._prompt_card_column_count = 2
+        self._prompts_workflow_guide = None
+        self._prompts_workflow_title_label = None
+        self._prompts_workflow_body_label = None
+        self._gui_destroying = False
         self._header_visual_label = None
         self._reports_visual_label = None
         self._prompts_visual_label = None
@@ -8817,6 +8824,7 @@ class GuiApp:  # pragma: no cover
 
         self.refresh_repos()
         self.root.bind("<Configure>", self._on_root_resize)
+        self.root.bind("<Destroy>", self._on_root_destroy, add="+")
         self.root.after(0, self._apply_responsive_layout)
         self._lock_repair_until_next_audit()
         self._set_active_flow_tab(self._audit_tab_name)
@@ -9247,9 +9255,10 @@ class GuiApp:  # pragma: no cover
             border_width=1,
             border_color=self._info_panel_border,
         )
+        self._prompts_workflow_guide = workflow_guide
         workflow_guide.grid(row=2, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 12))
         workflow_guide.grid_columnconfigure(1, weight=1)
-        self._localize_widget(ctk.CTkLabel(
+        workflow_title_label = self._localize_widget(ctk.CTkLabel(
             workflow_guide,
             text=self._t("agent_workflow_title"),
             height=28,
@@ -9258,8 +9267,9 @@ class GuiApp:  # pragma: no cover
             text_color=self._success_text,
             font=self._font(11, bold=True),
             padx=12,
-        ), "text", "agent_workflow_title").grid(row=0, column=0, sticky="w", padx=10, pady=10)
-        self._localize_widget(ctk.CTkLabel(
+        ), "text", "agent_workflow_title")
+        self._prompts_workflow_title_label = workflow_title_label
+        workflow_body_label = self._localize_widget(ctk.CTkLabel(
             workflow_guide,
             text=self._t("agent_workflow_body"),
             justify="left",
@@ -9267,11 +9277,16 @@ class GuiApp:  # pragma: no cover
             wraplength=1040,
             font=self._font(12),
             text_color=self._text_body,
-        ), "text", "agent_workflow_body").grid(row=0, column=1, sticky="we", padx=(0, 10), pady=10)
+        ), "text", "agent_workflow_body")
+        self._prompts_workflow_body_label = workflow_body_label
+        self._apply_prompts_workflow_layout(compact=self._prompt_card_columns_for_width(self._get_logical_window_width()) == 1)
         self._prompt_cards_frame = ctk.CTkFrame(prompts_card, fg_color="transparent")
         self._prompt_cards_frame.grid(row=3, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 12))
-        self._prompt_cards_frame.grid_columnconfigure((0, 1), weight=1)
         self._refresh_prompt_cards()
+
+    def _prompt_card_columns_for_width(self, width: int) -> int:
+        threshold = int(getattr(self, "_prompts_stack_width_threshold", 1240))
+        return 1 if width <= threshold else 2
 
     def _refresh_prompt_cards(self) -> None:
         cards_frame = getattr(self, "_prompt_cards_frame", None)
@@ -9279,11 +9294,12 @@ class GuiApp:  # pragma: no cover
             return
         for child in cards_frame.winfo_children():
             child.destroy()
+        self._prompt_card_widgets = []
+
+        columns = self._prompt_card_columns_for_width(self._get_logical_window_width())
 
         repo_root = Path(__file__).resolve().parent
         for idx, prompt in enumerate(prompt_helpers.agentic_prompt_cards(self._current_locale())):
-            row = idx // 2
-            column = idx % 2
             card = self.ctk.CTkFrame(
                 cards_frame,
                 fg_color=self._surface_alt,
@@ -9291,7 +9307,7 @@ class GuiApp:  # pragma: no cover
                 border_width=1,
                 border_color=self._card_border,
             )
-            card.grid(row=row, column=column, sticky="nsew", padx=(0 if column == 0 else 8, 8 if column == 0 else 0), pady=(0, 8))
+            self._prompt_card_widgets.append(card)
             card.grid_columnconfigure(0, weight=1)
             self.ctk.CTkLabel(
                 card,
@@ -9356,6 +9372,24 @@ class GuiApp:  # pragma: no cover
             )
             self._bind_tooltip_key(open_prompt_button, "open_prompt_file")
             open_prompt_button.grid(row=0, column=2, sticky="w")
+        self._apply_prompt_cards_layout(columns)
+
+    def _apply_prompt_cards_layout(self, columns: int) -> None:
+        cards_frame = getattr(self, "_prompt_cards_frame", None)
+        if cards_frame is None:
+            return
+        safe_columns = 1 if columns <= 1 else 2
+        self._prompt_card_column_count = safe_columns
+        for column_index in range(2):
+            cards_frame.grid_columnconfigure(column_index, weight=1 if column_index < safe_columns else 0)
+        for idx, card in enumerate(getattr(self, "_prompt_card_widgets", [])):
+            row = idx // safe_columns
+            column = idx % safe_columns
+            if safe_columns == 1:
+                padx = (0, 0)
+            else:
+                padx = (0 if column == 0 else 8, 8 if column == 0 else 0)
+            card.grid(row=row, column=column, sticky="nsew", padx=padx, pady=(0, 8))
 
     def _copy_text_to_clipboard(self, text: str, success_message: str) -> None:
         try:
@@ -9913,19 +9947,37 @@ class GuiApp:  # pragma: no cover
             width = int(width_text)
         except ValueError:
             width = self.root.winfo_width()
-        return max(0, int(width))
+        scale = 1.0
+        try:
+            scale = float(self.ctk.ScalingTracker.get_window_scaling(self.root))
+        except Exception:
+            pass
+        safe_scale = scale if scale > 0 else 1.0
+        return max(0, int(round(width / safe_scale)))
 
     def _on_root_resize(self, event) -> None:
         del event
+        if getattr(self, "_gui_destroying", False):
+            return
         self._apply_responsive_layout()
 
+    def _on_root_destroy(self, event) -> None:
+        if getattr(event, "widget", None) is self.root:
+            self._gui_destroying = True
+
     def _apply_responsive_layout(self) -> None:
+        if getattr(self, "_gui_destroying", False):
+            return
         width = self._get_logical_window_width()
         self._apply_header_flow_layout(compact=width <= self._top_stack_width_threshold)
         self._apply_top_layout(compact=width <= self._top_stack_width_threshold)
         self._apply_identity_actions_layout(compact=width <= self._top_stack_width_threshold)
         self._apply_options_layout(compact=width <= self._options_stack_width_threshold)
         self._apply_results_layout(compact=width <= self._results_stack_width_threshold)
+        prompt_columns = self._prompt_card_columns_for_width(width)
+        self._apply_prompts_workflow_layout(compact=prompt_columns == 1)
+        if prompt_columns != getattr(self, "_prompt_card_column_count", 2):
+            self._apply_prompt_cards_layout(prompt_columns)
 
     def _apply_header_flow_layout(self, compact: bool) -> None:
         if self._workflow_strip is None:
@@ -9944,6 +9996,39 @@ class GuiApp:  # pragma: no cover
             self._workflow_strip.grid_remove()
             if header_visual is not None:
                 header_visual.grid_remove()
+        except Exception:
+            return
+
+    def _apply_prompts_workflow_layout(self, compact: bool) -> None:
+        guide = getattr(self, "_prompts_workflow_guide", None)
+        title_label = getattr(self, "_prompts_workflow_title_label", None)
+        body_label = getattr(self, "_prompts_workflow_body_label", None)
+        visual_label = getattr(self, "_prompts_visual_label", None)
+        try:
+            if guide is not None:
+                guide.grid_columnconfigure(0, weight=1 if compact else 0)
+                guide.grid_columnconfigure(1, weight=0 if compact else 1)
+            if title_label is not None:
+                title_label.grid(
+                    row=0,
+                    column=0,
+                    sticky="w",
+                    padx=10,
+                    pady=(10, 4) if compact else 10,
+                )
+            if body_label is not None:
+                body_label.grid(
+                    row=1 if compact else 0,
+                    column=0 if compact else 1,
+                    sticky="we",
+                    padx=10 if compact else (0, 10),
+                    pady=(0, 10) if compact else 10,
+                )
+            if visual_label is not None:
+                if compact:
+                    visual_label.grid_remove()
+                else:
+                    visual_label.grid()
         except Exception:
             return
 

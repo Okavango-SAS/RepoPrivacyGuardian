@@ -1144,18 +1144,131 @@ def test_gui_header_flow_strip_hides_on_compact_layout() -> None:
     assert strip.actions == ["grid_remove", "grid"]
 
 
-def test_gui_logical_window_width_uses_tk_geometry_without_dpi_double_scaling() -> None:
+def test_gui_logical_window_width_normalizes_high_dpi_geometry_once() -> None:
     class DummyRoot:
         def wm_geometry(self) -> str:
-            return "1440x860+30+30"
+            return "2160x1290+30+30"
 
         def winfo_width(self) -> int:
             return 900
 
+    class DummyScalingTracker:
+        @staticmethod
+        def get_window_scaling(_root: object) -> float:
+            return 1.5
+
+    class DummyCtk:
+        ScalingTracker = DummyScalingTracker
+
     app = object.__new__(rpg.GuiApp)
     app.root = DummyRoot()
+    app.ctk = DummyCtk()
 
     assert app._get_logical_window_width() == 1440
+
+
+def test_gui_prompt_cards_stack_on_compact_layout() -> None:
+    app = object.__new__(rpg.GuiApp)
+    app._prompts_stack_width_threshold = 1240
+
+    assert app._prompt_card_columns_for_width(1180) == 1
+    assert app._prompt_card_columns_for_width(1440) == 2
+
+
+def test_gui_prompt_workflow_guide_stacks_and_hides_visual_on_compact_layout() -> None:
+    class DummyGuide:
+        def __init__(self) -> None:
+            self.columns: list[tuple[int, dict[str, object]]] = []
+
+        def grid_columnconfigure(self, column: int, **kwargs: object) -> None:
+            self.columns.append((column, kwargs))
+
+    class DummyWidget:
+        def __init__(self) -> None:
+            self.grid_calls: list[dict[str, object]] = []
+            self.removed = False
+
+        def grid(self, **kwargs: object) -> None:
+            self.grid_calls.append(kwargs)
+            self.removed = False
+
+        def grid_remove(self) -> None:
+            self.removed = True
+
+    guide = DummyGuide()
+    title = DummyWidget()
+    body = DummyWidget()
+    visual = DummyWidget()
+    app = object.__new__(rpg.GuiApp)
+    app._prompts_workflow_guide = guide
+    app._prompts_workflow_title_label = title
+    app._prompts_workflow_body_label = body
+    app._prompts_visual_label = visual
+
+    app._apply_prompts_workflow_layout(compact=True)
+
+    assert guide.columns[-2:] == [(0, {"weight": 1}), (1, {"weight": 0})]
+    assert title.grid_calls[-1]["row"] == 0
+    assert title.grid_calls[-1]["column"] == 0
+    assert body.grid_calls[-1]["row"] == 1
+    assert body.grid_calls[-1]["column"] == 0
+    assert visual.removed is True
+
+    app._apply_prompts_workflow_layout(compact=False)
+
+    assert guide.columns[-2:] == [(0, {"weight": 0}), (1, {"weight": 1})]
+    assert body.grid_calls[-1]["row"] == 0
+    assert body.grid_calls[-1]["column"] == 1
+    assert visual.removed is False
+
+
+def test_gui_responsive_prompt_layout_regrids_without_rebuilding_cards() -> None:
+    class DummyRoot:
+        def wm_geometry(self) -> str:
+            return "1770x1140+40+40"
+
+        def winfo_width(self) -> int:
+            return 1770
+
+    class DummyScalingTracker:
+        @staticmethod
+        def get_window_scaling(_root: object) -> float:
+            return 1.5
+
+    class DummyCtk:
+        ScalingTracker = DummyScalingTracker
+
+    calls: list[tuple[str, object]] = []
+    app = object.__new__(rpg.GuiApp)
+    app.root = DummyRoot()
+    app.ctk = DummyCtk()
+    app._gui_destroying = False
+    app._top_stack_width_threshold = 1220
+    app._options_stack_width_threshold = 1220
+    app._results_stack_width_threshold = 1240
+    app._prompts_stack_width_threshold = 1240
+    app._prompt_card_column_count = 2
+    app._apply_header_flow_layout = lambda compact: calls.append(("header", compact))
+    app._apply_top_layout = lambda compact: calls.append(("top", compact))
+    app._apply_identity_actions_layout = lambda compact: calls.append(("identity", compact))
+    app._apply_options_layout = lambda compact: calls.append(("options", compact))
+    app._apply_results_layout = lambda compact: calls.append(("results", compact))
+    app._apply_prompts_workflow_layout = lambda compact: calls.append(("prompt_workflow", compact))
+    app._apply_prompt_cards_layout = lambda columns: calls.append(("prompt_cards", columns))
+    app._refresh_prompt_cards = lambda: (_ for _ in ()).throw(AssertionError("resize must not rebuild cards"))
+
+    app._apply_responsive_layout()
+
+    assert ("prompt_workflow", True) in calls
+    assert ("prompt_cards", 1) in calls
+
+
+def test_gui_resize_ignores_callbacks_while_root_is_destroying() -> None:
+    app = object.__new__(rpg.GuiApp)
+    app._gui_destroying = True
+    app._apply_responsive_layout = lambda: (_ for _ in ()).throw(AssertionError("destroying root must not relayout"))
+
+    app._on_root_resize(object())
 
 
 def test_gui_advanced_identity_settings_are_collapsible() -> None:

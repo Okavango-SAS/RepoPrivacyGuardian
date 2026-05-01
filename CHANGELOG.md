@@ -8,6 +8,7 @@ All notable user-facing changes to this project are documented here.
 
 - Reframed the GUI first-screen hierarchy around the agent-first workflow: local audit, redacted evidence review, agent handoff, and gated repair.
 - Added an Audit-screen shortcut into the GUI Prompts tab and a prompt-library guide that makes the agentic orchestration layer visible without changing CLI behavior.
+- Made GUI prompt cards stack on compact widths so the agentic workflow remains readable near the minimum desktop size.
 - Refreshed tracked GUI screenshots after the agent-first visual QA pass, keeping visible paths sanitized.
 - Added a packaged GUI raster asset set for the window icon, header watermark, repository empty state, reports, prompts, repair gate visuals, and DPI-aware action icons.
 - Adjusted the GUI Refresh action to secondary-button styling so its icon remains readable and added smoke coverage for visible Prompt cards.
@@ -31,7 +32,7 @@ All notable user-facing changes to this project are documented here.
 ### Fixed
 
 - Fixed the GUI execution-log empty state so it renders above the log textbox in both light and dark mode.
-- Fixed GUI responsive width detection on high-DPI Windows so wide desktop windows do not incorrectly fall into compact layout.
+- Fixed GUI responsive width detection on high-DPI Windows by normalizing Tk physical geometry back to one logical UI width.
 
 ## [1.4.5] - 2026-04-28
 
