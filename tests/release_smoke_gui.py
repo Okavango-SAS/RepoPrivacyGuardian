@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 
@@ -24,6 +25,7 @@ def bootstrap_repo_root(
 REPO_ROOT = bootstrap_repo_root()
 
 import Repo_Privacy_Guardian as rpg  # noqa: E402
+from repo_privacy_guardian_artifacts import RunArtifacts  # noqa: E402
 
 
 def main() -> int:
@@ -75,8 +77,35 @@ def main() -> int:
             app._set_active_flow_tab(app._reports_tab_name)
             app.root.update_idletasks()
             app.root.update()
+            assert app._reports_go_audit_button.cget("text") == app._t("go_to_audit")
+            assert app._reports_go_audit_button.winfo_viewable()
             assert app._reports_status_badge.winfo_viewable()
             assert app._reports_paths_label.winfo_viewable()
+            assert all(button.cget("state") == "disabled" for button in app._reports_action_buttons)
+            run_dir = Path(temp_dir) / "run-artifacts"
+            run_dir.mkdir()
+            app._remember_last_run_artifacts(
+                RunArtifacts(
+                    run_id="run-artifacts",
+                    run_dir=run_dir,
+                    json_path=run_dir / "report.json",
+                    log_path=run_dir / "run.log",
+                    html_path=run_dir / "report.html",
+                    state_path=run_dir / "run_state.json",
+                    started_at=datetime.now(),
+                ),
+                run_fix=False,
+                exit_code=rpg.EXIT_OK,
+                reports_payload=[],
+            )
+            app.root.update_idletasks()
+            app.root.update()
+            assert not app._reports_go_audit_button.winfo_viewable()
+            assert all(button.cget("state") == "normal" for button in app._reports_action_buttons)
+            app._last_run_artifacts = None
+            app._refresh_reports_tab()
+            app.root.update_idletasks()
+            app.root.update()
             app._set_active_flow_tab(app._prompts_tab_name)
             app.root.update_idletasks()
             app.root.update()
@@ -113,8 +142,11 @@ def main() -> int:
             app._set_active_flow_tab(app._reports_tab_name)
             app.root.update_idletasks()
             app.root.update()
+            assert app._reports_go_audit_button.cget("text") == app._t("go_to_audit")
+            assert app._reports_go_audit_button.winfo_viewable()
             assert app._reports_status_badge.winfo_viewable()
             assert app._reports_paths_label.winfo_viewable()
+            assert all(button.cget("state") == "disabled" for button in app._reports_action_buttons)
             app._set_active_flow_tab(app._prompts_tab_name)
             app.root.update_idletasks()
             app.root.update()

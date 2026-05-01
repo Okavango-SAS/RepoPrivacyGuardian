@@ -12,6 +12,7 @@ All notable user-facing changes to this project are documented here.
 - Blended themeable GUI pictogram backgrounds in memory on dark startup so packaged assets sit cleanly on dark panels without adding duplicate image files.
 - Polished GUI scrollbar theming and the locked Repair state so light/dark screenshots stay quieter and the first Repair view no longer clips guidance.
 - Added a localized empty state to the GUI execution log so the primary Audit screen is easier to read before the first run.
+- Added a localized `Go to Audit` empty-state action in the GUI Reports tab so first-time users have a clear next step before any artifacts exist.
 - Updated README attribution to reflect Okavango SAS as the project maintainer while preserving original author and CTO credit.
 - Added a sanitized desktop GUI preview screenshot to the README.
 - Refreshed the README desktop GUI preview screenshot against the current light-mode companion UI with neutral visible paths.

@@ -7290,6 +7290,7 @@ class GuiApp:  # pragma: no cover
         self._reports_status_badge = None
         self._reports_summary_label = None
         self._reports_paths_label = None
+        self._reports_go_audit_button = None
         self._reports_action_buttons: list[object] = []
         self._prompt_cards_frame = None
         self._header_visual_label = None
@@ -9095,6 +9096,19 @@ class GuiApp:  # pragma: no cover
 
         actions = ctk.CTkFrame(reports_card, fg_color="transparent")
         actions.grid(row=3, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 12))
+        self._reports_go_audit_button = ctk.CTkButton(
+            actions,
+            text=self._t("go_to_audit"),
+            command=lambda: self._set_active_flow_tab(self._audit_tab_name),
+            height=32,
+            corner_radius=8,
+            fg_color=self._primary_button_fg,
+            hover_color=self._primary_button_hover,
+            **self._button_asset_options("icon-audit.png"),
+        )
+        self._localize_widget(self._reports_go_audit_button, "text", "go_to_audit")
+        self._bind_tooltip_key(self._reports_go_audit_button, "run_audit")
+        self._reports_go_audit_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
         report_actions = [
             ("open_html_report_action", "icon-report.png", lambda: self._open_last_artifact("html")),
             ("open_json_report_action", "icon-report.png", lambda: self._open_last_artifact("json")),
@@ -9114,7 +9128,7 @@ class GuiApp:  # pragma: no cover
             )
             self._localize_widget(button, "text", text_key)
             self._bind_tooltip_key(button, "reports_tab")
-            button.grid(row=0, column=idx, sticky="w", padx=(0, 8))
+            button.grid(row=0, column=idx + 1, sticky="w", padx=(0, 8))
             self._reports_action_buttons.append(button)
         self._refresh_reports_tab()
 
@@ -9298,13 +9312,22 @@ class GuiApp:  # pragma: no cover
         artifacts = getattr(self, "_last_run_artifacts", None)
         if badge is None or summary_label is None or paths_label is None:
             return
+        go_audit_button = getattr(self, "_reports_go_audit_button", None)
         if artifacts is None:
             badge.configure(text=self._t("last_run"), fg_color=self._success_badge_fg, text_color=self._success_text)
             summary_label.configure(text=self._t("last_run_none"))
             paths_label.configure(text=self._t("latest_artifacts_none"))
-            for button in getattr(self, "_reports_action_buttons", []):
+            if go_audit_button is not None:
+                go_audit_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
+            for idx, button in enumerate(getattr(self, "_reports_action_buttons", [])):
+                button.grid_configure(row=0, column=idx + 1, sticky="w", padx=(0, 8))
                 button.configure(state="disabled")
             return
+
+        if go_audit_button is not None:
+            go_audit_button.grid_remove()
+        for idx, button in enumerate(getattr(self, "_reports_action_buttons", [])):
+            button.grid_configure(row=0, column=idx, sticky="w", padx=(0, 8))
 
         failed = sum(1 for item in self._last_audit_reports_payload if item.get("status") == "FAIL")
         exit_code = getattr(self, "_last_run_exit_code", None)

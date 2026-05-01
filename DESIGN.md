@@ -114,6 +114,8 @@ Scrollbars should use low-contrast semantic theme colors. They must remain disco
 
 Large operational panes such as logs should have a quiet empty state before data exists. Empty-state copy must stay short, localized, and removable as soon as real run output appears.
 
+Empty states that represent a normal first-run path should include a safe next action when one exists. Prefer a single primary action such as `Run Audit` / `Go to Audit` over extra explanatory copy.
+
 ## Do's and Don'ts
 
 - Do keep the common Audit path visible and brief.

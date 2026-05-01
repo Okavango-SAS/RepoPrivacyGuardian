@@ -203,6 +203,7 @@ The theme pass added a presentation-only Light/Dark startup selector without wid
 - Added dark-mode pictogram background blending in memory so the existing Reports, Prompts, Repair, and repository-state visuals feel integrated with dark panels without generating or tracking duplicate assets.
 - Tuned global and repository-list scrollbars with semantic low-contrast tokens, and compacted the locked Repair gate so its guidance remains visible in the first viewport.
 - Added a localized empty-state overlay to the Execution Log so the first Audit screen no longer presents a large unexplained blank panel before any run starts.
+- Added a localized `Go to Audit` action to the Reports empty state so first-time users are not left on a dead-end panel before any run artifacts exist.
 - Added regression coverage for theme helper normalization, settings persistence, tooltip copy, smoke startup, and locale/theme independence from run-config parity.
 - Manually QAed fresh live-window screenshots in both Light and Dark modes before release validation.
 
