@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import threading
 
@@ -33,6 +34,14 @@ def is_git_repository(path: Path) -> bool:
     return (path / ".git").exists()
 
 
+def _repository_identity_key(path: Path) -> str:
+    try:
+        normalized = path.resolve()
+    except OSError:
+        normalized = path.absolute()
+    return os.path.normcase(str(normalized))
+
+
 def validate_repository_root(root: Path) -> str | None:
     try:
         if not root.exists():
@@ -54,6 +63,14 @@ def discover_repository_targets(
 
     repos: list[Path] = []
     skipped: list[str] = []
+    seen_repos: set[str] = set()
+
+    def append_repo_once(candidate: Path) -> None:
+        key = _repository_identity_key(candidate)
+        if key in seen_repos:
+            return
+        seen_repos.add(key)
+        repos.append(candidate)
 
     if repo_filters:
         for item in repo_filters:
@@ -61,18 +78,18 @@ def discover_repository_targets(
             if not candidate.is_absolute():
                 candidate = root / candidate
             if is_git_repository(candidate):
-                repos.append(candidate)
+                append_repo_once(candidate)
             else:
                 skipped.append(str(candidate))
         return repos, skipped, None
 
     if is_git_repository(root):
-        repos.append(root)
+        append_repo_once(root)
 
     try:
         for child in sorted(root.iterdir()):
             if child.is_dir() and is_git_repository(child):
-                repos.append(child)
+                append_repo_once(child)
     except OSError as exc:
         return [], skipped, f"Root folder is not accessible: {root} ({exc})"
 

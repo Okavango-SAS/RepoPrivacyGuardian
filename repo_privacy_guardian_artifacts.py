@@ -58,7 +58,12 @@ class RunLogger:
                         encoding,
                         errors="replace",
                     )
-                    self.sink(safe_text)
+                    try:
+                        self.sink(safe_text)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
             stamp = self._now_factory().strftime("%Y-%m-%d %H:%M:%S")
             line = f"[{stamp}] {text}\n"
             self._append_private_text_file(self.log_path, line)

@@ -340,6 +340,16 @@ def test_run_logger_falls_back_when_sink_cannot_encode_text(tmp_path: Path, monk
     assert "\ufeffprefix line" in (tmp_path / "run.log").read_text(encoding="utf-8")
 
 
+def test_run_logger_keeps_file_logging_when_sink_fails(tmp_path: Path) -> None:
+    def broken_sink(_text: str) -> None:
+        raise RuntimeError("ui sink closed")
+
+    logger = rpg.RunLogger(tmp_path / "run.log", sink=broken_sink)
+    logger("durable line")
+
+    assert "durable line" in (tmp_path / "run.log").read_text(encoding="utf-8")
+
+
 def test_write_private_text_file_fsyncs_parent_after_atomic_replace(tmp_path: Path, monkeypatch) -> None:
     target = tmp_path / "nested" / "report.json"
     fsynced: list[Path] = []
@@ -2919,6 +2929,20 @@ def test_discover_repository_targets_tracks_skipped_filters(tmp_path: Path) -> N
     assert root_error is None
     assert repos == [repo]
     assert skipped == [str(tmp_path / "missing-repo")]
+
+
+def test_discover_repository_targets_deduplicates_equivalent_filters(tmp_path: Path) -> None:
+    repo = tmp_path / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+
+    repos, skipped, root_error = rpg.discover_repository_targets(
+        tmp_path,
+        repo_filters=["repo-a", str(repo), "repo-a"],
+    )
+
+    assert root_error is None
+    assert skipped == []
+    assert repos == [repo]
 
 
 def test_normalize_csv_values_and_text_values_helpers() -> None:
