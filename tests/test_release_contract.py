@@ -1809,6 +1809,62 @@ def test_gui_ui_locale_catalogs_have_parallel_keys() -> None:
         assert set(catalog) == base_keys, locale
 
 
+def test_spanish_gui_locale_avoids_untranslated_ux_terms() -> None:
+    spanish_catalogs = {
+        "ui": rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419],
+        "tooltips": rpg.GUI_TOOLTIP_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419],
+    }
+    forbidden_fragments = (
+        "agent-first",
+        "gated",
+        "gate",
+        "backend",
+        "dashboard de reportes",
+        "prompt",
+        "audit-only",
+        "handoff",
+        "manual-review",
+        "hardening advisory",
+        "issues de tooling",
+        "leaks confirmados",
+        "github owner/org",
+        "github owner / org",
+        "owner u organización",
+        "owner remoto",
+        "owners remotos",
+        "allowlist",
+        "bypass",
+        "guardrail",
+        "workers",
+        "clone shallow",
+        "drag-and-drop",
+        "runtime tk",
+        "toggles",
+        "settings de email github",
+        "github email settings",
+        "low-confidence",
+        "dry run / preview",
+        "hardening de release",
+        "publication gate",
+        "checks read-only",
+        "tooling github",
+        "trackeado",
+        "untrack",
+        "baseline",
+    )
+
+    for catalog_name, catalog in spanish_catalogs.items():
+        for key, value in catalog.items():
+            normalized = value.lower()
+            for fragment in forbidden_fragments:
+                assert fragment not in normalized, f"{catalog_name}.{key} contains untranslated fragment {fragment!r}"
+
+    ui_catalog = spanish_catalogs["ui"]
+    assert ui_catalog["tab_prompts"] == "3. Instrucciones"
+    assert "modo solo auditoría" in ui_catalog["agent_handoff_prompt"]
+    assert "Instrucciones IA" in ui_catalog["recommended_path_body"]
+
+
 def test_gui_agent_handoff_uses_repo_relative_artifact_paths() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     run_dir = repo_root / "Audit_Results" / "agent-handoff-test"
@@ -2312,7 +2368,7 @@ def test_gui_repair_confirmation_text_uses_selected_spanish_locale() -> None:
 
     assert "Reparar se va a ejecutar con este plan:" in text
     assert "Categorías bloqueantes: 1" in text
-    assert "Señales manual-review: 1" in text
+    assert "Señales de revisión manual: 1" in text
     assert "¿Continuar?" in text
     assert "Repair will run with the following plan:" not in text
 

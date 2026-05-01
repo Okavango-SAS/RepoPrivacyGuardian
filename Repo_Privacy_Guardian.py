@@ -1799,7 +1799,7 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
         "o usá Buscar/Actualizar para refrescar los objetivos locales."
     ),
     "settings_toggle": "Muestra u oculta controles de configuración inicial. Las preferencias no secretas quedan guardadas sólo para este usuario.",
-    "policy_file": "Archivo Markdown de política usado por CLI y GUI para definir las reglas del gate de publicación.",
+    "policy_file": "Archivo Markdown de política usado por CLI y GUI para definir las reglas de la barrera de publicación.",
     "audit_results_folder": (
         "Carpeta base para artefactos con timestamp: JSON, HTML, log y estado de corrida. La política mantiene salidas en Audit_Results."
     ),
@@ -1809,19 +1809,19 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
         "los clona temporalmente, los audita y mantiene Reparar bloqueado."
     ),
     "github_repo_filters": (
-        "Nombres de repositorios remotos separados por coma para incluir cuando GitHub owner/org está activo. Dejalo vacío "
+        "Nombres de repositorios remotos separados por coma para incluir cuando el propietario u organización de GitHub está activo. Dejalo vacío "
         "para descubrir todos los repositorios que coincidan."
     ),
     "github_clone_workers": (
-        "Cantidad de clones concurrentes para auditoría GitHub owner/org. Valores más altos pueden ser más rápidos, "
+        "Cantidad de clonados concurrentes para auditoría por propietario u organización de GitHub. Valores más altos pueden ser más rápidos, "
         "pero usan más red, disco y procesos."
     ),
     "github_include_forks": (
-        "Incluye repositorios fork en el discovery de GitHub owner/org. Viene apagado para evitar auditar contenido heredado "
+        "Incluye repositorios derivados en el descubrimiento por propietario u organización de GitHub. Viene apagado para evitar auditar contenido heredado "
         "o de terceros sin querer."
     ),
     "github_fast": (
-        "Usa clones shallow en auditoría GitHub owner/org. Es más rápido en repos grandes, pero limita el historial disponible para el scanner."
+        "Usa clonados superficiales en auditoría por propietario u organización de GitHub. Es más rápido en repos grandes, pero limita el historial disponible para el escáner."
     ),
     "max_findings": (
         "Cantidad máxima de muestras retenidas por check en logs y reportes. Valores bajos acortan reportes; "
@@ -1834,10 +1834,10 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
         "Muestra controles opcionales de identidad Git y privacidad de email GitHub usados cuando Reparar reescribe o redacta metadatos."
     ),
     "noreply_email": "Dirección noreply de GitHub usada como identidad segura de reemplazo durante una reparación revisada.",
-    "placeholder_email": "Placeholder neutral usado al redactar emails de terceros durante una reparación revisada.",
-    "owner_name": "Nombre visible a usar en commits del owner reescritos cuando se autoriza reparación de identidad.",
+    "placeholder_email": "Valor neutral usado al redactar emails de terceros durante una reparación revisada.",
+    "owner_name": "Nombre visible a usar en commits del propietario reescritos cuando se autoriza reparación de identidad.",
     "owner_emails": (
-        "Emails privados del owner separados por coma que pueden reemplazarse por la dirección noreply durante una reparación revisada."
+        "Emails privados del propietario separados por coma que pueden reemplazarse por la dirección noreply durante una reparación revisada."
     ),
     "git_user_name": "Valor que se lee o escribe en git user.name al aplicar configuración Git local/global.",
     "git_user_email": "Email estilo noreply que se lee o escribe en git user.email en la configuración Git local/global.",
@@ -1847,66 +1847,66 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
     "apply_local_git_config": "Escribe git user.name y user.email sólo para el repositorio local seleccionado.",
     "read_current_git_identity": "Lee la identidad Git efectiva sin cambiar la configuración local ni global.",
     "open_github_email_settings": (
-        "Abre GitHub email settings para verificar manualmente privacidad de email y bloqueo de pushes con email privado."
+        "Abre la configuración de email de GitHub para verificar manualmente privacidad de email y bloqueo de pushes con email privado."
     ),
     "public_only": (
-        "Filtra objetivos locales a repositorios cuyo origin GitHub sea públicamente accesible. Útil antes de checks de release público."
+        "Filtra objetivos locales a repositorios cuyo origin GitHub sea públicamente accesible. Útil antes de verificaciones de publicación pública."
     ),
     "redact_third_party_emails": (
-        "Durante Reparar, reemplaza emails de contribuidores no owner con el placeholder. No hace nada durante Auditar."
+        "Durante Reparar, reemplaza emails de contribuidores que no son el propietario con el email de reemplazo. No hace nada durante Auditar."
     ),
     "low_confidence_blocking": (
-        "Convierte hallazgos ruidosos de email low-confidence en fallas bloqueantes. Dejalo apagado salvo que quieras un gate más estricto."
+        "Convierte hallazgos ruidosos de email de baja confianza en fallas bloqueantes. Dejalo apagado salvo que quieras una barrera más estricta."
     ),
-    "dry_run_preview": "Ejecuta Reparar en modo preview para reportar cambios planeados sin escribir en repositorios.",
+    "dry_run_preview": "Ejecuta Reparar en modo vista previa para reportar cambios planeados sin escribir en repositorios.",
     "audit_github_hardening": (
-        "Agrega checks read-only de settings GitHub como branch protection, permisos de Actions, secret scanning y Dependabot."
+        "Agrega verificaciones de solo lectura de configuración GitHub como branch protection, permisos de Actions, secret scanning y Dependabot."
     ),
-    "audit_litellm_incident": "Agrega checks focalizados para indicadores del incidente supply-chain de LiteLLM de marzo de 2026.",
+    "audit_litellm_incident": "Agrega verificaciones focalizadas para indicadores del incidente de cadena de suministro de LiteLLM de marzo de 2026.",
     "open_html_report": "Abre automáticamente el reporte HTML generado cuando termina una corrida desde GUI.",
     "confirm_each_repo_fix": (
         "Pregunta antes de aplicar Reparar en cada repositorio para revisar corridas multi-repo objetivo por objetivo."
     ),
     "rewrite_personal_paths": (
-        "Durante Reparar, reescribe hallazgos revisados de rutas personales en contenido trackeado e historial usando reglas replace-text."
+        "Durante Reparar, reescribe hallazgos revisados de rutas personales en contenido versionado e historial usando reglas replace-text."
     ),
     "replace_text_rules": "Archivo replace-text opcional para sustituciones literales que la herramienta no puede inferir de forma segura.",
     "force_push": (
         "Después de reescribir historial, fuerza push a origin. Usalo sólo luego de backups y coordinación con colaboradores."
     ),
     "bypass_remote_owner_guardrail": (
-        "Desactiva el check de safety del owner remoto antes del force push. Es intencionalmente riesgoso y requiere aceptación explícita."
+        "Desactiva la verificación de seguridad del propietario remoto antes del push forzado. Es intencionalmente riesgoso y requiere aceptación explícita."
     ),
-    "allowed_remote_owners": "Allowlist separada por coma de owners remotos aceptados por el guardrail de force-push.",
+    "allowed_remote_owners": "Lista permitida separada por coma de propietarios remotos aceptados para el push forzado.",
     "purge_safe_secret_files": "Purga candidatos de archivos secretos clasificados como más seguros de remover automáticamente luego de revisión.",
     "purge_risky_secret_files": (
-        "También purga candidatos ambiguos o manual-review. Usalo sólo después de confirmar cada candidato."
+        "También purga candidatos ambiguos o de revisión manual. Usalo sólo después de confirmar cada candidato."
     ),
-    "repair_button": "Ejecuta Reparar sólo después de una Auditoría completa y de que la ventana de revisión libere el gate de seguridad.",
-    "run_audit": "Ejecuta la auditoría del publication gate para repositorios seleccionados o todos los visibles si lo confirmás.",
+    "repair_button": "Ejecuta Reparar sólo después de una Auditoría completa y de que la ventana de revisión libere la barrera de seguridad.",
+    "run_audit": "Ejecuta la auditoría de la barrera de publicación para repositorios seleccionados o todos los visibles si lo confirmás.",
     "stop_after_current_step": (
         "Solicita cancelación cooperativa. El paso activo del repositorio termina limpiamente antes de detener la corrida."
     ),
-    "refresh_repos": "Recarga objetivos de repositorios locales desde la carpeta Root actual.",
+    "refresh_repos": "Recarga objetivos de repositorios locales desde la carpeta raíz actual.",
     "select_all_repos": "Selecciona todos los repositorios locales visibles para la próxima Auditoría o Reparación.",
     "clear_selection": (
         "Limpia la selección local. Si ejecutás Auditar sin selección, la GUI pregunta antes de correr todos."
     ),
     "clear_log": "Limpia sólo el log en pantalla. Los artefactos existentes en Audit_Results no se eliminan.",
     "repo_drop_area": (
-        "Arrastrá carpetas de repositorios locales acá para configurar Root y selección automáticamente. Buscar/Actualizar sigue disponible."
+        "Arrastrá carpetas de repositorios locales acá para configurar la carpeta raíz y la selección automáticamente. Buscar/Actualizar sigue disponible."
     ),
     "reports_tab": "Muestra rutas de artefactos de la última corrida y acciones rápidas sin exponer evidencia sensible cruda.",
-    "prompts_tab": "Copia prompts revisados para IDEs agénticas que usan el flujo CLI-first de auditoría y reparación.",
+    "prompts_tab": "Copia instrucciones revisadas para IDEs agénticas que usan el flujo prioritario por CLI de auditoría y reparación.",
     "open_settings_tab": "Mueve controles avanzados de paridad a Configuración para que Auditar quede enfocado en objetivos y ejecución.",
-    "open_agent_prompts_tab": "Abre la biblioteca de prompts para delegar auditoría CLI-first, revisión de evidencia y reparación aprobada.",
-    "repair_options_toggle": "Muestra toggles avanzados de Reparar. Mantenelos ocultos hasta revisar los hallazgos auditados.",
+    "open_agent_prompts_tab": "Abre la biblioteca de instrucciones para delegar auditoría por CLI, revisión de evidencia y reparación aprobada.",
+    "repair_options_toggle": "Muestra opciones avanzadas de Reparar. Mantenelas ocultas hasta revisar los hallazgos auditados.",
     "copy_agent_handoff": (
-        "Copia un prompt seguro de traspaso agéntico que referencia los últimos artefactos redactados sin pegar hallazgos crudos."
+        "Copia una instrucción segura de traspaso agéntico que referencia los últimos artefactos redactados sin pegar hallazgos crudos."
     ),
-    "copy_prompt": "Copia el prompt completo al portapapeles para pegarlo en una sesión de IDE agéntica.",
-    "copy_prompt_command": "Copia el comando CLI recomendado para este prompt.",
-    "open_prompt_file": "Abre el archivo de prompt trackeado para revisarlo en la aplicación local predeterminada.",
+    "copy_prompt": "Copia la instrucción completa al portapapeles para pegarla en una sesión de IDE agéntica.",
+    "copy_prompt_command": "Copia el comando CLI recomendado para esta instrucción.",
+    "open_prompt_file": "Abre el archivo de instrucción versionado para revisarlo en la aplicación local predeterminada.",
 }
 
 GUI_TOOLTIP_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
@@ -2219,55 +2219,55 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
     },
     GUI_LOCALE_ES_419: {
         "header_title": "Repo Privacy Guardian",
-        "header_subtitle": "Flujo agent-first: auditá localmente, revisá evidencia redactada, pasala a una IDE agéntica y Repará sólo con aprobación.",
+        "header_subtitle": "Flujo prioritario para agentes: auditá localmente, revisá evidencia redactada, pasala a una IDE agéntica y Repará sólo con aprobación.",
         "workflow_audit": "1 Auditar local",
         "workflow_review": "2 Revisar evidencia",
         "workflow_agent": "3 Traspaso IA",
-        "workflow_repair": "4 Reparar gated",
-        "workflow_parity": "Paridad CLI: mismo backend",
+        "workflow_repair": "4 Reparar con control",
+        "workflow_parity": "Paridad CLI: mismo motor",
         "tab_audit": "1. Auditar",
         "tab_reports": "2. Reportes",
-        "tab_prompts": "3. Prompts",
+        "tab_prompts": "3. Instrucciones",
         "tab_settings": "4. Configuración",
         "tab_repair": "5. Reparar",
         "audit_target": "Objetivo de auditoría",
-        "audit_target_body": "Elegí repositorios locales acá. Los controles avanzados de política, GitHub owner/org e identidad viven en Configuración. Los prompts agénticos quedan a un clic.",
+        "audit_target_body": "Elegí repositorios locales acá. Los controles avanzados de política, propietario u organización de GitHub e identidad viven en Configuración. Las instrucciones agénticas quedan a un clic.",
         "open_settings_tab": "Abrir configuración",
-        "open_agent_prompts_tab": "Prompts IA",
+        "open_agent_prompts_tab": "Instrucciones IA",
         "last_run": "Última corrida",
         "last_run_none": "Todavía no terminó ninguna corrida GUI en esta sesión.",
-        "reports_dashboard": "Dashboard de reportes",
+        "reports_dashboard": "Panel de reportes",
         "reports_dashboard_body": "Abrí evidencia local de la última corrida. Tratá los artefactos como sensibles incluso cuando los valores estén redactados.",
         "latest_artifacts": "Últimos artefactos",
         "latest_artifacts_none": "Ejecutá Auditar para crear report.json, report.html, run.log y run_state.json.",
         "copy_agent_handoff": "Copiar contexto agéntico",
         "agent_handoff_copied": "Contexto agéntico copiado al portapapeles.",
         "agent_handoff_prompt": (
-            "Actuá como release/security engineer. Revisá esta auditoría de Repo Privacy Guardian usando los artefactos locales de abajo.\n\n"
-            "Clasificá hallazgos como leaks confirmados, fixtures/ejemplos intencionales, indeterminados/manual-review, hardening advisory "
-            "o issues de tooling/runtime. No pegues secretos crudos, emails privados, URLs internas, hostnames ni rutas absolutas personales en el chat.\n\n"
+            "Actuá como ingeniero/a de publicación y seguridad. Revisá esta auditoría de Repo Privacy Guardian usando los artefactos locales de abajo.\n\n"
+            "Clasificá hallazgos como filtraciones confirmadas, datos de prueba/ejemplos intencionales, indeterminados para revisión manual, endurecimiento consultivo "
+            "o problemas de herramientas/tiempo de ejecución. No pegues secretos crudos, emails privados, URLs internas, nombres de host ni rutas absolutas personales en el chat.\n\n"
             "Artefactos:\n"
             "- report.json: {json_path}\n"
             "- report.html: {html_path}\n"
             "- run.log: {log_path}\n"
             "- run_state.json: {state_path}\n\n"
-            "Empezá audit-only. Proponé reparaciones sólo después de revisar evidencia redactada."
+            "Empezá en modo solo auditoría. Proponé reparaciones sólo después de revisar evidencia redactada."
         ),
         "open_html_report_action": "Abrir reporte HTML",
         "open_json_report_action": "Abrir report.json",
         "open_run_log_action": "Abrir run.log",
         "open_artifacts_folder_action": "Abrir carpeta de artefactos",
-        "prompts_library": "Prompts para flujo agéntico",
-        "prompts_library_body": "Copiá un prompt revisado en Codex, Claude Code, Antigravity, GitHub Copilot, Cursor o una IDE agéntica similar. Esta es la capa de orquestación para análisis, clasificación y reparación revisada.",
+        "prompts_library": "Instrucciones para flujo agéntico",
+        "prompts_library_body": "Copiá una instrucción revisada en Codex, Claude Code, Antigravity, GitHub Copilot, Cursor o una IDE agéntica similar. Esta es la capa de orquestación para análisis, clasificación y reparación revisada.",
         "agent_workflow_title": "Cómo usar esta pestaña",
-        "agent_workflow_body": "Prepará el entorno una vez, ejecutá primero audit-only, revisá artefactos locales en Reportes y recién después copiá un handoff o prompt de reparación cuando los hallazgos estén clasificados.",
-        "copy_prompt": "Copiar prompt",
+        "agent_workflow_body": "Prepará el entorno una vez, ejecutá primero en modo solo auditoría, revisá artefactos locales en Reportes y recién después copiá un traspaso o una instrucción de reparación cuando los hallazgos estén clasificados.",
+        "copy_prompt": "Copiar instrucción",
         "copy_command": "Copiar comando",
-        "open_prompt": "Abrir prompt",
+        "open_prompt": "Abrir instrucción",
         "prompt_command": "Comando",
-        "prompt_copied": "Prompt copiado al portapapeles.",
+        "prompt_copied": "Instrucción copiada al portapapeles.",
         "prompt_command_copied": "Comando copiado al portapapeles.",
-        "prompt_open_failed": "No se pudo abrir el archivo de prompt: {error}",
+        "prompt_open_failed": "No se pudo abrir el archivo de instrucción: {error}",
         "settings_companion_title": "Configuración avanzada",
         "settings_companion_body": "Estos controles preservan paridad CLI pero quedan fuera del camino principal de auditoría.",
         "repair_advanced_toggle_show": "Mostrar opciones avanzadas de Reparar",
@@ -2275,14 +2275,14 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "repair_advanced_hint_hidden": "Las opciones avanzadas de escritura están ocultas. Revisá el resumen de auditoría y expandí sólo si hace falta reparar.",
         "repair_advanced_hint_visible": "Las opciones avanzadas de Reparar están visibles. Confirmá el contexto de la última auditoría antes de cualquier acción de escritura.",
         "recommended_path": "Camino recomendado",
-        "recommended_path_body": "Elegí una carpeta raíz local o arrastrá repositorios abajo. Ejecutá Auditar primero; usá Reportes y Prompts IA para revisar evidencia y orquestar reparaciones.",
+        "recommended_path_body": "Elegí una carpeta raíz local o arrastrá repositorios abajo. Ejecutá Auditar primero; usá Reportes e Instrucciones IA para revisar evidencia y orquestar reparaciones.",
         "repositories_root": "Carpeta raíz de repositorios",
         "choose_repositories_root": "Elegir la carpeta raíz de repositorios",
         "setup_initial_hint": "La configuración inicial está abierta. Guardala una vez y la pantalla principal queda enfocada en Auditar.",
         "hide_settings": "Ocultar configuración",
         "open_settings": "Abrir configuración",
-        "setup_settings": "Setup y configuración",
-        "settings_status": "Usá estos controles para política/salida, auditorías GitHub owner/org e identidad avanzada.",
+        "setup_settings": "Preparación y configuración",
+        "settings_status": "Usá estos controles para política/salida, auditorías por propietario u organización de GitHub e identidad avanzada.",
         "gui_language": "Idioma de la GUI",
         "gui_appearance": "Tema de la GUI",
         "policy_file": "Archivo de política",
@@ -2291,49 +2291,49 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "choose_results_folder": "Elegir la carpeta base de resultados",
         "optional_json_copy": "Copia JSON opcional",
         "choose_json_copy": "Elegir la ruta extra de export JSON",
-        "github_owner": "GitHub owner / org",
-        "github_owner_placeholder": "owner u organización opcional",
+        "github_owner": "Propietario u organización de GitHub",
+        "github_owner_placeholder": "propietario u organización opcional",
         "remote_repo_filters": "Filtros de repos remotos",
         "remote_repo_filters_placeholder": "repo-a, repo-b",
-        "clone_workers": "Workers de clone",
-        "include_forks": "Incluir forks",
-        "fast_shallow_clone": "Clone shallow rápido",
+        "clone_workers": "Procesos de clonado",
+        "include_forks": "Incluir forks (bifurcaciones)",
+        "fast_shallow_clone": "Clonado superficial rápido",
         "max_findings": "Máx. hallazgos por check",
         "settings_persist_note": "Estas preferencias quedan guardadas localmente para la GUI. No se guardan secretos ni tokens.",
-        "save_setup": "Guardar setup",
-        "advanced_identity_hidden": "La identidad avanzada está oculta para el flujo normal audit-only.",
+        "save_setup": "Guardar configuración",
+        "advanced_identity_hidden": "La identidad avanzada está oculta para el flujo normal de solo auditoría.",
         "advanced_identity_visible": "La identidad avanzada está visible. Usala sólo si Reparar necesita metadatos personalizados.",
         "show_advanced_identity": "Mostrar identidad avanzada",
         "hide_advanced_identity": "Ocultar identidad avanzada",
-        "owner_profile": "Perfil del owner (defaults de reparación)",
+        "owner_profile": "Perfil del propietario (valores por defecto de reparación)",
         "owner_profile_body": "Lo usa Reparar al reescribir o redactar metadatos de identidad de commits.",
         "noreply_email": "Email noreply",
-        "placeholder_email": "Email placeholder",
-        "owner_name": "Nombre del owner",
+        "placeholder_email": "Email de reemplazo",
+        "owner_name": "Nombre del propietario",
         "private_emails_to_replace": "Emails privados a reemplazar",
         "optional_git_identity": "Opcional: identidad Git y privacidad de email GitHub",
         "git_user_name": "git user.name",
         "git_user_email": "git user.email (noreply)",
-        "apply_global_git_config": "Aplicar config Git global",
-        "apply_local_git_config": "Aplicar config Git local",
+        "apply_global_git_config": "Aplicar configuración Git global",
+        "apply_local_git_config": "Aplicar configuración Git local",
         "read_current_git_identity": "Leer identidad Git actual",
-        "open_github_email_settings": "Abrir settings de email GitHub",
+        "open_github_email_settings": "Abrir configuración de email de GitHub",
         "github_email_privacy_help": (
-            "Usá GitHub Email Settings para verificar privacidad de email, bloqueo de pushes con email privado "
+            "Usá la configuración de email de GitHub para verificar privacidad de email, bloqueo de pushes con email privado "
             "y copiar tu dirección noreply cuando haga falta."
         ),
         "identity_help": (
-            "Usá esto sólo si tu identidad Git local necesita settings noreply seguros. "
-            "Usá GitHub Email Settings para verificar privacidad de email, bloqueo de pushes con email privado y copiar tu dirección noreply cuando haga falta."
+            "Usá esto sólo si tu identidad Git local necesita configuración noreply segura. "
+            "Usá la configuración de email de GitHub para verificar privacidad de email, bloqueo de pushes con email privado y copiar tu dirección noreply cuando haga falta."
         ),
         "repair_plan_options": "Opciones del plan de reparación",
         "review_output_options": "Opciones de revisión y salida",
-        "review_output_info": "Toggles equivalentes al CLI. No reescriben historial por sí solos.",
+        "review_output_info": "Opciones equivalentes al CLI. No reescriben historial por sí solas.",
         "only_audit_public_remotes": "Auditar sólo remotos públicos",
         "redact_third_party_emails": "Redactar emails de terceros al reparar",
-        "low_confidence_blocking": "Tratar emails low-confidence como bloqueantes",
-        "dry_run_preview": "Dry run / preview de reparación",
-        "audit_github_hardening": "Auditar hardening de release GitHub",
+        "low_confidence_blocking": "Tratar emails de baja confianza como bloqueantes",
+        "dry_run_preview": "Simulación / vista previa de reparación",
+        "audit_github_hardening": "Auditar endurecimiento de publicación en GitHub",
         "audit_litellm_incident": "Auditar incidente LiteLLM (mar-2026)",
         "open_html_report": "Abrir reporte HTML automáticamente",
         "confirm_each_repo_fix": "Confirmar cada repositorio al reparar",
@@ -2345,12 +2345,12 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "replace_text_rules": "Reglas replace-text adicionales",
         "choose_replace_text_file": "Elegir un archivo replace-text explícito",
         "replace_text_rules_body": "Reemplazos literales revisados por operador para limpieza que la herramienta no puede inferir con seguridad.",
-        "force_push": "Force-push del historial reescrito",
-        "bypass_remote_owner_guardrail": "Bypass del guardrail de owner remoto",
-        "allowed_remote_owners": "Owners remotos permitidos",
-        "allowed_remote_owners_body": "Usá una allowlist separada por coma. Dejá bypass apagado para mantener verificación de owner.",
+        "force_push": "Push forzado del historial reescrito",
+        "bypass_remote_owner_guardrail": "Omitir protección de propietario remoto",
+        "allowed_remote_owners": "Propietarios remotos permitidos",
+        "allowed_remote_owners_body": "Usá una lista permitida separada por coma. Dejá esta omisión apagada para mantener la verificación de propietario.",
         "purge_safe_secret_files": "Purgar candidatos seguros de archivos secretos",
-        "purge_risky_secret_files": "Purgar también candidatos riesgosos/manual-review",
+        "purge_risky_secret_files": "Purgar también candidatos riesgosos/de revisión manual",
         "purge_body": "El modo seguro omite archivos ambiguos. El modo riesgoso también incluye candidatos que requieren juicio manual.",
         "repair_flow": "Flujo de reparación",
         "audit_required": "Auditoría requerida",
@@ -2372,13 +2372,13 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "stop_after_current_step": "Detener luego del paso actual",
         "stopping_after_current_step": "Deteniendo luego del paso actual...",
         "refresh": "Actualizar",
-        "repo_summary_default": "Seleccioná repositorios, arrastrá carpetas o dejá vacío para auditar todo lo visible bajo Root.",
+        "repo_summary_default": "Seleccioná repositorios, arrastrá carpetas o dejá vacío para auditar todo lo visible bajo la carpeta raíz.",
         "repo_drop_hint": "Arrastrá carpetas de repositorios acá, o usá Buscar / Actualizar.",
         "repo_drop_ready": "Arrastrá carpetas de repositorios acá para configurar el objetivo de auditoría, o usá Buscar / Actualizar.",
-        "repo_drop_unavailable": "Drag-and-drop no está disponible en este runtime Tk. Usá Buscar / Actualizar. ({error})",
-        "repo_drop_registration_failed": "Falló el registro de drag-and-drop. Usá Buscar / Actualizar. ({error})",
+        "repo_drop_unavailable": "Arrastrar y soltar no está disponible en este entorno Tk. Usá Buscar / Actualizar. ({error})",
+        "repo_drop_registration_failed": "Falló el registro de arrastrar y soltar. Usá Buscar / Actualizar. ({error})",
         "repo_targets_unavailable": "Objetivos de repositorio no disponibles",
-        "choose_valid_root": "Elegí una carpeta Root válida para cargar uno o más repositorios git.",
+        "choose_valid_root": "Elegí una carpeta raíz válida para cargar uno o más repositorios git.",
         "run_audit_available_hint": "Ejecutar Auditar queda disponible cuando hay al menos un repositorio visible en esta lista.",
         "select_all": "Seleccionar todo",
         "clear_selection": "Limpiar selección",
@@ -2387,47 +2387,47 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "execution_log_empty": (
             "Listo para auditar.\n"
             "Ejecutá Auditar para ver el progreso acá.\n"
-            "Reportes conserva artefactos y el handoff agéntico."
+            "Reportes conserva artefactos y el traspaso agéntico."
         ),
         "browse": "Buscar…",
         "save_as": "Guardar como…",
-        "setup_hint_open": "Setup abierto. Guardalo una vez y la pantalla principal queda enfocada en Auditar.",
-        "setup_hint_remote": "Configuración oculta. Auditoría remota GitHub owner/org activa para {github_owner} (audit-only; se ignora la lista local). Abrí Configuración para editar.",
-        "setup_hint_hidden": "Setup guardado y oculto. Abrí Configuración para política, salida, GitHub o identidad.",
+        "setup_hint_open": "Configuración abierta. Guardala una vez y la pantalla principal queda enfocada en Auditar.",
+        "setup_hint_remote": "Configuración oculta. Auditoría remota por propietario u organización de GitHub activa para {github_owner} (solo auditoría; se ignora la lista local). Abrí Configuración para editar.",
+        "setup_hint_hidden": "Configuración guardada y oculta. Abrí Configuración para política, salida, GitHub o identidad.",
         "all_matching_repositories": "todos los repositorios que coincidan",
         "named_remote_repo_singular": "{count} repositorio remoto nombrado",
         "named_remote_repo_plural": "{count} repositorios remotos nombrados",
         "github_remote_state": (
             "Auditar va a descubrir {filter_text} para {github_owner}, clonarlos en una carpeta privada temporal "
-            "y eliminar los clones al finalizar. El modo remoto es audit-only, así que Reparar queda no disponible para esos objetivos."
+            "y eliminar los clones al finalizar. El modo remoto es solo auditoría, así que Reparar queda no disponible para esos objetivos."
         ),
-        "repo_empty_invalid_root_title": "Carpeta Root no encontrada",
+        "repo_empty_invalid_root_title": "Carpeta raíz no encontrada",
         "repo_empty_invalid_root_hint": "Elegí un directorio válido y después actualizá la lista de repositorios.",
         "repo_empty_no_repos_title": "No se encontraron repositorios",
-        "repo_empty_no_repos_hint": "Cloná un repositorio acá o apuntá Root a una carpeta que ya contenga repositorios git.",
-        "repo_empty_github_remote_title": "Auditoría GitHub owner/org activa",
-        "repo_empty_github_remote_hint": "La selección local está pausada. Abrí Configuración para editar o limpiar GitHub owner/org.",
+        "repo_empty_no_repos_hint": "Cloná un repositorio acá o apuntá la carpeta raíz a una carpeta que ya contenga repositorios git.",
+        "repo_empty_github_remote_title": "Auditoría por propietario u organización de GitHub activa",
+        "repo_empty_github_remote_hint": "La selección local está pausada. Abrí Configuración para editar o limpiar el propietario u organización de GitHub.",
         "repo_summary_remote": (
-            "La auditoría GitHub owner/org está activa para {github_owner}. La lista local se ignora; Auditar va a descubrir "
-            "{filter_text} vía GitHub y mantener Reparar bloqueado porque el modo remoto es audit-only."
+            "La auditoría por propietario u organización de GitHub está activa para {github_owner}. La lista local se ignora; Auditar va a descubrir "
+            "{filter_text} vía GitHub y mantener Reparar bloqueado porque el modo remoto es solo auditoría."
         ),
-        "repo_summary_invalid_root": "Carpeta Root no encontrada. Elegí un directorio válido antes de ejecutar Auditar.",
-        "repo_summary_no_repos": "No se detectaron repositorios git bajo Root. Elegí otra carpeta o actualizá después de clonar.",
+        "repo_summary_invalid_root": "Carpeta raíz no encontrada. Elegí un directorio válido antes de ejecutar Auditar.",
+        "repo_summary_no_repos": "No se detectaron repositorios git bajo la carpeta raíz. Elegí otra carpeta o actualizá después de clonar.",
         "repo_word_singular": "repositorio",
         "repo_word_plural": "repositorios",
         "no_repos_selected": "No hay repositorios seleccionados.",
         "selected_count": "{count} seleccionados.",
-        "current_root_available": " La carpeta Root actual está disponible en la lista.",
-        "current_root_label": "Root actual",
+        "current_root_available": " La carpeta raíz actual está disponible en la lista.",
+        "current_root_label": "Carpeta raíz actual",
         "repo_summary_targets": (
-            "Paso 2: {total} {repo_word} visibles bajo Root. {selected_text} "
+            "Paso 2: {total} {repo_word} visibles bajo la carpeta raíz. {selected_text} "
             "Dejá la selección vacía para auditar todos los repositorios visibles.{root_hint}"
         ),
         "lock_repair_default": "Reparar (ejecutá auditoría primero)",
         "lock_repair_run_again": "Reparar (volvé a auditar)",
         "lock_repair_cancelled": "Reparar (auditoría cancelada)",
         "lock_repair_failed": "Reparar (auditoría fallida)",
-        "lock_repair_remote": "Reparar (auditoría remota es audit-only)",
+        "lock_repair_remote": "Reparar (auditoría remota es solo auditoría)",
         "lock_repair_in_progress": "Reparar (auditoría en curso)",
         "lock_repair_no_results": "Reparar (sin resultados auditados)",
         "lock_repair_message": "{reason}. Ejecutá Auditar nuevamente antes de aplicar más acciones de escritura.",
@@ -2442,14 +2442,14 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "repair_lock_default_reason": "Reparar queda bloqueado hasta que termine una auditoría válida.",
         "repair_lock_message": "{reason}\n\nEjecutá Auditar, revisá los resultados y volvé acá sólo cuando el plan de reparación esté listo para confirmar.",
         "last_audit_failed": "Última auditoría: {label}. {failed} FAIL / {passed} PASS.{detail_text} Revisá los hallazgos y confirmá cada acción de escritura antes de Reparar.",
-        "last_audit_passed_manual": "Última auditoría: {label}. Todos los repositorios seleccionados pasaron.{detail_text} Clasificá hallazgos advisory antes de publicar; Reparar es opcional y sólo debería aplicar limpiezas revisadas.",
+        "last_audit_passed_manual": "Última auditoría: {label}. Todos los repositorios seleccionados pasaron.{detail_text} Clasificá hallazgos consultivos antes de publicar; Reparar es opcional y sólo debería aplicar limpiezas revisadas.",
         "last_audit_passed": "Última auditoría: {label}. Todos los repositorios seleccionados pasaron.{detail_text} Reparar es opcional; usalo sólo si todavía querés aplicar acciones de limpieza revisadas.",
         "blocking_category_singular": "{count} categoría bloqueante",
         "blocking_category_plural": "{count} categorías bloqueantes",
-        "manual_signal_singular": "{count} señal manual-review",
-        "manual_signal_plural": "{count} señales manual-review",
-        "fixture_match_singular": "{count} coincidencia fixture/documentación mantenida no bloqueante",
-        "fixture_match_plural": "{count} coincidencias fixture/documentación mantenidas no bloqueantes",
+        "manual_signal_singular": "{count} señal de revisión manual",
+        "manual_signal_plural": "{count} señales de revisión manual",
+        "fixture_match_singular": "{count} coincidencia de datos de prueba/documentación mantenida no bloqueante",
+        "fixture_match_plural": "{count} coincidencias de datos de prueba/documentación mantenidas no bloqueantes",
         "repair_plan_intro": "Reparar se va a ejecutar con este plan:",
         "active_options": "Opciones activas:",
         "yes": "SÍ",
@@ -2457,29 +2457,29 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "auto_owner": "(auto desde noreply si está disponible)",
         "plan_rewrite_paths": "- Reescribir rutas personales: {value}",
         "plan_replace_text": "- Archivo replace-text explícito: {value}",
-        "plan_purge_safe": "- Purgar SAFE: {value}",
-        "plan_purge_risky": "- Purgar RISKY: {value}",
-        "plan_force_push": "- Force push remoto: {value}",
+        "plan_purge_safe": "- Purgar candidatos seguros (SAFE): {value}",
+        "plan_purge_risky": "- Purgar candidatos riesgosos (RISKY): {value}",
+        "plan_force_push": "- Push forzado remoto: {value}",
         "plan_open_report": "- Abrir reporte HTML automáticamente: {value}",
-        "plan_confirm_each_repo": "- Confirmar fix por repositorio: {value}",
-        "plan_allow_bypass": "- Permitir bypass de push no-owner: {value}",
-        "plan_allowed_owners": "- Owner(s) permitidos para push: {value}",
-        "repair_baseline_changes": "Cambios baseline de Reparar:",
+        "plan_confirm_each_repo": "- Confirmar reparación por repositorio: {value}",
+        "plan_allow_bypass": "- Permitir omisión de push no propietario: {value}",
+        "plan_allowed_owners": "- Propietarios permitidos para push: {value}",
+        "repair_baseline_changes": "Cambios base de Reparar:",
         "baseline_gitignore": "- Puede agregar patrones faltantes a .gitignore",
-        "baseline_untrack": "- Puede ejecutar git rm --cached sobre archivos trackeados pero ignorados",
+        "baseline_untrack": "- Puede quitar del índice con git rm --cached archivos versionados pero ignorados",
         "baseline_rewrite": "- Puede reescribir historial con git-filter-repo según las opciones seleccionadas",
-        "risky_warning_1": "WARNING: seleccionaste opciones RISKY (purgar todo, force push o bypass del guardrail de owner).",
-        "risky_warning_2": "Esto puede remover contenido histórico irreversiblemente o saltar protecciones de owner remoto.",
+        "risky_warning_1": "ADVERTENCIA: seleccionaste opciones riesgosas (purgar todo, push forzado u omitir la protección de propietario).",
+        "risky_warning_2": "Esto puede remover contenido histórico irreversiblemente o saltar protecciones de propietario remoto.",
         "audited_findings_summary": "Resumen explícito de hallazgos auditados:",
         "repo_status_line": "- {name} [{status}]",
         "blocking_categories_line": "  * Categorías bloqueantes: {count}",
-        "manual_review_signals_line": "  * Señales manual-review: {count}",
-        "fixture_context_line": "  * Coincidencias fixture/documentación mantenidas no bloqueantes: {count}",
-        "planned_untrack_line": "  * Untrack planeado (trackeado pero ignorado): {count}",
+        "manual_review_signals_line": "  * Señales de revisión manual: {count}",
+        "fixture_context_line": "  * Coincidencias de datos de prueba/documentación mantenidas no bloqueantes: {count}",
+        "planned_untrack_line": "  * Quitar del índice planeado (versionado pero ignorado): {count}",
         "planned_path_rewrite_line": "  * Reescritura planeada de rutas personales: {count} hallazgos",
         "personal_paths_disabled": "  * Rutas personales: reescritura deshabilitada",
-        "planned_purge_risky_line": "  * Purga RISKY planeada: {count} candidatos",
-        "planned_purge_safe_line": "  * Purga SAFE planeada: {count} candidatos",
+        "planned_purge_risky_line": "  * Purga riesgosa (RISKY) planeada: {count} candidatos",
+        "planned_purge_safe_line": "  * Purga segura (SAFE) planeada: {count} candidatos",
         "more_items": "    - ... y {count} más",
         "secret_purge_disabled": "  * Purga de archivos secretos: deshabilitada",
         "continue_question": "¿Continuar?",
@@ -2491,36 +2491,36 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "dialog_new_audit_required": "La selección actual de repositorios no coincide con la última auditoría. Ejecutá Auditar de nuevo antes de Reparar.",
         "dialog_confirm_repair_title": "Confirmar plan de reparación",
         "dialog_risk_title": "Se requiere aceptación de riesgo",
-        "dialog_risk_message": "Seleccionaste opciones RISKY (purgar todo, force push o bypass del guardrail de owner).\nConfirmá que aceptás continuar BAJO TU PROPIO RIESGO.",
+        "dialog_risk_message": "Seleccionaste opciones riesgosas (purgar todo, push forzado u omitir la protección de propietario).\nConfirmá que aceptás continuar BAJO TU PROPIO RIESGO.",
         "dialog_invalid_git_identity": "Identidad Git inválida",
-        "dialog_confirm_global_git_config": "Confirmar config Git global",
+        "dialog_confirm_global_git_config": "Confirmar configuración Git global",
         "dialog_confirm_global_git_config_message": "Esto actualiza git config --global para todos los repositorios de esta máquina. ¿Continuar?",
-        "dialog_global_git_config": "Config Git global",
-        "dialog_local_git_config": "Config Git local",
+        "dialog_global_git_config": "Configuración Git global",
+        "dialog_local_git_config": "Configuración Git local",
         "dialog_read_git_identity": "Leer identidad Git",
         "dialog_read_git_identity_select_one": "Seleccioná cero o un repositorio para inspeccionar la identidad Git local/efectiva.",
         "dialog_not_git_repo": "No es un repositorio git: {candidate}",
         "dialog_current_git_identity": "Identidad Git actual",
-        "dialog_github_email_settings": "Settings de email GitHub",
+        "dialog_github_email_settings": "Configuración de email de GitHub",
         "dialog_run_in_progress": "Ejecución en curso",
         "dialog_run_in_progress_message": "Ya hay una ejecución en curso. Esperá a que termine.",
-        "dialog_remote_audit_only": "Auditoría remota es audit-only",
-        "dialog_remote_audit_only_message": "La auditoría remota GitHub owner/org no puede combinarse con Reparar. Limpiá GitHub Owner / Org antes de reparar repositorios locales.",
+        "dialog_remote_audit_only": "Auditoría remota es solo auditoría",
+        "dialog_remote_audit_only_message": "La auditoría remota por propietario u organización de GitHub no puede combinarse con Reparar. Limpiá el propietario u organización de GitHub antes de reparar repositorios locales.",
         "dialog_run_all_title": "Ejecutar en todos los repositorios",
-        "dialog_run_all_message": "No hay repositorios seleccionados. ¿Ejecutar {action_name} para todos los repositorios bajo Root?",
+        "dialog_run_all_message": "No hay repositorios seleccionados. ¿Ejecutar {action_name} para todos los repositorios bajo la carpeta raíz?",
         "dialog_invalid_max_matches": "Máx. hallazgos inválido",
         "dialog_invalid_max_matches_message": "Máx. hallazgos debe ser un entero positivo.",
-        "dialog_invalid_github_jobs": "Workers GitHub inválidos",
-        "dialog_invalid_github_jobs_message": "Workers de clone GitHub debe ser un entero positivo.",
+        "dialog_invalid_github_jobs": "Procesos GitHub inválidos",
+        "dialog_invalid_github_jobs_message": "Procesos de clonado GitHub debe ser un entero positivo.",
         "action_repair": "reparar",
         "action_audit": "auditar",
         "confirm_repo_repair_title": "Confirmar reparación para este repositorio",
         "confirm_repo_repair_message": "Repositorio {index}/{total}: {repo_name}\n\n¿Aplicar Reparar a este repositorio?\nPodés responder No para omitir sólo este repositorio.",
-        "install_github_tooling_title": "Instalar tooling GitHub",
-        "install_github_tooling_intro": "Los checks de hardening GitHub funcionan mejor con GitHub CLI (`gh`) y, en Windows, App Installer / winget funcionando correctamente.",
-        "install_github_tooling_confirm": "¿Instalar o reparar ese tooling ahora?",
+        "install_github_tooling_title": "Instalar herramientas GitHub",
+        "install_github_tooling_intro": "Las verificaciones de endurecimiento GitHub funcionan mejor con GitHub CLI (`gh`) y, en Windows, App Installer / winget funcionando correctamente.",
+        "install_github_tooling_confirm": "¿Instalar o reparar esas herramientas ahora?",
         "github_auth_needed_title": "Todavía falta autenticación GitHub",
-        "github_auth_needed_message": "GitHub CLI está instalado, pero los checks con token todavía necesitan autenticación.\n\nEjecutá `gh auth login`, o configurá REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN o GH_TOKEN.",
+        "github_auth_needed_message": "GitHub CLI está instalado, pero las verificaciones con token todavía necesitan autenticación.\n\nEjecutá `gh auth login`, o configurá REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN o GH_TOKEN.",
     },
 }
 

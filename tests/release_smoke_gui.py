@@ -52,7 +52,7 @@ def main() -> int:
             assert getattr(app._flow_tabs, "_name_list", []) == [
                 "1. Auditar",
                 "2. Reportes",
-                "3. Prompts",
+                "3. Instrucciones",
                 "4. Configuración",
                 "5. Reparar",
             ]

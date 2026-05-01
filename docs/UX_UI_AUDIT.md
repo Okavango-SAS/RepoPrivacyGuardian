@@ -218,6 +218,15 @@ The localization pass added a presentation-only language selector without wideni
 - Kept CLI parity by mapping localized labels back to the same internal variables and `GuardRunConfig` fields; tests assert locale changes do not alter run-config payloads.
 - Left CLI help, report field names, JSON/HTML schema, policy keys, and backend log semantics unchanged.
 
+## 2026-05-01 Spanish Locale QA Pass
+
+This pass audited the Spanish (Latin America) GUI catalog after the agent-first redesign:
+
+- Replaced avoidable English UI copy such as `Prompts`, `audit-only`, `handoff`, `owner`, `settings`, `workers`, `drag-and-drop`, and `manual-review` with Spanish presentation text.
+- Kept technical/product tokens where they are contract or platform names: CLI, GUI, GitHub, Git, PASS/FAIL, SAFE/RISKY category tags, `report.json`, `report.html`, `run.log`, and CLI flags.
+- Added regression coverage that fails when common untranslated UX fragments reappear in the Spanish GUI labels or tooltips.
+- Preserved locale as presentation-only; no CLI flags, policy keys, report schema, or `GuardRunConfig` mappings changed.
+
 ## 2026-04-26 GUI Companion Reconstruction
 
 The next GUI pass re-centered the desktop app around the primary agentic CLI use case:

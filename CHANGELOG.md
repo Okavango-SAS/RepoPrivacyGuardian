@@ -32,6 +32,7 @@ All notable user-facing changes to this project are documented here.
 
 ### Fixed
 
+- Polished the Spanish (Latin America) GUI locale so visible labels, dialogs, contextual help, and agent handoff copy no longer mix avoidable English UX terms while preserving CLI flags, report fields, and technical product names.
 - Fixed the GUI execution-log empty state so it renders above the log textbox in both light and dark mode.
 - Fixed GUI responsive width detection on high-DPI Windows by normalizing Tk physical geometry back to one logical UI width.
 - Deduplicated equivalent local repository targets so repeated `--repos` entries or absolute/relative aliases do not audit the same checkout more than once.
