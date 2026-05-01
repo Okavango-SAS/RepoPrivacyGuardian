@@ -110,6 +110,8 @@ Buttons should be short and action-oriented. Cards should be shallow, with 8-12p
 
 Runtime image assets are allowed when they improve scanability without becoming decoration. Keep them small, local, and packaged with the GUI: app icon, subtle header watermark, empty-state visuals, evidence/prompt/repair pictograms. Do not embed text in images; labels must remain locale-driven.
 
+Scrollbars should use low-contrast semantic theme colors. They must remain discoverable, but should not compete with the primary Audit, Reports, Prompts, Settings, or Repair actions in either light or dark mode.
+
 ## Do's and Don'ts
 
 - Do keep the common Audit path visible and brief.

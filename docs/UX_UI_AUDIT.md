@@ -201,6 +201,7 @@ The theme pass added a presentation-only Light/Dark startup selector without wid
 - Kept theme labels locale-aware while preserving the same CLI flags, policy keys, report fields, and `GuardRunConfig` mappings.
 - Added dark-mode button icon tinting in memory so local packaged assets remain readable without introducing separate tracked icon copies.
 - Added dark-mode pictogram background blending in memory so the existing Reports, Prompts, Repair, and repository-state visuals feel integrated with dark panels without generating or tracking duplicate assets.
+- Tuned global and repository-list scrollbars with semantic low-contrast tokens, and compacted the locked Repair gate so its guidance remains visible in the first viewport.
 - Added regression coverage for theme helper normalization, settings persistence, tooltip copy, smoke startup, and locale/theme independence from run-config parity.
 - Manually QAed fresh live-window screenshots in both Light and Dark modes before release validation.
 

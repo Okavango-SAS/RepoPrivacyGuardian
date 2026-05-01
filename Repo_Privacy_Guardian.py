@@ -7288,6 +7288,7 @@ class GuiApp:  # pragma: no cover
         self._reports_visual_label = None
         self._prompts_visual_label = None
         self._repo_empty_state_visual_label = None
+        self._repo_scrollbar = None
         self._repair_gate_visual_label = None
         self._repair_options_visible = False
         self._repair_options_toggle_button = None
@@ -7302,6 +7303,9 @@ class GuiApp:  # pragma: no cover
             fg_color=self._page_bg,
             corner_radius=0,
             border_width=0,
+            scrollbar_fg_color=self._scrollbar_track,
+            scrollbar_button_color=self._scrollbar_thumb,
+            scrollbar_button_hover_color=self._scrollbar_hover,
         )
         app.grid(row=0, column=0, sticky="nsew")
         app.grid_columnconfigure(0, weight=1)
@@ -8424,7 +8428,7 @@ class GuiApp:  # pragma: no cover
             border_width=1,
             border_color=self._card_border,
         )
-        blocker_card.grid(row=0, column=0, padx=28, pady=(28, 20), sticky="n")
+        blocker_card.grid(row=0, column=0, padx=28, pady=(16, 14), sticky="n")
         blocker_card.grid_columnconfigure(0, weight=1)
         self._repair_gate_visual_label = self._make_asset_label(
             blocker_card,
@@ -8432,30 +8436,30 @@ class GuiApp:  # pragma: no cover
             background=self._white_panel_fg,
         )
         if self._repair_gate_visual_label is not None:
-            self._repair_gate_visual_label.grid(row=0, column=0, padx=24, pady=(18, 0), sticky="ew")
+            self._repair_gate_visual_label.grid(row=0, column=0, padx=24, pady=(10, 0), sticky="ew")
         self._localize_widget(ctk.CTkLabel(
             blocker_card,
             text=self._t("repair_tab_locked"),
             justify="center",
-            font=self._font(18, bold=True),
+            font=self._font(16, bold=True),
             text_color=self._text_heading,
-        ), "text", "repair_tab_locked").grid(row=1, column=0, padx=24, pady=(8, 8), sticky="ew")
+        ), "text", "repair_tab_locked").grid(row=1, column=0, padx=24, pady=(6, 6), sticky="ew")
         self._repair_tab_block_label = ctk.CTkLabel(
             blocker_card,
             text="",
             justify="center",
-            font=self._font(13, bold=True),
+            font=self._font(12, bold=True),
             text_color=self._text_heading,
             wraplength=620,
         )
-        self._repair_tab_block_label.grid(row=2, column=0, padx=24, pady=(0, 10), sticky="ew")
+        self._repair_tab_block_label.grid(row=2, column=0, padx=24, pady=(0, 6), sticky="ew")
         self._localize_widget(ctk.CTkLabel(
             blocker_card,
             text=self._t("before_repair"),
             justify="center",
-            font=self._font(12, bold=True),
+            font=self._font(11, bold=True),
             text_color=self._text_muted,
-        ), "text", "before_repair").grid(row=3, column=0, padx=24, pady=(0, 6), sticky="ew")
+        ), "text", "before_repair").grid(row=3, column=0, padx=24, pady=(0, 4), sticky="ew")
         step_texts = [
             "repair_lock_step_1",
             "repair_lock_step_2",
@@ -8469,23 +8473,23 @@ class GuiApp:  # pragma: no cover
                 justify="left",
                 anchor="w",
                 wraplength=620,
-                font=self._font(12),
+                font=self._font(11),
                 text_color=self._text_body,
             )
             self._localize_widget(step_label, "text", step_key)
-            step_label.grid(row=idx, column=0, padx=24, pady=2, sticky="ew")
+            step_label.grid(row=idx, column=0, padx=24, pady=1, sticky="ew")
             self._repair_tab_block_steps.append(step_label)
         self._localize_widget(ctk.CTkButton(
             blocker_card,
             text=self._t("go_to_audit"),
             command=lambda: self._set_active_flow_tab(self._audit_tab_name),
             width=170,
-            height=34,
+            height=32,
             corner_radius=8,
             fg_color=self._primary_button_fg,
             hover_color=self._primary_button_hover,
             **self._button_asset_options("icon-audit.png"),
-        ), "text", "go_to_audit").grid(row=7, column=0, pady=(14, 22))
+        ), "text", "go_to_audit").grid(row=7, column=0, pady=(10, 14))
 
         results_row = ctk.CTkFrame(audit_tab, fg_color="transparent")
         results_row.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 14))
@@ -8603,7 +8607,15 @@ class GuiApp:  # pragma: no cover
         )
         self._bind_tooltip_key(self.repo_list, "repo_drop_area")
         self.repo_list.grid(row=1, column=0, sticky="nsew", padx=(10, 0), pady=10)
-        repo_scroll = ctk.CTkScrollbar(list_shell, orientation="vertical", command=self.repo_list.yview)
+        repo_scroll = ctk.CTkScrollbar(
+            list_shell,
+            orientation="vertical",
+            command=self.repo_list.yview,
+            fg_color=self._scrollbar_track,
+            button_color=self._scrollbar_thumb,
+            button_hover_color=self._scrollbar_hover,
+        )
+        self._repo_scrollbar = repo_scroll
         repo_scroll.grid(row=1, column=1, sticky="ns", padx=(8, 10), pady=10)
         self.repo_list.configure(yscrollcommand=repo_scroll.set)
         self.repo_list.bind("<<ListboxSelect>>", self._on_repo_selection_changed)
@@ -8788,6 +8800,9 @@ class GuiApp:  # pragma: no cover
             self._list_select_text = "#F8FAFC"
             self._output_fg = "#071116"
             self._output_text = "#DDEDEA"
+            self._scrollbar_track = "#0F1D22"
+            self._scrollbar_thumb = "#3A5960"
+            self._scrollbar_hover = "#4C747B"
             return
 
         self._page_bg = "#EEF5F2"
@@ -8843,6 +8858,9 @@ class GuiApp:  # pragma: no cover
         self._list_select_text = "#F8FAFC"
         self._output_fg = "#0B1720"
         self._output_text = "#DDEDEA"
+        self._scrollbar_track = "#EEF5F2"
+        self._scrollbar_thumb = "#BCD2CD"
+        self._scrollbar_hover = "#8EAEA8"
 
     def _font(self, size: int, *, bold: bool = False, mono: bool = False):
         family = self._mono_font_family if mono else self._ui_font_family
@@ -9996,13 +10014,33 @@ class GuiApp:  # pragma: no cover
         if self._flow_tabs is None:
             return
         try:
-            self._flow_tabs.set(tab_name)
+            self._select_flow_tab_without_delayed_cleanup(tab_name)
             app_frame = getattr(self, "_app_frame", None)
             parent_canvas = getattr(app_frame, "_parent_canvas", None)
             if parent_canvas is not None:
                 parent_canvas.yview_moveto(0)
         except Exception:
             pass
+
+    def _select_flow_tab_without_delayed_cleanup(self, tab_name: str) -> None:
+        flow_tabs = getattr(self, "_flow_tabs", None)
+        if flow_tabs is None:
+            return
+        try:
+            tab_dict = getattr(flow_tabs, "_tab_dict", {})
+            if tab_name not in tab_dict:
+                return
+            current_name = getattr(flow_tabs, "_current_name", "")
+            if current_name in tab_dict and current_name != tab_name:
+                tab_dict[current_name].grid_forget()
+            flow_tabs._current_name = tab_name  # noqa: SLF001 - avoids CTkTabview.set() delayed grid cleanup.
+            segmented_button = getattr(flow_tabs, "_segmented_button", None)
+            if segmented_button is not None:
+                segmented_button.set(tab_name)
+            flow_tabs._set_grid_current_tab()  # noqa: SLF001
+            flow_tabs._grid_forget_all_tabs(exclude_name=tab_name)  # noqa: SLF001
+        except Exception:
+            return
 
     def _set_repair_status(
         self,
@@ -10312,6 +10350,7 @@ class GuiApp:  # pragma: no cover
             return
 
         if not locked:
+            self._repair_tab_block_overlay.grid_forget()
             self._repair_tab_block_overlay.place_forget()
             return
 
@@ -10321,7 +10360,8 @@ class GuiApp:  # pragma: no cover
                 text=self._t("repair_lock_message", reason=lock_reason)
             )
 
-        self._repair_tab_block_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self._repair_tab_block_overlay.place_forget()
+        self._repair_tab_block_overlay.grid(row=0, column=0, rowspan=3, sticky="nsew", padx=0, pady=0)
         self._repair_tab_block_overlay.lift()
 
     def _make_info_badge(self, parent, message: str | Callable[[], str]):

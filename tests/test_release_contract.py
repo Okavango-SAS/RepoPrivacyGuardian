@@ -1378,6 +1378,22 @@ def test_gui_appearance_helpers_normalize_supported_modes() -> None:
     assert rpg.gui_appearance_label(rpg.GUI_APPEARANCE_DARK, rpg.GUI_LOCALE_ES_419) == "Oscuro"
 
 
+def test_gui_theme_palette_uses_semantic_scrollbar_tokens() -> None:
+    app = object.__new__(rpg.GuiApp)
+
+    app._gui_appearance = rpg.GUI_APPEARANCE_LIGHT
+    app._configure_gui_theme_palette()
+    assert app._scrollbar_track == app._page_bg
+    assert app._scrollbar_thumb != app._scrollbar_hover
+    assert app._scrollbar_thumb != app._primary_button_fg
+
+    app._gui_appearance = rpg.GUI_APPEARANCE_DARK
+    app._configure_gui_theme_palette()
+    assert app._scrollbar_track == app._page_bg
+    assert app._scrollbar_thumb != app._scrollbar_hover
+    assert app._scrollbar_thumb != app._primary_button_fg
+
+
 def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
     seen: list[tuple[str, str]] = []
 
