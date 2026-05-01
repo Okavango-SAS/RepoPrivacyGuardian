@@ -12,6 +12,7 @@ All notable user-facing changes to this project are documented here.
 - Blended themeable GUI pictogram backgrounds in memory on dark startup so packaged assets sit cleanly on dark panels without adding duplicate image files.
 - Updated README attribution to reflect Okavango SAS as the project maintainer while preserving original author and CTO credit.
 - Added a sanitized desktop GUI preview screenshot to the README.
+- Refreshed the README desktop GUI preview screenshot against the current light-mode companion UI with neutral visible paths.
 - Reordered and simplified README onboarding so audit scope appears earlier and repeated first-run guidance is reduced.
 - Compacted the README agentic section into a prompt library to avoid repeating the first-run flow.
 - Clarified README start paths by role and when optional installation extras are needed.
