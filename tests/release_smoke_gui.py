@@ -60,6 +60,15 @@ def main() -> int:
             assert getattr(app._app_frame._scrollbar, "_button_color", None) == app._scrollbar_thumb
             assert getattr(app._repo_scrollbar, "_button_color", None) == app._scrollbar_thumb
             assert app._appearance_menu.cget("values") == ["Claro", "Oscuro"]
+            assert app._output_empty_state_label.winfo_viewable()
+            app.log("[INFO] GUI smoke log")
+            app.root.update_idletasks()
+            app.root.update()
+            assert not app._output_empty_state_label.winfo_viewable()
+            app.clear_output()
+            app.root.update_idletasks()
+            app.root.update()
+            assert app._output_empty_state_label.winfo_viewable()
             assert app._repair_button.cget("text") == app._t("lock_repair_default")
             assert app._repair_button.cget("state") == "disabled"
             assert app._repair_status_label.cget("text") == app._t("no_audit_results")
@@ -93,6 +102,11 @@ def main() -> int:
             assert getattr(app._app_frame._scrollbar, "_button_color", None) == app._scrollbar_thumb
             assert getattr(app._repo_scrollbar, "_button_color", None) == app._scrollbar_thumb
             assert app._appearance_menu.cget("values") == ["Light", "Dark"]
+            assert app._output_empty_state_label.cget("text") == app._t("execution_log_empty")
+            app._set_active_flow_tab(app._audit_tab_name)
+            app.root.update_idletasks()
+            app.root.update()
+            assert app._output_empty_state_label.winfo_viewable()
             assert app._repair_button.cget("text") == app._t("lock_repair_default")
             assert app._repair_button.cget("state") == "disabled"
             assert app._repair_status_label.cget("text") == app._t("no_audit_results")

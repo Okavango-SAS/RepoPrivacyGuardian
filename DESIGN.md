@@ -112,6 +112,8 @@ Runtime image assets are allowed when they improve scanability without becoming 
 
 Scrollbars should use low-contrast semantic theme colors. They must remain discoverable, but should not compete with the primary Audit, Reports, Prompts, Settings, or Repair actions in either light or dark mode.
 
+Large operational panes such as logs should have a quiet empty state before data exists. Empty-state copy must stay short, localized, and removable as soon as real run output appears.
+
 ## Do's and Don'ts
 
 - Do keep the common Audit path visible and brief.

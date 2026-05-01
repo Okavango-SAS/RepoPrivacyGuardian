@@ -2054,6 +2054,10 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "clear_selection": "Clear Selection",
         "clear_log": "Clear Log",
         "execution_log": "Execution Log",
+        "execution_log_empty": (
+            "Audit output will appear here.\n"
+            "Run Audit to stream progress, then open report.html, report.json, or run.log from Reports."
+        ),
         "browse": "Browse…",
         "save_as": "Save As…",
         "setup_hint_open": "Setup is open. Save it once, then the main screen stays focused on Audit.",
@@ -2337,6 +2341,10 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "clear_selection": "Limpiar selección",
         "clear_log": "Limpiar log",
         "execution_log": "Log de ejecución",
+        "execution_log_empty": (
+            "La salida de Auditar va a aparecer acá.\n"
+            "Ejecutá Auditar para ver el progreso y luego abrí report.html, report.json o run.log desde Reportes."
+        ),
         "browse": "Buscar…",
         "save_as": "Guardar como…",
         "setup_hint_open": "Setup abierto. Guardalo una vez y la pantalla principal queda enfocada en Auditar.",
@@ -7289,6 +7297,7 @@ class GuiApp:  # pragma: no cover
         self._prompts_visual_label = None
         self._repo_empty_state_visual_label = None
         self._repo_scrollbar = None
+        self._output_empty_state_label = None
         self._repair_gate_visual_label = None
         self._repair_options_visible = False
         self._repair_options_toggle_button = None
@@ -8731,6 +8740,18 @@ class GuiApp:  # pragma: no cover
             font=self._font(10, mono=True),
         )
         self.output.grid(row=1, column=0, sticky="nsew", padx=14, pady=(0, 12))
+        self._output_empty_state_label = ctk.CTkLabel(
+            output_card,
+            text=self._t("execution_log_empty"),
+            justify="center",
+            anchor="center",
+            wraplength=520,
+            font=self._font(11),
+            text_color=self._output_empty_text,
+            fg_color=self._output_fg,
+        )
+        self._localize_widget(self._output_empty_state_label, "text", "execution_log_empty")
+        self._set_output_empty_state(True)
 
         self.refresh_repos()
         self.root.bind("<Configure>", self._on_root_resize)
@@ -8800,6 +8821,7 @@ class GuiApp:  # pragma: no cover
             self._list_select_text = "#F8FAFC"
             self._output_fg = "#071116"
             self._output_text = "#DDEDEA"
+            self._output_empty_text = "#789097"
             self._scrollbar_track = "#0F1D22"
             self._scrollbar_thumb = "#3A5960"
             self._scrollbar_hover = "#4C747B"
@@ -8858,6 +8880,7 @@ class GuiApp:  # pragma: no cover
         self._list_select_text = "#F8FAFC"
         self._output_fg = "#0B1720"
         self._output_text = "#DDEDEA"
+        self._output_empty_text = "#7F939C"
         self._scrollbar_track = "#EEF5F2"
         self._scrollbar_thumb = "#BCD2CD"
         self._scrollbar_hover = "#8EAEA8"
@@ -10042,6 +10065,17 @@ class GuiApp:  # pragma: no cover
         except Exception:
             return
 
+    def _set_output_empty_state(self, visible: bool) -> None:
+        label = getattr(self, "_output_empty_state_label", None)
+        output = getattr(self, "output", None)
+        if label is None or output is None:
+            return
+        if visible:
+            label.place(in_=output, relx=0.5, rely=0.5, anchor="center")
+            label.lift()
+            return
+        label.place_forget()
+
     def _set_repair_status(
         self,
         message: str,
@@ -10940,11 +10974,13 @@ class GuiApp:  # pragma: no cover
         self.log("[INFO] Flow: audit finished. Review artifacts in the Reports tab, then continue to Repair only if needed.")
 
     def log(self, msg: str) -> None:
+        self._set_output_empty_state(False)
         self.output.insert("end", msg + "\n")
         self.output.see("end")
 
     def clear_output(self) -> None:
         self.output.delete("1.0", "end")
+        self._set_output_empty_state(True)
 
     def cancel_run_clicked(self) -> None:
         token = self._active_cancel_token

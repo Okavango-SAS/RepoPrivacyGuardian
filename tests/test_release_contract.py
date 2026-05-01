@@ -1386,12 +1386,14 @@ def test_gui_theme_palette_uses_semantic_scrollbar_tokens() -> None:
     assert app._scrollbar_track == app._page_bg
     assert app._scrollbar_thumb != app._scrollbar_hover
     assert app._scrollbar_thumb != app._primary_button_fg
+    assert app._output_empty_text != app._output_text
 
     app._gui_appearance = rpg.GUI_APPEARANCE_DARK
     app._configure_gui_theme_palette()
     assert app._scrollbar_track == app._page_bg
     assert app._scrollbar_thumb != app._scrollbar_hover
     assert app._scrollbar_thumb != app._primary_button_fg
+    assert app._output_empty_text != app._output_text
 
 
 def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:
