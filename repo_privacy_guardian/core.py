@@ -776,6 +776,10 @@ EXFIL_META_LINE_RE = re.compile(
     r"\b(?:line_has_exfil_indicator|is_exfil_indicator_noise|exfil_code_indicators|EXFIL_[A-Z_]+)\b"
 )
 EXFIL_PATTERN_LITERAL_RE = re.compile(r"^\s*r?[\"'][A-Za-z0-9_.\\|?*+()[\]-]+[\"']\s*,?\s*$")
+EXFIL_PATTERN_FIELD_RE = re.compile(r"[\"']pattern[\"']\s*:\s*(?:[rRuUbBfF]+)?[\"']")
+EXFIL_QUOTED_STRING_RE = re.compile(
+    r"(?i)(?:[rubf]{0,3})(?:\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*')"
+)
 EXFIL_TEST_FIXTURE_WRITE_RE = re.compile(r"\b(?:_write|write_text|write_bytes)\s*\(")
 
 
@@ -792,6 +796,10 @@ def is_exfil_indicator_noise(line: str, *, rel_path: str | None = None) -> bool:
         return True
     if EXFIL_PATTERN_LITERAL_RE.match(stripped):
         return True
+    if EXFIL_PATTERN_FIELD_RE.search(stripped):
+        unquoted = EXFIL_QUOTED_STRING_RE.sub('""', stripped)
+        if not EXFIL_ACTIVE_CODE_RE.search(unquoted):
+            return True
     if normalized_rel.startswith("tests/") and EXFIL_TEST_FIXTURE_WRITE_RE.search(stripped) and "\\n" in stripped:
         return True
     return False

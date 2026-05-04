@@ -412,12 +412,17 @@ def test_exfil_indicator_filters_ignore_imports_and_detector_scaffolding() -> No
     assert rpg.line_has_exfil_indicator(
         'assert rpg.line_has_exfil_indicator(\'requests.post(endpoint, json=payload)\') is True'
     ) is False
+    assert rpg.line_has_exfil_indicator('"pattern": "*requests.post*",') is False
+    assert rpg.line_has_exfil_indicator('rule = {"pattern": "*requests.post*"}') is False
     assert rpg.line_has_exfil_indicator("urllib.request.Request(url)") is False
 
 
 def test_exfil_indicator_keeps_active_network_sinks_and_contextual_terms() -> None:
     assert rpg.line_has_exfil_indicator('urllib.request.urlopen("https://collector.example")') is True
     assert rpg.line_has_exfil_indicator('requests.post(endpoint, json=payload)') is True
+    assert rpg.line_has_exfil_indicator(
+        'requests.post(endpoint, json={"pattern": "*safe*"})'
+    ) is True
     assert rpg.line_has_exfil_indicator('const send = fetch("https://collector.example")') is True
     assert rpg.line_has_exfil_indicator('webhook = "https://collector.example/hooks/release"') is True
     assert rpg.line_has_exfil_indicator("analytics_enabled = True") is False
@@ -453,6 +458,7 @@ def test_exfil_indicator_audit_ignores_detector_meta_and_test_fixtures(tmp_path:
             "def test_meta():\n"
             "    _write(repo / 'main.py', 'import urllib.request\\nurllib.request.urlopen(\"https://collector.example\")\\n')\n"
             "    assert rpg.line_has_exfil_indicator('requests.post(endpoint, json=payload)') is True\n"
+            '    rule = {"pattern": "*requests.post*"}\n'
             "    report.exfil_code_indicators = ['main.py:2:urllib.request.urlopen(\"https://collector.example\")']\n"
         ),
     )
