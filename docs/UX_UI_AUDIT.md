@@ -294,3 +294,51 @@ Validation notes:
 - The desktop GUI remains the optional companion to the CLI backend.
 - The design method changes documentation and maintenance criteria only; it does not add GUI-only behavior.
 - New report-directory hardening is covered by regression tests for symlinked requested/default results paths and CLI pre-pipeline failure handling.
+
+## 2026-05-04 Desktop UX Follow-Up
+
+This pass applied the desktop-adapted frontend-design criteria without changing the implementation target from `customtkinter`.
+
+Findings:
+
+- The Reports tab correctly offered `Go to Audit` before any run artifacts existed, but it still showed disabled artifact buttons in the same action row. That made the empty state feel busier than the one useful next step.
+- The Reports action row worked at the primary desktop width, but localized button labels needed an explicit compact reflow rule so artifact actions do not compete with each other near the minimum supported width.
+
+Corrections applied:
+
+- Hid downstream Reports artifact buttons until a run exists, keeping the first-run empty state focused on `Go to Audit`.
+- Kept artifact buttons disabled while hidden, then restored them as visible normal actions after artifacts are remembered.
+- Reflowed the Reports agent-handoff and artifact buttons onto a second row in compact desktop layout.
+- Documented the empty-state rule in `DESIGN.md` so future GUI states avoid disabled-action clutter.
+
+Validation notes:
+
+- Presentation changed only Reports-tab layout and empty-state affordances.
+- No CLI flags, report fields, policy keys, remediation defaults, or `GuardRunConfig` mappings changed.
+
+## 2026-05-04 Deep Agent-First GUI Review
+
+This pass revisited whether the GUI/UX makes sense for a tool whose highest-value path is CLI evidence plus AI-assisted classification and repair planning.
+
+Findings:
+
+- Reports still behaved like an artifact directory. It showed status and paths, but did not clearly tell the operator or coding agent what to do next after PASS, FAIL, review-only signals, or runtime errors.
+- The copied agent handoff referenced artifact paths, but did not include enough safe run context for an agent to start with the right policy posture without first inferring state from multiple files.
+- The Prompts tab had the right library, but the cards were flat. Users had to infer which prompt was setup, audit-only, reviewed repair, or full delegation.
+- The existing packaged raster assets remained sufficient. This pass needed workflow hierarchy and state copy, not new bitmap assets.
+
+Corrections applied:
+
+- Added a Reports decision panel with a localized next action for first-run, missing report payload, blocking failure, advisory/manual-review, clean PASS, and runtime/aborted states.
+- Added a three-step handoff checklist in Reports once artifacts exist: open redacted evidence, copy the handoff, then use a reviewed prompt.
+- Added a Reports shortcut into the Prompts tab after artifacts exist, keeping the first-run empty state focused on `Go to Audit`.
+- Expanded the copied agent handoff with safe summary context: run status, repository count, blocking-category count, manual-review signal count, fixture/documentation context count, recommended next action, and repository-relative artifact paths.
+- Reworked Prompt cards with stage badges and "best for" guidance so the library reads as a workflow instead of a list.
+- Polished Spanish prompt-registry copy to avoid avoidable English UX fragments in the visible GUI.
+
+Validation notes:
+
+- The changes remain presentation and orchestration only: no CLI flags, report fields, policy keys, remediation defaults, or `GuardRunConfig` mappings changed.
+- Reports still render paths and counts only. Raw findings remain in local artifacts, not in GUI handoff copy.
+- Screenshots were captured before and after for Reports and Prompts in the running desktop app.
+- Functional validation covered `ruff`, `pyright`, full `pytest`, GUI/CLI smoke tests, and the release-contract check.

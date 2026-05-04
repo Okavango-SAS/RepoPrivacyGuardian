@@ -4,6 +4,16 @@ All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Kept the GUI Reports empty state focused on the safe `Go to Audit` action instead of showing disabled artifact buttons before a run exists.
+- Added a Reports next-action panel, safe agent handoff summary counts, and staged Prompt-card guidance so the desktop companion better matches the agent-first CLI workflow.
+- Polished Spanish prompt-library copy in the GUI to avoid avoidable English UX fragments while preserving CLI flags and file names.
+
+### Fixed
+
+- Reflowed GUI Reports artifact actions on compact desktop widths so localized button text stays readable without competing with first-run guidance.
+
 ## [1.4.6] - 2026-05-01
 
 Post-release GUI, locale, and cleanup hardening update.

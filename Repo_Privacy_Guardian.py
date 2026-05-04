@@ -1938,10 +1938,28 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "reports_dashboard_body": "Open local evidence from the latest run. Treat artifacts as sensitive even when values are redacted.",
         "latest_artifacts": "Latest artifacts",
         "latest_artifacts_none": "Run Audit to create report.json, report.html, run.log, and run_state.json.",
+        "next_action": "Next action",
+        "next_action_run_audit": "Run Audit first, then review local artifacts here before copying anything into an agent session.",
+        "next_action_review_artifacts": "Open report.json and run.log to confirm the run produced repository results before delegating analysis.",
+        "next_action_failed": "Review blocking categories in report.html, then copy the agent handoff for classification before enabling Repair.",
+        "next_action_manual": "Classify advisory findings with an agent before publication. Repair stays optional and reviewed.",
+        "next_action_pass": "No blocking publication findings are present. Keep artifacts for review or copy the handoff for agent sign-off.",
+        "next_action_error": "Open run.log and run_state.json, resolve the runtime issue, then run Audit again.",
+        "agent_step_evidence": "Open redacted evidence",
+        "agent_step_copy": "Copy agent handoff",
+        "agent_step_prompt": "Use a reviewed prompt",
+        "open_agent_prompts_from_reports": "Open agent prompts",
         "copy_agent_handoff": "Copy agent handoff",
         "agent_handoff_copied": "Agent handoff copied to clipboard.",
         "agent_handoff_prompt": (
             "Act as a release/security engineer. Review this Repo Privacy Guardian audit using the local artifacts below.\n\n"
+            "Run summary:\n"
+            "- Run status: {status_label}\n"
+            "- Repositories: {repo_count}\n"
+            "- Blocking categories: {blocking_count}\n"
+            "- Manual-review signals: {manual_count}\n"
+            "- Fixture/documentation context: {fixture_count}\n"
+            "- Recommended next action: {next_action}\n\n"
             "Classify findings as confirmed leaks, intentional fixtures/examples, indeterminate/manual-review, advisory hardening, "
             "or tooling/runtime issues. Do not paste raw secrets, private emails, internal URLs, hostnames, or personal absolute paths into chat.\n\n"
             "Artifacts:\n"
@@ -1963,6 +1981,14 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "copy_command": "Copy command",
         "open_prompt": "Open prompt",
         "prompt_command": "Command",
+        "prompt_stage_environment_setup": "Preparation",
+        "prompt_stage_audit_only": "Audit only",
+        "prompt_stage_audit_and_repair": "Reviewed repair",
+        "prompt_stage_cli_workflow": "Full delegation",
+        "prompt_best_for_environment_setup": "Best before the first local use.",
+        "prompt_best_for_audit_only": "Best after choosing the target repo and before any write action.",
+        "prompt_best_for_audit_and_repair": "Best after findings were reviewed and approved for cleanup.",
+        "prompt_best_for_cli_workflow": "Best when handing the full release/security task to a coding agent.",
         "prompt_copied": "Prompt copied to clipboard.",
         "prompt_command_copied": "Command copied to clipboard.",
         "prompt_open_failed": "Could not open prompt file: {error}",
@@ -2240,10 +2266,28 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "reports_dashboard_body": "Abrí evidencia local de la última corrida. Tratá los artefactos como sensibles incluso cuando los valores estén redactados.",
         "latest_artifacts": "Últimos artefactos",
         "latest_artifacts_none": "Ejecutá Auditar para crear report.json, report.html, run.log y run_state.json.",
+        "next_action": "Próxima acción",
+        "next_action_run_audit": "Ejecutá Auditar primero. Después revisá acá los artefactos locales antes de pasar contexto a una sesión agéntica.",
+        "next_action_review_artifacts": "Abrí report.json y run.log para confirmar que la corrida produjo resultados antes de delegar análisis.",
+        "next_action_failed": "Revisá categorías bloqueantes en report.html. Después copiá el contexto agéntico para clasificar evidencia antes de Reparar.",
+        "next_action_manual": "Clasificá señales consultivas con un agente antes de publicar. Reparar queda opcional y revisado.",
+        "next_action_pass": "No hay bloqueos de publicación en los resultados. Conservá artefactos o copiá el contexto para una revisión agéntica final.",
+        "next_action_error": "Abrí run.log y run_state.json, resolvé el problema de ejecución y repetí Auditar.",
+        "agent_step_evidence": "Abrir evidencia redactada",
+        "agent_step_copy": "Copiar contexto agéntico",
+        "agent_step_prompt": "Usar una instrucción revisada",
+        "open_agent_prompts_from_reports": "Abrir instrucciones",
         "copy_agent_handoff": "Copiar contexto agéntico",
         "agent_handoff_copied": "Contexto agéntico copiado al portapapeles.",
         "agent_handoff_prompt": (
             "Actuá como ingeniero/a de publicación y seguridad. Revisá esta auditoría de Repo Privacy Guardian usando los artefactos locales de abajo.\n\n"
+            "Resumen de corrida:\n"
+            "- Estado de corrida: {status_label}\n"
+            "- Repositorios: {repo_count}\n"
+            "- Categorías bloqueantes: {blocking_count}\n"
+            "- Señales para revisión manual: {manual_count}\n"
+            "- Contexto de datos de prueba/documentación: {fixture_count}\n"
+            "- Próxima acción recomendada: {next_action}\n\n"
             "Clasificá hallazgos como filtraciones confirmadas, datos de prueba/ejemplos intencionales, indeterminados para revisión manual, endurecimiento consultivo "
             "o problemas de herramientas/tiempo de ejecución. No pegues secretos crudos, emails privados, URLs internas, nombres de host ni rutas absolutas personales en el chat.\n\n"
             "Artefactos:\n"
@@ -2265,6 +2309,14 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "copy_command": "Copiar comando",
         "open_prompt": "Abrir instrucción",
         "prompt_command": "Comando",
+        "prompt_stage_environment_setup": "Preparación",
+        "prompt_stage_audit_only": "Solo auditoría",
+        "prompt_stage_audit_and_repair": "Reparación revisada",
+        "prompt_stage_cli_workflow": "Delegación completa",
+        "prompt_best_for_environment_setup": "Para antes del primer uso local.",
+        "prompt_best_for_audit_only": "Para después de elegir el repositorio objetivo y antes de cualquier escritura.",
+        "prompt_best_for_audit_and_repair": "Para después de revisar hallazgos y aprobar limpieza.",
+        "prompt_best_for_cli_workflow": "Para pasar la tarea completa de publicación y seguridad a un agente de código.",
         "prompt_copied": "Instrucción copiada al portapapeles.",
         "prompt_command_copied": "Comando copiado al portapapeles.",
         "prompt_open_failed": "No se pudo abrir el archivo de instrucción: {error}",
@@ -7341,11 +7393,17 @@ class GuiApp:  # pragma: no cover
         self._reports_status_badge = None
         self._reports_summary_label = None
         self._reports_paths_label = None
+        self._reports_next_action_badge = None
+        self._reports_next_action_label = None
+        self._reports_agent_steps_frame = None
+        self._reports_open_prompts_button = None
         self._reports_go_audit_button = None
         self._reports_agent_handoff_button = None
         self._reports_action_buttons: list[object] = []
+        self._compact_reports_actions_layout = False
         self._prompt_cards_frame = None
         self._prompt_card_widgets: list[object] = []
+        self._prompt_card_stage_labels: list[object] = []
         self._prompt_card_column_count = 2
         self._prompts_workflow_guide = None
         self._prompts_workflow_title_label = None
@@ -9168,8 +9226,67 @@ class GuiApp:  # pragma: no cover
         )
         self._reports_paths_label.grid(row=2, column=0, columnspan=2, sticky="we", padx=12, pady=(0, 12))
 
+        decision_row = ctk.CTkFrame(
+            reports_card,
+            fg_color=self._info_panel_fg,
+            corner_radius=10,
+            border_width=1,
+            border_color=self._info_panel_border,
+        )
+        decision_row.grid(row=3, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 10))
+        decision_row.grid_columnconfigure(1, weight=1)
+        self._reports_next_action_badge = self._localize_widget(ctk.CTkLabel(
+            decision_row,
+            text=self._t("next_action"),
+            height=28,
+            corner_radius=14,
+            fg_color=self._success_badge_fg,
+            text_color=self._success_text,
+            font=self._font(11, bold=True),
+            padx=12,
+        ), "text", "next_action")
+        self._reports_next_action_badge.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 8))
+        self._reports_next_action_label = ctk.CTkLabel(
+            decision_row,
+            text=self._t("next_action_run_audit"),
+            justify="left",
+            anchor="w",
+            wraplength=900,
+            font=self._font(12),
+            text_color=self._text_body,
+        )
+        self._reports_next_action_label.grid(row=0, column=1, sticky="we", padx=(0, 12), pady=(10, 8))
+        self._reports_agent_steps_frame = ctk.CTkFrame(decision_row, fg_color="transparent")
+        self._reports_agent_steps_frame.grid(row=1, column=0, columnspan=2, sticky="we", padx=12, pady=(0, 10))
+        self._reports_agent_steps_frame.grid_columnconfigure(0, weight=1)
+        self._reports_agent_steps_frame.grid_columnconfigure(1, weight=1)
+        self._reports_agent_steps_frame.grid_columnconfigure(2, weight=1)
+        for idx, text_key in enumerate(("agent_step_evidence", "agent_step_copy", "agent_step_prompt")):
+            step_label = self._localize_widget(ctk.CTkLabel(
+                self._reports_agent_steps_frame,
+                text=self._t(text_key),
+                height=28,
+                corner_radius=8,
+                fg_color=self._surface_alt,
+                text_color=self._text_body,
+                font=self._font(11, bold=True),
+                padx=10,
+            ), "text", text_key)
+            step_label.grid(row=0, column=idx, sticky="we", padx=(0, 8 if idx < 2 else 0))
+        self._reports_open_prompts_button = ctk.CTkButton(
+            decision_row,
+            text=self._t("open_agent_prompts_from_reports"),
+            command=lambda: self._set_active_flow_tab(self._prompts_tab_name),
+            height=32,
+            corner_radius=8,
+            **self._button_asset_options("icon-open.png"),
+            **self._secondary_button_options(),
+        )
+        self._localize_widget(self._reports_open_prompts_button, "text", "open_agent_prompts_from_reports")
+        self._reports_open_prompts_button.grid(row=2, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 12))
+
         actions = ctk.CTkFrame(reports_card, fg_color="transparent")
-        actions.grid(row=3, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 12))
+        actions.grid(row=4, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 12))
         self._reports_go_audit_button = ctk.CTkButton(
             actions,
             text=self._t("go_to_audit"),
@@ -9293,6 +9410,12 @@ class GuiApp:  # pragma: no cover
         threshold = int(getattr(self, "_prompts_stack_width_threshold", 1240))
         return 1 if width <= threshold else 2
 
+    def _prompt_metadata_text(self, prompt_id: str, prefix: str) -> str:
+        key = f"{prefix}_{prompt_id}"
+        if key not in GUI_UI_TEXT_BY_LOCALE[GUI_LOCALE_DEFAULT]:
+            return ""
+        return self._t(key)
+
     def _refresh_prompt_cards(self) -> None:
         cards_frame = getattr(self, "_prompt_cards_frame", None)
         if cards_frame is None:
@@ -9300,6 +9423,7 @@ class GuiApp:  # pragma: no cover
         for child in cards_frame.winfo_children():
             child.destroy()
         self._prompt_card_widgets = []
+        self._prompt_card_stage_labels = []
 
         columns = self._prompt_card_columns_for_width(self._get_logical_window_width())
 
@@ -9314,14 +9438,27 @@ class GuiApp:  # pragma: no cover
             )
             self._prompt_card_widgets.append(card)
             card.grid_columnconfigure(0, weight=1)
+            stage_label = self.ctk.CTkLabel(
+                card,
+                text=f"{idx + 1} / {self._prompt_metadata_text(prompt.prompt_id, 'prompt_stage')}",
+                height=24,
+                corner_radius=12,
+                fg_color=self._success_badge_fg,
+                text_color=self._success_text,
+                font=self._font(10, bold=True),
+                anchor="w",
+                padx=10,
+            )
+            stage_label.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 4))
+            self._prompt_card_stage_labels.append(stage_label)
             self.ctk.CTkLabel(
                 card,
-                text=f"{idx + 1}. {prompt.title}",
+                text=prompt.title,
                 font=self._font(14, bold=True),
                 text_color=self._text_heading,
                 anchor="w",
                 justify="left",
-            ).grid(row=0, column=0, sticky="we", padx=12, pady=(10, 2))
+            ).grid(row=1, column=0, sticky="we", padx=12, pady=(0, 2))
             self.ctk.CTkLabel(
                 card,
                 text=prompt.description,
@@ -9330,7 +9467,16 @@ class GuiApp:  # pragma: no cover
                 anchor="w",
                 justify="left",
                 wraplength=500,
-            ).grid(row=1, column=0, sticky="we", padx=12, pady=(0, 8))
+            ).grid(row=2, column=0, sticky="we", padx=12, pady=(0, 6))
+            self.ctk.CTkLabel(
+                card,
+                text=self._prompt_metadata_text(prompt.prompt_id, "prompt_best_for"),
+                font=self._font(11, bold=True),
+                text_color=self._text_body,
+                anchor="w",
+                justify="left",
+                wraplength=500,
+            ).grid(row=3, column=0, sticky="we", padx=12, pady=(0, 8))
             self.ctk.CTkLabel(
                 card,
                 text=f"{self._t('prompt_command')}: {prompt.command}",
@@ -9339,10 +9485,10 @@ class GuiApp:  # pragma: no cover
                 anchor="w",
                 justify="left",
                 wraplength=520,
-            ).grid(row=2, column=0, sticky="we", padx=12, pady=(0, 8))
+            ).grid(row=4, column=0, sticky="we", padx=12, pady=(0, 8))
 
             actions = self.ctk.CTkFrame(card, fg_color="transparent")
-            actions.grid(row=3, column=0, sticky="w", padx=12, pady=(0, 12))
+            actions.grid(row=5, column=0, sticky="w", padx=12, pady=(0, 12))
             copy_prompt_button = self.ctk.CTkButton(
                 actions,
                 text=self._t("copy_prompt"),
@@ -9453,12 +9599,82 @@ class GuiApp:  # pragma: no cover
         except ValueError:
             return redact_sensitive_text(str(path))
 
+    def _reports_summary_counts(self, reports_payload: list[dict[str, object]] | None = None) -> dict[str, int]:
+        payload = getattr(self, "_last_audit_reports_payload", []) if reports_payload is None else reports_payload
+        return {
+            "total": len(payload),
+            "passed": sum(1 for item in payload if item.get("status") == "PASS"),
+            "failed": sum(1 for item in payload if item.get("status") == "FAIL"),
+            "blocking": sum(self._report_item_count(item, "failures") for item in payload),
+            "manual": sum(self._manual_review_signal_count(item) for item in payload),
+            "fixture": sum(self._safe_context_count(item) for item in payload),
+        }
+
+    def _reports_status_label(self, counts: dict[str, int], exit_code: int | None) -> str:
+        if counts["failed"] or counts["blocking"] or exit_code == EXIT_POLICY_FAILED:
+            return "FAIL"
+        if exit_code == EXIT_RUNTIME_ERROR:
+            return "ERROR"
+        if exit_code == EXIT_ABORTED:
+            return "ABORTED"
+        if counts["manual"] or counts["total"] == 0:
+            return "PASS/REVIEW"
+        return "PASS"
+
+    def _reports_next_action_key(self, counts: dict[str, int], exit_code: int | None, has_artifacts: bool) -> str:
+        if not has_artifacts:
+            return "next_action_run_audit"
+        if exit_code in {EXIT_RUNTIME_ERROR, EXIT_ABORTED}:
+            return "next_action_error"
+        if exit_code not in {None, EXIT_OK, EXIT_POLICY_FAILED}:
+            return "next_action_error"
+        if counts["failed"] or counts["blocking"] or exit_code == EXIT_POLICY_FAILED:
+            return "next_action_failed"
+        if counts["manual"]:
+            return "next_action_manual"
+        if counts["total"] == 0:
+            return "next_action_review_artifacts"
+        return "next_action_pass"
+
+    def _refresh_reports_decision_panel(self) -> None:
+        next_action_label = getattr(self, "_reports_next_action_label", None)
+        if next_action_label is None:
+            return
+        artifacts = getattr(self, "_last_run_artifacts", None)
+        counts = self._reports_summary_counts()
+        exit_code = getattr(self, "_last_run_exit_code", None)
+        next_action_label.configure(
+            text=self._t(self._reports_next_action_key(counts, exit_code, artifacts is not None))
+        )
+        steps_frame = getattr(self, "_reports_agent_steps_frame", None)
+        prompts_button = getattr(self, "_reports_open_prompts_button", None)
+        if artifacts is None:
+            if steps_frame is not None:
+                steps_frame.grid_remove()
+            if prompts_button is not None:
+                prompts_button.grid_remove()
+            return
+        if steps_frame is not None:
+            steps_frame.grid()
+        if prompts_button is not None:
+            prompts_button.grid()
+
     def _build_agent_handoff_text(self) -> str | None:
         artifacts = getattr(self, "_last_run_artifacts", None)
         if artifacts is None:
             return None
+        counts = self._reports_summary_counts()
+        exit_code = getattr(self, "_last_run_exit_code", None)
+        status_label = self._reports_status_label(counts, exit_code)
+        next_action = self._t(self._reports_next_action_key(counts, exit_code, True))
         return self._t(
             "agent_handoff_prompt",
+            status_label=status_label,
+            repo_count=counts["total"],
+            blocking_count=counts["blocking"],
+            manual_count=counts["manual"],
+            fixture_count=counts["fixture"],
+            next_action=next_action,
             json_path=self._artifact_handoff_path(artifacts.json_path),
             html_path=self._artifact_handoff_path(artifacts.html_path),
             log_path=self._artifact_handoff_path(artifacts.log_path),
@@ -9481,6 +9697,7 @@ class GuiApp:  # pragma: no cover
             return
         go_audit_button = getattr(self, "_reports_go_audit_button", None)
         agent_handoff_button = getattr(self, "_reports_agent_handoff_button", None)
+        self._refresh_reports_decision_panel()
         if artifacts is None:
             badge.configure(text=self._t("last_run"), fg_color=self._success_badge_fg, text_color=self._success_text)
             summary_label.configure(text=self._t("last_run_none"))
@@ -9489,34 +9706,41 @@ class GuiApp:  # pragma: no cover
                 go_audit_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
             if agent_handoff_button is not None:
                 agent_handoff_button.grid_remove()
-            for idx, button in enumerate(getattr(self, "_reports_action_buttons", [])):
-                button.grid_configure(row=0, column=idx + 1, sticky="w", padx=(0, 8))
+            for button in getattr(self, "_reports_action_buttons", []):
+                button.grid_remove()
                 button.configure(state="disabled")
             return
 
         if go_audit_button is not None:
             go_audit_button.grid_remove()
+        compact_actions = bool(getattr(self, "_compact_reports_actions_layout", False))
         if agent_handoff_button is not None:
-            agent_handoff_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
+            agent_handoff_button.grid(
+                row=0,
+                column=0,
+                sticky="w",
+                padx=(0, 8),
+                pady=(0, 6) if compact_actions else 0,
+            )
         for idx, button in enumerate(getattr(self, "_reports_action_buttons", [])):
-            button.grid_configure(row=0, column=idx + 1, sticky="w", padx=(0, 8))
+            if compact_actions:
+                button.grid_configure(row=1, column=idx, sticky="w", padx=(0, 8), pady=(2, 0))
+            else:
+                button.grid_configure(row=0, column=idx + 1, sticky="w", padx=(0, 8), pady=0)
 
-        failed = sum(1 for item in self._last_audit_reports_payload if item.get("status") == "FAIL")
+        counts = self._reports_summary_counts()
         exit_code = getattr(self, "_last_run_exit_code", None)
-        if failed or exit_code == EXIT_POLICY_FAILED:
-            badge_text = "FAIL"
+        badge_text = self._reports_status_label(counts, exit_code)
+        if badge_text == "FAIL":
             badge_fg = self._failure_badge_fg
             badge_text_color = self._failure_badge_text
-        elif exit_code == EXIT_RUNTIME_ERROR:
-            badge_text = "ERROR"
+        elif badge_text == "ERROR":
             badge_fg = self._failure_badge_fg
             badge_text_color = self._failure_badge_text
-        elif exit_code == EXIT_ABORTED:
-            badge_text = "ABORTED"
+        elif badge_text == "ABORTED":
             badge_fg = self._warning_badge_fg
             badge_text_color = self._warning_badge_text
         else:
-            badge_text = "PASS/REVIEW"
             badge_fg = self._pass_badge_fg
             badge_text_color = self._pass_badge_text
 
@@ -9979,6 +10203,7 @@ class GuiApp:  # pragma: no cover
         self._apply_identity_actions_layout(compact=width <= self._top_stack_width_threshold)
         self._apply_options_layout(compact=width <= self._options_stack_width_threshold)
         self._apply_results_layout(compact=width <= self._results_stack_width_threshold)
+        self._apply_reports_actions_layout(compact=width <= self._results_stack_width_threshold)
         prompt_columns = self._prompt_card_columns_for_width(width)
         self._apply_prompts_workflow_layout(compact=prompt_columns == 1)
         if prompt_columns != getattr(self, "_prompt_card_column_count", 2):
@@ -10270,6 +10495,13 @@ class GuiApp:  # pragma: no cover
         self._results_row.grid_columnconfigure(1, weight=1)
         self._repos_card.grid_configure(row=0, column=0, padx=(0, 8), pady=0, sticky="nsew")
         self._output_card.grid_configure(row=0, column=1, padx=(8, 0), pady=0, sticky="nsew")
+
+    def _apply_reports_actions_layout(self, compact: bool) -> None:
+        if compact == getattr(self, "_compact_reports_actions_layout", False):
+            return
+
+        self._compact_reports_actions_layout = compact
+        self._refresh_reports_tab()
 
     def _set_active_flow_tab(self, tab_name: str) -> None:
         if self._flow_tabs is None:

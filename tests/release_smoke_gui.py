@@ -81,9 +81,12 @@ def main() -> int:
             assert app._reports_go_audit_button.cget("text") == app._t("go_to_audit")
             assert app._reports_go_audit_button.winfo_viewable()
             assert not app._reports_agent_handoff_button.winfo_viewable()
+            assert app._reports_next_action_label.cget("text") == app._t("next_action_run_audit")
+            assert not app._reports_open_prompts_button.winfo_viewable()
             assert app._reports_status_badge.winfo_viewable()
             assert app._reports_paths_label.winfo_viewable()
             assert all(button.cget("state") == "disabled" for button in app._reports_action_buttons)
+            assert not any(button.winfo_viewable() for button in app._reports_action_buttons)
             run_dir = REPO_ROOT / "Audit_Results" / "gui-smoke-handoff"
             app._remember_last_run_artifacts(
                 RunArtifacts(
@@ -104,12 +107,16 @@ def main() -> int:
             assert not app._reports_go_audit_button.winfo_viewable()
             assert app._reports_agent_handoff_button.cget("text") == app._t("copy_agent_handoff")
             assert app._reports_agent_handoff_button.winfo_viewable()
+            assert app._reports_next_action_label.cget("text") == app._t("next_action_review_artifacts")
+            assert app._reports_open_prompts_button.winfo_viewable()
             assert all(button.cget("state") == "normal" for button in app._reports_action_buttons)
+            assert all(button.winfo_viewable() for button in app._reports_action_buttons)
             assert "Audit_Results/gui-smoke-handoff/report.json" in app._reports_paths_label.cget("text")
             assert str(REPO_ROOT) not in app._reports_paths_label.cget("text")
             handoff_text = app._build_agent_handoff_text()
             assert handoff_text is not None
             assert "Audit_Results/gui-smoke-handoff/report.json" in handoff_text
+            assert "Estado de corrida:" in handoff_text
             assert "No pegues secretos crudos" in handoff_text
             app._last_run_artifacts = None
             app._refresh_reports_tab()
@@ -117,10 +124,14 @@ def main() -> int:
             app.root.update()
             assert app._reports_go_audit_button.winfo_viewable()
             assert not app._reports_agent_handoff_button.winfo_viewable()
+            assert not app._reports_open_prompts_button.winfo_viewable()
+            assert not any(button.winfo_viewable() for button in app._reports_action_buttons)
             app._set_active_flow_tab(app._prompts_tab_name)
             app.root.update_idletasks()
             app.root.update()
             assert len(app._prompt_cards_frame.winfo_children()) == 4
+            assert len(app._prompt_card_stage_labels) == 4
+            assert app._prompt_card_stage_labels[0].cget("text") == "1 / Preparación"
             assert app._prompt_cards_frame.winfo_viewable()
             app._set_active_flow_tab(app._repair_tab_name)
             app.root.update_idletasks()
@@ -158,13 +169,17 @@ def main() -> int:
             assert app._reports_go_audit_button.winfo_viewable()
             assert app._reports_agent_handoff_button.cget("text") == app._t("copy_agent_handoff")
             assert not app._reports_agent_handoff_button.winfo_viewable()
+            assert app._reports_next_action_label.cget("text") == app._t("next_action_run_audit")
+            assert not app._reports_open_prompts_button.winfo_viewable()
             assert app._reports_status_badge.winfo_viewable()
             assert app._reports_paths_label.winfo_viewable()
             assert all(button.cget("state") == "disabled" for button in app._reports_action_buttons)
+            assert not any(button.winfo_viewable() for button in app._reports_action_buttons)
             app._set_active_flow_tab(app._prompts_tab_name)
             app.root.update_idletasks()
             app.root.update()
             assert len(app._prompt_cards_frame.winfo_children()) == 4
+            assert app._prompt_card_stage_labels[0].cget("text") == "1 / Preparation"
             assert app._prompt_cards_frame.winfo_viewable()
             app._set_active_flow_tab(app._repair_tab_name)
             app.root.update_idletasks()
