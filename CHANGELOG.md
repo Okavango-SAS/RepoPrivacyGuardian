@@ -4,6 +4,10 @@ All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.4.7] - 2026-05-04
+
+System-aware GUI theme and agent-first UX hardening update.
+
 ### Changed
 
 - Kept the GUI Reports empty state focused on the safe `Go to Audit` action instead of showing disabled artifact buttons before a run exists.
@@ -12,7 +16,7 @@ All notable user-facing changes to this project are documented here.
 - Refined the desktop GUI visual flow after screenshot QA: Reports now reads as latest-run review, checklist guidance no longer looks like disabled controls, and invalid Root empty states include a direct folder-selection action.
 - Improved compact desktop behavior for the GUI Reports and Prompts tabs so handoff steps stack cleanly and prompt descriptions use the available one-column width.
 - Added visible `(i)` contextual-help badges to agent-first GUI sections and improved tooltip positioning near screen edges.
-- Added a GUI `System` theme option, made it the default, and update the desktop palette immediately when the OS or selector changes.
+- Added a GUI `System` theme option, made it the default, and updates the desktop palette immediately when the OS or selector changes.
 
 ### Fixed
 
