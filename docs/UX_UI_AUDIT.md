@@ -224,7 +224,7 @@ The localization pass added a presentation-only language selector without wideni
 This pass audited the Spanish (Latin America) GUI catalog after the agent-first redesign:
 
 - Replaced avoidable English UI copy such as `Prompts`, `audit-only`, `handoff`, `owner`, `settings`, `workers`, `drag-and-drop`, and `manual-review` with Spanish presentation text.
-- Kept technical/product tokens where they are contract or platform names: CLI, GUI, GitHub, Git, PASS/FAIL, SAFE/RISKY category tags, `report.json`, `report.html`, `run.log`, and CLI flags.
+- Kept technical/product tokens where they are contract or platform names: CLI, GUI, GitHub, Git, PASS/FAIL, SAFE/RISKY category tags, `agent_summary.json`, `report.json`, `report.html`, `run.log`, and CLI flags.
 - Added regression coverage that fails when common untranslated UX fragments reappear in the Spanish GUI labels or tooltips.
 - Preserved locale as presentation-only; no CLI flags, policy keys, report schema, or `GuardRunConfig` mappings changed.
 
@@ -234,7 +234,8 @@ The next GUI pass re-centered the desktop app around the primary agentic CLI use
 
 - Rebuilt the information architecture as `Audit`, `Reports`, `Prompts`, `Settings`, and gated `Repair`.
 - Kept the first Audit path focused on local target selection, drag-and-drop, run/stop/refresh, and execution log.
-- Added a Reports dashboard for the latest local `report.json`, `report.html`, `run.log`, and `run_state.json` paths, with quick-open actions but no raw sensitive evidence rendering.
+- Added a Reports dashboard for the latest local `agent_summary.json`, `report.json`, `report.html`, `run.log`, and `run_state.json` paths, with quick-open actions but no raw sensitive evidence rendering.
+- Added `scripts/visual_qa_gui.py` for non-pixel-perfect screenshot QA across System, Light, and Dark desktop themes.
 - Added a Prompts tab backed by a tracked bilingual prompt registry for environment setup, audit-only, reviewed audit-and-repair, and compact CLI delegation workflows.
 - Moved policy/output/GitHub/identity parity controls into Settings and kept advanced Repair write options collapsed by default.
 - Preserved the shared backend and `GuardRunConfig` mapping; the change is presentation and workflow organization, not a new execution engine.

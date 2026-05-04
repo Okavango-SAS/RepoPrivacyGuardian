@@ -1,143 +1,103 @@
 # ARCHITECTURE
 
-Repo Privacy Guardian is still intentionally centered on one Python module: `Repo_Privacy_Guardian.py`.
+Repo Privacy Guardian now uses an internal package with compatibility facades for the stable `1.x` entry paths.
 
-That is a tradeoff, not an accident. The repository optimizes for a self-contained CLI/Desktop tool with a small packaging surface. Maintainability depends on keeping clear section boundaries inside that file and documenting where each concern lives.
+There are now four intentionally small support modules: the root compatibility shims for artifacts, GitHub, prompts, and runtime; their implementation lives inside the package.
 
-There are now four intentionally small support modules:
-
-- `repo_privacy_guardian_runtime.py` for shared run-exit semantics plus root/target discovery helpers used by both CLI and GUI
-- `repo_privacy_guardian_artifacts.py` for run-artifact creation, run-state persistence, and log-writing helpers shared by CLI and GUI flow
-- `repo_privacy_guardian_github.py` for GitHub remote parsing, API access, and release-hardening audit helpers
-- `repo_privacy_guardian_prompts.py` for the GUI/README agentic prompt registry without importing desktop GUI dependencies
-
-There is also one packaged GUI asset package:
-
-- `repo_privacy_guardian_assets/` for small raster visuals used by the optional desktop GUI
-
-They exist to remove high-risk runtime/preflight, network, prompt-library, artifact helper glue, and GUI packaging concerns from the monolith without fragmenting the core audit/remediation engine.
-
-The support modules intentionally remain at the repository root in the current `1.x` line because they are packaged as `py-modules`, imported by the direct script/module entry paths, and covered by release smoke tests. The GUI asset package is the only runtime package besides resources. Moving them into a package would be a broader import and packaging migration, not a cosmetic root cleanup.
-
-## Runtime surfaces
-
-The project exposes three practical entry paths:
+The public compatibility contract remains:
 
 - installed console script: `repo-privacy-guardian`
 - module execution: `python -m Repo_Privacy_Guardian`
-- direct compatibility path: `python Repo_Privacy_Guardian.py`
+- direct script execution: `python Repo_Privacy_Guardian.py`
+- import compatibility: `import Repo_Privacy_Guardian as rpg`
+- root shim imports: `repo_privacy_guardian_artifacts`, `repo_privacy_guardian_github`, `repo_privacy_guardian_prompts`, and `repo_privacy_guardian_runtime`
 
-All of them converge on the same parser and shared execution pipeline.
+`Repo_Privacy_Guardian.py` is now a facade. For imports, it aliases the real `repo_privacy_guardian.core` module so existing tests, scripts, and monkeypatch workflows still operate on the actual runtime globals. Direct execution still calls `main()`.
 
-## Code map inside `Repo_Privacy_Guardian.py`
+## Package Map
 
-Read the file in this order when orienting yourself:
+- `repo_privacy_guardian/core.py`: current CLI parser, shared pipeline, scanner/remediation engine, reporting, and optional desktop GUI coordinator
+- `repo_privacy_guardian/artifacts.py`: run directories, `run.log`, `run_state.json`, report persistence helpers, and `agent_summary.json` path wiring
+- `repo_privacy_guardian/runtime.py`: exit codes, run-status names, cancellation token, root validation, and target discovery
+- `repo_privacy_guardian/github.py`: GitHub remote parsing, API access, owner/org discovery, clone orchestration, and release-hardening audit helpers
+- `repo_privacy_guardian/prompts.py`: GUI/README prompt-card registry without importing desktop GUI dependencies
+- `repo_privacy_guardian/agent_summary.py`: safe, compact agent handoff artifact and CLI handoff formatting
+- `repo_privacy_guardian/strict_profiles.py`: documented `audit-only`, `internal`, and `release` profile normalization
+- `repo_privacy_guardian/suppressions.py`: versioned advisory/manual-review suppression parsing and traceable application
+- `repo_privacy_guardian/github_fix_guide.py`: non-mutating GitHub hardening checklist generation
+- `repo_privacy_guardian/metrics.py`: phase and per-repository performance timing snapshots
+- `repo_privacy_guardian_assets/`: packaged GUI raster assets
+- `repo_privacy_guardian_resources/`: packaged policy resource used by installed builds
 
-1. Defaults and policy constants
-- default paths, ignore baseline, network/auth constants, and core regex rules
+The package extraction is intentionally compatibility-first. The largest implementation surface still lives in `core.py` while behavior-sensitive seams are being extracted by domain. New logic should prefer small package modules when it has a clean boundary, but detection, policy, and GUI parity must remain coordinated through shared `GuardRunConfig`, `RepoReport`, and pipeline code.
 
-2. Shared runtime helpers
-- `repo_privacy_guardian_runtime.py`
-- root validation, target discovery, cancellation token, and stable exit-code/status mapping
-
-3. Run artifact and state helpers
-- `repo_privacy_guardian_artifacts.py`
-- run directory creation, `run_state.json` persistence, and report/log export helpers
-
-4. GitHub/network helpers
-- `repo_privacy_guardian_github.py`
-- GitHub remote parsing, auth token resolution, API request helpers, and hardening audit logic
-
-5. Tooling readiness and install helpers
-- `ToolingCheck`
-- `build_cli_tooling_checks()`
-- `build_gui_tooling_checks()`
-- install/bootstrap helpers for Git, `git-filter-repo`, `gh`, and Windows `winget`
-
-6. Core report and runtime models
-- `CommandResult`
-- `GuardRunConfig`
-- `RepoReport`
-
-7. Audit and remediation engine
-- `RepoPublicationGuard`
-- repository discovery
-- content/history scanning
-- `.gitignore` baseline enforcement
-- remediation planning and execution
-
-8. Reporting and export layer
-- CLI summaries
-- JSON sanitization
-- HTML report rendering
-- run artifact persistence
-
-9. Shared execution pipeline
-- `build_guard_run_config()`
-- `execute_guard_pipeline()`
-
-10. Optional GUI wrapper
-- `GuiApp`
-- GUI state management, Reports/Prompts/Settings presentation, audit/repair staging, and parity wiring
-
-11. CLI/parser entrypoint
-- `make_parser()`
-- `run_cli()`
-- `main()`
-
-## Responsibility boundaries
-
-Keep these boundaries intact when editing:
-
-- Detection logic should stay separate from presentation logic.
-- Shared runtime/config normalization should happen before CLI and GUI diverge.
-- GUI behavior should call the same pipeline used by CLI instead of re-implementing audit/fix logic.
-- Repository root validation and target discovery should stay shared between CLI and GUI to preserve `Current Root` parity and error semantics.
-- Run cancellation and exit-code/status semantics should stay shared between CLI and GUI so `run_state.json`, logs, and operator expectations do not drift.
-- GitHub/network logic should stay isolated from local audit/remediation flow so transport/typecheck changes do not churn unrelated CLI/GUI code.
-- GUI localization is a presentation layer only. Locale catalogs translate desktop labels, dialogs, and help copy while shared config names, CLI flags, report fields, and policy keys remain canonical.
-- Policy defaults should be expressed once in code and reused by smoke tests or fixtures where possible.
-
-## Execution flow
+## Execution Flow
 
 Normal CLI flow:
 
-1. parser builds arguments
-2. arguments normalize into `GuardRunConfig`
-3. tooling preflight runs when requested
-4. run artifacts are created under `Audit_Results/<run_id>/`
-   a local `run_state.json` manifest is updated as phases progress so interrupted runs still leave diagnosable state
-5. `execute_guard_pipeline()` instantiates `RepoPublicationGuard`
-6. repositories are discovered, execution-locked one at a time with an OS-backed lock file, and audited
-7. optional fix path executes only when explicitly requested
-8. reports are persisted and optionally opened
+1. `make_parser()` builds CLI arguments.
+2. arguments normalize into `GuardRunConfig` through `build_cli_guard_run_config()` and `build_guard_run_config()`.
+3. optional tooling preflight runs.
+4. run artifacts are created under `Audit_Results/<run_id>/`.
+5. `execute_guard_pipeline()` instantiates `RepoPublicationGuard`.
+6. repositories are discovered, execution-locked one at a time, audited, optionally fixed, and re-audited.
+7. strict profile and suppression post-processing is applied before status finalization.
+8. JSON, HTML, log, `agent_summary.json`, and `run_state.json` are persisted.
+9. `run_state.json` records phase timings and per-repository timing snapshots.
 
-GUI flow uses the same backend pipeline, but keeps a companion-style staged contract:
+GUI flow uses the same backend pipeline, but keeps the companion-style staged contract:
 
 1. `Audit`
 2. review local evidence in `Reports`
-3. copy CLI-first agentic workflows from `Prompts` when delegating work
+3. copy CLI-first agentic workflows from `Prompts`
 4. keep advanced parity controls in `Settings`
-5. `Repair` only after audit context unlocks it
+5. unlock `Repair` only after audit context exists
 
-## Operationally important files outside the main module
+## Reporting Artifacts
 
-- `tests/`: tracked regression and release smoke coverage
-- `scripts/release_readiness.py`: repository-owned end-to-end local validation harness
-- `docs/POLICY.md`: source-of-truth policy document in the repo
-- `repo_privacy_guardian_resources/POLICY.md`: packaged copy of the policy for installed builds
-- `config/requirements/`: compatibility requirement manifests for users who prefer requirements files over extras
+Each run writes:
 
-## Design constraints worth preserving
+- `agent_summary.json`: privacy-safe summary for coding agents with status, counts, relative artifact names, blocking/advisory/fixture/suppression counts, and next action
+- `report.json`: redacted structured report with full traceability, including `suppressed_findings` and GitHub hardening fix guide data when present
+- `report.html`: human review report that starts with `Decision first`
+- `run.log`: redacted execution log
+- `run_state.json`: status manifest with phase and performance diagnostics
 
-- Local-first behavior is the default.
-- Network access stays opt-in and documented.
-- Destructive operations require explicit flags.
-- Reports are treated as sensitive local artifacts.
-- CLI remains the primary contract; GUI is a parity wrapper, not a separate product surface.
-- GUI is a CLI companion for manual audit, evidence review, prompt copying, settings, and gated repair; it must not duplicate scanner or remediation logic.
-- CLI/GUI parity is a repository rule: new behavior must stay mapped through the shared runtime/config/report path or be documented as a non-behavioral presentation/launcher exception.
+## Policy Surfaces
 
-## Current technical debt
+- Defaults remain unchanged when new flags are omitted.
+- `--strict-profile audit-only` rejects `--fix` and `--push`.
+- `--strict-profile internal` documents the current default policy posture.
+- `--strict-profile release` treats low-confidence emails as blocking and treats GitHub hardening findings as blocking only when `--audit-github-hardening` was explicitly enabled.
+- `--strict-profile release` does not enable network access by itself.
+- `--suppressions PATH` can suppress only advisory/manual-review categories and always records redacted `suppressed_findings`.
+- High-confidence secrets, path leaks, dirty worktrees, fsck failures, Git metadata blocking secrets, execution errors, and fix errors cannot be suppressed.
 
-The largest structural debt is still the single-file implementation. That is acceptable for the current scope, but future refactors should only extract modules when they improve clarity without splitting tightly coupled policy/runtime logic across too many files.
+## Responsibility Boundaries
+
+- Detection logic should stay separate from presentation logic.
+- Shared runtime/config normalization should happen before CLI and GUI diverge.
+- GUI behavior must call the same pipeline used by CLI instead of re-implementing audit/fix logic.
+- Repository root validation and target discovery must stay shared between CLI and GUI.
+- Run cancellation and exit-code/status semantics must stay shared so `run_state.json`, logs, and operator expectations do not drift.
+- GitHub/network logic stays isolated from local audit/remediation flow.
+- GUI localization and theme are presentation layers only.
+- CLI/GUI parity is a repository rule and release-blocking for audit, report, GitHub hardening, remote-audit, locale-visible, and repair behavior.
+
+## Visual QA
+
+Desktop GUI changes should be visually checked with real screenshots, not only smoke tests. Use:
+
+```sh
+python scripts/visual_qa_gui.py
+```
+
+The script captures Audit, Reports, Prompts, and Repair tabs in System, Light, and Dark modes under `.local-meta/visual-qa/<run_id>/`, validates dimensions, and rejects blank screenshots. It is intentionally not a pixel-perfect CI gate.
+
+## GitHub Hardening Governance
+
+Repo Privacy Guardian does not mutate GitHub repository settings. Hardening findings include a non-mutating checklist in JSON, HTML, and agent summary context. Branch protection and rulesets must be configured manually in GitHub, then re-audited.
+
+## Current Technical Debt
+
+`repo_privacy_guardian/core.py` is still large. The refactor has moved import/runtime/artifact/GitHub/prompt/summary/profile/suppression/metrics responsibilities behind package boundaries while preserving the `1.x` public contract. Future extraction should continue by domain, with regression tests after each slice and no behavior drift in CLI/GUI parity.

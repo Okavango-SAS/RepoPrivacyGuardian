@@ -4,7 +4,7 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 ## Current stage
 
-- Current public line: `1.4.x`
+- Current public line: `1.5.x`
 - Maturity: stable for the CLI, packaging, and release-engineering surface
 - Goal of this stage: preserve the `1.x` contract while continuing additive hardening and documentation improvements
 
@@ -57,6 +57,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 `1.4.6` is a desktop GUI, locale, and cleanup-hardening patch on top of `1.4.5`. It refines the agent-first GUI companion workflow, packages and documents the current sanitized GUI screenshots/assets, polishes the Spanish (Latin America) GUI locale, and hardens report/build/temp cleanup paths without changing CLI flags, report schema, policy keys, or remediation defaults.
 
 `1.4.7` is a system-aware desktop GUI patch on top of `1.4.6`. It adds the default `System` theme mode with OS-theme tracking, improves contextual-help and agent-first UX affordances, and preserves the existing CLI contract, report schema, policy keys, and remediation defaults.
+
+`1.5.0` is an additive modular-architecture release on top of `1.4.7`. It keeps all stable `1.x` entry paths while introducing the internal `repo_privacy_guardian/` package, compatible root shims, `agent_summary.json`, `--agent-summary`, strict profiles, versioned advisory/manual-review suppressions, HTML `Decision first`, GitHub hardening fix guide output, performance timings in `run_state.json`, and basic desktop visual QA scripting.
 
 ## Versioning rules
 

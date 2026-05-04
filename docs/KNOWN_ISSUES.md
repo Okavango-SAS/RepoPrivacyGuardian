@@ -32,6 +32,11 @@ Workaround: always create bundle backups and coordinate with collaborators.
 Impact: low.
 Workaround: GUI supports cooperative cancellation, but it only stops after the active repository step completes. Use CLI for tighter control over long runs.
 
+1. `repo_privacy_guardian/core.py` is still large after the package split.
+
+Impact: medium.
+Workaround: continue extracting by domain behind the internal package while preserving the stable `1.x` facade and CLI/GUI parity tests.
+
 1. Linux GUI support depends on optional desktop prerequisites.
 
 Impact: low.
@@ -56,6 +61,7 @@ Workaround: treat rotation as an external mandatory post-remediation step.
 - Malformed/non-email author/committer email-field values are treated as suspicious commit identity tokens.
 - `exfil_code_indicators` is advisory by default. It elevates review guidance, but it does not automatically fail a repository.
 - `pytest` release validation intentionally ignores untracked/local-only `tests/test_*.py` files so the release signal matches a clean clone.
+- Suppression files are intentionally narrow: high-confidence secrets, path leaks, dirty tree state, fsck failures, execution errors, fix errors, and Git metadata blocking secrets cannot be suppressed.
 
 ## Tracking policy
 

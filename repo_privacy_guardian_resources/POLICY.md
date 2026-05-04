@@ -200,7 +200,45 @@ Local repository discovery note: when `--repos` is omitted, local auto-discovery
 
 GUI localization is presentation-only. Switching between English and Spanish (Latin America) changes visible desktop labels, dialogs, and contextual help, but it must not rename CLI flags, report fields, policy keys, or shared run-config mappings.
 
-### F) .gitignore policy and effectiveness
+### F) Strict profiles and suppressions
+
+Default behavior is unchanged when no strict profile is passed.
+
+Strict profiles:
+
+- `--strict-profile audit-only` rejects `--fix` and `--push`.
+- `--strict-profile internal` documents the current default posture.
+- `--strict-profile release` treats low-confidence emails as blocking and treats GitHub hardening findings as blocking only when `--audit-github-hardening` was explicitly enabled.
+- `--strict-profile release` must not enable network access by itself.
+- `exfil_code_indicators` remains advisory/manual-review in all profiles.
+
+Suppression files:
+
+- Use `--suppressions PATH` only for documented, reviewed advisory/manual-review findings.
+- The JSON format is versioned with top-level `schema_version: 1` and a `suppressions` array.
+- Each suppression requires `id`, `category`, `pattern`, `reason`, `owner`, and `expires`.
+- Suppressed findings are retained in redacted `suppressed_findings`; they do not disappear silently.
+- High-confidence secrets, path leaks, dirty tree state, fsck failures, execution errors, fix errors, and Git metadata blocking secrets cannot be suppressed.
+
+Example:
+
+```json
+{
+  "schema_version": 1,
+  "suppressions": [
+    {
+      "id": "fixture-exfil-doc-2026-05",
+      "category": "exfil_code_indicators",
+      "pattern": "docs/examples/*requests.post*",
+      "reason": "Documented fixture used to verify scanner guidance.",
+      "owner": "security",
+      "expires": "2026-12-31"
+    }
+  ]
+}
+```
+
+### G) .gitignore policy and effectiveness
 
 Critical notes:
 

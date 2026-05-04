@@ -55,6 +55,7 @@ By default the script:
 - removes stale `dist/`, `build/`, and `*.egg-info/` outputs before the final build
 - refuses symlinked build-output path components before path resolution, so stale-output cleanup does not delete through a symlink
 - byte-compiles every packaged Python module and release helper script
+- captures optional desktop GUI visual QA with `python scripts/visual_qa_gui.py` when a maintainer needs screenshot evidence for UI changes
 - runs `ruff check`
 - runs `pyright -p pyrightconfig.json`
 - runs `pip-audit` against dev, GUI, and remediation requirement files
@@ -93,11 +94,20 @@ GitHub hardening coverage is tiered:
 
 Use a token or authenticated `gh` session with repository admin/security permissions for the complete audit. The check remains audit-only and does not mutate GitHub settings.
 
+Manual GitHub hardening fix guide:
+
+- enable private vulnerability reporting for public repositories when desired
+- enable secret scanning and secret scanning push protection
+- protect `main` with a branch protection rule or ruleset
+- require pull requests, code-owner review when `CODEOWNERS` exists, conversation resolution, and current required checks
+- keep GitHub Actions workflow permissions least-privilege
+- re-run `--audit-github-hardening` after changes
+
 ## Artifacts and outputs
 
 Operational outputs remain local by default:
 
-- audit reports: `Audit_Results/<run_id>/report.json`, `report.html`, `run.log`
+- audit reports: `Audit_Results/<run_id>/agent_summary.json`, `report.json`, `report.html`, `run.log`
 - execution state manifest: `Audit_Results/<run_id>/run_state.json`
 - build outputs: `dist/`
 - rewrite safety bundle: `<repo>-pre-publication-fix-<timestamp>.bundle`
@@ -111,12 +121,15 @@ The tool also applies a few local-safety defaults during normal operation:
 - temporary clone cleanup refuses symlinked path components before recursive removal
 - local auto-discovery skips symlinked child directories unless the operator selects that target explicitly
 - run artifacts are created with private directory/file permissions where the platform supports them
+- `agent_summary.json` is written as a privacy-safe compact handoff for coding agents
+- `report.html` starts with `Decision first` so blockers, advisory/manual-review signals, fixtures/docs, suppressions, and next action are visible before details
 - run artifact directory collision handling is bounded and fails visibly instead of looping indefinitely
 - repository execution is guarded by an OS-backed lock file in the Git metadata directory to prevent overlapping runs on the same checkout without relying on PID/timestamp stale-lock reclamation
 - automatic `--fix` refuses to mutate a repository when the worktree is dirty, `git fsck` has already failed, or the audit recorded runtime/timeout errors
 - history scan startup failures and stream timeouts are promoted into `execution_errors` so partial scans do not look like a clean PASS
 - GitHub owner/org remote audits use bounded auth probes, paginated discovery limits, and capped clone workers so network or scheduler failures stay diagnosable instead of hanging a release run
 - atomic report/state writes fsync their replacement file and parent directory where the platform supports it, so interrupted runs are less likely to leave partially durable artifacts
+- `run_state.json` records total, phase, and per-repository performance timing snapshots
 - generated rewrite helper files are temporary and removed after the rewrite step finishes
 
 ## Recovery and rollback

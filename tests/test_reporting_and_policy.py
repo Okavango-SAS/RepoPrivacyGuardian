@@ -127,6 +127,119 @@ def _make_guard(root: Path, logger=None) -> rpg.RepoPublicationGuard:
     )
 
 
+def test_strict_profile_release_promotes_expected_policy() -> None:
+    parser = rpg.make_parser()
+    args = parser.parse_args(["--strict-profile", "release", "--audit-github-hardening"])
+    config = rpg.build_cli_guard_run_config(args)
+
+    assert config.strict_profile == "release"
+    assert config.low_confidence_email_mode == "blocking"
+    assert config.github_hardening_findings_blocking is True
+
+    report = _make_report("repo-a")
+    report.github_hardening_checked = True
+    report.github_hardening_findings = ["Default branch protection is not enabled for main."]
+    rpg.apply_report_policy_post_processing(report, config=config, suppression_rules=[])
+
+    assert report.status == "FAIL"
+    assert "GitHub hardening findings configured as blocking" in report.failures
+    assert report.github_hardening_fix_guide
+
+
+def test_strict_profile_audit_only_rejects_writes() -> None:
+    errors = rpg.strict_profiles.validate_strict_profile_runtime(
+        profile="audit-only",
+        fix=True,
+        push=False,
+    )
+
+    assert errors == ["--strict-profile audit-only cannot be combined with --fix or --push."]
+
+
+def test_suppressions_apply_only_to_allowed_manual_review_categories(tmp_path: Path) -> None:
+    suppression_file = tmp_path / "suppressions.json"
+    suppression_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "suppressions": [
+                    {
+                        "id": "exfil-doc-example",
+                        "category": "exfil_code_indicators",
+                        "pattern": "*requests.post*",
+                        "reason": "Documented fixture for scanner coverage.",
+                        "owner": "security",
+                        "expires": "2099-01-01",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    rules = rpg.load_configured_suppressions(_make_run_config(suppressions=str(suppression_file)))
+    config = _make_run_config()
+    report = _make_report("repo-a")
+    report.exfil_code_indicators = ["tests/fixtures/exfil.py:12:requests.post(url, json=payload)"]
+    report.tracked_secret_matches = [f"src/settings.py:1:{_fixture_secret()}"]
+
+    rpg.apply_report_policy_post_processing(report, config=config, suppression_rules=rules)
+
+    assert report.exfil_code_indicators == []
+    assert report.suppressed_findings[0]["category"] == "exfil_code_indicators"
+    assert report.tracked_secret_matches
+    assert report.status == "FAIL"
+
+
+def test_suppression_file_rejects_blocking_categories(tmp_path: Path) -> None:
+    suppression_file = tmp_path / "bad-suppressions.json"
+    suppression_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "suppressions": [
+                    {
+                        "id": "bad-secret",
+                        "category": "tracked_secret_matches",
+                        "pattern": "*",
+                        "reason": "not allowed",
+                        "owner": "security",
+                        "expires": "2099-01-01",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="not suppressible"):
+        rpg.load_configured_suppressions(_make_run_config(suppressions=str(suppression_file)))
+
+
+def test_persist_run_outputs_writes_agent_summary_and_decision_first_html(tmp_path: Path) -> None:
+    artifacts = rpg.create_run_artifacts(tmp_path / "Audit_Results")
+    config = _make_run_config(agent_summary=True)
+    report = _make_report("repo-a")
+    report.exfil_code_indicators = ["src/client.py:4:requests.post(url)"]
+    report.finalize()
+
+    rpg.persist_run_outputs(
+        reports=[report],
+        artifacts=artifacts,
+        root_path=config.root,
+        policy_path=config.policy,
+        run_settings=rpg.build_run_settings(config, tmp_path / "Audit_Results"),
+        logger=lambda _msg: None,
+        exit_code=rpg.EXIT_OK,
+    )
+
+    assert artifacts.agent_summary_path is not None
+    summary = json.loads(artifacts.agent_summary_path.read_text(encoding="utf-8"))
+    assert summary["schema_version"] == 1
+    assert summary["status"] == "REVIEW"
+    assert summary["artifacts"]["report_json"] == "report.json"
+    assert "Decision first" in artifacts.html_path.read_text(encoding="utf-8")
+
+
 def _github_ok_repo_payload(**overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "default_branch": "main",

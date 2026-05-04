@@ -182,8 +182,32 @@ Presentation-only GUI features and launcher-only CLI flags are permitted only wh
   - `Repair` remains locked until a valid audit context exists, and advanced write toggles start collapsed.
   - `dev` bundles test and release tooling.
 
+## DEC-013 - Internal package with compatibility facades
+
+- Status: accepted
+- Decision: move implementation behind the internal `repo_privacy_guardian/` package while keeping `Repo_Privacy_Guardian.py` and root support modules as compatibility facades/shims.
+- Rationale: the previous single-file/root-module shape made domain extraction difficult, but `1.x` users and tests rely on stable entry paths and imports.
+- Implementation notes:
+  - `import Repo_Privacy_Guardian as rpg` aliases the real `repo_privacy_guardian.core` module so monkeypatch and scripting workflows still affect runtime globals;
+  - root shim modules alias their package modules for the same reason;
+  - new bounded domains live in package modules for artifacts, GitHub, prompts, runtime, agent summary, strict profiles, suppressions, metrics, and GitHub fix-guide generation;
+  - `Repo_Privacy_Guardian.py` remains valid for direct script execution and `python -m Repo_Privacy_Guardian`.
+
+## DEC-014 - Agent summary, strict profiles, and traceable suppressions are additive policy surfaces
+
+- Status: accepted
+- Decision: add `agent_summary.json`, `--agent-summary`, `--strict-profile`, `--suppressions`, `Decision first`, GitHub hardening fix guide, and performance timings without changing defaults when flags are omitted.
+- Rationale: agent-first workflows need a compact safe handoff, release workflows need documented stricter presets, and accepted advisory findings need traceability rather than disappearing from reports.
+- Implementation notes:
+  - `agent_summary.json` is written for every run and uses relative artifact names;
+  - `--agent-summary` prints a compact safe handoff;
+  - `--strict-profile release` does not enable network access by itself;
+  - suppressions can affect only advisory/manual-review categories and keep redacted `suppressed_findings`;
+  - high-confidence secrets, path leaks, dirty trees, fsck failures, Git metadata blocking findings, execution errors, and fix errors are not suppressible;
+  - GitHub hardening remains read-only and produces a manual fix guide instead of mutating repository settings.
+
 ## Future candidates
 
-- DEC-012: scoped allowlists to reduce false positives.
-- DEC-013: optional HTML report renderer.
-- DEC-014: policy profiles by organization.
+- Scoped allowlists to reduce false positives beyond suppression files.
+- Further extraction of `repo_privacy_guardian/core.py` into scanner, policy, remediation, reporting, and GUI subpackages.
+- Optional policy profiles by organization.

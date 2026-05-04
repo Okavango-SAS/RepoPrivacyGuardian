@@ -663,7 +663,7 @@ def test_release_contract_detects_stale_current_release_references() -> None:
                 "`v1.2.3` is the current patch-level baseline.",
                 "`v1.4.0` is the current minor release.",
                 "`v1.4.6` is the current patch release with old notes.",
-                "`v1.4.7` is the current patch release with current notes.",
+                "`v1.5.0` is the current minor release with current notes.",
             ]
         )
     ) == [

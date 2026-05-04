@@ -14,7 +14,7 @@ Auditar, clasificar, preparar un plan de reparacion, aplicar solo cambios aproba
 2. Si el entorno no fue preparado en esta sesion, ejecutar `repo-privacy-guardian --check-tooling`.
 3. Ejecutar la primera auditoria sin writes:
    `repo-privacy-guardian --root <repos-root> --repos <target-repo> --dry-run --yes`
-4. Leer `Audit_Results/<run_id>/report.json`, `report.html` y `run.log`.
+4. Leer `Audit_Results/<run_id>/agent_summary.json`, `report.json`, `report.html` y `run.log`.
 5. Clasificar cada finding:
    - confirmed leak
    - fixture/documentacion intencional
@@ -48,6 +48,7 @@ Commands run:
 - ...
 
 Artifacts:
+- Audit_Results/<run_id>/agent_summary.json
 - Audit_Results/<run_id>/report.json
 - Audit_Results/<run_id>/report.html
 - Audit_Results/<run_id>/run.log

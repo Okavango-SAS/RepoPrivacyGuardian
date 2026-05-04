@@ -14,7 +14,7 @@ Prepare a repository for publication or deployment with traceable evidence, with
 2. If the environment is unknown, run `repo-privacy-guardian --check-tooling`.
 3. Run a local audit-only pass:
    `repo-privacy-guardian --root <root> --repos <repo> --dry-run --yes`
-4. Locate `Audit_Results/<run_id>/report.json`, `report.html`, and `run.log`.
+4. Locate `Audit_Results/<run_id>/agent_summary.json`, `report.json`, `report.html`, and `run.log`.
 5. Classify every finding:
    - confirmed leak
    - intentional fixture/documentation
@@ -40,6 +40,7 @@ Commands run:
 - ...
 
 Artifacts:
+- Audit_Results/<run_id>/agent_summary.json
 - Audit_Results/<run_id>/report.json
 - Audit_Results/<run_id>/report.html
 - Audit_Results/<run_id>/run.log

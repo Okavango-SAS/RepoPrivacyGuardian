@@ -14,7 +14,7 @@ Audit a repository with traceable evidence, distinguish real leaks from intentio
 2. If the environment is unknown, run `repo-privacy-guardian --check-tooling`.
 3. Run the first audit without writes:
    `repo-privacy-guardian --root <repos-root> --repos <target-repo> --dry-run --yes`
-4. Review `Audit_Results/<run_id>/report.json`, `report.html`, and `run.log`.
+4. Review `Audit_Results/<run_id>/agent_summary.json`, `report.json`, `report.html`, and `run.log`.
 5. Classify every finding as confirmed leak, intentional fixture/example, safe documentation, indeterminate/manual-review, advisory hardening, or tooling/runtime issue.
 6. Explain risk, possible consequence, and one concrete next action for each group.
 7. If a known literal must be rewritten and the replacement cannot be inferred safely, prepare a reviewed `--replace-text-file` mapping.
@@ -52,7 +52,7 @@ repo-privacy-guardian --root <repos-root> --repos <target-repo> --dry-run --yes 
 
 - Decision: `PASS`, `FAIL`, or `REVIEW`
 - Commands executed
-- Artifact paths for `report.json`, `report.html`, and `run.log`
+- Artifact paths for `agent_summary.json`, `report.json`, `report.html`, and `run.log`
 - Finding classification with redacted evidence references
 - Reviewed repair plan, if approved
 - Explicit confirmation: `No destructive changes applied` when only an audit was run

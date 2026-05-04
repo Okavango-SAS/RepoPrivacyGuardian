@@ -4,14 +4,27 @@ All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-05-04
+
+### Added
+
+- Added the internal `repo_privacy_guardian/` package while keeping stable entry paths and root shim imports compatible.
+- Added the modular architecture baseline for the `1.5.x` line.
+- Added `agent_summary.json` for every run plus `--agent-summary` for safe CLI handoff output.
+- Added `--strict-profile audit-only|internal|release` and versioned `--suppressions` files for traceable advisory/manual-review suppressions.
+- Added HTML `Decision first`, GitHub hardening fix guide output, and phase/per-repository timings in `run_state.json`.
+- Added `scripts/visual_qa_gui.py` for desktop screenshots across System, Light, and Dark GUI modes.
+
 ### Changed
 
 - Hardened the release-contract checker so stale README "current release" references are detected generically instead of through a manually maintained list of old versions.
 - Clarified the README agent-first mental model, GUI companion role, screenshot context, and SSH remote pseudo-email noise policy.
+- Updated architecture, policy, operations, release, and versioning docs for the modular package and agent-first artifacts.
 
 ### Fixed
 
 - Reduced email false positives by ignoring known SSH remote pseudo-users such as `git@github.com`, `git@gitlab.com`, and `git@bitbucket.org` while keeping real custom-domain emails reportable.
+- Reworked compatibility facades so monkeypatch/import workflows operate on the real internal modules.
 
 ## [1.4.7] - 2026-05-04
 

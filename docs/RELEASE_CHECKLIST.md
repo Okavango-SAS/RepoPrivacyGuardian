@@ -15,6 +15,7 @@ Use this checklist before tagging a public release.
 - Confirm README still distinguishes automatic CI smoke, manual extended CI, and the local release harness.
 - Confirm branch protection required status checks match the current automatic CI smoke job names.
 - Review GitHub Actions workflows for least-privilege permissions, explicit timeouts, and SHA-pinned actions.
+- Confirm the manual GitHub hardening checklist is current: private vulnerability reporting, secret scanning, push protection, `main` branch protection/ruleset, required checks, and least-privilege workflow permissions.
 
 ## 2. Audit run
 
@@ -23,6 +24,8 @@ Use this checklist before tagging a public release.
 - For dogfooding another repository, follow `docs/DOGFOODING.md` and keep the first pass audit-only.
 - Review FAIL reasons by severity.
 - Review advisory/manual-review findings separately from blockers, including `exfil_code_indicators`.
+- Review `agent_summary.json` and the HTML `Decision first` section before reading raw detail sections.
+- Confirm any `--suppressions` file contains owner, reason, expiration, and only advisory/manual-review categories.
 - Classify each finding as confirmed leak, intentional fixture/example, indeterminate/manual-review, advisory hardening, or tooling/runtime issue before proposing fixes.
 - Reference redacted evidence only; do not paste raw secrets, private emails, hostnames, internal URLs, or personal absolute paths into public notes.
 - If using GUI, confirm `Audit` is the first executable step and `Repair` is visually locked before audit context is available.
@@ -64,6 +67,7 @@ Use this checklist before tagging a public release.
 - `python -m ruff check .` passes locally.
 - `python -m pip_audit -r config/requirements/requirements-dev.txt`, `requirements-gui.txt`, and `requirements-remediation.txt` report no known vulnerabilities, or any outage/exception is recorded.
 - `python scripts/release_readiness.py` passes locally, or any intentionally skipped parts are documented.
+- `python scripts/visual_qa_gui.py` has been run for GUI-impacting changes when a desktop session is available.
 - Clean-clone validation passes: `python -m pip install .`, `repo-privacy-guardian --help`, `python -m pip install ".[test]"`, `python -m pytest`.
 - Package build succeeds (`python -m build`) and both `wheel` and `sdist` installs complete cleanly.
 - Automatic CI smoke is green.

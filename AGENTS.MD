@@ -26,6 +26,9 @@ Notes:
 - Treat `exfil_code_indicators` as advisory/manual-review by default. Review them, but do not expect them to flip PASS/FAIL on their own.
 - Treat low-confidence secret assignment fields (`tracked_secret_low_confidence`, `history_secret_low_confidence`, `git_metadata_secret_low_confidence`) as advisory/manual-review by default. `tracked_secret_matches`, `history_secret_matches`, and `git_metadata_secret_matches` are the high-confidence blocking buckets; fixture and documentation buckets are separated to reduce false positives.
 - Treat `github_hardening_findings` and `github_hardening_warnings` as advisory/manual-review by default. Use `--audit-github-hardening` when the target repo lives on GitHub and you want to inspect repository settings before publication.
+- Use `--agent-summary` when a compact safe handoff is useful; every run writes `agent_summary.json` even without the flag.
+- Use `--strict-profile audit-only|internal|release` only when the operator wants an explicit documented posture. `release` does not enable network checks by itself.
+- Use `--suppressions PATH` only for reviewed advisory/manual-review findings. High-confidence secrets, path leaks, dirty tree, fsck, execution errors, fix errors, and Git metadata blocking findings cannot be suppressed.
 - For GitHub hardening token-gated checks, support either token environment variables or an authenticated GitHub CLI session. GitHub MCP is not required for standalone CLI/Desktop use.
 - Use `--github-owner` only for opt-in remote audit discovery. It clones matching GitHub repos into temporary local directories, audits them with the same pipeline, and remains audit-only; do not combine it with `--fix` or `--push`.
 - Release validation should come from tracked tests only so a clean clone reproduces the same `pytest` signal.
@@ -133,7 +136,7 @@ When reporting findings, keep outputs actionable and brief.
 - State possible consequence.
 - State one suggested next action.
 - Classify each finding as confirmed leak, intentional fixture/example, indeterminate/manual-review, advisory hardening, or tooling/runtime issue before proposing remediation.
-- Reference `report.json`, `report.html`, and `run.log` by path, but do not paste raw secrets, private emails, internal URLs, hostnames, or personal absolute paths.
+- Reference `agent_summary.json`, `report.json`, `report.html`, and `run.log` by path, but do not paste raw secrets, private emails, internal URLs, hostnames, or personal absolute paths.
 
 Avoid dumping all raw findings first. Start with decision guidance, then show details only if needed.
 
@@ -154,5 +157,5 @@ Do not push or rewrite history without explicit approval.
 ## Artifacts
 
 - Reports are written under `Audit_Results/<run_id>/`.
-- Use `report.json`, `report.html`, and `run.log` as the audit record.
+- Use `agent_summary.json`, `report.json`, `report.html`, and `run.log` as the audit record.
 - Treat artifacts as sensitive operational outputs even when redacted.

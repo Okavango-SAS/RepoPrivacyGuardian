@@ -42,9 +42,14 @@ import socket
 from typing import Callable, Iterable, Mapping
 
 from repo_privacy_guardian import artifacts as artifact_helpers
+from repo_privacy_guardian import agent_summary as agent_summary_helpers
 from repo_privacy_guardian import github as github_helpers
+from repo_privacy_guardian import github_fix_guide
+from repo_privacy_guardian import metrics as metrics_helpers
 from repo_privacy_guardian import prompts as prompt_helpers
 from repo_privacy_guardian import runtime
+from repo_privacy_guardian import strict_profiles
+from repo_privacy_guardian import suppressions as suppression_helpers
 from repo_privacy_guardian.runtime import (
     CancellationToken,
     EXIT_ABORTED,
@@ -905,6 +910,10 @@ class GuardRunConfig:
     github_include_forks: bool = False
     github_fast: bool = False
     github_jobs: int = 4
+    agent_summary: bool = False
+    strict_profile: str | None = None
+    github_hardening_findings_blocking: bool = False
+    suppressions: str | None = None
 
 
 RunArtifacts = artifact_helpers.RunArtifacts
@@ -1762,6 +1771,12 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
     "low_confidence_blocking": (
         "Turns noisy low-confidence email findings into blocking failures. Leave off unless you want a stricter review gate."
     ),
+    "strict_profile": (
+        "Applies a CLI-equivalent policy preset. Release is stricter for handoff/publication; audit-only rejects repair and push."
+    ),
+    "suppression_file": (
+        "Versioned JSON file for suppressing only advisory/manual-review categories with owner, reason, and expiration."
+    ),
     "dry_run_preview": "Runs Repair in preview mode so planned changes are reported without writing to repositories.",
     "audit_github_hardening": (
         "Adds read-only GitHub settings checks such as branch protection, Actions permissions, secret scanning, and Dependabot."
@@ -1930,6 +1945,12 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
     "low_confidence_blocking": (
         "Convierte hallazgos ruidosos de email de baja confianza en fallas bloqueantes. Dejalo apagado salvo que quieras una barrera más estricta."
     ),
+    "strict_profile": (
+        "Aplica un preset de política equivalente al CLI. Release es más estricto para entrega/publicación; solo auditoría rechaza reparación y push."
+    ),
+    "suppression_file": (
+        "JSON versionado para suprimir sólo categorías advisory/de revisión manual con responsable, motivo y vencimiento."
+    ),
     "dry_run_preview": "Ejecuta Reparar en modo vista previa para reportar cambios planeados sin escribir en repositorios.",
     "audit_github_hardening": (
         "Agrega verificaciones de solo lectura de configuración GitHub como branch protection, permisos de Actions, secret scanning y Dependabot."
@@ -2087,6 +2108,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
             "Classify findings as confirmed leaks, intentional fixtures/examples, indeterminate/manual-review, advisory hardening, "
             "or tooling/runtime issues. Do not paste raw secrets, private emails, internal URLs, hostnames, or personal absolute paths into chat.\n\n"
             "Artifacts:\n"
+            "- agent_summary.json: {agent_summary_path}\n"
             "- report.json: {json_path}\n"
             "- report.html: {html_path}\n"
             "- run.log: {log_path}\n"
@@ -2139,6 +2161,9 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "choose_results_folder": "Choose the base results directory",
         "optional_json_copy": "Optional JSON Copy",
         "choose_json_copy": "Choose the extra JSON export path",
+        "strict_profile": "Strict profile",
+        "suppression_file": "Suppression file",
+        "choose_suppression_file": "Choose a suppression JSON file",
         "github_owner": "GitHub Owner / Org",
         "github_owner_placeholder": "optional owner or organization",
         "remote_repo_filters": "Remote repo filters",
@@ -2416,6 +2441,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
             "Clasificá hallazgos como filtraciones confirmadas, datos de prueba/ejemplos intencionales, indeterminados para revisión manual, endurecimiento consultivo "
             "o problemas de herramientas/tiempo de ejecución. No pegues secretos crudos, emails privados, URLs internas, nombres de host ni rutas absolutas personales en el chat.\n\n"
             "Artefactos:\n"
+            "- agent_summary.json: {agent_summary_path}\n"
             "- report.json: {json_path}\n"
             "- report.html: {html_path}\n"
             "- run.log: {log_path}\n"
@@ -2468,6 +2494,9 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "choose_results_folder": "Elegir la carpeta base de resultados",
         "optional_json_copy": "Copia JSON opcional",
         "choose_json_copy": "Elegir la ruta extra de export JSON",
+        "strict_profile": "Perfil estricto",
+        "suppression_file": "Archivo de supresiones",
+        "choose_suppression_file": "Elegir archivo JSON de supresiones",
         "github_owner": "Propietario u organización de GitHub",
         "github_owner_placeholder": "propietario u organización opcional",
         "remote_repo_filters": "Filtros de repos remotos",
@@ -2785,6 +2814,10 @@ class RepoReport:
     github_hardening_checked: bool = False
     github_hardening_findings: list[str] = field(default_factory=list)
     github_hardening_warnings: list[str] = field(default_factory=list)
+    github_hardening_fix_guide: list[str] = field(default_factory=list)
+    github_hardening_findings_blocking: bool = False
+    strict_profile: str | None = None
+    suppressed_findings: list[dict[str, str]] = field(default_factory=list)
 
     litellm_reference_hits: list[str] = field(default_factory=list)
     litellm_compromised_reference_hits: list[str] = field(default_factory=list)
@@ -2858,6 +2891,10 @@ class RepoReport:
             (
                 bool(self.litellm_incident_severity in {"CRITICAL", "HIGH"}),
                 "LiteLLM supply-chain incident indicators detected",
+            ),
+            (
+                bool(self.github_hardening_findings_blocking and self.github_hardening_findings),
+                "GitHub hardening findings configured as blocking",
             ),
             (bool(self.fix_errors), "fix execution errors occurred"),
             (bool(self.execution_errors), "repository execution errors occurred"),
@@ -3460,6 +3497,10 @@ class RepoPublicationGuard:  # pragma: no cover
         report.github_hardening_checked = True
         report.github_hardening_findings = findings[: self.max_matches]
         report.github_hardening_warnings = warnings[: self.max_matches]
+        report.github_hardening_fix_guide = github_fix_guide.build_github_hardening_fix_guide(
+            report.github_hardening_findings,
+            report.github_hardening_warnings,
+        )
 
     def _finalize_git_stream_process(
         self,
@@ -4600,6 +4641,8 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"github_hardening_checked: {report.github_hardening_checked}")
     logger(f"github_hardening_findings: {len(report.github_hardening_findings)}")
     logger(f"github_hardening_warnings: {len(report.github_hardening_warnings)}")
+    logger(f"github_hardening_fix_guide: {len(report.github_hardening_fix_guide)}")
+    logger(f"suppressed_findings: {len(report.suppressed_findings)}")
     logger(f"github_hardening_mode: {GITHUB_HARDENING_MODE}")
     logger(f"litellm_incident_severity: {report.litellm_incident_severity}")
     logger(f"litellm_reference_hits: {len(report.litellm_reference_hits)}")
@@ -5170,6 +5213,14 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload["exfil_code_indicators"] = _redact_text_list(report.exfil_code_indicators)
     payload["github_hardening_findings"] = _redact_text_list(report.github_hardening_findings)
     payload["github_hardening_warnings"] = _redact_text_list(report.github_hardening_warnings)
+    payload["github_hardening_fix_guide"] = _redact_text_list(report.github_hardening_fix_guide)
+    payload["suppressed_findings"] = [
+        {
+            str(key): redact_sensitive_text(str(value))
+            for key, value in item.items()
+        }
+        for item in report.suppressed_findings
+    ]
     payload["backups_created"] = _redact_text_list(report.backups_created)
     payload["fix_actions"] = _redact_text_list(report.fix_actions)
     payload["fix_errors"] = _redact_text_list(report.fix_errors)
@@ -5400,6 +5451,14 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
             "Suggestion: review each cited network-capable code path manually. This signal does not change PASS/FAIL by default.",
         )
 
+    if report.github_hardening_findings_blocking and report.github_hardening_findings:
+        return (
+            "PRIORITY",
+            "Release profile: GitHub repository hardening findings are blocking.",
+            "Possible consequence: branch protection, secret scanning, or publication controls may be missing for release.",
+            "Suggestion: apply the GitHub hardening fix guide manually and re-run with --audit-github-hardening.",
+        )
+
     if report.github_hardening_findings:
         return (
             "REVIEW",
@@ -5509,6 +5568,9 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     if report.exfil_code_indicators:
         score = max(score, 20)
         highlights.append("Outbound/exfil heuristics require manual review (advisory)")
+    if report.github_hardening_findings_blocking and report.github_hardening_findings:
+        score = max(score, 65)
+        highlights.append("GitHub release hardening findings are blocking under the selected strict profile")
     if report.github_hardening_findings:
         score = max(score, 25)
         highlights.append("GitHub release hardening settings need manual follow-up (advisory)")
@@ -5573,6 +5635,14 @@ def build_detected_findings_preview(report: RepoReport) -> list[str]:
     add("exfil advisory", report.exfil_code_indicators)
     add("github advisory", report.github_hardening_findings)
     add("github audit warning", report.github_hardening_warnings)
+    add("github fix guide", report.github_hardening_fix_guide)
+    add(
+        "suppressed finding",
+        [
+            f"{item.get('category', 'unknown')}: {item.get('finding', '')}"
+            for item in report.suppressed_findings
+        ],
+    )
     add("litellm reference", report.litellm_reference_hits)
     add("litellm compromised", report.litellm_compromised_reference_hits)
     add("litellm ioc", report.litellm_ioc_hits)
@@ -5664,6 +5734,53 @@ def render_html_report(
         if len(items) > limit:
             suffix = f'<div class="more">Showing {limit} of {len(items)} entries.</div>'
         return f"<ul class=\"finding-list\">{content}</ul>{suffix}"
+
+    def count_report_keys(rep: RepoReport, keys: tuple[str, ...]) -> int:
+        count = 0
+        for key in keys:
+            value = getattr(rep, key, [])
+            if isinstance(value, list):
+                count += len(value)
+        return count
+
+    blocking_findings = sum(
+        count_report_keys(rep, agent_summary_helpers.BLOCKING_CATEGORY_KEYS)
+        for rep in reports
+    )
+    manual_review_findings = sum(
+        count_report_keys(rep, agent_summary_helpers.MANUAL_REVIEW_CATEGORY_KEYS)
+        for rep in reports
+    )
+    fixture_documentation_findings = sum(
+        count_report_keys(rep, agent_summary_helpers.FIXTURE_DOCUMENTATION_CATEGORY_KEYS)
+        for rep in reports
+    )
+    suppressed_findings = sum(len(rep.suppressed_findings) for rep in reports)
+    decision = "FAIL" if failed else ("REVIEW" if manual_review_findings else "PASS")
+    decision_class = {
+        "FAIL": "decision-fail",
+        "REVIEW": "decision-review",
+        "PASS": "decision-pass",
+    }[decision]
+    if decision == "FAIL":
+        decision_next_action = (
+            "Do not publish yet. Review blocking categories first, authorize only reviewed fixes, then re-run."
+        )
+    elif decision == "REVIEW":
+        decision_next_action = (
+            "Classify advisory/manual-review findings before publication. Blocking policy status is PASS."
+        )
+    else:
+        decision_next_action = "No blocking or advisory action is required by the current policy."
+
+    decision_rows = "".join(
+        (
+            f"<tr><td>Blocking findings</td><td class=\"num\">{blocking_findings}</td></tr>"
+            f"<tr><td>Advisory/manual-review findings</td><td class=\"num\">{manual_review_findings}</td></tr>"
+            f"<tr><td>Fixture/documentation findings</td><td class=\"num\">{fixture_documentation_findings}</td></tr>"
+            f"<tr><td>Suppressed findings</td><td class=\"num\">{suppressed_findings}</td></tr>"
+        )
+    )
 
     reason_rows = "".join(
         f"<tr><td>{esc(reason)}</td><td class=\"num\">{count}</td></tr>"
@@ -5863,6 +5980,8 @@ def render_html_report(
             f"<tr><td>github_hardening_checked</td><td>{esc(str(rep.github_hardening_checked))}</td></tr>"
             f"<tr><td>github_hardening_findings</td><td class=\"num\">{len(rep.github_hardening_findings)}</td></tr>"
             f"<tr><td>github_hardening_warnings</td><td class=\"num\">{len(rep.github_hardening_warnings)}</td></tr>"
+            f"<tr><td>github_hardening_fix_guide</td><td class=\"num\">{len(rep.github_hardening_fix_guide)}</td></tr>"
+            f"<tr><td>suppressed_findings</td><td class=\"num\">{len(rep.suppressed_findings)}</td></tr>"
             f"<tr><td>litellm_incident_severity</td><td>{esc(classify_litellm_incident_severity(rep))}</td></tr>"
             f"<tr><td>litellm_reference_hits</td><td class=\"num\">{len(rep.litellm_reference_hits)}</td></tr>"
             f"<tr><td>litellm_compromised_reference_hits</td><td class=\"num\">{len(rep.litellm_compromised_reference_hits)}</td></tr>"
@@ -5871,6 +5990,10 @@ def render_html_report(
             f"<tr><td>execution_errors</td><td class=\"num\">{len(rep.execution_errors)}</td></tr>"
             "</table>"
         )
+        suppressed_preview = [
+            f"{item.get('category', 'unknown')}: {item.get('finding', '')}"
+            for item in rep.suppressed_findings
+        ]
 
         detail_sections = (
             "<div class=\"detail-grid\">"
@@ -5967,6 +6090,14 @@ def render_html_report(
             "</section>"
             "<section><h5>GitHub hardening audit warnings</h5>"
             f"{render_lines(rep.github_hardening_warnings)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>GitHub hardening fix guide</h5>"
+            f"{render_lines(rep.github_hardening_fix_guide)}"
+            "</section>"
+            "<section><h5>Suppressed findings</h5>"
+            f"{render_lines(suppressed_preview)}"
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
@@ -6087,6 +6218,11 @@ def render_html_report(
     .metric {{ font-size: 1.8rem; font-weight: 700; margin: 0; }}
     .metric.fail {{ color: var(--high); }}
     .metric.pass {{ color: var(--ok); }}
+    .decision-first {{ border-left: 6px solid var(--accent); }}
+    .decision-badge {{ display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 800; letter-spacing: 0; }}
+    .decision-pass {{ background: #dff6e9; color: var(--ok); }}
+    .decision-review {{ background: #fff8df; color: var(--low); }}
+    .decision-fail {{ background: #ffe4e8; color: var(--high); }}
     section {{ margin-top: 18px; }}
     h2 {{ margin: 0 0 10px; font-size: 1.18rem; }}
     h4 {{ margin: 0 0 8px; }}
@@ -6118,6 +6254,9 @@ def render_html_report(
       .sev-medium {{ background: #431407; color: var(--med); }}
       .sev-low {{ background: #422006; color: var(--low); }}
       .sev-ok {{ background: #064e3b; color: var(--ok); }}
+      .decision-pass {{ background: #064e3b; color: var(--ok); }}
+      .decision-review {{ background: #422006; color: var(--low); }}
+      .decision-fail {{ background: #450a0a; color: var(--high); }}
       .high-card {{ border-color: #7f1d1d; background: #450a0a; }}
     }}
     @media (max-width: 760px) {{
@@ -6144,6 +6283,18 @@ def render_html_report(
       <article class=\"card\"><h3>PASS</h3><p class=\"metric pass\">{passed}</p></article>
       <article class=\"card\"><h3>FAIL</h3><p class=\"metric fail\">{failed}</p></article>
             <article class=\"card\"><h3>HIGH severity repos</h3><p class=\"metric fail\">{len(high_risk_repos)}</p></article>
+    </section>
+
+    <section class=\"panel decision-first\">
+      <h2>Decision first</h2>
+      <p><span class=\"decision-badge {decision_class}\">{decision}</span></p>
+      <p><strong>Next action:</strong> {esc(decision_next_action)}</p>
+      <div class=\"table-wrap\">
+        <table>
+          <tr><th>Signal</th><th class=\"num\">Count</th></tr>
+          {decision_rows}
+        </table>
+      </div>
     </section>
 
     <section class=\"panel\">
@@ -6216,6 +6367,7 @@ def persist_run_outputs(
     logger: Callable[[str], None],
     optional_json_export: str | None = None,
     optional_supply_chain_payload: dict[str, object] | None = None,
+    exit_code: int | None = None,
 ) -> None:
     artifact_helpers.persist_run_outputs(
         reports=reports,
@@ -6233,6 +6385,21 @@ def persist_run_outputs(
         optional_supply_chain_payload=optional_supply_chain_payload,
         now_factory=datetime.now,
     )
+    reports_payload = [sanitize_report_for_export(rep) for rep in reports]
+    summary = agent_summary_helpers.build_agent_summary(
+        reports_payload=reports_payload,
+        artifacts=artifacts,
+        root_path=Path(redact_sensitive_text(str(root_path))),
+        policy_path=Path(redact_sensitive_text(str(policy_path))),
+        run_settings=run_settings,
+        exit_code=exit_code,
+        generated_at=datetime.now(),
+    )
+    agent_summary_path = artifacts.agent_summary_path or artifacts.run_dir / "agent_summary.json"
+    write_private_text_file(agent_summary_path, json.dumps(summary, indent=2))
+    logger(f"[INFO] Agent summary written to {agent_summary_path}")
+    if run_settings.get("agent_summary") == "True":
+        logger(agent_summary_helpers.format_agent_summary_handoff(summary))
 
 
 def open_html_report_in_browser(
@@ -6283,7 +6450,40 @@ def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, s
         "github_include_forks": str(config.github_include_forks),
         "github_fast": str(config.github_fast),
         "github_jobs": str(config.github_jobs),
+        "agent_summary": str(config.agent_summary),
+        "strict_profile": str(config.strict_profile or ""),
+        "github_hardening_findings_blocking": str(config.github_hardening_findings_blocking),
+        "suppressions": str(config.suppressions or ""),
     }
+
+
+def load_configured_suppressions(config: GuardRunConfig) -> list[suppression_helpers.SuppressionRule]:
+    if not config.suppressions:
+        return []
+    return suppression_helpers.load_suppression_rules(Path(config.suppressions))
+
+
+def apply_report_policy_post_processing(
+    report: RepoReport,
+    *,
+    config: GuardRunConfig,
+    suppression_rules: list[suppression_helpers.SuppressionRule],
+) -> None:
+    report.strict_profile = config.strict_profile
+    report.github_hardening_findings_blocking = config.github_hardening_findings_blocking
+    if (report.github_hardening_findings or report.github_hardening_warnings) and not report.github_hardening_fix_guide:
+        report.github_hardening_fix_guide = github_fix_guide.build_github_hardening_fix_guide(
+            report.github_hardening_findings,
+            report.github_hardening_warnings,
+        )
+    suppressed = suppression_helpers.apply_suppression_rules(
+        report,
+        suppression_rules,
+        redact_sensitive_text=redact_sensitive_text,
+    )
+    if suppressed:
+        report.suppressed_findings.extend(suppressed)
+    report.finalize()
 
 
 def execute_guard_pipeline(
@@ -6303,6 +6503,8 @@ def execute_guard_pipeline(
     total_repositories = 0
     remote_temp_root: Path | None = None
     state_tracker = RunStateTracker(artifacts.state_path, artifacts=artifacts, config=config)
+    run_metrics = metrics_helpers.RunMetrics()
+    suppression_rules: list[suppression_helpers.SuppressionRule] = []
 
     guard_kwargs: dict[str, object] = {
         "root": config.root,
@@ -6356,11 +6558,27 @@ def execute_guard_pipeline(
         )
 
     try:
+        preflight_started = run_metrics.begin_phase()
         state_tracker.update(phase="preflight")
         git_ok, git_error = probe_git_available()
         if not git_ok:
             logger(f"[ERROR] {git_error}")
             exit_code = EXIT_RUNTIME_ERROR
+        elif strict_profile_errors := strict_profiles.validate_strict_profile_runtime(
+            profile=config.strict_profile,
+            fix=config.fix,
+            push=config.push,
+        ):
+            for error in strict_profile_errors:
+                logger(f"[ERROR] {error}")
+            logger("\n[SUMMARY] ERROR 0/0")
+            exit_code = EXIT_RUNTIME_ERROR
+            state_tracker.update(
+                phase="invalid-config",
+                total_repositories=0,
+                completed_repositories=0,
+                current_repository="",
+            )
         elif config.github_owner and (config.fix or config.push):
             logger("[ERROR] --github-owner is audit-only and cannot be combined with --fix or --push.")
             logger("\n[SUMMARY] ERROR 0/0")
@@ -6372,14 +6590,36 @@ def execute_guard_pipeline(
                 current_repository="",
             )
         else:
+            if config.suppressions:
+                try:
+                    suppression_rules = load_configured_suppressions(config)
+                    logger(f"[INFO] Loaded {len(suppression_rules)} suppression rule(s).")
+                except ValueError as exc:
+                    logger(f"[ERROR] Suppression file rejected: {exc}")
+                    logger("\n[SUMMARY] ERROR 0/0")
+                    exit_code = EXIT_RUNTIME_ERROR
+                    state_tracker.update(
+                        phase="invalid-config",
+                        total_repositories=0,
+                        completed_repositories=0,
+                        current_repository="",
+                    )
+                    return exit_code
+            run_metrics.end_phase("preflight", preflight_started)
+            state_tracker.update(performance=run_metrics.snapshot())
             if config.low_confidence_email_mode == "blocking":
                 logger("[INFO] Email policy: low-confidence findings are blocking.")
             else:
                 logger("[INFO] Email policy: low-confidence findings are informational.")
+            if config.strict_profile:
+                logger(f"[INFO] Strict profile: {strict_profiles.describe_strict_profile(config.strict_profile)}")
             if config.audit_github_hardening:
-                logger(
-                    "[INFO] GitHub hardening audit enabled: advisory/manual-review only by default."
-                )
+                if config.github_hardening_findings_blocking:
+                    logger("[INFO] GitHub hardening audit enabled: findings are blocking under release profile.")
+                else:
+                    logger(
+                        "[INFO] GitHub hardening audit enabled: advisory/manual-review only by default."
+                    )
             if config.github_owner:
                 logger(
                     "[INFO] GitHub remote audit enabled: repositories are cloned into a temporary private directory."
@@ -6400,6 +6640,7 @@ def execute_guard_pipeline(
                 )
             else:
                 remote_no_targets_error: str | None = None
+                discovery_started = run_metrics.begin_phase()
                 if config.github_owner:
                     state_tracker.update(phase="github-discovery")
                     try:
@@ -6407,6 +6648,11 @@ def execute_guard_pipeline(
                             prepare_github_remote_audit_repositories(config, logger)
                         )
                         for failure_report in clone_failure_reports:
+                            apply_report_policy_post_processing(
+                                failure_report,
+                                config=config,
+                                suppression_rules=suppression_rules,
+                            )
                             reports.append(failure_report)
                             print_report(failure_report, logger)
                     except Exception as exc:
@@ -6448,6 +6694,8 @@ def execute_guard_pipeline(
                                 completed_repositories=0,
                                 current_repository="",
                             )
+                run_metrics.end_phase("discovery", discovery_started)
+                state_tracker.update(performance=run_metrics.snapshot())
             total_repositories = len(repos) + len(reports)
             if exit_code == EXIT_OK:
                 state_tracker.update(
@@ -6536,7 +6784,11 @@ def execute_guard_pipeline(
                         if callable(acquire_repo_lock):
                             repo_lock = acquire_repo_lock(repo)
                         logger(f"[AUDIT] {repo_name}")
+                        audit_started = run_metrics.begin_phase()
                         report = guard.audit_repo(repo)
+                        audit_elapsed = time.perf_counter() - audit_started
+                        run_metrics.end_phase("audit", audit_started)
+                        run_metrics.add_repo_timing(repo_name, "audit", audit_elapsed)
 
                         if config.fix:
                             run_fix = True
@@ -6550,9 +6802,17 @@ def execute_guard_pipeline(
                                 report.fix_actions.append("repair skipped because the run was cancelled")
                             elif run_fix:
                                 logger(f"[FIX] {repo_name}")
+                                fix_started = run_metrics.begin_phase()
                                 fixed = guard.apply_fixes(repo, report)
+                                fix_elapsed = time.perf_counter() - fix_started
+                                run_metrics.end_phase("fix", fix_started)
+                                run_metrics.add_repo_timing(repo_name, "fix", fix_elapsed)
                                 logger(f"[RE-AUDIT] {repo_name}")
+                                reaudit_started = run_metrics.begin_phase()
                                 report = guard.audit_repo(repo)
+                                reaudit_elapsed = time.perf_counter() - reaudit_started
+                                run_metrics.end_phase("re-audit", reaudit_started)
+                                run_metrics.add_repo_timing(repo_name, "re-audit", reaudit_elapsed)
                                 report.backups_created = fixed.backups_created
                                 report.fix_actions = fixed.fix_actions
                                 report.fix_errors = fixed.fix_errors
@@ -6567,7 +6827,11 @@ def execute_guard_pipeline(
                         if callable(release_repo_lock):
                             release_repo_lock(repo_lock)
 
-                    report.finalize()
+                    apply_report_policy_post_processing(
+                        report,
+                        config=config,
+                        suppression_rules=suppression_rules,
+                    )
                     reports.append(report)
                     completed_repo_iterations += 1
                     print_report(report, logger)
@@ -6576,6 +6840,7 @@ def execute_guard_pipeline(
                         current_repository="",
                         completed_repositories=len(reports),
                         total_repositories=total_repositories,
+                        performance=run_metrics.snapshot(),
                     )
 
                 if repos and exit_code == EXIT_OK and cancellation_requested() and completed_repo_iterations < len(repos):
@@ -6636,6 +6901,7 @@ def execute_guard_pipeline(
             pass
 
         try:
+            persist_started = run_metrics.begin_phase()
             persist_kwargs: dict[str, object] = {
                 "reports": reports,
                 "artifacts": artifacts,
@@ -6645,12 +6911,16 @@ def execute_guard_pipeline(
                 "logger": logger,
                 "optional_json_export": config.report_json,
                 "optional_supply_chain_payload": supply_chain_payload,
+                "exit_code": exit_code,
             }
 
             persist_params = inspect.signature(persist_run_outputs).parameters
             if "optional_supply_chain_payload" not in persist_params:
                 persist_kwargs.pop("optional_supply_chain_payload", None)
+            if "exit_code" not in persist_params:
+                persist_kwargs.pop("exit_code", None)
             persist_run_outputs(**persist_kwargs)
+            run_metrics.end_phase("report_persistence", persist_started)
             if config.audit_litellm_incident and supply_chain_payload is not None:
                 persist_litellm_supply_chain_output(
                     artifacts=artifacts,
@@ -6665,10 +6935,12 @@ def execute_guard_pipeline(
             exit_code = EXIT_RUNTIME_ERROR
         finally:
             if remote_temp_root is not None:
+                cleanup_started = run_metrics.begin_phase()
                 removed, cleanup_error = remove_private_temp_tree(
                     remote_temp_root,
                     required_prefix="repo-privacy-guardian-github-",
                 )
+                run_metrics.end_phase("remote_clone_cleanup", cleanup_started)
                 if removed:
                     logger("[INFO] Removed temporary GitHub clone directory.")
                 else:
@@ -6685,6 +6957,7 @@ def execute_guard_pipeline(
                     pass_count=passed,
                     fail_count=failed,
                     exit_code=exit_code,
+                    performance=run_metrics.snapshot(),
                 )
             except Exception:
                 pass
@@ -7093,12 +7366,20 @@ def build_guard_run_config(
     github_jobs: int = 4,
     audit_litellm_incident: bool = False,
     audit_github_hardening: bool = False,
+    agent_summary: bool = False,
+    strict_profile: str | None = None,
+    suppressions: str | None = None,
 ) -> GuardRunConfig:
     normalized_owner_emails = normalize_text_values(owner_emails)
     normalized_allowed_remote_owners = normalize_text_values(allowed_remote_owners)
     inferred_owner = infer_github_username_from_noreply(noreply_email)
     if inferred_owner and inferred_owner not in normalized_allowed_remote_owners:
         normalized_allowed_remote_owners.append(inferred_owner)
+    strict_profile_config = strict_profiles.build_strict_profile_config(
+        profile=strict_profile,
+        low_confidence_email_mode=low_confidence_email_mode,
+        audit_github_hardening=audit_github_hardening,
+    )
 
     return GuardRunConfig(
         mode=mode,
@@ -7113,7 +7394,7 @@ def build_guard_run_config(
         purge_detected_secret_files=purge_detected_secret_files,
         purge_all_detected_secret_files=purge_all_detected_secret_files,
         rewrite_personal_paths=rewrite_personal_paths,
-        low_confidence_email_mode=low_confidence_email_mode,
+        low_confidence_email_mode=strict_profile_config.low_confidence_email_mode,
         owner_name=owner_name,
         owner_emails=normalized_owner_emails,
         noreply_email=noreply_email,
@@ -7131,6 +7412,10 @@ def build_guard_run_config(
         github_include_forks=github_include_forks,
         github_fast=github_fast,
         github_jobs=normalize_github_jobs(github_jobs),
+        agent_summary=agent_summary,
+        strict_profile=strict_profile_config.name,
+        github_hardening_findings_blocking=strict_profile_config.github_hardening_findings_blocking,
+        suppressions=(suppressions.strip() if suppressions and suppressions.strip() else None),
     )
 
 
@@ -7432,6 +7717,12 @@ class GuiApp:  # pragma: no cover
             value=gui_setting_str(self._gui_settings, "github_repo_filters", "")
         )
         self.github_jobs_var = tk.StringVar(value=gui_setting_str(self._gui_settings, "github_jobs", "4"))
+        self.strict_profile_var = tk.StringVar(
+            value=gui_setting_str(self._gui_settings, "strict_profile", "default") or "default"
+        )
+        self.suppressions_file_var = tk.StringVar(
+            value=gui_setting_str(self._gui_settings, "suppressions", "")
+        )
 
         self.public_only_var = tk.BooleanVar(
             value=gui_setting_bool(self._gui_settings, "public_only", GUI_DEFAULT_PUBLIC_ONLY)
@@ -7527,6 +7818,12 @@ class GuiApp:  # pragma: no cover
         self._last_run_artifacts: artifact_helpers.RunArtifacts | None = None
         self._last_run_exit_code: int | None = None
         self._last_run_action = ""
+        self._gui_warnings: list[str] = []
+        self._gui_debug_warnings = os.environ.get("REPO_PRIVACY_GUARDIAN_GUI_DEBUG", "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
         self._reports_status_badge = None
         self._reports_summary_label = None
         self._reports_paths_label = None
@@ -7955,6 +8252,44 @@ class GuiApp:  # pragma: no cover
             default_extension=".json",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             tooltip_key="optional_json_copy",
+        )
+
+        settings_row += 1
+        self._make_field_label(
+            setup_settings_frame,
+            text_key="strict_profile",
+            tooltip_key="strict_profile",
+        ).grid(row=settings_row, column=0, sticky="w", padx=(14, 8), pady=4)
+        strict_profile_menu = ctk.CTkOptionMenu(
+            setup_settings_frame,
+            variable=self.strict_profile_var,
+            values=["default", *strict_profiles.STRICT_PROFILE_CHOICES],
+            height=32,
+            corner_radius=8,
+            fg_color=self._secondary_button_fg,
+            button_color=self._support_button_fg,
+            button_hover_color=self._support_button_hover,
+            text_color=self._secondary_button_text,
+        )
+        self._bind_tooltip_key(strict_profile_menu, "strict_profile")
+        strict_profile_menu.grid(row=settings_row, column=1, sticky="w", pady=4)
+        self._make_info_badge_for(setup_settings_frame, "strict_profile").grid(
+            row=settings_row,
+            column=2,
+            sticky="w",
+            padx=(8, 14),
+            pady=4,
+        )
+
+        settings_row += 1
+        self._add_file_field(
+            setup_settings_frame,
+            row=settings_row,
+            label_key="suppression_file",
+            variable=self.suppressions_file_var,
+            title_key="choose_suppression_file",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            tooltip_key="suppression_file",
         )
 
         settings_row += 1
@@ -9369,8 +9704,8 @@ class GuiApp:  # pragma: no cover
             return
         try:
             init_appearance()
-        except Exception:
-            pass
+        except Exception as exc:
+            self._record_gui_warning("appearance mode tracker initialization failed", exc)
 
     def _register_appearance_mode_callback(self) -> None:
         if getattr(self, "_appearance_mode_callback_registered", False):
@@ -9381,7 +9716,8 @@ class GuiApp:  # pragma: no cover
             return
         try:
             add_callback(self._on_ctk_appearance_mode_changed, self.root)
-        except Exception:
+        except Exception as exc:
+            self._record_gui_warning("appearance mode callback registration failed", exc)
             return
         self._appearance_mode_callback_registered = True
 
@@ -9393,8 +9729,8 @@ class GuiApp:  # pragma: no cover
         if remove_callback is not None:
             try:
                 remove_callback(self._on_ctk_appearance_mode_changed)
-            except Exception:
-                pass
+            except Exception as exc:
+                self._record_gui_warning("appearance mode callback unregister failed", exc)
         self._appearance_mode_callback_registered = False
 
     def _on_ctk_appearance_mode_changed(self, _mode_name: str) -> None:
@@ -9610,12 +9946,13 @@ class GuiApp:  # pragma: no cover
             return
         try:
             widget.configure(**updates)
-        except Exception:
+        except Exception as exc:
+            self._record_gui_warning("bulk theme update failed", exc)
             for option, translated in updates.items():
                 try:
                     widget.configure(**{option: translated})
-                except Exception:
-                    pass
+                except Exception as item_exc:
+                    self._record_gui_warning(f"theme option update failed ({option})", item_exc)
 
     def _configure_asset_label_image(self, label: object, filename: str, background: str) -> None:
         image = self._asset_image(filename, background=background)
@@ -9623,8 +9960,8 @@ class GuiApp:  # pragma: no cover
             return
         try:
             label.configure(image=image, background=background)
-        except Exception:
-            pass
+        except Exception as exc:
+            self._record_gui_warning("asset label image update failed", exc)
 
     def _refresh_gui_asset_labels(self) -> None:
         self._gui_themed_asset_images.clear()
@@ -9658,14 +9995,14 @@ class GuiApp:  # pragma: no cover
                 continue
             try:
                 widget.configure(**{option: value})
-            except Exception:
-                pass
+            except Exception as exc:
+                self._record_gui_warning(f"fixed theme option update failed ({option})", exc)
 
     def _apply_theme_to_special_widgets(self) -> None:
         try:
             self.root.configure(fg_color=self._page_bg)
-        except Exception:
-            pass
+        except Exception as exc:
+            self._record_gui_warning("root theme update failed", exc)
         app_frame = getattr(self, "_app_frame", None)
         if app_frame is not None:
             try:
@@ -9675,8 +10012,8 @@ class GuiApp:  # pragma: no cover
                     scrollbar_button_color=self._scrollbar_thumb,
                     scrollbar_button_hover_color=self._scrollbar_hover,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                self._record_gui_warning("scrollable frame theme update failed", exc)
         flow_tabs = getattr(self, "_flow_tabs", None)
         if flow_tabs is not None:
             try:
@@ -9702,8 +10039,8 @@ class GuiApp:  # pragma: no cover
                         unselected_hover_color=self._tab_unselected_hover,
                         text_color=self._text_heading,
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self._record_gui_warning("tab segmented button theme update failed", exc)
         repo_scrollbar = getattr(self, "_repo_scrollbar", None)
         if repo_scrollbar is not None:
             try:
@@ -9712,8 +10049,8 @@ class GuiApp:  # pragma: no cover
                     button_color=self._scrollbar_thumb,
                     button_hover_color=self._scrollbar_hover,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                self._record_gui_warning("repository scrollbar theme update failed", exc)
         repo_list = getattr(self, "repo_list", None)
         if repo_list is not None:
             try:
@@ -9723,14 +10060,14 @@ class GuiApp:  # pragma: no cover
                     selectbackground=self._primary_button_fg,
                     selectforeground=self._list_select_text,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                self._record_gui_warning("repository list theme update failed", exc)
         output = getattr(self, "output", None)
         if output is not None:
             try:
                 output.configure(fg_color=self._output_fg, text_color=self._output_text)
-            except Exception:
-                pass
+            except Exception as exc:
+                self._record_gui_warning("output theme update failed", exc)
         output_empty_state_label = getattr(self, "_output_empty_state_label", None)
         if output_empty_state_label is not None:
             try:
@@ -9738,8 +10075,8 @@ class GuiApp:  # pragma: no cover
                     fg_color=self._output_fg,
                     text_color=self._output_empty_text,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                self._record_gui_warning("output empty-state theme update failed", exc)
         self._refresh_fixed_theme_options()
 
     def _refresh_theme_dependent_state(self) -> None:
@@ -10343,6 +10680,9 @@ class GuiApp:  # pragma: no cover
             manual_count=counts["manual"],
             fixture_count=counts["fixture"],
             next_action=next_action,
+            agent_summary_path=self._artifact_handoff_path(
+                artifacts.agent_summary_path or artifacts.run_dir / "agent_summary.json"
+            ),
             json_path=self._artifact_handoff_path(artifacts.json_path),
             html_path=self._artifact_handoff_path(artifacts.html_path),
             log_path=self._artifact_handoff_path(artifacts.log_path),
@@ -10421,6 +10761,7 @@ class GuiApp:  # pragma: no cover
             text=(
                 f"run_dir: {self._artifact_handoff_path(artifacts.run_dir)}\n"
                 f"report.json: {self._artifact_handoff_path(artifacts.json_path)}\n"
+                f"agent_summary.json: {self._artifact_handoff_path(artifacts.agent_summary_path or artifacts.run_dir / 'agent_summary.json')}\n"
                 f"report.html: {self._artifact_handoff_path(artifacts.html_path)}\n"
                 f"run.log: {self._artifact_handoff_path(artifacts.log_path)}\n"
                 f"run_state.json: {self._artifact_handoff_path(artifacts.state_path)}"
@@ -10955,7 +11296,8 @@ class GuiApp:  # pragma: no cover
             self._workflow_strip.grid_remove()
             if header_visual is not None:
                 header_visual.grid_remove()
-        except Exception:
+        except Exception as exc:
+            self._record_gui_warning("header flow layout update failed", exc)
             return
 
     def _apply_prompts_workflow_layout(self, compact: bool) -> None:
@@ -11000,8 +11342,19 @@ class GuiApp:  # pragma: no cover
                     visual_label.grid_remove()
                 else:
                     visual_label.grid()
-        except Exception:
+        except Exception as exc:
+            self._record_gui_warning("prompts workflow layout update failed", exc)
             return
+
+    def _gui_var_str(self, attr_name: str, default: str = "") -> str:
+        var = getattr(self, attr_name, None)
+        if var is None:
+            return default
+        try:
+            value = var.get()
+        except Exception:
+            return default
+        return str(value).strip()
 
     def _current_gui_settings_payload(self, *, setup_completed: bool) -> dict[str, object]:
         return {
@@ -11016,6 +11369,8 @@ class GuiApp:  # pragma: no cover
             "github_owner": self.github_owner_var.get().strip(),
             "github_repo_filters": self.github_repo_filters_var.get().strip(),
             "github_jobs": self.github_jobs_var.get().strip(),
+            "strict_profile": self._gui_var_str("strict_profile_var", "default"),
+            "suppressions": self._gui_var_str("suppressions_file_var", ""),
             "public_only": bool(self.public_only_var.get()),
             "github_include_forks": bool(self.github_include_forks_var.get()),
             "github_fast": bool(self.github_fast_var.get()),
@@ -11278,8 +11633,9 @@ class GuiApp:  # pragma: no cover
             if prompts_button is not None and self._widget_is_grid_managed(prompts_button):
                 prompts_button.grid_configure(sticky="e")
             self._reports_decision_layout_signature = layout_signature
-        except Exception:
+        except Exception as exc:
             self._reports_decision_layout_signature = None
+            self._record_gui_warning("reports decision layout update failed", exc)
             return
 
     @staticmethod
@@ -11298,8 +11654,8 @@ class GuiApp:  # pragma: no cover
             parent_canvas = getattr(app_frame, "_parent_canvas", None)
             if parent_canvas is not None:
                 parent_canvas.yview_moveto(0)
-        except Exception:
-            pass
+        except Exception as exc:
+            self._record_gui_warning("flow tab selection failed", exc)
 
     def _select_flow_tab_without_delayed_cleanup(self, tab_name: str) -> None:
         flow_tabs = getattr(self, "_flow_tabs", None)
@@ -11318,7 +11674,8 @@ class GuiApp:  # pragma: no cover
                 segmented_button.set(tab_name)
             flow_tabs._set_grid_current_tab()  # noqa: SLF001
             flow_tabs._grid_forget_all_tabs(exclude_name=tab_name)  # noqa: SLF001
-        except Exception:
+        except Exception as exc:
+            self._record_gui_warning("tab view direct selection failed", exc)
             return
 
     def _set_output_empty_state(self, visible: bool) -> None:
@@ -12255,6 +12612,20 @@ class GuiApp:  # pragma: no cover
         self.output.insert("end", msg + "\n")
         self.output.see("end")
 
+    def _record_gui_warning(self, context: str, exc: Exception | None = None) -> None:
+        detail = f"{context}: {exc}" if exc is not None else context
+        warning = redact_sensitive_text(detail)
+        warnings = getattr(self, "_gui_warnings", None)
+        if isinstance(warnings, list):
+            warnings.append(warning)
+            del warnings[:-50]
+        if not getattr(self, "_gui_debug_warnings", False):
+            return
+        try:
+            self.log(f"[WARN] GUI visual fallback: {warning}")
+        except Exception:
+            return
+
     def clear_output(self) -> None:
         self.output.delete("1.0", "end")
         self._set_output_empty_state(True)
@@ -12537,6 +12908,9 @@ class GuiApp:  # pragma: no cover
             replace_text_file = self.replace_text_file_var.get().strip() or None
             github_owner = self._github_owner_value()
             github_jobs = parse_positive_int(self.github_jobs_var.get().strip()) if github_owner else 4
+            strict_profile_raw = self._gui_var_str("strict_profile_var", "default")
+            strict_profile = None if strict_profile_raw in {"", "default"} else strict_profile_raw
+            suppressions_file = self._gui_var_str("suppressions_file_var", "") or None
 
             def _ui_sink(message: str) -> None:
                 def _emit() -> None:
@@ -12590,6 +12964,9 @@ class GuiApp:  # pragma: no cover
                 github_jobs=github_jobs,
                 audit_litellm_incident=self.audit_litellm_incident_var.get(),
                 audit_github_hardening=self.audit_github_hardening_var.get(),
+                agent_summary=False,
+                strict_profile=strict_profile,
+                suppressions=suppressions_file,
             )
 
             def _confirm_repo_fix(repo: Path, index: int, total: int) -> bool:
@@ -12731,6 +13108,26 @@ def make_parser() -> argparse.ArgumentParser:
         choices=["informational", "blocking"],
         default="informational",
         help="Treat low-confidence email findings as informational (default) or blocking",
+    )
+    parser.add_argument(
+        "--strict-profile",
+        choices=list(strict_profiles.STRICT_PROFILE_CHOICES),
+        help=(
+            "Apply a documented policy preset: audit-only rejects writes, internal is explicit current behavior, "
+            "release promotes low-confidence emails and opt-in GitHub hardening findings to blocking."
+        ),
+    )
+    parser.add_argument(
+        "--suppressions",
+        help=(
+            "Versioned JSON suppression file for advisory/manual-review findings. "
+            "High-confidence secrets, path leaks, git metadata blocking findings, fsck, dirty tree, and runtime errors cannot be suppressed."
+        ),
+    )
+    parser.add_argument(
+        "--agent-summary",
+        action="store_true",
+        help="Print a safe agent handoff summary and always write agent_summary.json in the run artifacts.",
     )
     parser.add_argument(
         "--audit-litellm-incident",
@@ -12875,6 +13272,9 @@ def build_cli_guard_run_config(args: argparse.Namespace) -> GuardRunConfig:
         github_jobs=args.github_jobs,
         audit_litellm_incident=args.audit_litellm_incident,
         audit_github_hardening=args.audit_github_hardening,
+        agent_summary=args.agent_summary,
+        strict_profile=args.strict_profile,
+        suppressions=args.suppressions,
     )
 
 

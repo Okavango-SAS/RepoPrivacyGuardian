@@ -30,7 +30,7 @@ Auditar un repositorio con trazabilidad, distinguir leaks reales de fixtures int
 - No abrir browser automaticamente salvo pedido explicito.
 - No hacer push ni rewrite destructivo sin autorizacion explicita.
 - No pegar secretos crudos, emails privados, hostnames, URLs internas, paths personales absolutos ni lineas no redactadas del log en la respuesta.
-- Usar referencias a `Audit_Results/<run_id>/report.json`, `report.html` y `run.log` como evidencia; citar solo snippets redactados o conteos/categorias.
+- Usar referencias a `Audit_Results/<run_id>/agent_summary.json`, `report.json`, `report.html` y `run.log` como evidencia; citar solo snippets redactados o conteos/categorias.
 - Tratar `exfil_code_indicators` como advisory/manual-review por defecto.
 - Tratar `github_hardening_findings` y `github_hardening_warnings` como advisory/manual-review por defecto.
 - Preservar artefactos bajo `Audit_Results/<run_id>/`.
@@ -68,5 +68,5 @@ repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --aud
 - Clasificacion de cada hallazgo: confirmed leak, fixture/documentacion intencional, indeterminado/manual-review, advisory hardening o tooling/runtime issue
 - Decision de si cada hallazgo amerita fix, review o solo documentacion
 - Lista de cambios aplicados
-- Referencias a `report.json`, `report.html` y `run.log`
+- Referencias a `agent_summary.json`, `report.json`, `report.html` y `run.log`
 - Confirmacion explicita: `No destructive changes applied` cuando solo se audito

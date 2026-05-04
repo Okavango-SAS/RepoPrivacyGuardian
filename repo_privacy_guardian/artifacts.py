@@ -21,6 +21,11 @@ class RunArtifacts:
     html_path: Path
     state_path: Path
     started_at: datetime
+    agent_summary_path: Path | None = None
+
+    def __post_init__(self) -> None:
+        if self.agent_summary_path is None:
+            self.agent_summary_path = self.run_dir / "agent_summary.json"
 
 
 class RunLogger:
@@ -161,6 +166,7 @@ def create_run_artifacts(
         html_path=run_dir / "report.html",
         state_path=run_dir / run_state_filename,
         started_at=started,
+        agent_summary_path=run_dir / "agent_summary.json",
     )
 
 

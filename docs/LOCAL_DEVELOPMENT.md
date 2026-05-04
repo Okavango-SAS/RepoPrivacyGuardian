@@ -45,6 +45,14 @@ Use the GUI smoke path only when a desktop session is available:
 python tests/release_smoke_gui.py
 ```
 
+For visual QA after desktop GUI changes, capture non-pixel-perfect screenshots:
+
+```sh
+python scripts/visual_qa_gui.py
+```
+
+Screenshots are written under `.local-meta/visual-qa/<run_id>/` and cover Audit, Reports, Prompts, and Repair in System, Light, and Dark modes.
+
 ## 3. Full repository-owned validation
 
 Before tagging or shipping artifacts, run the repository harness:
@@ -80,11 +88,9 @@ The harness currently validates:
 
 Start here when changing behavior:
 
-- `Repo_Privacy_Guardian.py`: main CLI, audit engine, remediation flow, reporting, and optional GUI
-- `repo_privacy_guardian_runtime.py`: shared run-exit semantics, root validation, cancellation, and target discovery helpers
-- `repo_privacy_guardian_artifacts.py`: typed run-artifact and run-state helper slice extracted from the monolith
-- `repo_privacy_guardian_github.py`: GitHub remote parsing, API access, remote discovery, and hardening audit helpers
-- `repo_privacy_guardian_prompts.py`: GUI/README agentic prompt registry without importing desktop GUI dependencies
+- `Repo_Privacy_Guardian.py`: compatibility facade for entry points, direct execution, and `import Repo_Privacy_Guardian as rpg`
+- `repo_privacy_guardian/`: internal implementation package for core, runtime, artifacts, GitHub helpers, agent summary, strict profiles, suppressions, metrics, and prompts
+- `repo_privacy_guardian_*.py`: root compatibility shims for imports kept stable in the `1.x` line
 - `repo_privacy_guardian_assets/`: packaged raster assets used only by the optional GUI
 - `tests/`: tracked regression tests plus release smoke coverage
 - `scripts/release_readiness.py`: owned end-to-end local validation harness

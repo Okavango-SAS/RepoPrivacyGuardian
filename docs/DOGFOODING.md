@@ -29,7 +29,7 @@ The maintained automation contract is CLI-first:
 1. start with `repo-privacy-guardian --help`
 2. run `repo-privacy-guardian --check-tooling` when the target environment is unknown
 3. run a local dry-run audit
-4. review `Audit_Results/<run_id>/report.json`, `report.html`, and `run.log`
+4. review `Audit_Results/<run_id>/agent_summary.json`, `report.json`, `report.html`, and `run.log`
 5. classify findings before proposing any fix
 6. run fix preview only after review
 7. run real fixes only with explicit operator approval
@@ -49,6 +49,24 @@ Optional GitHub release-hardening audit for GitHub-hosted targets:
 
 ```sh
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening
+```
+
+Safe agent handoff summary:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --agent-summary
+```
+
+Strict release profile:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --strict-profile release
+```
+
+Reviewed advisory/manual-review suppression file:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --suppressions suppressions.json
 ```
 
 Optional owner/org discovery audit:
@@ -93,6 +111,7 @@ Keep evidence useful without leaking sensitive data:
 - do not paste raw secret values, private emails, private hostnames, internal URLs, absolute personal paths, or unredacted log lines into tickets or chat
 - quote only the minimum redacted snippet needed to identify the finding
 - treat `Audit_Results/<run_id>/` as sensitive local evidence even when redacted
+- use `agent_summary.json` for compact handoff when an agent needs status, counts, artifact names, and next action without raw findings
 - do not upload report artifacts to public issue trackers unless they have been separately reviewed
 
 ## Agent Output Template
@@ -107,6 +126,7 @@ Commands run:
 - optional: repo-privacy-guardian --root ... --repos ... --dry-run --yes --audit-github-hardening
 
 Artifacts:
+- Audit_Results/<run_id>/agent_summary.json
 - Audit_Results/<run_id>/report.json
 - Audit_Results/<run_id>/report.html
 - Audit_Results/<run_id>/run.log

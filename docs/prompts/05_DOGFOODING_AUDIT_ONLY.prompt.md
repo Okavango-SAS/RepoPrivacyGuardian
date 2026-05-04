@@ -14,7 +14,7 @@ Preparar un repo para publicacion o despliegue con evidencia trazable, sin activ
 2. Si el entorno no es conocido, correr `repo-privacy-guardian --check-tooling`.
 3. Ejecutar auditoria local audit-only:
    `repo-privacy-guardian --root <root> --repos <repo> --dry-run --yes`
-4. Ubicar `Audit_Results/<run_id>/report.json`, `report.html` y `run.log`.
+4. Ubicar `Audit_Results/<run_id>/agent_summary.json`, `report.json`, `report.html` y `run.log`.
 5. Clasificar cada finding:
    - confirmed leak
    - fixture/documentacion intencional
@@ -40,6 +40,7 @@ Commands run:
 - ...
 
 Artifacts:
+- Audit_Results/<run_id>/agent_summary.json
 - Audit_Results/<run_id>/report.json
 - Audit_Results/<run_id>/report.html
 - Audit_Results/<run_id>/run.log

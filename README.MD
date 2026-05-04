@@ -44,7 +44,7 @@ Repo Privacy Guardian is not meant to replace a release engineer or coding agent
 
 | Layer | Role | Output |
 | --- | --- | --- |
-| Local scanner | Runs deterministic Git, file, policy, and hardening checks without uploading repository contents | `report.json`, `report.html`, `run.log`, and `run_state.json` |
+| Local scanner | Runs deterministic Git, file, policy, and hardening checks without uploading repository contents | `agent_summary.json`, `report.json`, `report.html`, `run.log`, and `run_state.json` |
 | Operator or coding agent | Classifies redacted evidence as confirmed leak, intentional fixture/example, indeterminate/manual-review, advisory hardening, or tooling/runtime issue | A reviewed decision and a small remediation plan |
 | Repair gate | Applies only approved mechanical fixes, with dry-run preview and owner/push guardrails | A changed checkout that must be re-audited until `PASS` |
 
@@ -85,7 +85,7 @@ Use Repo Privacy Guardian from CLI, not GUI.
 Start with repo-privacy-guardian --help, then run repo-privacy-guardian --check-tooling.
 Run the first audit without writes:
 repo-privacy-guardian --root <repos-root> --repos <target-repo> --dry-run --yes
-Read Audit_Results/<run_id>/report.json, report.html, and run.log.
+Read Audit_Results/<run_id>/agent_summary.json, report.json, report.html, and run.log.
 Classify findings as confirmed leak, intentional fixture/example, indeterminate/manual-review, advisory hardening, or tooling/runtime issue.
 Report risk, possible consequence, and one next action per finding group.
 Do not apply fixes, rewrite history, push, or paste raw secrets/private paths/unredacted logs unless I explicitly approve.
@@ -105,7 +105,7 @@ How to read the first result:
 - `REVIEW`: the repo may still be publishable, but inspect advisory findings first.
 - `FAIL`: do not publish yet; fix the blocking findings and re-run the audit.
 
-All run evidence stays local under `Audit_Results/<run_id>/` as `report.json`, `report.html`, and `run.log`.
+All run evidence stays local under `Audit_Results/<run_id>/` as `agent_summary.json`, `report.json`, `report.html`, and `run.log`.
 
 ## 🧭 Start Here
 
@@ -157,7 +157,15 @@ Advisory checks that do not change `PASS` or `FAIL` by default:
 
 Generic `password = ...`, `api_key = ...`, `client_secret = ...`, and similar assignments are separated as low-confidence advisory findings unless they also match a high-confidence provider pattern. Placeholder-looking values in tests, fixtures, docs, examples, and README-style files are surfaced separately as safe fixture/documentation evidence instead of blocking publication.
 
-GitHub hardening findings and warnings are also advisory/manual-review only by default when `--audit-github-hardening` is enabled.
+GitHub hardening findings and warnings are also advisory/manual-review only by default when `--audit-github-hardening` is enabled. Passing `--strict-profile release` promotes GitHub hardening findings to blocking only when `--audit-github-hardening` was explicitly enabled; it does not enable network checks by itself.
+
+`--strict-profile` provides documented policy presets without changing defaults when the flag is omitted:
+
+- `audit-only`: rejects `--fix` and `--push`
+- `internal`: explicit current-default posture
+- `release`: treats low-confidence emails as blocking and treats opt-in GitHub hardening findings as blocking
+
+`--suppressions PATH` accepts a versioned JSON file for advisory/manual-review suppressions. Suppressions require `schema_version`, `id`, `category`, `pattern`, `reason`, `owner`, and `expires`, leave redacted `suppressed_findings` traceability in reports, and cannot suppress high-confidence secrets, path leaks, dirty trees, fsck failures, Git metadata blocking findings, execution errors, or fix errors.
 
 ## 🌐 Network Behavior
 
@@ -171,7 +179,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 ## 🔒 Local Security Posture
 
 - Run artifacts are kept local and are written with private file permissions where the platform supports them.
-- Each run writes a local `run_state.json` manifest so a partial, cancelled, or interrupted execution still leaves phase/exit diagnostics behind.
+- Each run writes a local `run_state.json` manifest with phase timings and per-repository timing snapshots so a partial, cancelled, or interrupted execution still leaves phase/exit diagnostics behind.
 - Generated rewrite inputs such as temporary `mailmap` and `replace-text` files are removed after use instead of being left behind in temp storage.
 - Tracked-file scanners skip symlinked files and oversized text candidates to reduce accidental local file disclosure and unbounded memory reads.
 - Local auto-discovery skips symlinked child directories. Audit symlinked checkouts only by explicit operator-selected target so the scanned set stays predictable.
@@ -197,6 +205,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - Use `--gui` for the desktop interface.
 - CLI does not open a browser automatically.
 - Use `--open-report` only when you explicitly want the HTML report opened after a CLI run.
+- Use `--agent-summary` when you want the CLI to print a privacy-safe handoff summary for a coding agent; `agent_summary.json` is written for every run even without the flag.
 - GUI runs can be cancelled; cancellation stops after the active repository step completes and the run is recorded as `ABORTED`.
 - In the GUI, `Open HTML report automatically` is opt-in and off by default.
 - The GUI keeps the staged `Audit -> Repair` interaction so operators cannot jump straight to write actions.
@@ -350,6 +359,32 @@ repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --aud
 
 This mode is audit-only: it reports advisory `github_hardening_findings` and `github_hardening_warnings`, but it does not change repository settings.
 
+Strict local release preset:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --strict-profile release
+```
+
+Strict release preset with opt-in GitHub hardening:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --strict-profile release --audit-github-hardening
+```
+
+The first command stays local. The second performs read-only GitHub hardening checks and treats resulting hardening findings as release blockers.
+
+Safe agent handoff output:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --agent-summary
+```
+
+Advisory/manual-review suppressions:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --suppressions suppressions.json
+```
+
 Coverage without authentication:
 
 - local `.github/CODEOWNERS`
@@ -419,6 +454,7 @@ Illustrative clean summary:
 [INFO] JSON report written to Audit_Results/<run_id>/report.json
 [INFO] HTML report written to Audit_Results/<run_id>/report.html
 [INFO] LOG report written to Audit_Results/<run_id>/run.log
+[INFO] Agent summary written to Audit_Results/<run_id>/agent_summary.json
 ```
 
 Illustrative blocking summary:
@@ -471,12 +507,13 @@ The GUI documentation is intentionally privacy-first. Maintained screenshots liv
 
 Each run writes local artifacts under `Audit_Results/<run_id>/`:
 
+- `agent_summary.json`
 - `report.json`
 - `report.html`
 - `run.log`
 - `run_state.json`
 
-Artifacts are redacted, but they still contain operational security context and should be treated as sensitive local outputs.
+The HTML report starts with a `Decision first` section that separates blockers, advisory/manual-review signals, fixture/documentation context, suppressed findings, and the next action. Artifacts are redacted, but they still contain operational security context and should be treated as sensitive local outputs.
 
 ## 🛠️ What `--fix` Can Do
 
@@ -548,7 +585,7 @@ Act as a release/security engineer. Work only on <target-repo>.
 Use Repo Privacy Guardian from CLI, not GUI.
 Start with --help, then run a dry-run audit, classify findings as confirmed leaks, intentional fixtures/examples,
 indeterminate/manual-review, advisory hardening, or tooling/runtime issues. Reference redacted evidence from
-Audit_Results/<run_id>/report.json, report.html, and run.log without pasting raw secrets or private paths.
+Audit_Results/<run_id>/agent_summary.json, report.json, report.html, and run.log without pasting raw secrets or private paths.
 Apply only safe reviewed fixes, use --replace-text-file only when an explicit literal replacement is required,
 re-run the audit until the repository is PASS, and preserve audit artifacts under Audit_Results.
 Do not push or rewrite history without explicit approval.
@@ -558,7 +595,7 @@ The desktop GUI exposes the same prompt library in its `Prompts` tab. Locale onl
 
 ## 📈 Release Posture
 
-- Current release line: `v1.4.x`.
+- Current release line: `v1.5.x`.
 - `v1.0.0` established the stable CLI, packaging, and release contract within the current local-first scope.
 - `v1.1.0` adds reusable GitHub release-hardening audit support and operator playbooks without widening the product scope.
 - `v1.2.0` adds stronger environment readiness checks, optional GitHub CLI setup from the GUI, and Windows `winget` bootstrap support for local tool installation.
@@ -571,7 +608,8 @@ The desktop GUI exposes the same prompt library in its `Prompts` tab. Locale onl
 - `v1.4.4` hardened public prompt-library hygiene.
 - `v1.4.5` hardened root layout allowlist coverage.
 - `v1.4.6` hardened desktop GUI, locale, reporting-artifact, and cleanup behavior.
-- `v1.4.7` is the current patch release with system-aware GUI theme, contextual-help, and agent-first UX hardening.
+- `v1.4.7` added system-aware GUI theme, contextual-help, and agent-first UX hardening.
+- `v1.5.0` is the current minor release with modular architecture, agent-summary, strict-profile, and suppression workflow.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
@@ -624,11 +662,9 @@ Validation tiers for this repository:
 
 ## 🏗️ Repository Layout
 
-- `Repo_Privacy_Guardian.py`: main script, core CLI, and optional GUI implementation
-- `repo_privacy_guardian_runtime.py`: shared run-exit semantics, root validation, cancellation, and target discovery helpers
-- `repo_privacy_guardian_artifacts.py`: typed run-artifact and run-state helpers shared by CLI and GUI flow
-- `repo_privacy_guardian_github.py`: GitHub remote parsing, API access, remote discovery, and hardening audit helpers
-- `repo_privacy_guardian_prompts.py`: GUI/README agentic prompt registry without desktop GUI imports
+- `Repo_Privacy_Guardian.py`: compatibility facade for entry points, direct execution, and `import Repo_Privacy_Guardian as rpg`
+- `repo_privacy_guardian/`: internal implementation package for core, artifacts, GitHub helpers, agent summary, strict profiles, suppressions, metrics, and prompt/runtime helpers
+- `repo_privacy_guardian_*.py`: root compatibility shims for imports kept stable in the `1.x` line
 - `repo_privacy_guardian_assets/`: packaged GUI raster assets for the optional desktop interface
 - `repo_privacy_guardian_resources/`: packaged policy resource used by installed builds
 - `config/requirements/`: compatibility dependency manifests
@@ -648,7 +684,8 @@ Root is intentionally small and allowlisted by tests. Files that intentionally r
 - `Repo_Privacy_Guardian.py`
 - `pyproject.toml`
 - `repo_privacy_guardian_assets/` runtime GUI image assets
-- `repo_privacy_guardian_*.py` support modules published as `py-modules`
+- `repo_privacy_guardian/` internal package
+- `repo_privacy_guardian_*.py` import-compatibility shims published as `py-modules`
 
 Generated outputs, local agent scratch material, release bundles, coverage files, build outputs, and audit artifacts belong in ignored local paths such as `.local-meta/`, `Audit_Results/`, `dist/`, and `*.egg-info/`, not in the public tracked root.
 

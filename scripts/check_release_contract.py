@@ -6,8 +6,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.4.7"
-CURRENT_VERSION_DESCRIPTION = "system-aware GUI theme, contextual-help, and agent-first UX hardening"
+CURRENT_VERSION = "1.5.0"
+CURRENT_VERSION_DESCRIPTION = "modular architecture, agent-summary, strict-profile, and suppression workflow"
 CURRENT_RELEASE_REFERENCE_RE = re.compile(
     r"`v(?P<version>\d+\.\d+\.\d+)` is the current (?P<kind>patch-level|patch release|minor release)"
 )
@@ -15,7 +15,7 @@ CURRENT_RELEASE_REFERENCE_RE = re.compile(
 README_REQUIREMENTS = [
     "automatic CI smoke",
     "manual extended CI",
-    f"`v{CURRENT_VERSION}` is the current patch release with {CURRENT_VERSION_DESCRIPTION}",
+    f"`v{CURRENT_VERSION}` is the current minor release with {CURRENT_VERSION_DESCRIPTION}",
     "## ⚡ 60-Second First Run",
     "How to read the first result:",
     "malformed non-email identity tokens",
@@ -34,6 +34,9 @@ README_REQUIREMENTS = [
     "@google/design.md@0.1.0",
     "tracked_secret_low_confidence",
     "git_metadata_secret_low_confidence",
+    "agent_summary.json",
+    "--strict-profile",
+    "--suppressions",
     "Root is intentionally small and allowlisted by tests",
     "Developed and maintained by **Okavango SAS**",
     "docs/ux-audit/after/audit-default-desktop-after.png",
@@ -46,6 +49,8 @@ CHECKLIST_REQUIREMENTS = [
     "validation tiers documented in README",
     "branch protection required status checks match the current automatic CI smoke job names",
     "Classify each finding as confirmed leak",
+    "agent_summary.json",
+    "--suppressions",
 ]
 
 KNOWN_ISSUES_REQUIREMENTS = [
@@ -65,6 +70,8 @@ POLICY_REQUIREMENTS = [
     "Alert findings stay redacted",
     "tracked_secret_low_confidence",
     "git_metadata_secret_matches",
+    "--strict-profile release",
+    "--suppressions PATH",
 ]
 
 TROUBLESHOOTING_REQUIREMENTS = [
@@ -88,10 +95,11 @@ VERSIONING_REQUIREMENTS = [
     "`1.4.5`",
     "`1.4.6`",
     "`1.4.7`",
+    "`1.5.0`",
 ]
 
 ROADMAP_REQUIREMENTS = [
-    "current stable `1.4.x`",
+    "current stable `1.5.x`",
     "companion-style GUI with Audit, Reports, Prompts, Settings, and gated Repair views",
     "keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract",
     "GUI-only workflows that bypass the shared CLI backend",
@@ -101,23 +109,27 @@ AGENTS_REQUIREMENTS = [
     "CLI/GUI parity is a repository rule and release-blocking invariant",
     "same internal configuration/policy keys",
     "covered by regression tests",
+    "agent_summary.json",
 ]
 
 ARCHITECTURE_REQUIREMENTS = [
-    "There are now four intentionally small support modules:",
-    "Moving them into a package would be a broader import and packaging migration",
+    "Repo Privacy Guardian now uses an internal package",
+    "agent_summary.json",
     "CLI/GUI parity is a repository rule",
-    "shared runtime/config/report path",
+    "repo_privacy_guardian/core.py",
 ]
 
 ENGINEERING_DECISIONS_REQUIREMENTS = [
     "CLI/GUI parity is a repository rule and release-blocking invariant",
+    "agent_summary.json",
     "Every new audit, report, GitHub hardening, remote-audit, locale-visible, or repair behavior must",
     "Presentation-only GUI features and launcher-only CLI flags",
 ]
 
 OPERATIONS_REQUIREMENTS = [
     "byte-compiles every packaged Python module and release helper script",
+    "agent_summary.json",
+    "Decision first",
     "External design-spec hygiene",
     "google-labs-code/design.md",
     "@google/design.md@0.1.0",

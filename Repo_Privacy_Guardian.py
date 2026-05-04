@@ -12,6 +12,8 @@ keeps the stable 1.x public entry points intact:
 
 from __future__ import annotations
 
+import sys
+
 from repo_privacy_guardian.core import *  # noqa: F403
 from repo_privacy_guardian import core as _core
 
@@ -28,6 +30,9 @@ __all__ = [
     for name in globals()
     if not (name.startswith("__") and name.endswith("__"))
 ]
+
+if __name__ != "__main__":
+    sys.modules[__name__] = _core
 
 
 if __name__ == "__main__":

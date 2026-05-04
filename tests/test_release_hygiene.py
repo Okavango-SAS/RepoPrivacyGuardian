@@ -66,11 +66,16 @@ ROOT_LAYOUT_REQUIRED = [
     "Repo_Privacy_Guardian.py",
     "README.MD",
     "repo_privacy_guardian/__init__.py",
+    "repo_privacy_guardian/agent_summary.py",
     "repo_privacy_guardian/artifacts.py",
     "repo_privacy_guardian/core.py",
+    "repo_privacy_guardian/github_fix_guide.py",
     "repo_privacy_guardian/github.py",
+    "repo_privacy_guardian/metrics.py",
     "repo_privacy_guardian/prompts.py",
     "repo_privacy_guardian/runtime.py",
+    "repo_privacy_guardian/strict_profiles.py",
+    "repo_privacy_guardian/suppressions.py",
     "repo_privacy_guardian_artifacts.py",
     "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_prompts.py",
@@ -272,7 +277,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     roadmap = (root / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
     release_notes = (root / "docs" / "RELEASE_NOTES_TEMPLATE.md").read_text(encoding="utf-8")
 
-    assert "`1.4.x`" in versioning
+    assert "`1.5.x`" in versioning
     assert "`1.0.0`" in versioning
     assert "`1.2.0`" in versioning
     assert "`1.2.1`" in versioning
@@ -295,8 +300,9 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.4.5`" in versioning
     assert "`1.4.6`" in versioning
     assert "`1.4.7`" in versioning
+    assert "`1.5.0`" in versioning
     assert "semantic versioning" in versioning.lower()
-    assert "current stable `1.4.x`" in roadmap
+    assert "current stable `1.5.x`" in roadmap
     assert "companion-style GUI with Audit, Reports, Prompts, Settings, and gated Repair views" in roadmap
     assert "current stable `1.3.x`" not in roadmap
     assert "Validation evidence" in release_notes
@@ -425,6 +431,8 @@ def test_changelog_records_stable_release() -> None:
     changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
 
     assert "## [1.3.0] - 2026-04-25" in changelog
+    assert "## [1.5.0] - 2026-05-04" in changelog
+    assert "modular architecture" in changelog
     assert "## [1.4.7] - 2026-05-04" in changelog
     assert "System-aware GUI theme and agent-first UX hardening update." in changelog
     assert "## [1.4.6] - 2026-05-01" in changelog
@@ -480,8 +488,8 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.4.7"' in pyproject
-    assert "Current release line: `v1.4.x`." in readme
+    assert 'version = "1.5.0"' in pyproject
+    assert "Current release line: `v1.5.x`." in readme
     assert "`v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs." in readme
     assert "`v1.4.1` hardened roadmap and CI trigger coverage for release-contract docs." in readme
     assert "`v1.4.2` hardened release harness byte-compile coverage." in readme
@@ -489,7 +497,8 @@ def test_pyproject_version_matches_current_release_line() -> None:
     assert "`v1.4.4` hardened public prompt-library hygiene." in readme
     assert "`v1.4.5` hardened root layout allowlist coverage." in readme
     assert "`v1.4.6` hardened desktop GUI, locale, reporting-artifact, and cleanup behavior." in readme
-    assert "`v1.4.7` is the current patch release with system-aware GUI theme, contextual-help, and agent-first UX hardening." in readme
+    assert "`v1.4.7` added system-aware GUI theme, contextual-help, and agent-first UX hardening." in readme
+    assert "`v1.5.0` is the current minor release with modular architecture, agent-summary, strict-profile, and suppression workflow." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme
