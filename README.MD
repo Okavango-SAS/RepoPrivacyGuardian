@@ -44,7 +44,7 @@ Luego abrí `Settings` (`Configuración`) → `GUI Language` (`Idioma de la GUI`
 | --- | --- |
 | ![Repo Privacy Guardian desktop GUI audit screen](docs/ux-audit/after/audit-default-desktop-after.png) | ![Repo Privacy Guardian desktop GUI reports and agent handoff screen](docs/ux-audit/after/reports-desktop-after.png) |
 
-The desktop GUI is optional and shares the same audit engine, policy keys, report schema, and safety gates as the CLI. It is a companion for manual review: `Audit` starts the local run, `Reports` opens local evidence and can copy a privacy-safe agent handoff, `Prompts` exposes the maintained prompt library, and `Repair` stays gated. Maintained, sanitized GUI screenshots live under `docs/ux-audit/`.
+The desktop GUI is optional and shares the same audit engine, policy keys, report schema, and safety gates as the CLI. It is a companion for manual review: `Audit` starts the local run, `Reports` opens local evidence, shows the next safe action, and can copy a privacy-safe agent handoff, `Prompts` exposes the maintained staged prompt library, and `Repair` stays gated. Maintained, sanitized GUI screenshots live under `docs/ux-audit/`.
 
 ## ⚡ 60-Second First Run
 

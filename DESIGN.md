@@ -120,6 +120,10 @@ Empty states should not show disabled downstream actions that cannot succeed yet
 
 Agentic handoff UI should reference redacted local evidence and safe next actions, not raw findings. When copying prompts from the GUI, prefer repository-relative artifact paths when available and redact personal absolute paths otherwise.
 
+Reports should answer "what should the operator or agent do next?" before listing file paths. The decision panel may show status, counts, and a recommended next action, but it must not render raw findings or duplicate report internals.
+
+Prompt-library cards should be staged and task-specific. Each card needs a clear phase and recommended use case so users can choose environment setup, audit-only review, approved repair, or full CLI delegation without reading every prompt file first.
+
 ## Desktop Visual QA Method
 
 Repo Privacy Guardian can borrow useful product-design discipline from web-app frontend workflows, but the implementation target remains a `customtkinter` desktop companion. Do not migrate the GUI to React, Vite, browser routing, or web-only QA just to satisfy visual design guidance.

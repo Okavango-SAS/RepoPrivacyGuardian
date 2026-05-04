@@ -315,3 +315,30 @@ Validation notes:
 
 - Presentation changed only Reports-tab layout and empty-state affordances.
 - No CLI flags, report fields, policy keys, remediation defaults, or `GuardRunConfig` mappings changed.
+
+## 2026-05-04 Deep Agent-First GUI Review
+
+This pass revisited whether the GUI/UX makes sense for a tool whose highest-value path is CLI evidence plus AI-assisted classification and repair planning.
+
+Findings:
+
+- Reports still behaved like an artifact directory. It showed status and paths, but did not clearly tell the operator or coding agent what to do next after PASS, FAIL, review-only signals, or runtime errors.
+- The copied agent handoff referenced artifact paths, but did not include enough safe run context for an agent to start with the right policy posture without first inferring state from multiple files.
+- The Prompts tab had the right library, but the cards were flat. Users had to infer which prompt was setup, audit-only, reviewed repair, or full delegation.
+- The existing packaged raster assets remained sufficient. This pass needed workflow hierarchy and state copy, not new bitmap assets.
+
+Corrections applied:
+
+- Added a Reports decision panel with a localized next action for first-run, missing report payload, blocking failure, advisory/manual-review, clean PASS, and runtime/aborted states.
+- Added a three-step handoff checklist in Reports once artifacts exist: open redacted evidence, copy the handoff, then use a reviewed prompt.
+- Added a Reports shortcut into the Prompts tab after artifacts exist, keeping the first-run empty state focused on `Go to Audit`.
+- Expanded the copied agent handoff with safe summary context: run status, repository count, blocking-category count, manual-review signal count, fixture/documentation context count, recommended next action, and repository-relative artifact paths.
+- Reworked Prompt cards with stage badges and "best for" guidance so the library reads as a workflow instead of a list.
+- Polished Spanish prompt-registry copy to avoid avoidable English UX fragments in the visible GUI.
+
+Validation notes:
+
+- The changes remain presentation and orchestration only: no CLI flags, report fields, policy keys, remediation defaults, or `GuardRunConfig` mappings changed.
+- Reports still render paths and counts only. Raw findings remain in local artifacts, not in GUI handoff copy.
+- Screenshots were captured before and after for Reports and Prompts in the running desktop app.
+- Functional validation covered `ruff`, `pyright`, full `pytest`, GUI/CLI smoke tests, and the release-contract check.

@@ -1829,6 +1829,11 @@ def test_spanish_gui_locale_avoids_untranslated_ux_terms() -> None:
     spanish_catalogs = {
         "ui": rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419],
         "tooltips": rpg.GUI_TOOLTIP_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419],
+        "prompts": {
+            prompt.prompt_id: f"{prompt.title}\n{prompt.description}"
+            for prompt in prompt_helpers.PROMPT_REGISTRY
+            if prompt.locale == "es-419"
+        },
     }
     forbidden_fragments = (
         "agent-first",
@@ -1867,6 +1872,9 @@ def test_spanish_gui_locale_avoids_untranslated_ux_terms() -> None:
         "trackeado",
         "untrack",
         "baseline",
+        "fixes",
+        "re-audite",
+        "release/security",
     )
 
     for catalog_name, catalog in spanish_catalogs.items():
@@ -1894,6 +1902,16 @@ def test_gui_agent_handoff_uses_repo_relative_artifact_paths() -> None:
         state_path=run_dir / "run_state.json",
         started_at=datetime.now(),
     )
+    app._last_run_exit_code = rpg.EXIT_POLICY_FAILED
+    app._last_audit_reports_payload = [
+        {
+            "name": "SampleRepo",
+            "status": "FAIL",
+            "failures": ["tracked secret matches"],
+            "exfil_code_indicators": ["main.py:1:<redacted-url>"],
+            "tracked_secret_fixture_matches": ["tests/fixtures/example.env:1:<redacted-secret>"],
+        }
+    ]
 
     handoff = app._build_agent_handoff_text()
 
@@ -1901,7 +1919,49 @@ def test_gui_agent_handoff_uses_repo_relative_artifact_paths() -> None:
     assert "Audit_Results/agent-handoff-test/report.json" in handoff
     assert "Audit_Results/agent-handoff-test/run.log" in handoff
     assert str(repo_root) not in handoff
+    assert "Run status: FAIL" in handoff
+    assert "Blocking categories: 1" in handoff
+    assert "Manual-review signals: 1" in handoff
+    assert "Fixture/documentation context: 1" in handoff
+    assert "Recommended next action:" in handoff
     assert "Do not paste raw secrets" in handoff
+
+
+def test_gui_reports_next_action_tracks_policy_state() -> None:
+    app = object.__new__(rpg.GuiApp)
+    app._gui_locale = rpg.GUI_LOCALE_DEFAULT
+    blocking_counts = app._reports_summary_counts(
+        [
+            {
+                "name": "SampleRepo",
+                "status": "FAIL",
+                "failures": ["tracked secret matches"],
+            }
+        ]
+    )
+    manual_counts = app._reports_summary_counts(
+        [
+            {
+                "name": "SampleRepo",
+                "status": "PASS",
+                "exfil_code_indicators": ["main.py:1:<redacted-url>"],
+            }
+        ]
+    )
+
+    assert app._reports_status_label(blocking_counts, rpg.EXIT_POLICY_FAILED) == "FAIL"
+    assert app._reports_next_action_key(blocking_counts, rpg.EXIT_POLICY_FAILED, True) == "next_action_failed"
+    assert app._reports_status_label(manual_counts, rpg.EXIT_OK) == "PASS/REVIEW"
+    assert app._reports_next_action_key(manual_counts, rpg.EXIT_OK, True) == "next_action_manual"
+    empty_counts = {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "blocking": 0,
+        "manual": 0,
+        "fixture": 0,
+    }
+    assert app._reports_next_action_key(empty_counts, None, False) == "next_action_run_audit"
 
 
 def test_agentic_prompt_registry_has_parallel_locales_and_existing_files() -> None:
