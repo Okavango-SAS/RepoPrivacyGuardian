@@ -8,6 +8,10 @@ All notable user-facing changes to this project are documented here.
 
 - Hardened the release-contract checker so stale README "current release" references are detected generically instead of through a manually maintained list of old versions.
 
+### Fixed
+
+- Reduced email false positives by ignoring known SSH remote pseudo-users such as `git@github.com`, `git@gitlab.com`, and `git@bitbucket.org` while keeping real custom-domain emails reportable.
+
 ## [1.4.7] - 2026-05-04
 
 System-aware GUI theme and agent-first UX hardening update.

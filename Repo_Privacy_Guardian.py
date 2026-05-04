@@ -211,6 +211,15 @@ EMAIL_NOISE_DOMAINS = {
     "localhost",
     "localdomain",
 }
+SSH_REMOTE_PSEUDO_EMAILS = {
+    ("git", "github.com"),
+    ("git", "ssh.github.com"),
+    ("git", "gitlab.com"),
+    ("git", "bitbucket.org"),
+    ("git", "ssh.dev.azure.com"),
+    ("git", "vs-ssh.visualstudio.com"),
+    ("hg", "bitbucket.org"),
+}
 GITHUB_EMAIL_PRIVACY_HELP = (
     "Use GitHub Email Settings to verify private-email and push-block protections, "
     "and to copy your noreply address when needed."
@@ -4882,6 +4891,8 @@ def is_relevant_email_candidate(email: str) -> bool:
     if not local or not domain:
         return False
 
+    if (local, domain) in SSH_REMOTE_PSEUDO_EMAILS:
+        return False
     if domain in EMAIL_NOISE_DOMAINS:
         return False
     if domain.endswith(".local") or domain.endswith(".invalid") or domain.endswith(".example"):

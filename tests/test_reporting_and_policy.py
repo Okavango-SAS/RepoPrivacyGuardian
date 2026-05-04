@@ -2203,6 +2203,13 @@ def test_is_relevant_email_candidate_filters_noise_domains() -> None:
     assert rpg.is_relevant_email_candidate("user@10.0.0.1") is False
     assert rpg.is_relevant_email_candidate("user@corp.c") is False
     assert rpg.is_relevant_email_candidate("user@corp.c0") is False
+    assert rpg.is_relevant_email_candidate("git@github.com") is False
+    assert rpg.is_relevant_email_candidate("git@ssh.github.com") is False
+    assert rpg.is_relevant_email_candidate("git@gitlab.com") is False
+    assert rpg.is_relevant_email_candidate("git@bitbucket.org") is False
+    assert rpg.is_relevant_email_candidate("hg@bitbucket.org") is False
+    assert rpg.is_relevant_email_candidate("git@ssh.dev.azure.com") is False
+    assert rpg.is_relevant_email_candidate("git@" + "corp.com") is True
     assert rpg.is_relevant_email_candidate("redacted-contributor@example.invalid") is True
 
 
