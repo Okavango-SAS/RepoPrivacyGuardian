@@ -1,6 +1,7 @@
 {
   "include": [
     "Repo_Privacy_Guardian.py",
+    "repo_privacy_guardian/__init__.py",
     "repo_privacy_guardian/agent_summary.py",
     "repo_privacy_guardian/artifacts.py",
     "repo_privacy_guardian/core.py",

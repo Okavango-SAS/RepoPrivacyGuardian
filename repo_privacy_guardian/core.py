@@ -1590,6 +1590,9 @@ report_contains_sensitive_findings = reporting_helpers.report_contains_sensitive
 render_html_report = reporting_helpers.render_html_report
 persist_run_outputs = reporting_helpers.persist_run_outputs
 open_html_report_in_browser = reporting_helpers.open_html_report_in_browser
+AGENT_SUMMARY_SCHEMA_VERSION = agent_summary_helpers.AGENT_SUMMARY_SCHEMA_VERSION
+build_agent_summary = agent_summary_helpers.build_agent_summary
+format_agent_summary_handoff = agent_summary_helpers.format_agent_summary_handoff
 
 def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, str]:
     return {

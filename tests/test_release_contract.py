@@ -567,6 +567,31 @@ def test_module_import_does_not_require_gui_dependencies() -> None:
     assert "ok" in proc.stdout
 
 
+def test_public_facade_exports_refactor_feature_helpers() -> None:
+    import repo_privacy_guardian as package
+
+    for name in (
+        "AGENT_SUMMARY_SCHEMA_VERSION",
+        "build_agent_summary",
+        "format_agent_summary_handoff",
+        "load_configured_suppressions",
+        "apply_report_policy_post_processing",
+    ):
+        assert hasattr(rpg, name), name
+    for name in (
+        "main",
+        "make_parser",
+        "GuardRunConfig",
+        "RepoReport",
+        "GuiApp",
+        "persist_run_outputs",
+        "build_agent_summary",
+        "format_agent_summary_handoff",
+        "load_configured_suppressions",
+    ):
+        assert hasattr(package, name), name
+
+
 def test_module_wrapper_runs_help_without_launching_gui() -> None:
     proc = subprocess.run(
         [sys.executable, "-m", "Repo_Privacy_Guardian"],
