@@ -7,7 +7,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CURRENT_VERSION = "1.5.0"
-CURRENT_VERSION_DESCRIPTION = "modular architecture, agent-summary, strict-profile, and suppression workflow"
+CURRENT_VERSION_DESCRIPTION = (
+    "modular architecture, agent-summary, strict-profile, suppression workflow, "
+    "and modular CI validation coverage"
+)
 CURRENT_RELEASE_REFERENCE_RE = re.compile(
     r"`v(?P<version>\d+\.\d+\.\d+)` is the current (?P<kind>patch-level|patch release|minor release)"
 )

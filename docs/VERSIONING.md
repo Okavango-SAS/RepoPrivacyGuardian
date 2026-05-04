@@ -58,7 +58,7 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.4.7` is a system-aware desktop GUI patch on top of `1.4.6`. It adds the default `System` theme mode with OS-theme tracking, improves contextual-help and agent-first UX affordances, and preserves the existing CLI contract, report schema, policy keys, and remediation defaults.
 
-`1.5.0` is an additive modular-architecture release on top of `1.4.7`. It keeps all stable `1.x` entry paths while introducing the internal `repo_privacy_guardian/` package, compatible root shims, `agent_summary.json`, `--agent-summary`, strict profiles, versioned advisory/manual-review suppressions, HTML `Decision first`, GitHub hardening fix guide output, performance timings in `run_state.json`, and basic desktop visual QA scripting.
+`1.5.0` is an additive modular-architecture release on top of `1.4.7`. It keeps all stable `1.x` entry paths while introducing the internal `repo_privacy_guardian/` package, compatible root shims, `agent_summary.json`, `--agent-summary`, strict profiles, versioned advisory/manual-review suppressions, HTML `Decision first`, GitHub hardening fix guide output, performance timings in `run_state.json`, basic desktop visual QA scripting, and CI/release-contract coverage for the modular runtime surfaces.
 
 ## Versioning rules
 

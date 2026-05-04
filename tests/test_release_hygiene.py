@@ -529,7 +529,7 @@ def test_pyproject_version_matches_current_release_line() -> None:
     assert "`v1.4.5` hardened root layout allowlist coverage." in readme
     assert "`v1.4.6` hardened desktop GUI, locale, reporting-artifact, and cleanup behavior." in readme
     assert "`v1.4.7` added system-aware GUI theme, contextual-help, and agent-first UX hardening." in readme
-    assert "`v1.5.0` is the current minor release with modular architecture, agent-summary, strict-profile, and suppression workflow." in readme
+    assert "`v1.5.0` is the current minor release with modular architecture, agent-summary, strict-profile, suppression workflow, and modular CI validation coverage." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme

@@ -18,6 +18,7 @@ All notable user-facing changes to this project are documented here.
 ### Changed
 
 - Hardened the release-contract checker so stale README "current release" references are detected generically instead of through a manually maintained list of old versions.
+- Hardened CI path filters and release-contract coverage for the modular package, GUI assets, packaged resources, and visual QA helper so future runtime changes trigger validation.
 - Clarified the README agent-first mental model, GUI companion role, screenshot context, and SSH remote pseudo-email noise policy.
 - Updated architecture, policy, operations, release, and versioning docs for the modular package and agent-first artifacts.
 
