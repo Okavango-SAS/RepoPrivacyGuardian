@@ -62,7 +62,7 @@ def main() -> int:
             assert app._refresh_button.cget("fg_color") == app._secondary_button_fg
             assert getattr(app._app_frame._scrollbar, "_button_color", None) == app._scrollbar_thumb
             assert getattr(app._repo_scrollbar, "_button_color", None) == app._scrollbar_thumb
-            assert app._appearance_menu.cget("values") == ["Claro", "Oscuro"]
+            assert app._appearance_menu.cget("values") == ["Sistema", "Claro", "Oscuro"]
             assert len(app._gui_info_badges) >= 40
             visible_badge = next(badge for badge in app._gui_info_badges if badge.winfo_viewable())
             visible_badge_label = getattr(visible_badge, "_label")
@@ -165,7 +165,7 @@ def main() -> int:
             assert app._refresh_button.cget("fg_color") == app._secondary_button_fg
             assert getattr(app._app_frame._scrollbar, "_button_color", None) == app._scrollbar_thumb
             assert getattr(app._repo_scrollbar, "_button_color", None) == app._scrollbar_thumb
-            assert app._appearance_menu.cget("values") == ["Light", "Dark"]
+            assert app._appearance_menu.cget("values") == ["System", "Light", "Dark"]
             assert app._output_empty_state_label.cget("text") == app._t("execution_log_empty")
             app._set_active_flow_tab(app._audit_tab_name)
             app.root.update_idletasks()

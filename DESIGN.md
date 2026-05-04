@@ -110,7 +110,7 @@ Buttons should be short and action-oriented. Cards should be shallow, with 8-12p
 
 Runtime image assets are allowed when they improve scanability without becoming decoration. Keep them small, local, and packaged with the GUI: app icon, subtle header watermark, empty-state visuals, evidence/prompt/repair pictograms. Do not embed text in images; labels must remain locale-driven.
 
-Scrollbars should use low-contrast semantic theme colors. They must remain discoverable, but should not compete with the primary Audit, Reports, Prompts, Settings, or Repair actions in either light or dark mode.
+Scrollbars should use low-contrast semantic theme colors. They must remain discoverable, but should not compete with the primary Audit, Reports, Prompts, Settings, or Repair actions in system, light, or dark mode.
 
 Large operational panes such as logs should have a quiet empty state before data exists. Empty-state copy must stay short, localized, and removable as soon as real run output appears.
 
@@ -139,7 +139,7 @@ Use the transferable parts:
 - define visual tokens before changing widgets: palette, spacing, type scale, icon treatment, surface density, and states
 - design the complete desktop surface or state being changed, including empty, loaded, disabled, compact, light, dark, and localized states when relevant
 - keep UI text code-native and locale-driven; generated or raster assets must not carry required interface copy
-- verify real desktop screenshots after implementation, preferably both light and dark modes, and compare hierarchy, spacing, typography, assets, icon contrast, and first-run clarity against the intended state
+- verify real desktop screenshots after implementation, preferably system, light, and dark modes, and compare hierarchy, spacing, typography, assets, icon contrast, and first-run clarity against the intended state
 - preserve the agent-first product model: CLI automation is primary, GUI supports manual review, local evidence, prompt copying, settings, and gated repair
 - preserve CLI/GUI parity: presentation changes must not rename flags, policy keys, report fields, or `GuardRunConfig` mappings
 

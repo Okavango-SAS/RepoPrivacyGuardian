@@ -1664,14 +1664,19 @@ def test_gui_locale_helpers_normalize_supported_languages() -> None:
 
 
 def test_gui_appearance_helpers_normalize_supported_modes() -> None:
+    assert rpg.normalize_gui_appearance("system") == rpg.GUI_APPEARANCE_SYSTEM
+    assert rpg.normalize_gui_appearance("Sistema") == rpg.GUI_APPEARANCE_SYSTEM
+    assert rpg.normalize_gui_appearance("auto") == rpg.GUI_APPEARANCE_SYSTEM
     assert rpg.normalize_gui_appearance("dark") == rpg.GUI_APPEARANCE_DARK
     assert rpg.normalize_gui_appearance("Oscuro") == rpg.GUI_APPEARANCE_DARK
     assert rpg.normalize_gui_appearance("noche") == rpg.GUI_APPEARANCE_DARK
     assert rpg.normalize_gui_appearance("light") == rpg.GUI_APPEARANCE_LIGHT
     assert rpg.normalize_gui_appearance("Claro") == rpg.GUI_APPEARANCE_LIGHT
     assert rpg.normalize_gui_appearance("unknown") == rpg.GUI_APPEARANCE_DEFAULT
+    assert rpg.gui_appearance_from_label("Sistema") == rpg.GUI_APPEARANCE_SYSTEM
     assert rpg.gui_appearance_from_label("Claro") == rpg.GUI_APPEARANCE_LIGHT
     assert rpg.gui_appearance_from_label("Dark") == rpg.GUI_APPEARANCE_DARK
+    assert rpg.gui_appearance_label(rpg.GUI_APPEARANCE_SYSTEM, rpg.GUI_LOCALE_ES_419) == "Sistema"
     assert rpg.gui_appearance_label(rpg.GUI_APPEARANCE_DARK, rpg.GUI_LOCALE_ES_419) == "Oscuro"
 
 
@@ -1691,6 +1696,87 @@ def test_gui_theme_palette_uses_semantic_scrollbar_tokens() -> None:
     assert app._scrollbar_thumb != app._scrollbar_hover
     assert app._scrollbar_thumb != app._primary_button_fg
     assert app._output_empty_text != app._output_text
+
+
+def test_gui_system_appearance_resolves_to_effective_palette() -> None:
+    class DummyCtk:
+        @staticmethod
+        def get_appearance_mode() -> str:
+            return "Dark"
+
+    app = object.__new__(rpg.GuiApp)
+    app.ctk = DummyCtk()
+    app._gui_appearance = rpg.GUI_APPEARANCE_SYSTEM
+
+    app._configure_gui_theme_palette()
+
+    assert app._current_appearance() == rpg.GUI_APPEARANCE_SYSTEM
+    assert app._effective_appearance() == rpg.GUI_APPEARANCE_DARK
+    assert app._page_bg == "#0F1D22"
+
+    app._gui_appearance = rpg.GUI_APPEARANCE_LIGHT
+    app._configure_gui_theme_palette()
+
+    assert app._effective_appearance() == rpg.GUI_APPEARANCE_LIGHT
+    assert app._page_bg == "#EEF5F2"
+
+
+def test_gui_theme_translation_handles_ambiguous_section_colors() -> None:
+    class DummyCtk:
+        @staticmethod
+        def get_appearance_mode() -> str:
+            return "Light"
+
+    app = object.__new__(rpg.GuiApp)
+    app.ctk = DummyCtk()
+    app._gui_appearance = rpg.GUI_APPEARANCE_LIGHT
+    app._configure_gui_theme_palette()
+    light_palette = app._theme_palette_snapshot()
+
+    app._gui_appearance = rpg.GUI_APPEARANCE_DARK
+    app._configure_gui_theme_palette()
+    dark_palette = app._theme_palette_snapshot()
+
+    assert app._translate_theme_color(
+        light_palette["_secondary_button_fg"],
+        "fg_color",
+        old_palette=light_palette,
+        new_palette=dark_palette,
+        sibling_values={},
+    ) == dark_palette["_secondary_button_fg"]
+    assert app._translate_theme_color(
+        light_palette["_success_text"],
+        "text_color",
+        old_palette=light_palette,
+        new_palette=dark_palette,
+        sibling_values={},
+    ) == dark_palette["_success_text"]
+    assert app._translate_theme_color(
+        light_palette["_white_panel_border"],
+        "border_color",
+        old_palette=light_palette,
+        new_palette=dark_palette,
+        sibling_values={"fg_color": light_palette["_white_panel_fg"]},
+    ) == dark_palette["_white_panel_border"]
+
+
+def test_gui_fixed_theme_options_restore_non_palette_text_colors() -> None:
+    class DummyWidget:
+        def __init__(self) -> None:
+            self.options: dict[str, object] = {}
+
+        def configure(self, **kwargs: object) -> None:
+            self.options.update(kwargs)
+
+    app = object.__new__(rpg.GuiApp)
+    app._fixed_theme_options = []
+    widget = DummyWidget()
+
+    app._register_fixed_theme_option(widget, "text_color", "#F8FAFC")
+    widget.configure(text_color="#082326")
+    app._refresh_fixed_theme_options()
+
+    assert widget.options["text_color"] == "#F8FAFC"
 
 
 def test_on_gui_run_finished_keeps_repair_locked_after_aborted_audit() -> None:

@@ -194,11 +194,12 @@ The current GUI now uses a small packaged raster asset set instead of relying on
 
 ## 2026-04-30 GUI Theme Pass
 
-The theme pass added a presentation-only Light/Dark startup selector without widening the CLI contract:
+The theme pass added a presentation-only Light/Dark startup selector without widening the CLI contract. A later pass expanded that selector to `System`, made it the default, and applied palette changes immediately when the OS or GUI selector changes:
 
-- Replaced visible light-only surfaces with a shared GUI palette so Audit, Reports, Prompts, Settings, Repair, lists, logs, badges, and gated states render coherently in both startup modes.
+- Replaced visible light-only surfaces with a shared GUI palette so Audit, Reports, Prompts, Settings, Repair, lists, logs, badges, and gated states render coherently in system, light, and dark modes.
 - Persisted only the non-secret `gui_appearance` GUI preference alongside locale and setup state.
 - Kept theme labels locale-aware while preserving the same CLI flags, policy keys, report fields, and `GuardRunConfig` mappings.
+- Added automatic system-theme tracking through CustomTkinter's appearance tracker and a GUI palette refresh that updates existing sections, buttons, scrollbars, lists, logs, and local assets without requiring restart.
 - Added dark-mode button icon tinting in memory so local packaged assets remain readable without introducing separate tracked icon copies.
 - Added dark-mode pictogram background blending in memory so the existing Reports, Prompts, Repair, and repository-state visuals feel integrated with dark panels without generating or tracking duplicate assets.
 - Tuned global and repository-list scrollbars with semantic low-contrast tokens, and compacted the locked Repair gate so its guidance remains visible in the first viewport.
@@ -207,7 +208,7 @@ The theme pass added a presentation-only Light/Dark startup selector without wid
 - Added a localized Reports action that copies a privacy-safe agent handoff prompt using repository-relative artifact paths when available, so GUI users can move from visual evidence to agentic review without pasting raw findings.
 - Updated Reports artifact labels to prefer repository-relative paths when available, reducing long path noise and avoiding visible personal absolute paths in normal repo-local runs.
 - Added regression coverage for theme helper normalization, settings persistence, tooltip copy, smoke startup, and locale/theme independence from run-config parity.
-- Manually QAed fresh live-window screenshots in both Light and Dark modes before release validation.
+- Manually QAed fresh live-window screenshots in Light, Dark, and System/effective modes before release validation.
 
 ## 2026-04-26 GUI Locale Pass
 

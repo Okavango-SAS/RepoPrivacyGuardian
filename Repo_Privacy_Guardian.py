@@ -106,13 +106,16 @@ GUI_LOCALE_OPTIONS: tuple[tuple[str, str], ...] = (
 )
 GUI_APPEARANCE_LIGHT = "light"
 GUI_APPEARANCE_DARK = "dark"
-GUI_APPEARANCE_DEFAULT = GUI_APPEARANCE_LIGHT
+GUI_APPEARANCE_SYSTEM = "system"
+GUI_APPEARANCE_DEFAULT = GUI_APPEARANCE_SYSTEM
 GUI_APPEARANCE_OPTIONS_BY_LOCALE: dict[str, tuple[tuple[str, str], ...]] = {
     GUI_LOCALE_DEFAULT: (
+        (GUI_APPEARANCE_SYSTEM, "System"),
         (GUI_APPEARANCE_LIGHT, "Light"),
         (GUI_APPEARANCE_DARK, "Dark"),
     ),
     GUI_LOCALE_ES_419: (
+        (GUI_APPEARANCE_SYSTEM, "Sistema"),
         (GUI_APPEARANCE_LIGHT, "Claro"),
         (GUI_APPEARANCE_DARK, "Oscuro"),
     ),
@@ -1712,7 +1715,7 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
         "higher values aid deep triage."
     ),
     "gui_language": "Language for GUI labels, contextual help, and dialogs. This does not change CLI flags, reports, or behavior.",
-    "gui_appearance": "Light or dark GUI theme applied on the next GUI launch. This is presentation-only and does not change CLI flags, reports, or policy behavior.",
+    "gui_appearance": "System, Light, or Dark GUI theme. System follows OS theme changes automatically. This is presentation-only and does not change CLI flags, reports, or policy behavior.",
     "save_setup": "Stores only non-secret GUI preferences and collapses setup controls so the main view stays focused on Audit.",
     "advanced_identity": (
         "Shows optional Git identity and GitHub email privacy controls used when Repair rewrites or redacts identity metadata."
@@ -1880,7 +1883,7 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
         "valores altos ayudan en triage profundo."
     ),
     "gui_language": "Idioma de etiquetas, ayuda contextual y diálogos de la GUI. No cambia flags, reportes ni contrato CLI.",
-    "gui_appearance": "Tema claro u oscuro aplicado en el próximo inicio de la GUI. Es sólo presentación y no cambia flags, reportes ni política.",
+    "gui_appearance": "Tema Sistema, Claro u Oscuro. Sistema sigue automáticamente los cambios del sistema operativo. Es sólo presentación y no cambia flags, reportes ni política.",
     "save_setup": "Guarda sólo preferencias no secretas de la GUI y colapsa la configuración para enfocar la vista principal en Auditar.",
     "advanced_identity": (
         "Muestra controles opcionales de identidad Git y privacidad de email GitHub usados cuando Reparar reescribe o redacta metadatos."
@@ -6956,6 +6959,8 @@ def normalize_gui_appearance(value: object) -> str:
     if not isinstance(value, str):
         return GUI_APPEARANCE_DEFAULT
     normalized = value.strip().lower().replace("_", "-")
+    if normalized in {"system", "sistema", "auto", "automatic", "automático", "automatico", "os"}:
+        return GUI_APPEARANCE_SYSTEM
     if normalized in {"dark", "oscuro", "noche"}:
         return GUI_APPEARANCE_DARK
     if normalized in {"light", "claro", "day", "dia", "día"}:
@@ -7339,10 +7344,15 @@ class GuiApp:  # pragma: no cover
                 "On Linux desktop, install python3-tk and start from a graphical session. "
                 "Otherwise, use the CLI."
             ) from exc
+        self._sync_ctk_system_appearance_probe()
         self._gui_asset_images = self._load_gui_assets()
         self._gui_themed_asset_images: dict[tuple[str, str, str], object] = {}
         self._gui_button_asset_images = self._load_gui_button_assets()
         self._gui_info_badges: list[object] = []
+        self._gui_asset_labels: list[dict[str, object]] = []
+        self._fixed_theme_options: list[dict[str, object]] = []
+        self._effective_gui_appearance = GUI_APPEARANCE_LIGHT
+        self._appearance_mode_callback_registered = False
         self._set_window_icon()
         self.root.title("Repo Privacy Guardian")
         screen_w = self.root.winfo_screenwidth()
@@ -7757,7 +7767,7 @@ class GuiApp:  # pragma: no cover
         )
         quick_start.grid(row=1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 10))
         quick_start.grid_columnconfigure(1, weight=1)
-        self._localize_widget(ctk.CTkLabel(
+        quick_start_badge = self._localize_widget(ctk.CTkLabel(
             quick_start,
             text=self._t("setup_settings"),
             height=28,
@@ -7766,7 +7776,9 @@ class GuiApp:  # pragma: no cover
             text_color="#F8FAFC",
             font=self._font(11, bold=True),
             padx=12,
-        ), "text", "setup_settings").grid(row=0, column=0, sticky="w", padx=10, pady=10)
+        ), "text", "setup_settings")
+        self._register_fixed_theme_option(quick_start_badge, "text_color", "#F8FAFC")
+        quick_start_badge.grid(row=0, column=0, sticky="w", padx=10, pady=10)
         self._localize_widget(ctk.CTkLabel(
             quick_start,
             text=self._t("settings_status"),
@@ -9023,6 +9035,7 @@ class GuiApp:  # pragma: no cover
         self.refresh_repos()
         self.root.bind("<Configure>", self._on_root_resize)
         self.root.bind("<Destroy>", self._on_root_destroy, add="+")
+        self._register_appearance_mode_callback()
         self.root.after(0, self._apply_responsive_layout)
         self._lock_repair_until_next_audit()
         self._set_active_flow_tab(self._audit_tab_name)
@@ -9030,12 +9043,30 @@ class GuiApp:  # pragma: no cover
     def _current_appearance(self) -> str:
         return normalize_gui_appearance(getattr(self, "_gui_appearance", GUI_APPEARANCE_DEFAULT))
 
+    def _resolved_effective_appearance(self) -> str:
+        selected = self._current_appearance()
+        if selected != GUI_APPEARANCE_SYSTEM:
+            return selected
+        try:
+            mode = str(self.ctk.get_appearance_mode()).strip().lower()
+        except Exception:
+            mode = ""
+        if mode.startswith("dark"):
+            return GUI_APPEARANCE_DARK
+        return GUI_APPEARANCE_LIGHT
+
+    def _effective_appearance(self) -> str:
+        return normalize_gui_appearance(
+            getattr(self, "_effective_gui_appearance", self._resolved_effective_appearance())
+        )
+
     def _ensure_gui_theme_palette(self) -> None:
         if not hasattr(self, "_text_muted"):
             self._configure_gui_theme_palette()
 
     def _configure_gui_theme_palette(self) -> None:
-        if self._current_appearance() == GUI_APPEARANCE_DARK:
+        self._effective_gui_appearance = self._resolved_effective_appearance()
+        if self._effective_appearance() == GUI_APPEARANCE_DARK:
             self._page_bg = "#0F1D22"
             self._surface_fg = "#15272D"
             self._surface_alt = "#102026"
@@ -9213,10 +9244,10 @@ class GuiApp:  # pragma: no cover
     def _asset_image(self, filename: str, *, background: str | None = None):
         if (
             background
-            and self._current_appearance() == GUI_APPEARANCE_DARK
+            and self._effective_appearance() == GUI_APPEARANCE_DARK
             and filename in GUI_THEMEABLE_ASSET_FILENAMES
         ):
-            cache_key = (filename, self._current_appearance(), background)
+            cache_key = (filename, self._effective_appearance(), background)
             cached_image = self._gui_themed_asset_images.get(cache_key)
             if cached_image is not None:
                 return cached_image
@@ -9244,6 +9275,29 @@ class GuiApp:  # pragma: no cover
         except Exception:
             pass
 
+    def _theme_token_name_for_color(self, color: str) -> str | None:
+        matches = [
+            name
+            for name, value in vars(self).items()
+            if name.startswith("_") and isinstance(value, str) and value == color and parse_hex_rgb(value) is not None
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        preferred = (
+            "_header_fg",
+            "_surface_fg",
+            "_surface_alt",
+            "_white_panel_fg",
+            "_info_panel_fg",
+            "_success_panel_fg",
+            "_warning_panel_fg",
+            "_page_bg",
+        )
+        for name in preferred:
+            if name in matches:
+                return name
+        return matches[0] if matches else None
+
     def _make_asset_label(
         self,
         parent: object,
@@ -9254,7 +9308,7 @@ class GuiApp:  # pragma: no cover
         image = self._asset_image(filename, background=background)
         if image is None:
             return None
-        return self.tk.Label(
+        label = self.tk.Label(
             parent,
             image=image,
             background=background,
@@ -9263,6 +9317,14 @@ class GuiApp:  # pragma: no cover
             padx=0,
             pady=0,
         )
+        self._gui_asset_labels.append(
+            {
+                "label": label,
+                "filename": filename,
+                "background_token": self._theme_token_name_for_color(background),
+            }
+        )
+        return label
 
     def _button_asset_options(self, filename: str) -> dict[str, object]:
         image = self._gui_button_asset_images.get(filename)
@@ -9278,6 +9340,420 @@ class GuiApp:  # pragma: no cover
             "border_color": self._secondary_button_border,
             "text_color": self._secondary_button_text,
         }
+
+    def _sync_ctk_system_appearance_probe(self) -> None:
+        if self._current_appearance() != GUI_APPEARANCE_SYSTEM:
+            return
+        tracker = getattr(self.ctk, "AppearanceModeTracker", None)
+        init_appearance = getattr(tracker, "init_appearance_mode", None)
+        if init_appearance is None:
+            return
+        try:
+            init_appearance()
+        except Exception:
+            pass
+
+    def _register_appearance_mode_callback(self) -> None:
+        if getattr(self, "_appearance_mode_callback_registered", False):
+            return
+        tracker = getattr(self.ctk, "AppearanceModeTracker", None)
+        add_callback = getattr(tracker, "add", None)
+        if add_callback is None:
+            return
+        try:
+            add_callback(self._on_ctk_appearance_mode_changed, self.root)
+        except Exception:
+            return
+        self._appearance_mode_callback_registered = True
+
+    def _unregister_appearance_mode_callback(self) -> None:
+        if not getattr(self, "_appearance_mode_callback_registered", False):
+            return
+        tracker = getattr(self.ctk, "AppearanceModeTracker", None)
+        remove_callback = getattr(tracker, "remove", None)
+        if remove_callback is not None:
+            try:
+                remove_callback(self._on_ctk_appearance_mode_changed)
+            except Exception:
+                pass
+        self._appearance_mode_callback_registered = False
+
+    def _on_ctk_appearance_mode_changed(self, _mode_name: str) -> None:
+        if getattr(self, "_gui_destroying", False):
+            return
+        self._apply_effective_gui_theme()
+
+    def _theme_palette_snapshot(self) -> dict[str, str]:
+        return {
+            name: value
+            for name, value in vars(self).items()
+            if name.startswith("_") and isinstance(value, str) and parse_hex_rgb(value) is not None
+        }
+
+    def _preferred_theme_token_for_option(
+        self,
+        option: str,
+        token_names: list[str],
+        *,
+        sibling_values: dict[str, object],
+        old_palette: dict[str, str],
+    ) -> str | None:
+        if option == "border_color" and "_white_panel_border" in token_names:
+            sibling_fg = sibling_values.get("fg_color")
+            if sibling_fg == old_palette.get("_white_panel_fg"):
+                return "_white_panel_border"
+
+        preferences = {
+            "fg_color": [
+                "_page_bg",
+                "_surface_fg",
+                "_surface_alt",
+                "_white_panel_fg",
+                "_secondary_button_fg",
+                "_primary_button_fg",
+                "_success_panel_fg",
+                "_success_badge_fg",
+                "_pass_badge_fg",
+                "_info_panel_fg",
+                "_warning_panel_fg",
+                "_warning_badge_fg",
+                "_failure_badge_fg",
+                "_output_fg",
+            ],
+            "bg_color": ["_page_bg", "_surface_fg", "_surface_alt", "_white_panel_fg"],
+            "text_color": [
+                "_text_heading",
+                "_text_body",
+                "_text_muted",
+                "_secondary_button_text",
+                "_success_text",
+                "_pass_badge_text",
+                "_info_text",
+                "_warning_text",
+                "_warning_strong_text",
+                "_warning_badge_text",
+                "_danger_text",
+                "_failure_badge_text",
+                "_output_text",
+                "_output_empty_text",
+                "_list_select_text",
+            ],
+            "hover_color": [
+                "_primary_button_hover",
+                "_secondary_button_hover",
+                "_support_button_hover",
+                "_tab_selected_hover",
+                "_tab_unselected_hover",
+                "_scrollbar_hover",
+            ],
+            "border_color": [
+                "_card_border",
+                "_white_panel_border",
+                "_success_panel_border",
+                "_info_panel_border",
+                "_warning_panel_border",
+                "_secondary_button_border",
+            ],
+            "button_color": ["_support_button_fg", "_scrollbar_thumb"],
+            "button_hover_color": ["_support_button_hover", "_scrollbar_hover"],
+            "scrollbar_fg_color": ["_scrollbar_track"],
+            "scrollbar_button_color": ["_scrollbar_thumb"],
+            "scrollbar_button_hover_color": ["_scrollbar_hover"],
+            "segmented_button_fg_color": ["_tab_segment_fg"],
+            "segmented_button_selected_color": ["_tab_selected_fg"],
+            "segmented_button_selected_hover_color": ["_tab_selected_hover"],
+            "segmented_button_unselected_color": ["_tab_unselected_fg"],
+            "segmented_button_unselected_hover_color": ["_tab_unselected_hover"],
+            "background": ["_white_panel_fg", "_surface_fg", "_surface_alt", "_header_fg", "_page_bg", "_output_fg"],
+            "foreground": ["_list_text", "_output_text", "_text_body"],
+            "selectbackground": ["_primary_button_fg"],
+            "selectforeground": ["_list_select_text"],
+            "insertbackground": ["_text_body", "_output_text"],
+        }
+        for preferred in preferences.get(option, []):
+            if preferred in token_names:
+                return preferred
+        return token_names[0] if token_names else None
+
+    def _translate_theme_color(
+        self,
+        value: object,
+        option: str,
+        *,
+        old_palette: dict[str, str],
+        new_palette: dict[str, str],
+        sibling_values: dict[str, object],
+    ) -> object | None:
+        if isinstance(value, (tuple, list)):
+            translated_items = [
+                self._translate_theme_color(
+                    item,
+                    option,
+                    old_palette=old_palette,
+                    new_palette=new_palette,
+                    sibling_values=sibling_values,
+                )
+                for item in value
+            ]
+            if all(item is None for item in translated_items):
+                return None
+            merged = [
+                original if translated is None else translated
+                for original, translated in zip(value, translated_items, strict=False)
+            ]
+            return tuple(merged) if isinstance(value, tuple) else merged
+
+        if not isinstance(value, str) or parse_hex_rgb(value) is None:
+            return None
+        token_names = [name for name, old_value in old_palette.items() if old_value == value]
+        if not token_names:
+            return None
+        if len(token_names) == 1:
+            token_name = token_names[0]
+        else:
+            token_name = self._preferred_theme_token_for_option(
+                option,
+                token_names,
+                sibling_values=sibling_values,
+                old_palette=old_palette,
+            )
+        if token_name is None:
+            return None
+        new_value = new_palette.get(token_name)
+        if not new_value or new_value == value:
+            return None
+        return new_value
+
+    def _iter_theme_widgets(self):
+        seen: set[int] = set()
+
+        def walk(widget):
+            widget_id = id(widget)
+            if widget_id in seen:
+                return
+            seen.add(widget_id)
+            yield widget
+            try:
+                children = widget.winfo_children()
+            except Exception:
+                children = []
+            for child in children:
+                yield from walk(child)
+
+        yield from walk(self.root)
+
+    def _apply_theme_to_widget(self, widget: object, old_palette: dict[str, str], new_palette: dict[str, str]) -> None:
+        options = (
+            "fg_color",
+            "bg_color",
+            "text_color",
+            "hover_color",
+            "border_color",
+            "button_color",
+            "button_hover_color",
+            "scrollbar_fg_color",
+            "scrollbar_button_color",
+            "scrollbar_button_hover_color",
+            "segmented_button_fg_color",
+            "segmented_button_selected_color",
+            "segmented_button_selected_hover_color",
+            "segmented_button_unselected_color",
+            "segmented_button_unselected_hover_color",
+            "dropdown_fg_color",
+            "dropdown_hover_color",
+            "dropdown_text_color",
+            "placeholder_text_color",
+            "background",
+            "foreground",
+            "selectbackground",
+            "selectforeground",
+            "highlightbackground",
+            "insertbackground",
+        )
+        sibling_values: dict[str, object] = {}
+        for option in options:
+            try:
+                sibling_values[option] = widget.cget(option)
+            except Exception:
+                continue
+        updates: dict[str, object] = {}
+        for option, value in sibling_values.items():
+            translated = self._translate_theme_color(
+                value,
+                option,
+                old_palette=old_palette,
+                new_palette=new_palette,
+                sibling_values=sibling_values,
+            )
+            if translated is not None:
+                updates[option] = translated
+        if not updates:
+            return
+        try:
+            widget.configure(**updates)
+        except Exception:
+            for option, translated in updates.items():
+                try:
+                    widget.configure(**{option: translated})
+                except Exception:
+                    pass
+
+    def _configure_asset_label_image(self, label: object, filename: str, background: str) -> None:
+        image = self._asset_image(filename, background=background)
+        if image is None:
+            return
+        try:
+            label.configure(image=image, background=background)
+        except Exception:
+            pass
+
+    def _refresh_gui_asset_labels(self) -> None:
+        self._gui_themed_asset_images.clear()
+        for item in list(getattr(self, "_gui_asset_labels", [])):
+            label = item.get("label")
+            filename = item.get("filename")
+            background_token = item.get("background_token")
+            if label is None or not isinstance(filename, str):
+                continue
+            background = None
+            if isinstance(background_token, str):
+                background = getattr(self, background_token, None)
+            if not isinstance(background, str):
+                try:
+                    background = label.cget("background")
+                except Exception:
+                    background = None
+            if isinstance(background, str):
+                self._configure_asset_label_image(label, filename, background)
+        self._set_window_icon()
+
+    def _register_fixed_theme_option(self, widget: object, option: str, value: object) -> None:
+        self._fixed_theme_options.append({"widget": widget, "option": option, "value": value})
+
+    def _refresh_fixed_theme_options(self) -> None:
+        for item in list(getattr(self, "_fixed_theme_options", [])):
+            widget = item.get("widget")
+            option = item.get("option")
+            value = item.get("value")
+            if widget is None or not isinstance(option, str):
+                continue
+            try:
+                widget.configure(**{option: value})
+            except Exception:
+                pass
+
+    def _apply_theme_to_special_widgets(self) -> None:
+        try:
+            self.root.configure(fg_color=self._page_bg)
+        except Exception:
+            pass
+        app_frame = getattr(self, "_app_frame", None)
+        if app_frame is not None:
+            try:
+                app_frame.configure(
+                    fg_color=self._page_bg,
+                    scrollbar_fg_color=self._scrollbar_track,
+                    scrollbar_button_color=self._scrollbar_thumb,
+                    scrollbar_button_hover_color=self._scrollbar_hover,
+                )
+            except Exception:
+                pass
+        flow_tabs = getattr(self, "_flow_tabs", None)
+        if flow_tabs is not None:
+            try:
+                flow_tabs.configure(
+                    fg_color=self._tabview_fg,
+                    segmented_button_fg_color=self._tab_segment_fg,
+                    segmented_button_selected_color=self._tab_selected_fg,
+                    segmented_button_selected_hover_color=self._tab_selected_hover,
+                    segmented_button_unselected_color=self._tab_unselected_fg,
+                    segmented_button_unselected_hover_color=self._tab_unselected_hover,
+                    text_color=self._text_heading,
+                )
+            except Exception:
+                pass
+            segmented_button = getattr(flow_tabs, "_segmented_button", None)
+            if segmented_button is not None:
+                try:
+                    segmented_button.configure(
+                        fg_color=self._tab_segment_fg,
+                        selected_color=self._tab_selected_fg,
+                        selected_hover_color=self._tab_selected_hover,
+                        unselected_color=self._tab_unselected_fg,
+                        unselected_hover_color=self._tab_unselected_hover,
+                        text_color=self._text_heading,
+                    )
+                except Exception:
+                    pass
+        repo_scrollbar = getattr(self, "_repo_scrollbar", None)
+        if repo_scrollbar is not None:
+            try:
+                repo_scrollbar.configure(
+                    fg_color=self._scrollbar_track,
+                    button_color=self._scrollbar_thumb,
+                    button_hover_color=self._scrollbar_hover,
+                )
+            except Exception:
+                pass
+        repo_list = getattr(self, "repo_list", None)
+        if repo_list is not None:
+            try:
+                repo_list.configure(
+                    background=self._list_fg,
+                    foreground=self._list_text,
+                    selectbackground=self._primary_button_fg,
+                    selectforeground=self._list_select_text,
+                )
+            except Exception:
+                pass
+        output = getattr(self, "output", None)
+        if output is not None:
+            try:
+                output.configure(fg_color=self._output_fg, text_color=self._output_text)
+            except Exception:
+                pass
+        output_empty_state_label = getattr(self, "_output_empty_state_label", None)
+        if output_empty_state_label is not None:
+            try:
+                output_empty_state_label.configure(
+                    fg_color=self._output_fg,
+                    text_color=self._output_empty_text,
+                )
+            except Exception:
+                pass
+        self._refresh_fixed_theme_options()
+
+    def _refresh_theme_dependent_state(self) -> None:
+        if getattr(self, "_repo_empty_reason", None):
+            body_label = getattr(self, "_repo_empty_state_body_label", None)
+            try:
+                message = body_label.cget("text") if body_label is not None else None
+            except Exception:
+                message = None
+            self._set_repo_empty_state(True, message, reason=getattr(self, "_repo_empty_reason", None))
+        self._refresh_reports_tab()
+        self._refresh_repair_locale_state()
+        self._update_repair_gate_note()
+        self._sync_purge_mode_controls()
+        self._sync_push_guardrail_controls()
+        if getattr(self, "repo_list", None) is not None:
+            self._update_run_buttons_state()
+
+    def _apply_effective_gui_theme(self, *, force: bool = False) -> None:
+        old_effective = getattr(self, "_effective_gui_appearance", None)
+        resolved_effective = self._resolved_effective_appearance()
+        if not force and old_effective == resolved_effective:
+            return
+        old_palette = self._theme_palette_snapshot() if hasattr(self, "_text_muted") else {}
+        self._effective_gui_appearance = resolved_effective
+        self._configure_gui_theme_palette()
+        new_palette = self._theme_palette_snapshot()
+        if old_palette and getattr(self, "root", None) is not None:
+            for widget in self._iter_theme_widgets():
+                self._apply_theme_to_widget(widget, old_palette, new_palette)
+            self._apply_theme_to_special_widgets()
+            self._refresh_gui_asset_labels()
+            self._refresh_theme_dependent_state()
 
     def _build_reports_tab(self, reports_tab) -> None:
         ctk = self.ctk
@@ -10115,9 +10591,15 @@ class GuiApp:  # pragma: no cover
 
     def _on_gui_appearance_selected(self, selected_label: str) -> None:
         self._gui_appearance = gui_appearance_from_label(selected_label)
+        try:
+            self.ctk.set_appearance_mode(self._current_appearance())
+        except Exception:
+            pass
+        self._sync_ctk_system_appearance_probe()
+        self._apply_effective_gui_theme(force=True)
         self._refresh_appearance_menu()
         self._save_gui_setup_settings(setup_completed=bool(getattr(self, "_setup_completed", False)))
-        self.log(f"[INFO] GUI theme saved as {self._current_appearance()}. Restart the GUI to apply it.")
+        self.log(f"[INFO] GUI theme applied as {self._current_appearance()} ({self._effective_appearance()} effective).")
 
     def _tooltip_text(self, key: str) -> str:
         catalog = GUI_TOOLTIP_TEXT_BY_LOCALE.get(self._current_locale(), GUI_TOOLTIP_TEXT)
@@ -10146,6 +10628,8 @@ class GuiApp:  # pragma: no cover
             font=self._font(font_size, bold=True),
             text_color=text_color or self._text_heading,
         )
+        if text_color is not None:
+            self._register_fixed_theme_option(label, "text_color", text_color)
         self._localize_widget(label, "text", text_key)
         self._bind_tooltip_key(label, tooltip_key)
         label.pack(side="left")
@@ -10417,6 +10901,7 @@ class GuiApp:  # pragma: no cover
     def _on_root_destroy(self, event) -> None:
         if getattr(event, "widget", None) is self.root:
             self._gui_destroying = True
+            self._unregister_appearance_mode_callback()
 
     def _apply_responsive_layout(self) -> None:
         if getattr(self, "_gui_destroying", False):
@@ -10914,7 +11399,7 @@ class GuiApp:  # pragma: no cover
         repo_empty_state.configure(fg_color=theme["fg"], border_color=theme["border"])
         visual_label = getattr(self, "_repo_empty_state_visual_label", None)
         if visual_label is not None:
-            visual_label.configure(background=theme["fg"])
+            self._configure_asset_label_image(visual_label, "repo-dropzone.png", theme["fg"])
         if title_label is not None:
             title_label.configure(text=theme["title"], text_color=theme["title_color"])
         if body_label is not None and message:
