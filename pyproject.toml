@@ -69,7 +69,7 @@ repo-privacy-guardian = "Repo_Privacy_Guardian:main"
 
 [tool.setuptools]
 py-modules = ["Repo_Privacy_Guardian", "repo_privacy_guardian_artifacts", "repo_privacy_guardian_github", "repo_privacy_guardian_prompts", "repo_privacy_guardian_runtime"]
-packages = ["repo_privacy_guardian", "repo_privacy_guardian_resources", "repo_privacy_guardian_assets"]
+packages = ["repo_privacy_guardian", "repo_privacy_guardian.gui", "repo_privacy_guardian_resources", "repo_privacy_guardian_assets"]
 
 [tool.setuptools.package-data]
 repo_privacy_guardian_resources = ["POLICY.md"]

@@ -16,20 +16,26 @@ The public compatibility contract remains:
 
 ## Package Map
 
-- `repo_privacy_guardian/core.py`: current CLI parser, shared pipeline, scanner/remediation engine, reporting, and optional desktop GUI coordinator
+- `repo_privacy_guardian/core.py`: compatibility runtime, shared dataclasses, CLI parser/config normalization, pipeline orchestration, GitHub remote-audit preparation, Git identity helpers, LiteLLM supply-chain helpers, and public reexports for compatibility
 - `repo_privacy_guardian/artifacts.py`: run directories, `run.log`, `run_state.json`, report persistence helpers, and `agent_summary.json` path wiring
 - `repo_privacy_guardian/runtime.py`: exit codes, run-status names, cancellation token, root validation, and target discovery
 - `repo_privacy_guardian/github.py`: GitHub remote parsing, API access, owner/org discovery, clone orchestration, and release-hardening audit helpers
 - `repo_privacy_guardian/prompts.py`: GUI/README prompt-card registry without importing desktop GUI dependencies
+- `repo_privacy_guardian/tooling.py`: CLI/GUI tooling preflight, optional local installer prompts, Windows App Installer / `winget` bootstrap helpers, and GitHub hardening auth readiness checks
+- `repo_privacy_guardian/scanner.py`: `RepoPublicationGuard`, repository discovery, execution locks, deterministic scans, reviewed remediation, and re-audit behavior
+- `repo_privacy_guardian/redaction.py`: finding-context classification and redaction helpers for emails, identity tokens, secrets, URLs, and local paths
+- `repo_privacy_guardian/reporting.py`: status/severity classification, redacted JSON export, `Decision first` HTML rendering, report persistence, and sensitive-artifact warnings
 - `repo_privacy_guardian/agent_summary.py`: safe, compact agent handoff artifact and CLI handoff formatting
 - `repo_privacy_guardian/strict_profiles.py`: documented `audit-only`, `internal`, and `release` profile normalization
 - `repo_privacy_guardian/suppressions.py`: versioned advisory/manual-review suppression parsing and traceable application
 - `repo_privacy_guardian/github_fix_guide.py`: non-mutating GitHub hardening checklist generation
 - `repo_privacy_guardian/metrics.py`: phase and per-repository performance timing snapshots
+- `repo_privacy_guardian/gui/app.py`: desktop `GuiApp` coordinator and staged Audit/Reports/Prompts/Settings/Repair workflow
+- `repo_privacy_guardian/gui/locale.py`: GUI text catalogs, tooltips, and font-selection helpers
 - `repo_privacy_guardian_assets/`: packaged GUI raster assets
 - `repo_privacy_guardian_resources/`: packaged policy resource used by installed builds
 
-The package extraction is intentionally compatibility-first. The largest implementation surface still lives in `core.py` while behavior-sensitive seams are being extracted by domain. New logic should prefer small package modules when it has a clean boundary, but detection, policy, and GUI parity must remain coordinated through shared `GuardRunConfig`, `RepoReport`, and pipeline code.
+The package extraction is intentionally compatibility-first. `core.py` still reexports public names so existing tests, scripts, and monkeypatch workflows keep working, but behavior-sensitive seams now live in domain modules. New logic should prefer these package modules when it has a clean boundary, while detection, policy, and GUI parity remain coordinated through shared `GuardRunConfig`, `RepoReport`, and pipeline code.
 
 ## Execution Flow
 
@@ -100,4 +106,4 @@ Repo Privacy Guardian does not mutate GitHub repository settings. Hardening find
 
 ## Current Technical Debt
 
-`repo_privacy_guardian/core.py` is still large. The refactor has moved import/runtime/artifact/GitHub/prompt/summary/profile/suppression/metrics responsibilities behind package boundaries while preserving the `1.x` public contract. Future extraction should continue by domain, with regression tests after each slice and no behavior drift in CLI/GUI parity.
+`repo_privacy_guardian/core.py` is no longer the 12k-line monolith, but it remains the compatibility nexus for the `1.x` public API. The next debt is to replace transitional star-import bridges in extracted GUI/scanner/reporting/tooling modules with narrower explicit dependencies once more domain-level tests exist. Future extraction should continue by small slices with regression tests after each slice and no behavior drift in CLI/GUI parity.

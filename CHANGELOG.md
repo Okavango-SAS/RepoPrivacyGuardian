@@ -9,7 +9,7 @@ All notable user-facing changes to this project are documented here.
 ### Added
 
 - Added the internal `repo_privacy_guardian/` package while keeping stable entry paths and root shim imports compatible.
-- Added the modular architecture baseline for the `1.5.x` line.
+- Split the former monolith into a modular architecture with domain modules for scanner/remediation, reporting, redaction, tooling, GUI app/locale, artifacts, GitHub, runtime, prompts, agent summary, profiles, suppressions, and metrics while keeping `1.x` compatibility facades.
 - Added `agent_summary.json` for every run plus `--agent-summary` for safe CLI handoff output.
 - Added `--strict-profile audit-only|internal|release` and versioned `--suppressions` files for traceable advisory/manual-review suppressions.
 - Added HTML `Decision first`, GitHub hardening fix guide output, and phase/per-repository timings in `run_state.json`.

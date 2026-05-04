@@ -69,13 +69,20 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian/agent_summary.py",
     "repo_privacy_guardian/artifacts.py",
     "repo_privacy_guardian/core.py",
+    "repo_privacy_guardian/gui/__init__.py",
+    "repo_privacy_guardian/gui/app.py",
+    "repo_privacy_guardian/gui/locale.py",
     "repo_privacy_guardian/github_fix_guide.py",
     "repo_privacy_guardian/github.py",
     "repo_privacy_guardian/metrics.py",
     "repo_privacy_guardian/prompts.py",
+    "repo_privacy_guardian/redaction.py",
+    "repo_privacy_guardian/reporting.py",
     "repo_privacy_guardian/runtime.py",
+    "repo_privacy_guardian/scanner.py",
     "repo_privacy_guardian/strict_profiles.py",
     "repo_privacy_guardian/suppressions.py",
+    "repo_privacy_guardian/tooling.py",
     "repo_privacy_guardian_artifacts.py",
     "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_prompts.py",
@@ -563,8 +570,8 @@ def test_gui_runtime_assets_are_packaged_and_bounded() -> None:
     }
 
     assert (
-        'packages = ["repo_privacy_guardian", "repo_privacy_guardian_resources", '
-        '"repo_privacy_guardian_assets"]'
+        'packages = ["repo_privacy_guardian", "repo_privacy_guardian.gui", '
+        '"repo_privacy_guardian_resources", "repo_privacy_guardian_assets"]'
     ) in pyproject
     assert 'repo_privacy_guardian_assets = ["*.png"]' in pyproject
     for filename, expected_size in expected_sizes.items():

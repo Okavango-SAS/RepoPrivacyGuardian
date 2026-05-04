@@ -190,7 +190,7 @@ Presentation-only GUI features and launcher-only CLI flags are permitted only wh
 - Implementation notes:
   - `import Repo_Privacy_Guardian as rpg` aliases the real `repo_privacy_guardian.core` module so monkeypatch and scripting workflows still affect runtime globals;
   - root shim modules alias their package modules for the same reason;
-  - new bounded domains live in package modules for artifacts, GitHub, prompts, runtime, agent summary, strict profiles, suppressions, metrics, and GitHub fix-guide generation;
+  - new bounded domains live in package modules for artifacts, GitHub, prompts, runtime, tooling, scanner/remediation, redaction, reporting, GUI app/locale, agent summary, strict profiles, suppressions, metrics, and GitHub fix-guide generation;
   - `Repo_Privacy_Guardian.py` remains valid for direct script execution and `python -m Repo_Privacy_Guardian`.
 
 ## DEC-014 - Agent summary, strict profiles, and traceable suppressions are additive policy surfaces
@@ -209,5 +209,5 @@ Presentation-only GUI features and launcher-only CLI flags are permitted only wh
 ## Future candidates
 
 - Scoped allowlists to reduce false positives beyond suppression files.
-- Further extraction of `repo_privacy_guardian/core.py` into scanner, policy, remediation, reporting, and GUI subpackages.
+- Replace transitional compatibility bridges in extracted modules with narrower explicit dependency injection once the split has more domain-level characterization tests.
 - Optional policy profiles by organization.
