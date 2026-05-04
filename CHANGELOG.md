@@ -4,7 +4,9 @@ All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Changed
+
+- Hardened the release-contract checker so stale README "current release" references are detected generically instead of through a manually maintained list of old versions.
 
 ## [1.4.7] - 2026-05-04
 

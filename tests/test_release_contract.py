@@ -654,6 +654,25 @@ def test_release_readiness_script_exposes_help() -> None:
     assert "--skip-self-audit" in proc.stdout
 
 
+def test_release_contract_detects_stale_current_release_references() -> None:
+    release_contract = _load_support_module("release_contract_support", "scripts/check_release_contract.py")
+
+    assert release_contract._stale_current_release_references(
+        "\n".join(
+            [
+                "`v1.2.3` is the current patch-level baseline.",
+                "`v1.4.0` is the current minor release.",
+                "`v1.4.6` is the current patch release with old notes.",
+                "`v1.4.7` is the current patch release with current notes.",
+            ]
+        )
+    ) == [
+        "`v1.2.3` is the current patch-level",
+        "`v1.4.0` is the current minor release",
+        "`v1.4.6` is the current patch release",
+    ]
+
+
 def test_release_smoke_cli_resolves_direct_script_without_installed_entrypoint(tmp_path: Path) -> None:
     smoke_cli = _load_support_module("release_smoke_cli_support", "tests/release_smoke_cli.py")
     repo_root = Path(__file__).resolve().parents[1]

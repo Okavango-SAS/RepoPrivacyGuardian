@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CURRENT_VERSION = "1.4.7"
 CURRENT_VERSION_DESCRIPTION = "system-aware GUI theme, contextual-help, and agent-first UX hardening"
+CURRENT_RELEASE_REFERENCE_RE = re.compile(
+    r"`v(?P<version>\d+\.\d+\.\d+)` is the current (?P<kind>patch-level|patch release|minor release)"
+)
 
 README_REQUIREMENTS = [
     "automatic CI smoke",
@@ -195,6 +199,14 @@ def _require_contains(text: str, required: list[str], label: str) -> list[str]:
     return [f"{label}: missing `{item}`" for item in required if item not in text]
 
 
+def _stale_current_release_references(text: str) -> list[str]:
+    return [
+        match.group(0)
+        for match in CURRENT_RELEASE_REFERENCE_RE.finditer(text)
+        if match.group("version") != CURRENT_VERSION
+    ]
+
+
 def validate_release_contract() -> list[str]:
     errors: list[str] = []
     readme = _read("README.MD")
@@ -247,21 +259,11 @@ def validate_release_contract() -> list[str]:
         errors.append(f'pyproject.toml: expected `version = "{CURRENT_VERSION}"`')
     if f"## [{CURRENT_VERSION}]" not in changelog:
         errors.append(f"CHANGELOG.md: missing current version section `{CURRENT_VERSION}`")
-    if (
-        "`v1.2.1` is the current patch-level" in readme
-        or "`v1.2.2` is the current patch-level" in readme
-        or "`v1.2.3` is the current patch-level" in readme
-        or "`v1.3.0` is the current minor release" in readme
-        or "`v1.3.10` is the current patch release" in readme
-        or "`v1.4.0` is the current minor release" in readme
-        or "`v1.4.1` is the current patch release" in readme
-        or "`v1.4.2` is the current patch release" in readme
-        or "`v1.4.3` is the current patch release" in readme
-        or "`v1.4.4` is the current patch release" in readme
-        or "`v1.4.5` is the current patch release" in readme
-        or "`v1.4.6` is the current patch release" in readme
-    ):
-        errors.append("README.MD: stale current release reference")
+    stale_current_release_refs = _stale_current_release_references(readme)
+    if stale_current_release_refs:
+        errors.append(
+            "README.MD: stale current release reference(s): " + ", ".join(stale_current_release_refs)
+        )
     if "GUI does not include pause/resume or cancellation controls." in known_issues:
         errors.append("docs/KNOWN_ISSUES.md: stale claim that GUI has no cancellation support")
 
