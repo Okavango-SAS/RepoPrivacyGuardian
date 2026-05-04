@@ -6,7 +6,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TypeVar
 
 
 RUN_ARTIFACT_COLLISION_ATTEMPTS = 1000
@@ -26,6 +26,9 @@ class RunArtifacts:
     def __post_init__(self) -> None:
         if self.agent_summary_path is None:
             self.agent_summary_path = self.run_dir / "agent_summary.json"
+
+
+ReportT = TypeVar("ReportT")
 
 
 class RunLogger:
@@ -191,17 +194,17 @@ def resolve_optional_json_export_path(
 
 
 def persist_run_outputs(
-    reports: list[object],
+    reports: list[ReportT],
     artifacts: RunArtifacts,
     root_path: Path,
     policy_path: Path,
     run_settings: dict[str, str],
     logger: Callable[[str], None],
     *,
-    sanitize_report_for_export: Callable[[object], dict[str, object]],
+    sanitize_report_for_export: Callable[[ReportT], dict[str, object]],
     render_html_report: Callable[..., str],
     write_private_text_file: Callable[[Path, str], None],
-    report_contains_sensitive_findings: Callable[[object], bool],
+    report_contains_sensitive_findings: Callable[[ReportT], bool],
     resolve_optional_json_export_path: Callable[[str | None, str], Path | None],
     optional_json_export: str | None = None,
     optional_supply_chain_payload: dict[str, object] | None = None,

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: reportUnsupportedDunderAll=false
 """Compatibility facade for Repo Privacy Guardian.
 
 The implementation now lives under :mod:`repo_privacy_guardian`. This module

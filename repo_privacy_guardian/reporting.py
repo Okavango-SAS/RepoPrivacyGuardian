@@ -684,15 +684,24 @@ def render_html_report(
             "LOW": "sev-low",
             "NONE": "sev-ok",
         }.get(global_severity, "sev-low")
-        critical_evidence = [
-            str(item) for item in optional_supply_chain_payload.get("critical_evidence", []) if str(item)
-        ]
-        high_evidence = [
-            str(item) for item in optional_supply_chain_payload.get("high_evidence", []) if str(item)
-        ]
-        medium_evidence = [
-            str(item) for item in optional_supply_chain_payload.get("medium_evidence", []) if str(item)
-        ]
+        critical_evidence_raw = optional_supply_chain_payload.get("critical_evidence", [])
+        high_evidence_raw = optional_supply_chain_payload.get("high_evidence", [])
+        medium_evidence_raw = optional_supply_chain_payload.get("medium_evidence", [])
+        critical_evidence = (
+            [str(item) for item in critical_evidence_raw if str(item)]
+            if isinstance(critical_evidence_raw, list)
+            else []
+        )
+        high_evidence = (
+            [str(item) for item in high_evidence_raw if str(item)]
+            if isinstance(high_evidence_raw, list)
+            else []
+        )
+        medium_evidence = (
+            [str(item) for item in medium_evidence_raw if str(item)]
+            if isinstance(medium_evidence_raw, list)
+            else []
+        )
         python_probes = optional_supply_chain_payload.get("python_probes", [])
         probe_rows = ""
         if isinstance(python_probes, list):

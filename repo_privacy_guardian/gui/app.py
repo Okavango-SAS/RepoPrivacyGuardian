@@ -7,6 +7,8 @@ core shrinks and GUI ownership becomes explicit.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 # ruff: noqa: F403,F405
 from repo_privacy_guardian.core import *
 from repo_privacy_guardian import core as _core
@@ -1964,7 +1966,8 @@ class GuiApp:  # pragma: no cover
             try:
                 with Image.open(asset_path) as source:
                     image = source.convert("RGBA").copy()
-                dark_image = self._tint_gui_icon(image, ImageColor.getrgb(dark_icon_color))
+                dark_icon_rgb = ImageColor.getrgb(dark_icon_color)[:3]
+                dark_image = self._tint_gui_icon(image, dark_icon_rgb)
                 images[filename] = ctk_image(light_image=image, dark_image=dark_image, size=(24, 24))
             except Exception:
                 continue
@@ -2315,9 +2318,10 @@ class GuiApp:  # pragma: no cover
             "insertbackground",
         )
         sibling_values: dict[str, object] = {}
+        dynamic_widget = cast(Any, widget)
         for option in options:
             try:
-                sibling_values[option] = widget.cget(option)
+                sibling_values[option] = dynamic_widget.cget(option)
             except Exception:
                 continue
         updates: dict[str, object] = {}
@@ -2334,12 +2338,12 @@ class GuiApp:  # pragma: no cover
         if not updates:
             return
         try:
-            widget.configure(**updates)
+            dynamic_widget.configure(**updates)
         except Exception as exc:
             self._record_gui_warning("bulk theme update failed", exc)
             for option, translated in updates.items():
                 try:
-                    widget.configure(**{option: translated})
+                    dynamic_widget.configure(**{option: translated})
                 except Exception as item_exc:
                     self._record_gui_warning(f"theme option update failed ({option})", item_exc)
 
@@ -2348,7 +2352,7 @@ class GuiApp:  # pragma: no cover
         if image is None:
             return
         try:
-            label.configure(image=image, background=background)
+            cast(Any, label).configure(image=image, background=background)
         except Exception as exc:
             self._record_gui_warning("asset label image update failed", exc)
 
@@ -3919,7 +3923,7 @@ class GuiApp:  # pragma: no cover
             return
 
         self._compact_identity_actions_layout = compact
-        buttons = self._identity_action_buttons
+        buttons = [cast(Any, button) for button in self._identity_action_buttons]
 
         if compact:
             self._identity_actions.grid_columnconfigure((0, 1), weight=1)
@@ -4030,7 +4034,7 @@ class GuiApp:  # pragma: no cover
     @staticmethod
     def _widget_is_grid_managed(widget: object) -> bool:
         try:
-            return widget.winfo_manager() == "grid"
+            return cast(Any, widget).winfo_manager() == "grid"
         except Exception:
             return True
 
@@ -4209,14 +4213,15 @@ class GuiApp:  # pragma: no cover
             return "copy"
 
         for widget in widgets:
+            dynamic_widget = cast(Any, widget)
             try:
-                widget.tk.call("tkdnd::drop_target", "register", widget._w, DND_FILES)
+                dynamic_widget.tk.call("tkdnd::drop_target", "register", dynamic_widget._w, DND_FILES)
                 drop_command = self.root.register(_drop)
                 enter_command = self.root.register(_copy_action)
                 self._dnd_command_names.extend([drop_command, enter_command])
-                widget.tk.call("bind", widget._w, "<<Drop>>", f"{drop_command} %D")
-                widget.tk.call("bind", widget._w, "<<DropEnter>>", enter_command)
-                widget.tk.call("bind", widget._w, "<<DropPosition>>", enter_command)
+                dynamic_widget.tk.call("bind", dynamic_widget._w, "<<Drop>>", f"{drop_command} %D")
+                dynamic_widget.tk.call("bind", dynamic_widget._w, "<<DropEnter>>", enter_command)
+                dynamic_widget.tk.call("bind", dynamic_widget._w, "<<DropPosition>>", enter_command)
             except Exception as exc:
                 self._set_repo_drop_hint(self._t("repo_drop_registration_failed", error=exc))
                 return
@@ -5457,4 +5462,3 @@ for _method_name, _method in list(GuiApp.__dict__.items()):
         continue
     if callable(_method) and not _method_name.startswith("__"):
         setattr(GuiApp, _method_name, _wrap_gui_method(_method))
-del _method_name, _method

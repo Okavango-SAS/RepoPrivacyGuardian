@@ -651,7 +651,7 @@ Validation tiers for this repository:
 
 - [CHANGELOG](CHANGELOG.md): shipped release notes and public version history
 - [LOCAL_DEVELOPMENT](docs/LOCAL_DEVELOPMENT.md): contributor setup, validation loops, and repository map
-- [ARCHITECTURE](docs/ARCHITECTURE.md): code navigation and subsystem boundaries inside the single-file implementation
+- [ARCHITECTURE](docs/ARCHITECTURE.md): code navigation and subsystem boundaries inside the modular implementation
 - [VERSIONING](docs/VERSIONING.md): versioning policy, stable-baseline notes, and `1.x` release discipline
 - [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md): pre-tag release checklist
 - [OPERATIONS](docs/OPERATIONS.md): local runbook for preflight, release validation, and recovery
@@ -663,7 +663,7 @@ Validation tiers for this repository:
 ## 🏗️ Repository Layout
 
 - `Repo_Privacy_Guardian.py`: compatibility facade for entry points, direct execution, and `import Repo_Privacy_Guardian as rpg`
-- `repo_privacy_guardian/`: internal implementation package for core, artifacts, GitHub helpers, agent summary, strict profiles, suppressions, metrics, and prompt/runtime helpers
+- `repo_privacy_guardian/`: internal implementation package for core orchestration, scanner/remediation, reporting, redaction, tooling, GUI app/locale, artifacts, GitHub helpers, agent summary, strict profiles, suppressions, metrics, and prompt/runtime helpers
 - `repo_privacy_guardian_*.py`: root compatibility shims for imports kept stable in the `1.x` line
 - `repo_privacy_guardian_assets/`: packaged GUI raster assets for the optional desktop interface
 - `repo_privacy_guardian_resources/`: packaged policy resource used by installed builds

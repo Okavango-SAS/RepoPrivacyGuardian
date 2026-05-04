@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 import socket  # noqa: F401 - re-exported for extracted scanner
-from typing import Callable, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping, cast
 
 from repo_privacy_guardian import artifacts as artifact_helpers
 from repo_privacy_guardian import agent_summary as agent_summary_helpers  # noqa: F401 - re-exported for extracted reporting
@@ -490,7 +490,7 @@ def subprocess_stdin(input_text: str | None = None) -> int:
     return subprocess.PIPE if input_text is not None else subprocess.DEVNULL
 
 
-def streaming_popen_kwargs() -> dict[str, object]:
+def streaming_popen_kwargs() -> dict[str, Any]:
     return {
         "stdin": subprocess.DEVNULL,
         "start_new_session": True,
@@ -660,8 +660,7 @@ def append_private_text_file(path: Path, content: str) -> None:
         raise RuntimeError(f"Refusing to append through symlinked file path: {path}")
 
     flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
+    flags |= int(getattr(os, "O_NOFOLLOW", 0))
     fd = os.open(str(path), flags, 0o600)
     with os.fdopen(fd, "a", encoding="utf-8", newline="") as fh:
         fh.write(content)
@@ -1360,7 +1359,6 @@ def _make_tooling_wrapper(name: str):
 
 for _tooling_name in _TOOLING_EXPORT_NAMES:
     globals()[_tooling_name] = _make_tooling_wrapper(_tooling_name)
-del _tooling_name
 _missing_executable_message = globals()["_missing_executable_message"]
 probe_git_available = globals()["probe_git_available"]
 probe_command_available = globals()["probe_command_available"]
@@ -1674,6 +1672,7 @@ def execute_guard_pipeline(
     exit_code = EXIT_OK
     total_repositories = 0
     remote_temp_root: Path | None = None
+    remote_no_targets_error: str | None = None
     state_tracker = RunStateTracker(artifacts.state_path, artifacts=artifacts, config=config)
     run_metrics = metrics_helpers.RunMetrics()
     suppression_rules: list[suppression_helpers.SuppressionRule] = []
@@ -1706,7 +1705,7 @@ def execute_guard_pipeline(
         for key, value in guard_kwargs.items()
         if key in guard_init_params
     }
-    guard = RepoPublicationGuard(**guard_kwargs)
+    guard = cast(Any, RepoPublicationGuard)(**guard_kwargs)
     guard.rewrite_personal_paths = config.rewrite_personal_paths
 
     def cancellation_requested() -> bool:
@@ -1811,7 +1810,6 @@ def execute_guard_pipeline(
                     total=0,
                 )
             else:
-                remote_no_targets_error: str | None = None
                 discovery_started = run_metrics.begin_phase()
                 if config.github_owner:
                     state_tracker.update(phase="github-discovery")
@@ -1954,7 +1952,7 @@ def execute_guard_pipeline(
                     try:
                         acquire_repo_lock = getattr(guard, "acquire_repo_lock", None)
                         if callable(acquire_repo_lock):
-                            repo_lock = acquire_repo_lock(repo)
+                            repo_lock = cast(RepoExecutionLock | None, acquire_repo_lock(repo))
                         logger(f"[AUDIT] {repo_name}")
                         audit_started = run_metrics.begin_phase()
                         report = guard.audit_repo(repo)
@@ -2074,7 +2072,7 @@ def execute_guard_pipeline(
 
         try:
             persist_started = run_metrics.begin_phase()
-            persist_kwargs: dict[str, object] = {
+            persist_kwargs: dict[str, Any] = {
                 "reports": reports,
                 "artifacts": artifacts,
                 "root_path": config.root,
@@ -2091,7 +2089,7 @@ def execute_guard_pipeline(
                 persist_kwargs.pop("optional_supply_chain_payload", None)
             if "exit_code" not in persist_params:
                 persist_kwargs.pop("exit_code", None)
-            persist_run_outputs(**persist_kwargs)
+            cast(Any, persist_run_outputs)(**persist_kwargs)
             run_metrics.end_phase("report_persistence", persist_started)
             if config.audit_litellm_incident and supply_chain_payload is not None:
                 persist_litellm_supply_chain_output(
@@ -2721,7 +2719,7 @@ def run_litellm_global_supply_chain_scan(
     max_matches: int,
     logger: Callable[[str], None],
 ) -> dict[str, object]:
-    payload: dict[str, object] = {
+    payload: dict[str, Any] = {
         "incident": LITELLM_INCIDENT_ID,
         "python_probes": [],
         "pip_cache_hits": [],

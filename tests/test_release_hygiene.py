@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import struct
 import subprocess
@@ -213,6 +214,28 @@ def test_support_files_are_moved_out_of_root() -> None:
 
     assert not offenders, "Support files should not live in the repository root:\n" + "\n".join(offenders)
     assert not missing, "Expected organized support files are missing:\n" + "\n".join(missing)
+
+
+def test_pyright_config_covers_release_python_surfaces() -> None:
+    root = _repo_root()
+    config = json.loads((root / "pyrightconfig.json").read_text(encoding="utf-8"))
+    included = set(config.get("include", []))
+
+    expected = [
+        rel
+        for rel in ROOT_LAYOUT_REQUIRED
+        if rel.endswith(".py")
+        and not rel.endswith("__init__.py")
+        and (
+            rel == "Repo_Privacy_Guardian.py"
+            or rel.startswith("scripts/")
+            or rel.startswith("repo_privacy_guardian_")
+            or rel.startswith("repo_privacy_guardian/")
+        )
+    ]
+    missing = sorted(rel for rel in expected if rel not in included)
+
+    assert not missing, "pyrightconfig.json must cover release Python surfaces:\n" + "\n".join(missing)
 
 
 def test_tracked_repository_root_layout_is_allowlisted() -> None:

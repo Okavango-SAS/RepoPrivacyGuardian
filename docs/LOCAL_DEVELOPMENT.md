@@ -89,7 +89,7 @@ The harness currently validates:
 Start here when changing behavior:
 
 - `Repo_Privacy_Guardian.py`: compatibility facade for entry points, direct execution, and `import Repo_Privacy_Guardian as rpg`
-- `repo_privacy_guardian/`: internal implementation package for core, runtime, artifacts, GitHub helpers, agent summary, strict profiles, suppressions, metrics, and prompts
+- `repo_privacy_guardian/`: internal implementation package for core orchestration, scanner/remediation, reporting, redaction, tooling, GUI app/locale, runtime, artifacts, GitHub helpers, agent summary, strict profiles, suppressions, metrics, and prompts
 - `repo_privacy_guardian_*.py`: root compatibility shims for imports kept stable in the `1.x` line
 - `repo_privacy_guardian_assets/`: packaged raster assets used only by the optional GUI
 - `tests/`: tracked regression tests plus release smoke coverage

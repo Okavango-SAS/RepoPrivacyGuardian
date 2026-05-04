@@ -177,8 +177,7 @@ class RepoPublicationGuard:  # pragma: no cover
             raise RuntimeError(f"Refusing to use symlinked lock file path: {lock_path}")
 
         flags = os.O_RDWR | os.O_CREAT
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
+        flags |= int(getattr(os, "O_NOFOLLOW", 0))
         try:
             fd = os.open(str(lock_path), flags, 0o600)
         except OSError as exc:
@@ -1708,4 +1707,3 @@ def _wrap_guard_method(method):
 for _method_name, _method in list(RepoPublicationGuard.__dict__.items()):
     if callable(_method) and not _method_name.startswith("__"):
         setattr(RepoPublicationGuard, _method_name, _wrap_guard_method(_method))
-del _method_name, _method
