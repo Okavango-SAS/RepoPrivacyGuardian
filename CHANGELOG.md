@@ -4,6 +4,8 @@ All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
 ## [1.4.7] - 2026-05-04
 
 System-aware GUI theme and agent-first UX hardening update.
