@@ -9,11 +9,11 @@
 
 🔒 Repo Privacy Guardian is an agent-first, local-first publication gate for auditing and hardening Git repositories before public release.
 
-It is built for coding-agent workflows in Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, and similar IDEs: run the CLI locally, keep redacted evidence, classify findings, and apply only reviewed fixes. The optional desktop GUI is a companion for manual review, reports, prompts, and gated repair on the same underlying pipeline. Developed and maintained by **Okavango SAS**.
+Its value comes from combining deterministic local checks with human or AI-assisted review: the tool creates redacted evidence, an operator or coding agent classifies what matters, and only reviewed fixes are applied. It is built for coding-agent workflows in Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, and similar IDEs. The optional desktop GUI is a companion for manual review, reports, prompts, and gated repair on the same underlying pipeline. Developed and maintained by **Okavango SAS**.
 
 ## 🔍 What It Audits
 
-- leaked Git identity metadata
+- leaked Git identity metadata, while treating known SSH remote pseudo-users such as `git@github.com`, `git@gitlab.com`, and `git@bitbucket.org` as transport syntax instead of email evidence
 - secrets in tracked content, history, and Git metadata, including high-confidence provider tokens, webhooks, auth headers, and credentialed URLs
 - low-confidence generic secret assignments as advisory review items, with synthetic fixtures and safe documentation examples separated from blocking findings
 - personal or local absolute paths
@@ -38,13 +38,27 @@ Luego abrí `Settings` (`Configuración`) → `GUI Language` (`Idioma de la GUI`
 
 **English.** Repo Privacy Guardian audits Git repositories before public release: it detects secrets, Git identity metadata, personal paths, sensitive files, and `.gitignore` drift, then writes local JSON, HTML, and log evidence. It is optimized for agentic IDE workflows: local CLI audit first, then evidence, classification, and reviewed repair. The CLI remains English for automation compatibility, while the GUI can switch between `English` and `Español (Latinoamérica)` without changing behavior or reports.
 
+## 🧠 Agent-First Mental Model
+
+Repo Privacy Guardian is not meant to replace a release engineer or coding agent. It gives them a safer operating loop:
+
+| Layer | Role | Output |
+| --- | --- | --- |
+| Local scanner | Runs deterministic Git, file, policy, and hardening checks without uploading repository contents | `report.json`, `report.html`, `run.log`, and `run_state.json` |
+| Operator or coding agent | Classifies redacted evidence as confirmed leak, intentional fixture/example, indeterminate/manual-review, advisory hardening, or tooling/runtime issue | A reviewed decision and a small remediation plan |
+| Repair gate | Applies only approved mechanical fixes, with dry-run preview and owner/push guardrails | A changed checkout that must be re-audited until `PASS` |
+
+Use the CLI for repeatable automation and agentic IDE work. Use the GUI when a human wants a desktop companion for target selection, local evidence review, maintained prompts, Settings, and visually gated repair. The GUI should make the workflow more understandable; it should not introduce a separate policy engine, hidden network service, or web-app-only path.
+
 ## 🖥️ Desktop GUI Preview
 
 | Audit | Reports and agent handoff |
 | --- | --- |
 | ![Repo Privacy Guardian desktop GUI audit screen](docs/ux-audit/after/audit-default-desktop-after.png) | ![Repo Privacy Guardian desktop GUI reports and agent handoff screen](docs/ux-audit/after/reports-desktop-after.png) |
 
-The desktop GUI is optional and shares the same audit engine, policy keys, report schema, and safety gates as the CLI. It is a companion for manual review: `Audit` starts the local run, `Reports` opens local evidence, shows the next safe action, and can copy a privacy-safe agent handoff, `Prompts` exposes the maintained staged prompt library, and `Repair` stays gated. Maintained, sanitized GUI screenshots live under `docs/ux-audit/`.
+The desktop GUI is optional and shares the same audit engine, policy keys, report schema, and safety gates as the CLI. It is a companion for manual review: `Audit` starts the local run, `Reports` opens local evidence, shows the next safe action, and can copy a privacy-safe agent handoff, `Prompts` exposes the maintained staged prompt library, and `Repair` stays gated.
+
+The screenshots above intentionally show the same companion workflow across the English and Spanish GUI surfaces. Maintained, sanitized GUI screenshots live under `docs/ux-audit/`; visible paths and repository names use neutral examples so private local context is not published in image pixels.
 
 ## ⚡ 60-Second First Run
 

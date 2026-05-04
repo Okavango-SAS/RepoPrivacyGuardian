@@ -7,6 +7,7 @@ All notable user-facing changes to this project are documented here.
 ### Changed
 
 - Hardened the release-contract checker so stale README "current release" references are detected generically instead of through a manually maintained list of old versions.
+- Clarified the README agent-first mental model, GUI companion role, screenshot context, and SSH remote pseudo-email noise policy.
 
 ### Fixed
 
