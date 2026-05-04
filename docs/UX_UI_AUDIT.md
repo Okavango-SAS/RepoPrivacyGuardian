@@ -342,3 +342,24 @@ Validation notes:
 - Reports still render paths and counts only. Raw findings remain in local artifacts, not in GUI handoff copy.
 - Screenshots were captured before and after for Reports and Prompts in the running desktop app.
 - Functional validation covered `ruff`, `pyright`, full `pytest`, GUI/CLI smoke tests, and the release-contract check.
+
+## 2026-05-04 Continuous Visual QA Pass
+
+This pass continued from the merged `main` GUI and inspected fresh desktop screenshots of Audit, Reports, Prompts, and Repair states.
+
+Findings:
+
+- The invalid Root empty state showed the right diagnosis, but the correction action was separated from the error card. Users had to look back up to the Root field or Refresh button instead of acting where the state explained the problem.
+- The Reports handoff checklist used filled label blocks that could be mistaken for disabled buttons.
+- The Reports title still sounded like a generic dashboard instead of a latest-run review surface.
+
+Corrections applied:
+
+- Added a direct `Choose Root` / `Elegir carpeta` action inside the repository empty state for invalid or empty local roots.
+- Made Root-folder browse actions refresh the repository list immediately after selection, keeping the Audit screen state in sync without requiring a separate Refresh click.
+- Changed the Reports heading to latest-run review copy and made the checklist read as numbered guidance rather than controls.
+- Re-captured Audit and Reports screenshots after the visual changes; tracked Reports/Prompts screenshots remain sanitized under `docs/ux-audit/after/`.
+
+Validation notes:
+
+- These changes are GUI presentation/state-flow only. CLI flags, report fields, policy keys, remediation defaults, and `GuardRunConfig` mappings are unchanged.

@@ -124,6 +124,8 @@ Reports should answer "what should the operator or agent do next?" before listin
 
 Prompt-library cards should be staged and task-specific. Each card needs a clear phase and recommended use case so users can choose environment setup, audit-only review, approved repair, or full CLI delegation without reading every prompt file first.
 
+Instructional checklist rows should not look like inactive buttons. Use button styling only for controls that perform an action, and place the recovery action inside empty states when the next step is unambiguous.
+
 ## Desktop Visual QA Method
 
 Repo Privacy Guardian can borrow useful product-design discipline from web-app frontend workflows, but the implementation target remains a `customtkinter` desktop companion. Do not migrate the GUI to React, Vite, browser routing, or web-only QA just to satisfy visual design guidance.

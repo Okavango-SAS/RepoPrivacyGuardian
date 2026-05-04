@@ -1934,8 +1934,8 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "open_agent_prompts_tab": "Agent prompts",
         "last_run": "Last run",
         "last_run_none": "No GUI run has finished in this session yet.",
-        "reports_dashboard": "Reports Dashboard",
-        "reports_dashboard_body": "Open local evidence from the latest run. Treat artifacts as sensitive even when values are redacted.",
+        "reports_dashboard": "Latest Run Review",
+        "reports_dashboard_body": "Review the latest local artifacts, decide the next safe action, then hand off only redacted context.",
         "latest_artifacts": "Latest artifacts",
         "latest_artifacts_none": "Run Audit to create report.json, report.html, run.log, and run_state.json.",
         "next_action": "Next action",
@@ -1945,9 +1945,9 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "next_action_manual": "Classify advisory findings with an agent before publication. Repair stays optional and reviewed.",
         "next_action_pass": "No blocking publication findings are present. Keep artifacts for review or copy the handoff for agent sign-off.",
         "next_action_error": "Open run.log and run_state.json, resolve the runtime issue, then run Audit again.",
-        "agent_step_evidence": "Open redacted evidence",
-        "agent_step_copy": "Copy agent handoff",
-        "agent_step_prompt": "Use a reviewed prompt",
+        "agent_step_evidence": "1. Review redacted evidence",
+        "agent_step_copy": "2. Copy agent handoff",
+        "agent_step_prompt": "3. Choose a reviewed prompt",
         "open_agent_prompts_from_reports": "Open agent prompts",
         "copy_agent_handoff": "Copy agent handoff",
         "agent_handoff_copied": "Agent handoff copied to clipboard.",
@@ -2124,6 +2124,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         ),
         "repo_empty_invalid_root_title": "Root folder not found",
         "repo_empty_invalid_root_hint": "Pick a valid directory, then refresh the repository list.",
+        "repo_empty_choose_root_action": "Choose Root",
         "repo_empty_no_repos_title": "No repositories found",
         "repo_empty_no_repos_hint": "Clone a repository here or point Root at a folder that already contains git repositories.",
         "repo_empty_github_remote_title": "GitHub owner/org audit active",
@@ -2262,8 +2263,8 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "open_agent_prompts_tab": "Instrucciones IA",
         "last_run": "Última corrida",
         "last_run_none": "Todavía no terminó ninguna corrida GUI en esta sesión.",
-        "reports_dashboard": "Panel de reportes",
-        "reports_dashboard_body": "Abrí evidencia local de la última corrida. Tratá los artefactos como sensibles incluso cuando los valores estén redactados.",
+        "reports_dashboard": "Revisión de última corrida",
+        "reports_dashboard_body": "Revisá los artefactos locales recientes, decidí la próxima acción segura y pasá sólo contexto redactado.",
         "latest_artifacts": "Últimos artefactos",
         "latest_artifacts_none": "Ejecutá Auditar para crear report.json, report.html, run.log y run_state.json.",
         "next_action": "Próxima acción",
@@ -2273,9 +2274,9 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "next_action_manual": "Clasificá señales consultivas con un agente antes de publicar. Reparar queda opcional y revisado.",
         "next_action_pass": "No hay bloqueos de publicación en los resultados. Conservá artefactos o copiá el contexto para una revisión agéntica final.",
         "next_action_error": "Abrí run.log y run_state.json, resolvé el problema de ejecución y repetí Auditar.",
-        "agent_step_evidence": "Abrir evidencia redactada",
-        "agent_step_copy": "Copiar contexto agéntico",
-        "agent_step_prompt": "Usar una instrucción revisada",
+        "agent_step_evidence": "1. Revisar evidencia redactada",
+        "agent_step_copy": "2. Copiar contexto agéntico",
+        "agent_step_prompt": "3. Elegir instrucción revisada",
         "open_agent_prompts_from_reports": "Abrir instrucciones",
         "copy_agent_handoff": "Copiar contexto agéntico",
         "agent_handoff_copied": "Contexto agéntico copiado al portapapeles.",
@@ -2455,6 +2456,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         ),
         "repo_empty_invalid_root_title": "Carpeta raíz no encontrada",
         "repo_empty_invalid_root_hint": "Elegí un directorio válido y después actualizá la lista de repositorios.",
+        "repo_empty_choose_root_action": "Elegir carpeta",
         "repo_empty_no_repos_title": "No se encontraron repositorios",
         "repo_empty_no_repos_hint": "Cloná un repositorio acá o apuntá la carpeta raíz a una carpeta que ya contenga repositorios git.",
         "repo_empty_github_remote_title": "Auditoría por propietario u organización de GitHub activa",
@@ -7377,6 +7379,7 @@ class GuiApp:  # pragma: no cover
         self._repo_empty_state_title_label = None
         self._repo_empty_state_body_label = None
         self._repo_empty_state_hint_label = None
+        self._repo_empty_state_action_button = None
         self._repo_empty_reason: str | None = None
         self._repo_items: list[tuple[str, str]] = []
         self._select_all_button = None
@@ -7545,6 +7548,7 @@ class GuiApp:  # pragma: no cover
             variable=self.root_var,
             title_key="choose_repositories_root",
             tooltip_key="repositories_root",
+            on_select=self._on_root_directory_selected,
         )
         audit_settings_row = ctk.CTkFrame(audit_target_card, fg_color="transparent")
         audit_settings_row.grid(row=3, column=0, columnspan=3, sticky="we", padx=14, pady=(6, 12))
@@ -7665,6 +7669,7 @@ class GuiApp:  # pragma: no cover
             variable=self.root_var,
             title_key="choose_repositories_root",
             tooltip_key="repositories_root",
+            on_select=self._on_root_directory_selected,
         )
 
         row += 1
@@ -8804,7 +8809,20 @@ class GuiApp:  # pragma: no cover
             text_color=self._text_muted,
             wraplength=420,
         )
-        self._repo_empty_state_hint_label.grid(row=3, column=0, padx=18, pady=(0, 16), sticky="ew")
+        self._repo_empty_state_hint_label.grid(row=3, column=0, padx=18, pady=(0, 8), sticky="ew")
+        self._repo_empty_state_action_button = ctk.CTkButton(
+            self._repo_empty_state,
+            text=self._t("repo_empty_choose_root_action"),
+            command=self._choose_root_from_empty_state,
+            width=150,
+            height=32,
+            corner_radius=8,
+            **self._button_asset_options("icon-folder.png"),
+            **self._secondary_button_options(),
+        )
+        self._localize_widget(self._repo_empty_state_action_button, "text", "repo_empty_choose_root_action")
+        self._bind_tooltip_key(self._repo_empty_state_action_button, "repositories_root")
+        self._repo_empty_state_action_button.grid(row=4, column=0, padx=18, pady=(0, 16))
 
         run_controls = ctk.CTkFrame(repos_card, fg_color="transparent")
         run_controls.grid(row=3, column=0, columnspan=2, sticky="w", padx=14, pady=(4, 12))
@@ -9266,10 +9284,11 @@ class GuiApp:  # pragma: no cover
                 self._reports_agent_steps_frame,
                 text=self._t(text_key),
                 height=28,
-                corner_radius=8,
-                fg_color=self._surface_alt,
+                fg_color="transparent",
                 text_color=self._text_body,
                 font=self._font(11, bold=True),
+                anchor="w",
+                justify="left",
                 padx=10,
             ), "text", text_key)
             step_label.grid(row=0, column=idx, sticky="we", padx=(0, 8 if idx < 2 else 0))
@@ -9283,7 +9302,7 @@ class GuiApp:  # pragma: no cover
             **self._secondary_button_options(),
         )
         self._localize_widget(self._reports_open_prompts_button, "text", "open_agent_prompts_from_reports")
-        self._reports_open_prompts_button.grid(row=2, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 12))
+        self._reports_open_prompts_button.grid(row=2, column=0, columnspan=2, sticky="e", padx=12, pady=(0, 12))
 
         actions = ctk.CTkFrame(reports_card, fg_color="transparent")
         actions.grid(row=4, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 12))
@@ -9990,14 +10009,28 @@ class GuiApp:  # pragma: no cover
 
         return str(candidate if candidate.parent.exists() else default_root_dir())
 
-    def _browse_directory(self, target_var, *, title: str) -> None:
+    def _browse_directory(self, target_var, *, title: str, mustexist: bool = False) -> bool:
         selected = self.filedialog.askdirectory(
             title=title,
             initialdir=self._dialog_initial_dir(target_var.get()),
-            mustexist=False,
+            mustexist=mustexist,
         )
         if selected:
             target_var.set(selected)
+            return True
+        return False
+
+    def _on_root_directory_selected(self) -> None:
+        self.refresh_repos()
+        self._save_gui_setup_settings(setup_completed=True)
+
+    def _choose_root_from_empty_state(self) -> None:
+        if self._browse_directory(
+            self.root_var,
+            title=self._t("choose_repositories_root"),
+            mustexist=True,
+        ):
+            self._on_root_directory_selected()
 
     def _browse_existing_file(self, target_var, *, title: str, filetypes) -> None:
         selected = self.filedialog.askopenfilename(
@@ -10036,6 +10069,7 @@ class GuiApp:  # pragma: no cover
         title: str | None = None,
         title_key: str | None = None,
         tooltip_key: str | None = None,
+        on_select: Callable[[], None] | None = None,
     ) -> None:
         self._make_field_label(parent, text=label, text_key=label_key, tooltip_key=tooltip_key).grid(
             row=row,
@@ -10062,12 +10096,26 @@ class GuiApp:  # pragma: no cover
             corner_radius=8,
             **self._button_asset_options("icon-folder.png"),
             **self._secondary_button_options(),
-            command=lambda: self._browse_directory(variable, title=self._t(title_key) if title_key else (title or "")),
+            command=lambda: self._handle_directory_browse(
+                variable,
+                title=self._t(title_key) if title_key else (title or ""),
+                on_select=on_select,
+            ),
         )
         self._localize_widget(button, "text", "browse")
         if tooltip_key:
             self._bind_tooltip_key(button, tooltip_key)
         button.grid(row=row, column=2, padx=(0, 14), pady=4)
+
+    def _handle_directory_browse(
+        self,
+        target_var,
+        *,
+        title: str,
+        on_select: Callable[[], None] | None = None,
+    ) -> None:
+        if self._browse_directory(target_var, title=title) and on_select is not None:
+            on_select()
 
     def _add_file_field(
         self,
@@ -10600,6 +10648,7 @@ class GuiApp:  # pragma: no cover
         title_label = getattr(self, "_repo_empty_state_title_label", None)
         body_label = getattr(self, "_repo_empty_state_body_label", None)
         hint_label = getattr(self, "_repo_empty_state_hint_label", None)
+        action_button = getattr(self, "_repo_empty_state_action_button", None)
 
         palette = {
             "invalid_root": {
@@ -10638,6 +10687,12 @@ class GuiApp:  # pragma: no cover
             body_label.configure(text=message, text_color=theme["body_color"])
         if hint_label is not None:
             hint_label.configure(text=theme["hint"], text_color=self._text_muted)
+        if action_button is not None:
+            if self._repo_empty_reason in {"invalid_root", "no_repos"}:
+                action_button.configure(text=self._t("repo_empty_choose_root_action"), state="normal")
+                action_button.grid()
+            else:
+                action_button.grid_remove()
         try:
             self.repo_list.configure(state="disabled")
         except Exception:

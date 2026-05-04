@@ -2138,6 +2138,13 @@ def test_refresh_repos_invalid_root_surfaces_empty_state_and_disables_audit(tmp_
         def place_forget(self) -> None:
             self.kwargs["hidden"] = "1"
 
+        def grid(self, **kwargs) -> None:
+            self.kwargs.update(kwargs)
+            self.kwargs["grid"] = "1"
+
+        def grid_remove(self) -> None:
+            self.kwargs["grid_removed"] = "1"
+
         def lift(self) -> None:
             self.kwargs["lifted"] = "1"
 
@@ -2152,6 +2159,7 @@ def test_refresh_repos_invalid_root_surfaces_empty_state_and_disables_audit(tmp_
     app._repo_empty_state_title_label = DummyWidget()
     app._repo_empty_state_body_label = DummyWidget()
     app._repo_empty_state_hint_label = DummyWidget()
+    app._repo_empty_state_action_button = DummyWidget()
     app._audit_button = DummyWidget()
     app._select_all_button = DummyWidget()
     app._clear_selection_button = DummyWidget()
@@ -2164,6 +2172,9 @@ def test_refresh_repos_invalid_root_surfaces_empty_state_and_disables_audit(tmp_
     assert "Root folder not found" in app._repo_summary_label.text
     assert app._repo_empty_state_title_label.text == "Root folder not found"
     assert app._repo_empty_state_body_label.text == rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT]["choose_valid_root"]
+    assert app._repo_empty_state_action_button.text == "Choose Root"
+    assert app._repo_empty_state_action_button.kwargs["state"] == "normal"
+    assert app._repo_empty_state_action_button.kwargs["grid"] == "1"
     assert app._audit_button.kwargs["text"] == "Audit unavailable"
     assert app._audit_button.kwargs["state"] == "disabled"
     assert app._select_all_button.kwargs["state"] == "disabled"
