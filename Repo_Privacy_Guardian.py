@@ -1791,6 +1791,58 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
     "copy_prompt": "Copies the full prompt text to the clipboard so it can be pasted into an agentic IDE session.",
     "copy_prompt_command": "Copies the recommended CLI command template for this prompt.",
     "open_prompt_file": "Opens the tracked prompt file for review in the default local application.",
+    "workflow_overview": (
+        "The desktop companion mirrors the CLI-first workflow: choose targets, audit first, review local artifacts, "
+        "copy a safe agent handoff, and repair only after approval."
+    ),
+    "audit_target_section": (
+        "Start here for local work. Choose a repository root, confirm visible targets, then run an audit-only pass "
+        "before any repair."
+    ),
+    "settings_section": (
+        "Advanced CLI-parity controls live here so the Audit tab stays focused. These settings map to the same "
+        "internal run configuration as CLI flags."
+    ),
+    "owner_profile_section": (
+        "Optional repair defaults for owner identity and GitHub email privacy. They are used only by reviewed "
+        "repair actions."
+    ),
+    "repositories_section": (
+        "Visible local repositories for the next run. Select specific targets or leave selection empty and confirm "
+        "when asked to run all visible repositories."
+    ),
+    "execution_log_section": (
+        "Live redacted run output for quick monitoring. The durable audit record remains in report.json, "
+        "report.html, run.log, and run_state.json."
+    ),
+    "reports_section": (
+        "Use Reports after each run to read the latest artifact paths, decide the next safe action, and copy only "
+        "redacted context into an agent session."
+    ),
+    "latest_artifacts_section": (
+        "Shows the latest local evidence bundle from this GUI session. Open artifacts locally instead of pasting "
+        "raw findings into chat."
+    ),
+    "next_action_section": (
+        "Decision guidance based on the latest run status. It separates blocking findings, manual review, and "
+        "safe agent handoff."
+    ),
+    "prompts_section": (
+        "Vetted prompts for agentic IDEs. They preserve the audit-first workflow and tell the agent to use CLI "
+        "artifacts instead of raw sensitive evidence."
+    ),
+    "agent_workflow_section": (
+        "Use the prompt cards in staged order: prepare the environment, audit only, review artifacts, then repair "
+        "only after approval."
+    ),
+    "repair_options_section": (
+        "Repair settings are intentionally separated from Audit. Keep write options off until the latest findings "
+        "have been reviewed."
+    ),
+    "repair_flow_section": (
+        "Shows the repair gate state and the final Repair action. The button remains locked until a valid audit "
+        "has completed and the review window has elapsed."
+    ),
 }
 
 GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
@@ -1907,6 +1959,58 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
     "copy_prompt": "Copia la instrucción completa al portapapeles para pegarla en una sesión de IDE agéntica.",
     "copy_prompt_command": "Copia el comando CLI recomendado para esta instrucción.",
     "open_prompt_file": "Abre el archivo de instrucción versionado para revisarlo en la aplicación local predeterminada.",
+    "workflow_overview": (
+        "La GUI acompaña el flujo principal por CLI: elegí objetivos, auditá primero, revisá artefactos locales, "
+        "copiá un traspaso seguro para IA y repará sólo después de aprobarlo."
+    ),
+    "audit_target_section": (
+        "Empezá acá para trabajo local. Elegí una carpeta raíz, confirmá los objetivos visibles y ejecutá una "
+        "primera auditoría sin reparación."
+    ),
+    "settings_section": (
+        "Los controles avanzados equivalentes al CLI viven acá para que Auditar quede enfocado. Estos ajustes "
+        "mapean a la misma configuración interna de corrida que las opciones de línea de comandos."
+    ),
+    "owner_profile_section": (
+        "Valores opcionales de reparación para identidad del propietario y privacidad de email en GitHub. Sólo se "
+        "usan en acciones de reparación revisadas."
+    ),
+    "repositories_section": (
+        "Repositorios locales visibles para la próxima corrida. Seleccioná objetivos puntuales o dejá la selección "
+        "vacía y confirmá cuando la GUI pregunte si debe correr todos."
+    ),
+    "execution_log_section": (
+        "Salida redactada en vivo para monitoreo rápido. El registro durable queda en report.json, report.html, "
+        "run.log y run_state.json."
+    ),
+    "reports_section": (
+        "Usá Reportes después de cada corrida para leer rutas de artefactos, decidir la próxima acción segura y "
+        "copiar sólo contexto redactado a una sesión de IA."
+    ),
+    "latest_artifacts_section": (
+        "Muestra el paquete local de evidencia más reciente de esta sesión GUI. Abrí artefactos localmente en vez "
+        "de pegar hallazgos crudos en el chat."
+    ),
+    "next_action_section": (
+        "Guía de decisión según el estado de la última corrida. Separa hallazgos bloqueantes, revisión manual y "
+        "traspaso seguro a IA."
+    ),
+    "prompts_section": (
+        "Instrucciones revisadas para IDEs agénticas. Conservan el flujo de auditar primero y piden usar "
+        "artefactos CLI en vez de evidencia sensible cruda."
+    ),
+    "agent_workflow_section": (
+        "Usá las tarjetas en orden: preparar entorno, auditar sin reparación, revisar artefactos y recién después "
+        "reparar si fue aprobado."
+    ),
+    "repair_options_section": (
+        "La configuración de Reparar está separada de Auditar a propósito. Mantené las opciones de escritura "
+        "apagadas hasta revisar los hallazgos recientes."
+    ),
+    "repair_flow_section": (
+        "Muestra el estado de la barrera de reparación y la acción final Reparar. El botón queda bloqueado hasta "
+        "que una auditoría válida termine y pase la ventana de revisión."
+    ),
 }
 
 GUI_TOOLTIP_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
@@ -7238,6 +7342,7 @@ class GuiApp:  # pragma: no cover
         self._gui_asset_images = self._load_gui_assets()
         self._gui_themed_asset_images: dict[tuple[str, str, str], object] = {}
         self._gui_button_asset_images = self._load_gui_button_assets()
+        self._gui_info_badges: list[object] = []
         self._set_window_icon()
         self.root.title("Repo Privacy Guardian")
         screen_w = self.root.winfo_screenwidth()
@@ -7414,6 +7519,7 @@ class GuiApp:  # pragma: no cover
         self._prompts_workflow_guide = None
         self._prompts_workflow_title_label = None
         self._prompts_workflow_body_label = None
+        self._prompts_workflow_info_badge = None
         self._gui_destroying = False
         self._header_visual_label = None
         self._reports_visual_label = None
@@ -7447,12 +7553,13 @@ class GuiApp:  # pragma: no cover
         header.grid(row=0, column=0, sticky="we", padx=16, pady=(10, 8))
         header.grid_columnconfigure(0, weight=1)
         header.grid_columnconfigure(1, weight=0)
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             header,
-            text=self._t("header_title"),
-            font=self._font(24, bold=True),
+            text_key="header_title",
+            tooltip_key="workflow_overview",
+            font_size=24,
             text_color="#F8FAFC",
-        ), "text", "header_title").grid(row=0, column=0, sticky="w", padx=18, pady=(12, 0))
+        ).grid(row=0, column=0, sticky="w", padx=18, pady=(12, 0))
         self._localize_widget(ctk.CTkLabel(
             header,
             text=self._t("header_subtitle"),
@@ -7481,6 +7588,12 @@ class GuiApp:  # pragma: no cover
                 font=self._font(11, bold=True),
                 padx=12,
             ), "text", label_key).grid(row=0, column=idx, sticky="w", padx=(0, 8))
+        self._make_info_badge_for(workflow_strip, "workflow_overview").grid(
+            row=0,
+            column=len(workflow_items),
+            sticky="w",
+            padx=(2, 0),
+        )
         self._header_visual_label = self._make_asset_label(
             header,
             "header-watermark.png",
@@ -7529,12 +7642,12 @@ class GuiApp:  # pragma: no cover
         )
         audit_target_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
         audit_target_card.grid_columnconfigure(1, weight=1)
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             audit_target_card,
-            text=self._t("audit_target"),
-            font=self._font(16, bold=True),
-            text_color=self._text_heading,
-        ), "text", "audit_target").grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 4))
+            text_key="audit_target",
+            tooltip_key="audit_target_section",
+            font_size=16,
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 4))
         self._localize_widget(ctk.CTkLabel(
             audit_target_card,
             text=self._t("audit_target_body"),
@@ -7596,12 +7709,12 @@ class GuiApp:  # pragma: no cover
         settings_intro = ctk.CTkFrame(settings_tab, fg_color="transparent")
         settings_intro.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 0))
         settings_intro.grid_columnconfigure(0, weight=1)
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             settings_intro,
-            text=self._t("settings_companion_title"),
-            font=self._font(18, bold=True),
-            text_color=self._text_heading,
-        ), "text", "settings_companion_title").grid(row=0, column=0, sticky="w")
+            text_key="settings_companion_title",
+            tooltip_key="settings_section",
+            font_size=18,
+        ).grid(row=0, column=0, sticky="w")
         self._localize_widget(ctk.CTkLabel(
             settings_intro,
             text=self._t("settings_companion_body"),
@@ -7628,12 +7741,12 @@ class GuiApp:  # pragma: no cover
         settings_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         settings_card.grid_columnconfigure(1, weight=1)
         self._settings_card = settings_card
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             settings_card,
-            text=self._t("setup_settings"),
-            font=self._font(16, bold=True),
-            text_color=self._text_heading,
-        ), "text", "setup_settings").grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
+            text_key="setup_settings",
+            tooltip_key="settings_section",
+            font_size=16,
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
 
         quick_start = ctk.CTkFrame(
             settings_card,
@@ -7720,12 +7833,12 @@ class GuiApp:  # pragma: no cover
         setup_settings_frame.grid_columnconfigure(1, weight=1)
         self._setup_settings_frame = setup_settings_frame
 
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             setup_settings_frame,
-            text=self._t("setup_settings"),
-            font=self._font(14, bold=True),
-            text_color=self._text_heading,
-        ), "text", "setup_settings").grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 4))
+            text_key="setup_settings",
+            tooltip_key="settings_section",
+            font_size=14,
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 4))
         self._settings_status_label = ctk.CTkLabel(
             setup_settings_frame,
             text=self._t("settings_status"),
@@ -7974,12 +8087,12 @@ class GuiApp:  # pragma: no cover
         self._profile_card = profile_card
         self._compact_top_layout = False
 
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             profile_card,
-            text=self._t("owner_profile"),
-            font=self._font(16, bold=True),
-            text_color=self._text_heading,
-        ), "text", "owner_profile").grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
+            text_key="owner_profile",
+            tooltip_key="owner_profile_section",
+            font_size=16,
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
         self._localize_widget(ctk.CTkLabel(
             profile_card,
             text=self._t("owner_profile_body"),
@@ -8237,12 +8350,12 @@ class GuiApp:  # pragma: no cover
         options_card.grid_columnconfigure(1, weight=1)
         self._options_card = options_card
         self._repair_options_card = options_card
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             options_card,
-            text=self._t("repair_plan_options"),
-            font=self._font(16, bold=True),
-            text_color=self._text_heading,
-        ), "text", "repair_plan_options").grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
+            text_key="repair_plan_options",
+            tooltip_key="repair_options_section",
+            font_size=16,
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
 
         safe_options = ctk.CTkFrame(
             options_card,
@@ -8491,12 +8604,13 @@ class GuiApp:  # pragma: no cover
         )
         repair_actions_card.grid(row=2, column=0, sticky="we", padx=10, pady=(0, 8))
         repair_actions_card.grid_columnconfigure(0, weight=1)
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             repair_actions_card,
-            text=self._t("repair_flow"),
-            font=self._font(14, bold=True),
+            text_key="repair_flow",
+            tooltip_key="repair_flow_section",
+            font_size=14,
             text_color=self._warning_text,
-        ), "text", "repair_flow").grid(row=0, column=0, sticky="w", padx=14, pady=(10, 4))
+        ).grid(row=0, column=0, sticky="w", padx=14, pady=(10, 4))
         self._repair_status_panel = ctk.CTkFrame(
             repair_actions_card,
             fg_color=self._success_panel_fg,
@@ -8663,12 +8777,12 @@ class GuiApp:  # pragma: no cover
         repo_header.grid(row=0, column=0, columnspan=2, sticky="we", padx=14, pady=(12, 6))
         repo_header.grid_columnconfigure(0, weight=1)
         repo_header.grid_columnconfigure(1, weight=0)
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             repo_header,
-            text=self._t("repositories"),
-            font=self._font(16, bold=True),
-            text_color=self._text_heading,
-        ), "text", "repositories").grid(row=0, column=0, sticky="w")
+            text_key="repositories",
+            tooltip_key="repositories_section",
+            font_size=16,
+        ).grid(row=0, column=0, sticky="w")
         repo_actions = ctk.CTkFrame(repo_header, fg_color="transparent")
         repo_actions.grid(row=0, column=1, sticky="e")
         self._audit_button = ctk.CTkButton(
@@ -8877,12 +8991,12 @@ class GuiApp:  # pragma: no cover
         output_card.grid_columnconfigure(0, weight=1)
         output_card.grid_rowconfigure(1, weight=1)
         self._output_card = output_card
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             output_card,
-            text=self._t("execution_log"),
-            font=self._font(16, bold=True),
-            text_color=self._text_heading,
-        ), "text", "execution_log").grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
+            text_key="execution_log",
+            tooltip_key="execution_log_section",
+            font_size=16,
+        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
         self.output = ctk.CTkTextbox(
             output_card,
             fg_color=self._output_fg,
@@ -9177,12 +9291,12 @@ class GuiApp:  # pragma: no cover
         reports_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
         reports_card.grid_columnconfigure(0, weight=1)
         reports_card.grid_columnconfigure(1, weight=0)
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             reports_card,
-            text=self._t("reports_dashboard"),
-            font=self._font(18, bold=True),
-            text_color=self._text_heading,
-        ), "text", "reports_dashboard").grid(row=0, column=0, sticky="w", padx=14, pady=(12, 4))
+            text_key="reports_dashboard",
+            tooltip_key="reports_section",
+            font_size=18,
+        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 4))
         self._localize_widget(ctk.CTkLabel(
             reports_card,
             text=self._t("reports_dashboard_body"),
@@ -9209,6 +9323,7 @@ class GuiApp:  # pragma: no cover
         )
         status_row.grid(row=2, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 10))
         status_row.grid_columnconfigure(1, weight=1)
+        status_row.grid_columnconfigure(2, weight=0)
         self._reports_status_badge = ctk.CTkLabel(
             status_row,
             text=self._t("last_run"),
@@ -9220,12 +9335,21 @@ class GuiApp:  # pragma: no cover
             padx=12,
         )
         self._reports_status_badge.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 6))
-        self._localize_widget(ctk.CTkLabel(
+        latest_artifacts_label = self._localize_widget(ctk.CTkLabel(
             status_row,
             text=self._t("latest_artifacts"),
             font=self._font(12, bold=True),
             text_color=self._text_heading,
-        ), "text", "latest_artifacts").grid(row=0, column=1, sticky="w", padx=(0, 12), pady=(10, 6))
+        ), "text", "latest_artifacts")
+        self._bind_tooltip_key(latest_artifacts_label, "latest_artifacts_section")
+        latest_artifacts_label.grid(row=0, column=1, sticky="w", padx=(0, 8), pady=(10, 6))
+        self._make_info_badge_for(status_row, "latest_artifacts_section").grid(
+            row=0,
+            column=2,
+            sticky="e",
+            padx=(0, 12),
+            pady=(10, 6),
+        )
         self._reports_summary_label = ctk.CTkLabel(
             status_row,
             text=self._t("last_run_none"),
@@ -9256,6 +9380,7 @@ class GuiApp:  # pragma: no cover
         )
         decision_row.grid(row=3, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 10))
         decision_row.grid_columnconfigure(1, weight=1)
+        decision_row.grid_columnconfigure(2, weight=0)
         self._reports_next_action_badge = self._localize_widget(ctk.CTkLabel(
             decision_row,
             text=self._t("next_action"),
@@ -9266,6 +9391,7 @@ class GuiApp:  # pragma: no cover
             font=self._font(11, bold=True),
             padx=12,
         ), "text", "next_action")
+        self._bind_tooltip_key(self._reports_next_action_badge, "next_action_section")
         self._reports_next_action_badge.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 8))
         self._reports_next_action_label = ctk.CTkLabel(
             decision_row,
@@ -9276,9 +9402,17 @@ class GuiApp:  # pragma: no cover
             font=self._font(12),
             text_color=self._text_body,
         )
-        self._reports_next_action_label.grid(row=0, column=1, sticky="we", padx=(0, 12), pady=(10, 8))
+        self._bind_tooltip_key(self._reports_next_action_label, "next_action_section")
+        self._reports_next_action_label.grid(row=0, column=1, sticky="we", padx=(0, 8), pady=(10, 8))
+        self._make_info_badge_for(decision_row, "next_action_section").grid(
+            row=0,
+            column=2,
+            sticky="e",
+            padx=(0, 12),
+            pady=(10, 8),
+        )
         self._reports_agent_steps_frame = ctk.CTkFrame(decision_row, fg_color="transparent")
-        self._reports_agent_steps_frame.grid(row=1, column=0, columnspan=2, sticky="we", padx=12, pady=(0, 10))
+        self._reports_agent_steps_frame.grid(row=1, column=0, columnspan=3, sticky="we", padx=12, pady=(0, 10))
         self._reports_agent_steps_frame.grid_columnconfigure(0, weight=1)
         self._reports_agent_steps_frame.grid_columnconfigure(1, weight=1)
         self._reports_agent_steps_frame.grid_columnconfigure(2, weight=1)
@@ -9307,7 +9441,8 @@ class GuiApp:  # pragma: no cover
             **self._secondary_button_options(),
         )
         self._localize_widget(self._reports_open_prompts_button, "text", "open_agent_prompts_from_reports")
-        self._reports_open_prompts_button.grid(row=2, column=0, columnspan=2, sticky="e", padx=12, pady=(0, 12))
+        self._bind_tooltip_key(self._reports_open_prompts_button, "open_agent_prompts_tab")
+        self._reports_open_prompts_button.grid(row=2, column=0, columnspan=3, sticky="e", padx=12, pady=(0, 12))
 
         actions = ctk.CTkFrame(reports_card, fg_color="transparent")
         actions.grid(row=4, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 12))
@@ -9372,12 +9507,12 @@ class GuiApp:  # pragma: no cover
         prompts_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
         prompts_card.grid_columnconfigure(0, weight=1)
         prompts_card.grid_columnconfigure(1, weight=0)
-        self._localize_widget(ctk.CTkLabel(
+        self._make_section_heading(
             prompts_card,
-            text=self._t("prompts_library"),
-            font=self._font(18, bold=True),
-            text_color=self._text_heading,
-        ), "text", "prompts_library").grid(row=0, column=0, sticky="w", padx=14, pady=(12, 4))
+            text_key="prompts_library",
+            tooltip_key="prompts_section",
+            font_size=18,
+        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 4))
         self._localize_widget(ctk.CTkLabel(
             prompts_card,
             text=self._t("prompts_library_body"),
@@ -9414,7 +9549,10 @@ class GuiApp:  # pragma: no cover
             font=self._font(11, bold=True),
             padx=12,
         ), "text", "agent_workflow_title")
+        self._bind_tooltip_key(workflow_title_label, "agent_workflow_section")
         self._prompts_workflow_title_label = workflow_title_label
+        workflow_info_badge = self._make_info_badge_for(workflow_guide, "agent_workflow_section")
+        self._prompts_workflow_info_badge = workflow_info_badge
         workflow_body_label = self._localize_widget(ctk.CTkLabel(
             workflow_guide,
             text=self._t("agent_workflow_body"),
@@ -9424,6 +9562,7 @@ class GuiApp:  # pragma: no cover
             font=self._font(12),
             text_color=self._text_body,
         ), "text", "agent_workflow_body")
+        self._bind_tooltip_key(workflow_body_label, "agent_workflow_section")
         self._prompts_workflow_body_label = workflow_body_label
         self._apply_prompts_workflow_layout(compact=self._prompt_card_columns_for_width(self._get_logical_window_width()) == 1)
         self._prompt_cards_frame = ctk.CTkFrame(prompts_card, fg_color="transparent")
@@ -9991,6 +10130,28 @@ class GuiApp:  # pragma: no cover
     def _make_info_badge_for(self, parent, key: str):
         return self._make_info_badge(parent, lambda: self._tooltip_text(key))
 
+    def _make_section_heading(
+        self,
+        parent,
+        *,
+        text_key: str,
+        tooltip_key: str,
+        font_size: int = 16,
+        text_color: str | None = None,
+    ):
+        shell = self.ctk.CTkFrame(parent, fg_color="transparent")
+        label = self.ctk.CTkLabel(
+            shell,
+            text=self._t(text_key),
+            font=self._font(font_size, bold=True),
+            text_color=text_color or self._text_heading,
+        )
+        self._localize_widget(label, "text", text_key)
+        self._bind_tooltip_key(label, tooltip_key)
+        label.pack(side="left")
+        self._make_info_badge_for(shell, tooltip_key).pack(side="left", padx=(8, 0))
+        return shell
+
     def _make_field_label(
         self,
         parent,
@@ -10297,11 +10458,13 @@ class GuiApp:  # pragma: no cover
         guide = getattr(self, "_prompts_workflow_guide", None)
         title_label = getattr(self, "_prompts_workflow_title_label", None)
         body_label = getattr(self, "_prompts_workflow_body_label", None)
+        info_badge = getattr(self, "_prompts_workflow_info_badge", None)
         visual_label = getattr(self, "_prompts_visual_label", None)
         try:
             if guide is not None:
                 guide.grid_columnconfigure(0, weight=1 if compact else 0)
                 guide.grid_columnconfigure(1, weight=0 if compact else 1)
+                guide.grid_columnconfigure(2, weight=0)
             if title_label is not None:
                 title_label.grid(
                     row=0,
@@ -10310,10 +10473,19 @@ class GuiApp:  # pragma: no cover
                     padx=10,
                     pady=(10, 4) if compact else 10,
                 )
+            if info_badge is not None:
+                info_badge.grid(
+                    row=0,
+                    column=1 if compact else 2,
+                    sticky="e",
+                    padx=(0, 10),
+                    pady=(10, 4) if compact else 10,
+                )
             if body_label is not None:
                 body_label.grid(
                     row=1 if compact else 0,
                     column=0 if compact else 1,
+                    columnspan=2 if compact else 1,
                     sticky="we",
                     padx=10 if compact else (0, 10),
                     pady=(0, 10) if compact else 10,
@@ -10996,6 +11168,9 @@ class GuiApp:  # pragma: no cover
             text_color=self._success_text,
             font=self._font(12, bold=True),
         )
+        badges = getattr(self, "_gui_info_badges", None)
+        if isinstance(badges, list):
+            badges.append(badge)
         self._bind_tooltip(badge, message)
         return badge
 
@@ -11032,8 +11207,19 @@ class GuiApp:  # pragma: no cover
                 text_color="#E2ECF6",
             ).pack(padx=10, pady=8)
 
+            tip.update_idletasks()
+            tip_width = max(tip.winfo_reqwidth(), 1)
+            tip_height = max(tip.winfo_reqheight(), 1)
+            screen_width = max(self.root.winfo_screenwidth(), 1)
+            screen_height = max(self.root.winfo_screenheight(), 1)
             x = widget.winfo_rootx() + widget.winfo_width() + 8
             y = widget.winfo_rooty() - 2
+            if x + tip_width + 8 > screen_width:
+                x = widget.winfo_rootx() - tip_width - 8
+            if y + tip_height + 8 > screen_height:
+                y = screen_height - tip_height - 8
+            x = max(4, x)
+            y = max(4, y)
             tip.geometry(f"+{x}+{y}")
             state["tip"] = tip
 

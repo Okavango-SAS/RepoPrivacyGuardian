@@ -359,6 +359,7 @@ Corrections applied:
 - Made Root-folder browse actions refresh the repository list immediately after selection, keeping the Audit screen state in sync without requiring a separate Refresh click.
 - Changed the Reports heading to latest-run review copy and made the checklist read as numbered guidance rather than controls.
 - Stacked Reports handoff steps in compact desktop layouts and widened one-column Prompt card text wraps so compact cards do not look half-empty.
+- Added visible `(i)` contextual-help badges to the main agent-first sections and kept help in hover tooltips so the screen stays cleaner by default.
 - Re-captured Audit and Reports screenshots after the visual changes; tracked Reports/Prompts screenshots remain sanitized under `docs/ux-audit/after/`.
 
 Validation notes:

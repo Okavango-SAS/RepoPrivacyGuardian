@@ -1261,28 +1261,34 @@ def test_gui_prompt_workflow_guide_stacks_and_hides_visual_on_compact_layout() -
     guide = DummyGuide()
     title = DummyWidget()
     body = DummyWidget()
+    info = DummyWidget()
     visual = DummyWidget()
     app = object.__new__(rpg.GuiApp)
     app._prompts_workflow_guide = guide
     app._prompts_workflow_title_label = title
     app._prompts_workflow_body_label = body
+    app._prompts_workflow_info_badge = info
     app._prompts_visual_label = visual
 
     app._apply_prompts_workflow_layout(compact=True)
 
-    assert guide.columns[-2:] == [(0, {"weight": 1}), (1, {"weight": 0})]
+    assert guide.columns[-3:] == [(0, {"weight": 1}), (1, {"weight": 0}), (2, {"weight": 0})]
     assert title.grid_calls[-1]["row"] == 0
     assert title.grid_calls[-1]["column"] == 0
+    assert info.grid_calls[-1]["column"] == 1
     assert body.grid_calls[-1]["row"] == 1
     assert body.grid_calls[-1]["column"] == 0
+    assert body.grid_calls[-1]["columnspan"] == 2
     assert body.config["wraplength"] == 760
     assert visual.removed is True
 
     app._apply_prompts_workflow_layout(compact=False)
 
-    assert guide.columns[-2:] == [(0, {"weight": 0}), (1, {"weight": 1})]
+    assert guide.columns[-3:] == [(0, {"weight": 0}), (1, {"weight": 1}), (2, {"weight": 0})]
+    assert info.grid_calls[-1]["column"] == 2
     assert body.grid_calls[-1]["row"] == 0
     assert body.grid_calls[-1]["column"] == 1
+    assert body.grid_calls[-1]["columnspan"] == 1
     assert body.config["wraplength"] == 1040
     assert visual.removed is False
 
@@ -1919,7 +1925,27 @@ def test_gui_tooltip_catalog_covers_non_obvious_controls() -> None:
         "clear_selection",
         "clear_log",
         "repo_drop_area",
+        "workflow_overview",
+        "audit_target_section",
+        "settings_section",
+        "owner_profile_section",
+        "repositories_section",
+        "execution_log_section",
+        "reports_section",
+        "latest_artifacts_section",
+        "next_action_section",
+        "prompts_section",
+        "agent_workflow_section",
+        "repair_options_section",
+        "repair_flow_section",
+        "reports_tab",
+        "prompts_tab",
+        "open_settings_tab",
+        "open_agent_prompts_tab",
         "copy_agent_handoff",
+        "copy_prompt",
+        "copy_prompt_command",
+        "open_prompt_file",
     }
 
     assert required_keys <= set(rpg.GUI_TOOLTIP_TEXT)

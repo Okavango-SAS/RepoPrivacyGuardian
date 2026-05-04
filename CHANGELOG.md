@@ -11,6 +11,7 @@ All notable user-facing changes to this project are documented here.
 - Polished Spanish prompt-library copy in the GUI to avoid avoidable English UX fragments while preserving CLI flags and file names.
 - Refined the desktop GUI visual flow after screenshot QA: Reports now reads as latest-run review, checklist guidance no longer looks like disabled controls, and invalid Root empty states include a direct folder-selection action.
 - Improved compact desktop behavior for the GUI Reports and Prompts tabs so handoff steps stack cleanly and prompt descriptions use the available one-column width.
+- Added visible `(i)` contextual-help badges to agent-first GUI sections and improved tooltip positioning near screen edges.
 
 ### Fixed
 

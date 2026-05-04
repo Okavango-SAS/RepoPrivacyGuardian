@@ -63,6 +63,18 @@ def main() -> int:
             assert getattr(app._app_frame._scrollbar, "_button_color", None) == app._scrollbar_thumb
             assert getattr(app._repo_scrollbar, "_button_color", None) == app._scrollbar_thumb
             assert app._appearance_menu.cget("values") == ["Claro", "Oscuro"]
+            assert len(app._gui_info_badges) >= 40
+            visible_badge = next(badge for badge in app._gui_info_badges if badge.winfo_viewable())
+            visible_badge_label = getattr(visible_badge, "_label")
+            child_count = len(app.root.winfo_children())
+            visible_badge_label.event_generate("<Enter>")
+            app.root.update_idletasks()
+            app.root.update()
+            assert len(app.root.winfo_children()) > child_count
+            visible_badge_label.event_generate("<Leave>")
+            app.root.update_idletasks()
+            app.root.update()
+            assert len(app.root.winfo_children()) == child_count
             assert app._output_empty_state_label.winfo_viewable()
             app.log("[INFO] GUI smoke log")
             app.root.update_idletasks()

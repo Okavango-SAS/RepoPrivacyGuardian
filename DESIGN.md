@@ -128,6 +128,8 @@ Instructional checklist rows should not look like inactive buttons. Use button s
 
 Compact layouts should reuse the available one-column width instead of preserving two-column text wraps. When cards stack, body and command text should expand enough to avoid narrow left-heavy content.
 
+Contextual help should be visible but secondary. Use small `(i)` badges and hover tooltips on non-obvious sections, controls, and agent-first decisions so the default screen stays simple while new users can discover what each area does without leaving the GUI.
+
 ## Desktop Visual QA Method
 
 Repo Privacy Guardian can borrow useful product-design discipline from web-app frontend workflows, but the implementation target remains a `customtkinter` desktop companion. Do not migrate the GUI to React, Vite, browser routing, or web-only QA just to satisfy visual design guidance.
