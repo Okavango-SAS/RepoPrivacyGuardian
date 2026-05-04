@@ -7344,6 +7344,7 @@ class GuiApp:  # pragma: no cover
         self._reports_go_audit_button = None
         self._reports_agent_handoff_button = None
         self._reports_action_buttons: list[object] = []
+        self._compact_reports_actions_layout = False
         self._prompt_cards_frame = None
         self._prompt_card_widgets: list[object] = []
         self._prompt_card_column_count = 2
@@ -9489,17 +9490,27 @@ class GuiApp:  # pragma: no cover
                 go_audit_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
             if agent_handoff_button is not None:
                 agent_handoff_button.grid_remove()
-            for idx, button in enumerate(getattr(self, "_reports_action_buttons", [])):
-                button.grid_configure(row=0, column=idx + 1, sticky="w", padx=(0, 8))
+            for button in getattr(self, "_reports_action_buttons", []):
+                button.grid_remove()
                 button.configure(state="disabled")
             return
 
         if go_audit_button is not None:
             go_audit_button.grid_remove()
+        compact_actions = bool(getattr(self, "_compact_reports_actions_layout", False))
         if agent_handoff_button is not None:
-            agent_handoff_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
+            agent_handoff_button.grid(
+                row=0,
+                column=0,
+                sticky="w",
+                padx=(0, 8),
+                pady=(0, 6) if compact_actions else 0,
+            )
         for idx, button in enumerate(getattr(self, "_reports_action_buttons", [])):
-            button.grid_configure(row=0, column=idx + 1, sticky="w", padx=(0, 8))
+            if compact_actions:
+                button.grid_configure(row=1, column=idx, sticky="w", padx=(0, 8), pady=(2, 0))
+            else:
+                button.grid_configure(row=0, column=idx + 1, sticky="w", padx=(0, 8), pady=0)
 
         failed = sum(1 for item in self._last_audit_reports_payload if item.get("status") == "FAIL")
         exit_code = getattr(self, "_last_run_exit_code", None)
@@ -9979,6 +9990,7 @@ class GuiApp:  # pragma: no cover
         self._apply_identity_actions_layout(compact=width <= self._top_stack_width_threshold)
         self._apply_options_layout(compact=width <= self._options_stack_width_threshold)
         self._apply_results_layout(compact=width <= self._results_stack_width_threshold)
+        self._apply_reports_actions_layout(compact=width <= self._results_stack_width_threshold)
         prompt_columns = self._prompt_card_columns_for_width(width)
         self._apply_prompts_workflow_layout(compact=prompt_columns == 1)
         if prompt_columns != getattr(self, "_prompt_card_column_count", 2):
@@ -10270,6 +10282,13 @@ class GuiApp:  # pragma: no cover
         self._results_row.grid_columnconfigure(1, weight=1)
         self._repos_card.grid_configure(row=0, column=0, padx=(0, 8), pady=0, sticky="nsew")
         self._output_card.grid_configure(row=0, column=1, padx=(8, 0), pady=0, sticky="nsew")
+
+    def _apply_reports_actions_layout(self, compact: bool) -> None:
+        if compact == getattr(self, "_compact_reports_actions_layout", False):
+            return
+
+        self._compact_reports_actions_layout = compact
+        self._refresh_reports_tab()
 
     def _set_active_flow_tab(self, tab_name: str) -> None:
         if self._flow_tabs is None:

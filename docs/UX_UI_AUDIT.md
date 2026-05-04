@@ -294,3 +294,24 @@ Validation notes:
 - The desktop GUI remains the optional companion to the CLI backend.
 - The design method changes documentation and maintenance criteria only; it does not add GUI-only behavior.
 - New report-directory hardening is covered by regression tests for symlinked requested/default results paths and CLI pre-pipeline failure handling.
+
+## 2026-05-04 Desktop UX Follow-Up
+
+This pass applied the desktop-adapted frontend-design criteria without changing the implementation target from `customtkinter`.
+
+Findings:
+
+- The Reports tab correctly offered `Go to Audit` before any run artifacts existed, but it still showed disabled artifact buttons in the same action row. That made the empty state feel busier than the one useful next step.
+- The Reports action row worked at the primary desktop width, but localized button labels needed an explicit compact reflow rule so artifact actions do not compete with each other near the minimum supported width.
+
+Corrections applied:
+
+- Hid downstream Reports artifact buttons until a run exists, keeping the first-run empty state focused on `Go to Audit`.
+- Kept artifact buttons disabled while hidden, then restored them as visible normal actions after artifacts are remembered.
+- Reflowed the Reports agent-handoff and artifact buttons onto a second row in compact desktop layout.
+- Documented the empty-state rule in `DESIGN.md` so future GUI states avoid disabled-action clutter.
+
+Validation notes:
+
+- Presentation changed only Reports-tab layout and empty-state affordances.
+- No CLI flags, report fields, policy keys, remediation defaults, or `GuardRunConfig` mappings changed.

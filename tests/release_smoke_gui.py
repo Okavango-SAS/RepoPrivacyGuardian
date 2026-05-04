@@ -84,6 +84,7 @@ def main() -> int:
             assert app._reports_status_badge.winfo_viewable()
             assert app._reports_paths_label.winfo_viewable()
             assert all(button.cget("state") == "disabled" for button in app._reports_action_buttons)
+            assert not any(button.winfo_viewable() for button in app._reports_action_buttons)
             run_dir = REPO_ROOT / "Audit_Results" / "gui-smoke-handoff"
             app._remember_last_run_artifacts(
                 RunArtifacts(
@@ -105,6 +106,7 @@ def main() -> int:
             assert app._reports_agent_handoff_button.cget("text") == app._t("copy_agent_handoff")
             assert app._reports_agent_handoff_button.winfo_viewable()
             assert all(button.cget("state") == "normal" for button in app._reports_action_buttons)
+            assert all(button.winfo_viewable() for button in app._reports_action_buttons)
             assert "Audit_Results/gui-smoke-handoff/report.json" in app._reports_paths_label.cget("text")
             assert str(REPO_ROOT) not in app._reports_paths_label.cget("text")
             handoff_text = app._build_agent_handoff_text()
@@ -117,6 +119,7 @@ def main() -> int:
             app.root.update()
             assert app._reports_go_audit_button.winfo_viewable()
             assert not app._reports_agent_handoff_button.winfo_viewable()
+            assert not any(button.winfo_viewable() for button in app._reports_action_buttons)
             app._set_active_flow_tab(app._prompts_tab_name)
             app.root.update_idletasks()
             app.root.update()
@@ -161,6 +164,7 @@ def main() -> int:
             assert app._reports_status_badge.winfo_viewable()
             assert app._reports_paths_label.winfo_viewable()
             assert all(button.cget("state") == "disabled" for button in app._reports_action_buttons)
+            assert not any(button.winfo_viewable() for button in app._reports_action_buttons)
             app._set_active_flow_tab(app._prompts_tab_name)
             app.root.update_idletasks()
             app.root.update()

@@ -116,6 +116,8 @@ Large operational panes such as logs should have a quiet empty state before data
 
 Empty states that represent a normal first-run path should include a safe next action when one exists. Prefer a single primary action such as `Run Audit` / `Go to Audit` over extra explanatory copy.
 
+Empty states should not show disabled downstream actions that cannot succeed yet. Reveal artifact, report, and repair actions after the state that enables them exists.
+
 Agentic handoff UI should reference redacted local evidence and safe next actions, not raw findings. When copying prompts from the GUI, prefer repository-relative artifact paths when available and redact personal absolute paths otherwise.
 
 ## Desktop Visual QA Method

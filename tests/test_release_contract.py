@@ -1298,6 +1298,22 @@ def test_gui_responsive_prompt_layout_regrids_without_rebuilding_cards() -> None
     assert ("prompt_cards", 1) in calls
 
 
+def test_gui_reports_actions_reflow_when_compact_state_changes() -> None:
+    calls: list[bool] = []
+    app = object.__new__(rpg.GuiApp)
+    app._compact_reports_actions_layout = False
+    app._refresh_reports_tab = lambda: calls.append(app._compact_reports_actions_layout)  # type: ignore[method-assign]
+
+    app._apply_reports_actions_layout(compact=True)
+
+    assert app._compact_reports_actions_layout is True
+    assert calls == [True]
+
+    app._apply_reports_actions_layout(compact=True)
+
+    assert calls == [True]
+
+
 def test_gui_resize_ignores_callbacks_while_root_is_destroying() -> None:
     app = object.__new__(rpg.GuiApp)
     app._gui_destroying = True

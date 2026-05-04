@@ -4,6 +4,14 @@ All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Kept the GUI Reports empty state focused on the safe `Go to Audit` action instead of showing disabled artifact buttons before a run exists.
+
+### Fixed
+
+- Reflowed GUI Reports artifact actions on compact desktop widths so localized button text stays readable without competing with first-run guidance.
+
 ## [1.4.6] - 2026-05-01
 
 Post-release GUI, locale, and cleanup hardening update.
