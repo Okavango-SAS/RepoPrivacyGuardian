@@ -49,6 +49,7 @@ ROOT_LAYOUT_ALLOWED_TOP_LEVEL = {
     "docs",
     "pyproject.toml",
     "pyrightconfig.json",
+    "repo_privacy_guardian",
     "repo_privacy_guardian_artifacts.py",
     "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_prompts.py",
@@ -64,6 +65,12 @@ ROOT_LAYOUT_REQUIRED = [
     ".env.example",
     "Repo_Privacy_Guardian.py",
     "README.MD",
+    "repo_privacy_guardian/__init__.py",
+    "repo_privacy_guardian/artifacts.py",
+    "repo_privacy_guardian/core.py",
+    "repo_privacy_guardian/github.py",
+    "repo_privacy_guardian/prompts.py",
+    "repo_privacy_guardian/runtime.py",
     "repo_privacy_guardian_artifacts.py",
     "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_prompts.py",
@@ -546,7 +553,10 @@ def test_gui_runtime_assets_are_packaged_and_bounded() -> None:
         "icon-stop.png": (24, 24),
     }
 
-    assert 'packages = ["repo_privacy_guardian_resources", "repo_privacy_guardian_assets"]' in pyproject
+    assert (
+        'packages = ["repo_privacy_guardian", "repo_privacy_guardian_resources", '
+        '"repo_privacy_guardian_assets"]'
+    ) in pyproject
     assert 'repo_privacy_guardian_assets = ["*.png"]' in pyproject
     for filename, expected_size in expected_sizes.items():
         asset = assets_dir / filename

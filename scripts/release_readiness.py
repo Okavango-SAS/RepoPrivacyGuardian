@@ -34,6 +34,12 @@ DEPENDENCY_AUDIT_REQUIREMENT_FILES = (
 )
 RELEASE_BYTE_COMPILE_PATHS = (
     "Repo_Privacy_Guardian.py",
+    "repo_privacy_guardian/__init__.py",
+    "repo_privacy_guardian/artifacts.py",
+    "repo_privacy_guardian/core.py",
+    "repo_privacy_guardian/github.py",
+    "repo_privacy_guardian/prompts.py",
+    "repo_privacy_guardian/runtime.py",
     "repo_privacy_guardian_artifacts.py",
     "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_prompts.py",

@@ -1,5 +1,9 @@
 {
   "include": [
+    "repo_privacy_guardian/artifacts.py",
+    "repo_privacy_guardian/github.py",
+    "repo_privacy_guardian/prompts.py",
+    "repo_privacy_guardian/runtime.py",
     "repo_privacy_guardian_artifacts.py",
     "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_runtime.py",
