@@ -1210,6 +1210,30 @@ def test_gui_prompt_cards_stack_on_compact_layout() -> None:
     assert app._prompt_card_columns_for_width(1440) == 2
 
 
+def test_gui_prompt_card_wraplength_expands_for_single_column_layout() -> None:
+    class DummyRoot:
+        def wm_geometry(self) -> str:
+            return "980x780+40+40"
+
+        def winfo_width(self) -> int:
+            return 980
+
+    class DummyScalingTracker:
+        @staticmethod
+        def get_window_scaling(_root: object) -> float:
+            return 1.0
+
+    class DummyCtk:
+        ScalingTracker = DummyScalingTracker
+
+    app = object.__new__(rpg.GuiApp)
+    app.root = DummyRoot()
+    app.ctk = DummyCtk()
+
+    assert app._prompt_card_text_wraplength(1) > app._prompt_card_text_wraplength(2)
+    assert app._prompt_card_text_wraplength(1, mono=True) > app._prompt_card_text_wraplength(2, mono=True)
+
+
 def test_gui_prompt_workflow_guide_stacks_and_hides_visual_on_compact_layout() -> None:
     class DummyGuide:
         def __init__(self) -> None:
@@ -1221,11 +1245,15 @@ def test_gui_prompt_workflow_guide_stacks_and_hides_visual_on_compact_layout() -
     class DummyWidget:
         def __init__(self) -> None:
             self.grid_calls: list[dict[str, object]] = []
+            self.config: dict[str, object] = {}
             self.removed = False
 
         def grid(self, **kwargs: object) -> None:
             self.grid_calls.append(kwargs)
             self.removed = False
+
+        def configure(self, **kwargs: object) -> None:
+            self.config.update(kwargs)
 
         def grid_remove(self) -> None:
             self.removed = True
@@ -1247,6 +1275,7 @@ def test_gui_prompt_workflow_guide_stacks_and_hides_visual_on_compact_layout() -
     assert title.grid_calls[-1]["column"] == 0
     assert body.grid_calls[-1]["row"] == 1
     assert body.grid_calls[-1]["column"] == 0
+    assert body.config["wraplength"] == 760
     assert visual.removed is True
 
     app._apply_prompts_workflow_layout(compact=False)
@@ -1254,6 +1283,7 @@ def test_gui_prompt_workflow_guide_stacks_and_hides_visual_on_compact_layout() -
     assert guide.columns[-2:] == [(0, {"weight": 0}), (1, {"weight": 1})]
     assert body.grid_calls[-1]["row"] == 0
     assert body.grid_calls[-1]["column"] == 1
+    assert body.config["wraplength"] == 1040
     assert visual.removed is False
 
 
@@ -1288,6 +1318,7 @@ def test_gui_responsive_prompt_layout_regrids_without_rebuilding_cards() -> None
     app._apply_identity_actions_layout = lambda compact: calls.append(("identity", compact))
     app._apply_options_layout = lambda compact: calls.append(("options", compact))
     app._apply_results_layout = lambda compact: calls.append(("results", compact))
+    app._apply_reports_decision_layout = lambda compact: calls.append(("reports_decision", compact))
     app._apply_prompts_workflow_layout = lambda compact: calls.append(("prompt_workflow", compact))
     app._apply_prompt_cards_layout = lambda columns: calls.append(("prompt_cards", columns))
     app._refresh_prompt_cards = lambda: (_ for _ in ()).throw(AssertionError("resize must not rebuild cards"))
@@ -1312,6 +1343,86 @@ def test_gui_reports_actions_reflow_when_compact_state_changes() -> None:
     app._apply_reports_actions_layout(compact=True)
 
     assert calls == [True]
+
+
+def test_gui_reports_decision_steps_stack_on_compact_layout() -> None:
+    class DummySteps:
+        def __init__(self) -> None:
+            self.columns: list[tuple[object, dict[str, object]]] = []
+
+        def grid_columnconfigure(self, column: object, **kwargs: object) -> None:
+            self.columns.append((column, kwargs))
+
+    class DummyWidget:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        def grid_configure(self, **kwargs: object) -> None:
+            self.calls.append(kwargs)
+
+    steps = DummySteps()
+    labels = [DummyWidget(), DummyWidget(), DummyWidget()]
+    prompts_button = DummyWidget()
+    app = object.__new__(rpg.GuiApp)
+    app._compact_reports_decision_layout = False
+    app._reports_agent_steps_frame = steps
+    app._reports_agent_step_labels = labels
+    app._reports_open_prompts_button = prompts_button
+
+    app._apply_reports_decision_layout(compact=True)
+
+    assert app._compact_reports_decision_layout is True
+    assert labels[0].calls[-1]["row"] == 0
+    assert labels[1].calls[-1]["row"] == 1
+    assert labels[2].calls[-1]["row"] == 2
+    assert labels[0].calls[-1]["column"] == 0
+    assert prompts_button.calls[-1]["sticky"] == "w"
+
+    rebuilt_labels = [DummyWidget(), DummyWidget(), DummyWidget()]
+    app._reports_agent_step_labels = rebuilt_labels
+    app._apply_reports_decision_layout(compact=True)
+
+    assert rebuilt_labels[1].calls[-1]["row"] == 1
+    assert rebuilt_labels[2].calls[-1]["column"] == 0
+
+    app._apply_reports_decision_layout(compact=False)
+
+    assert app._compact_reports_decision_layout is False
+    assert rebuilt_labels[0].calls[-1]["row"] == 0
+    assert rebuilt_labels[1].calls[-1]["row"] == 0
+    assert rebuilt_labels[2].calls[-1]["row"] == 0
+    assert rebuilt_labels[2].calls[-1]["column"] == 2
+    assert prompts_button.calls[-1]["sticky"] == "e"
+
+
+def test_gui_reports_decision_layout_does_not_unhide_prompt_button() -> None:
+    class DummySteps:
+        def grid_columnconfigure(self, column: object, **kwargs: object) -> None:
+            del column, kwargs
+
+    class DummyLabel:
+        def grid_configure(self, **kwargs: object) -> None:
+            del kwargs
+
+    class HiddenButton:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        def winfo_manager(self) -> str:
+            return ""
+
+        def grid_configure(self, **kwargs: object) -> None:
+            self.calls.append(kwargs)
+
+    hidden_button = HiddenButton()
+    app = object.__new__(rpg.GuiApp)
+    app._reports_agent_steps_frame = DummySteps()
+    app._reports_agent_step_labels = [DummyLabel(), DummyLabel(), DummyLabel()]
+    app._reports_open_prompts_button = hidden_button
+
+    app._apply_reports_decision_layout(compact=True)
+
+    assert hidden_button.calls == []
 
 
 def test_gui_resize_ignores_callbacks_while_root_is_destroying() -> None:

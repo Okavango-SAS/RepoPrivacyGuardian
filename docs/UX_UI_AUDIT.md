@@ -358,6 +358,7 @@ Corrections applied:
 - Added a direct `Choose Root` / `Elegir carpeta` action inside the repository empty state for invalid or empty local roots.
 - Made Root-folder browse actions refresh the repository list immediately after selection, keeping the Audit screen state in sync without requiring a separate Refresh click.
 - Changed the Reports heading to latest-run review copy and made the checklist read as numbered guidance rather than controls.
+- Stacked Reports handoff steps in compact desktop layouts and widened one-column Prompt card text wraps so compact cards do not look half-empty.
 - Re-captured Audit and Reports screenshots after the visual changes; tracked Reports/Prompts screenshots remain sanitized under `docs/ux-audit/after/`.
 
 Validation notes:

@@ -126,6 +126,8 @@ Prompt-library cards should be staged and task-specific. Each card needs a clear
 
 Instructional checklist rows should not look like inactive buttons. Use button styling only for controls that perform an action, and place the recovery action inside empty states when the next step is unambiguous.
 
+Compact layouts should reuse the available one-column width instead of preserving two-column text wraps. When cards stack, body and command text should expand enough to avoid narrow left-heavy content.
+
 ## Desktop Visual QA Method
 
 Repo Privacy Guardian can borrow useful product-design discipline from web-app frontend workflows, but the implementation target remains a `customtkinter` desktop companion. Do not migrate the GUI to React, Vite, browser routing, or web-only QA just to satisfy visual design guidance.

@@ -7399,10 +7399,13 @@ class GuiApp:  # pragma: no cover
         self._reports_next_action_badge = None
         self._reports_next_action_label = None
         self._reports_agent_steps_frame = None
+        self._reports_agent_step_labels: list[object] = []
         self._reports_open_prompts_button = None
         self._reports_go_audit_button = None
         self._reports_agent_handoff_button = None
         self._reports_action_buttons: list[object] = []
+        self._reports_decision_layout_signature: tuple[object, ...] | None = None
+        self._compact_reports_decision_layout = False
         self._compact_reports_actions_layout = False
         self._prompt_cards_frame = None
         self._prompt_card_widgets: list[object] = []
@@ -9279,6 +9282,7 @@ class GuiApp:  # pragma: no cover
         self._reports_agent_steps_frame.grid_columnconfigure(0, weight=1)
         self._reports_agent_steps_frame.grid_columnconfigure(1, weight=1)
         self._reports_agent_steps_frame.grid_columnconfigure(2, weight=1)
+        self._reports_agent_step_labels = []
         for idx, text_key in enumerate(("agent_step_evidence", "agent_step_copy", "agent_step_prompt")):
             step_label = self._localize_widget(ctk.CTkLabel(
                 self._reports_agent_steps_frame,
@@ -9292,6 +9296,7 @@ class GuiApp:  # pragma: no cover
                 padx=10,
             ), "text", text_key)
             step_label.grid(row=0, column=idx, sticky="we", padx=(0, 8 if idx < 2 else 0))
+            self._reports_agent_step_labels.append(step_label)
         self._reports_open_prompts_button = ctk.CTkButton(
             decision_row,
             text=self._t("open_agent_prompts_from_reports"),
@@ -9429,6 +9434,12 @@ class GuiApp:  # pragma: no cover
         threshold = int(getattr(self, "_prompts_stack_width_threshold", 1240))
         return 1 if width <= threshold else 2
 
+    def _prompt_card_text_wraplength(self, columns: int, *, mono: bool = False) -> int:
+        if columns > 1:
+            return 520 if mono else 500
+        width = self._get_logical_window_width()
+        return max(520, min(900, width - (140 if mono else 170)))
+
     def _prompt_metadata_text(self, prompt_id: str, prefix: str) -> str:
         key = f"{prefix}_{prompt_id}"
         if key not in GUI_UI_TEXT_BY_LOCALE[GUI_LOCALE_DEFAULT]:
@@ -9445,6 +9456,8 @@ class GuiApp:  # pragma: no cover
         self._prompt_card_stage_labels = []
 
         columns = self._prompt_card_columns_for_width(self._get_logical_window_width())
+        body_wraplength = self._prompt_card_text_wraplength(columns)
+        command_wraplength = self._prompt_card_text_wraplength(columns, mono=True)
 
         repo_root = Path(__file__).resolve().parent
         for idx, prompt in enumerate(prompt_helpers.agentic_prompt_cards(self._current_locale())):
@@ -9485,7 +9498,7 @@ class GuiApp:  # pragma: no cover
                 text_color=self._text_muted,
                 anchor="w",
                 justify="left",
-                wraplength=500,
+                wraplength=body_wraplength,
             ).grid(row=2, column=0, sticky="we", padx=12, pady=(0, 6))
             self.ctk.CTkLabel(
                 card,
@@ -9494,7 +9507,7 @@ class GuiApp:  # pragma: no cover
                 text_color=self._text_body,
                 anchor="w",
                 justify="left",
-                wraplength=500,
+                wraplength=body_wraplength,
             ).grid(row=3, column=0, sticky="we", padx=12, pady=(0, 8))
             self.ctk.CTkLabel(
                 card,
@@ -9503,7 +9516,7 @@ class GuiApp:  # pragma: no cover
                 text_color=self._text_body,
                 anchor="w",
                 justify="left",
-                wraplength=520,
+                wraplength=command_wraplength,
             ).grid(row=4, column=0, sticky="we", padx=12, pady=(0, 8))
 
             actions = self.ctk.CTkFrame(card, fg_color="transparent")
@@ -9677,6 +9690,8 @@ class GuiApp:  # pragma: no cover
             steps_frame.grid()
         if prompts_button is not None:
             prompts_button.grid()
+        self._reports_decision_layout_signature = None
+        self._apply_reports_decision_layout(compact=bool(getattr(self, "_compact_reports_decision_layout", False)))
 
     def _build_agent_handoff_text(self) -> str | None:
         artifacts = getattr(self, "_last_run_artifacts", None)
@@ -10251,6 +10266,7 @@ class GuiApp:  # pragma: no cover
         self._apply_identity_actions_layout(compact=width <= self._top_stack_width_threshold)
         self._apply_options_layout(compact=width <= self._options_stack_width_threshold)
         self._apply_results_layout(compact=width <= self._results_stack_width_threshold)
+        self._apply_reports_decision_layout(compact=width <= self._results_stack_width_threshold)
         self._apply_reports_actions_layout(compact=width <= self._results_stack_width_threshold)
         prompt_columns = self._prompt_card_columns_for_width(width)
         self._apply_prompts_workflow_layout(compact=prompt_columns == 1)
@@ -10302,6 +10318,7 @@ class GuiApp:  # pragma: no cover
                     padx=10 if compact else (0, 10),
                     pady=(0, 10) if compact else 10,
                 )
+                body_label.configure(wraplength=760 if compact else 1040)
             if visual_label is not None:
                 if compact:
                     visual_label.grid_remove()
@@ -10550,6 +10567,51 @@ class GuiApp:  # pragma: no cover
 
         self._compact_reports_actions_layout = compact
         self._refresh_reports_tab()
+
+    def _apply_reports_decision_layout(self, compact: bool) -> None:
+        steps_frame = getattr(self, "_reports_agent_steps_frame", None)
+        step_labels = list(getattr(self, "_reports_agent_step_labels", []))
+        prompts_button = getattr(self, "_reports_open_prompts_button", None)
+        if steps_frame is None or len(step_labels) != 3:
+            return
+
+        layout_signature = (
+            compact,
+            id(steps_frame),
+            *(id(label) for label in step_labels),
+            id(prompts_button),
+        )
+        if layout_signature == getattr(self, "_reports_decision_layout_signature", None):
+            return
+
+        try:
+            self._compact_reports_decision_layout = compact
+            if compact:
+                steps_frame.grid_columnconfigure(0, weight=1)
+                steps_frame.grid_columnconfigure((1, 2), weight=0)
+                for idx, label in enumerate(step_labels):
+                    label.grid_configure(row=idx, column=0, sticky="we", padx=0, pady=(0, 3))
+                if prompts_button is not None and self._widget_is_grid_managed(prompts_button):
+                    prompts_button.grid_configure(sticky="w")
+                self._reports_decision_layout_signature = layout_signature
+                return
+
+            steps_frame.grid_columnconfigure((0, 1, 2), weight=1)
+            for idx, label in enumerate(step_labels):
+                label.grid_configure(row=0, column=idx, sticky="we", padx=(0, 8 if idx < 2 else 0), pady=0)
+            if prompts_button is not None and self._widget_is_grid_managed(prompts_button):
+                prompts_button.grid_configure(sticky="e")
+            self._reports_decision_layout_signature = layout_signature
+        except Exception:
+            self._reports_decision_layout_signature = None
+            return
+
+    @staticmethod
+    def _widget_is_grid_managed(widget: object) -> bool:
+        try:
+            return widget.winfo_manager() == "grid"
+        except Exception:
+            return True
 
     def _set_active_flow_tab(self, tab_name: str) -> None:
         if self._flow_tabs is None:
