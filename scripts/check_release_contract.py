@@ -40,6 +40,8 @@ README_REQUIREMENTS = [
     "Root is intentionally small and allowlisted by tests",
     "Developed and maintained by **Okavango SAS**",
     "docs/ux-audit/after/audit-default-desktop-after.png",
+    "This repository itself is already public.",
+    "git diff --check",
 ]
 
 CHECKLIST_REQUIREMENTS = [
@@ -51,6 +53,8 @@ CHECKLIST_REQUIREMENTS = [
     "Classify each finding as confirmed leak",
     "agent_summary.json",
     "--suppressions",
+    "already public repository",
+    "Confirm no raw secrets",
 ]
 
 KNOWN_ISSUES_REQUIREMENTS = [
@@ -110,6 +114,8 @@ AGENTS_REQUIREMENTS = [
     "same internal configuration/policy keys",
     "covered by regression tests",
     "agent_summary.json",
+    "Public Repository Operating Rule",
+    "immediately internet-visible",
 ]
 
 ARCHITECTURE_REQUIREMENTS = [
@@ -135,6 +141,8 @@ OPERATIONS_REQUIREMENTS = [
     "@google/design.md@0.1.0",
     "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN",
     "NPM_TOKEN",
+    "Public repository posture",
+    "already public on GitHub",
 ]
 
 DESIGN_REQUIREMENTS = [

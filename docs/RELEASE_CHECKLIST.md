@@ -4,9 +4,13 @@ Use this checklist before tagging a public release.
 
 ## 1. Pre-flight
 
+- Confirm maintainers are treating RepoPrivacyGuardian itself as an already public repository: every pushed branch, commit, tag, PR, screenshot, and documentation edit can be internet-visible.
 - Confirm clean working tree.
 - Confirm target branch and remote.
 - Confirm local git identity is correct for release commits.
+- Confirm `git status --short` and `git diff --check` were reviewed before staging release changes.
+- Confirm no raw secrets, private emails, internal hostnames, private URLs, personal absolute paths, unredacted logs, real tokens in examples, or private-context screenshots are staged.
+- Confirm local-only outputs remain ignored: `Audit_Results/`, `.local-meta/`, `dist/`, `build/`, `*.egg-info/`, and `*-pre-publication-fix-*.bundle`.
 - Clear stale local build outputs (`dist/`, `build/`, and `*.egg-info/`) before the final package build if you are reusing a workspace.
 - Prefer `python scripts/release_readiness.py` as the final local pre-tag validation path.
 - Confirm the public repository keeps `main` protected with pull-request-only changes and code-owner review.

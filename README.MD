@@ -11,6 +11,20 @@
 
 Its value comes from combining deterministic local checks with human or AI-assisted review: the tool creates redacted evidence, an operator or coding agent classifies what matters, and only reviewed fixes are applied. It is built for coding-agent workflows in Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, and similar IDEs. The optional desktop GUI is a companion for manual review, reports, prompts, and gated repair on the same underlying pipeline. Developed and maintained by **Okavango SAS**.
 
+## Public Repository Operating Contract
+
+This repository itself is already public. Any pushed branch, commit, tag, PR, issue reference, screenshot, or documentation edit can become visible on the internet immediately, even though the tool is often used to prepare other target repositories before publication.
+
+When working on Repo Privacy Guardian:
+
+- review `git status --short` and `git diff --check` before staging or committing
+- commit only intentional source, test, documentation, and sanitized asset changes
+- keep local audit evidence, generated screenshots, release builds, coverage output, scratch prompts, and logs in ignored paths such as `Audit_Results/`, `.local-meta/`, `dist/`, `build/`, `*.egg-info/`, and `*-pre-publication-fix-*.bundle`
+- never commit raw secrets, private emails, internal hostnames, private URLs, personal absolute paths, tokens in command examples, unredacted logs, or screenshots that reveal private local context
+- use obvious placeholders and `.env.example` for non-secret variable names; do not put credentials in Git remotes, docs, tests, examples, CI config, or command arguments
+
+If sensitive data reaches a commit, stop normal work, keep only redacted evidence, rotate the affected credential outside this repo, and coordinate a reviewed history cleanup before pushing further changes.
+
 ## 🔍 What It Audits
 
 - leaked Git identity metadata, while treating known SSH remote pseudo-users such as `git@github.com`, `git@gitlab.com`, and `git@bitbucket.org` as transport syntax instead of email evidence

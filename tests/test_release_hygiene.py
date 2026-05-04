@@ -675,6 +675,31 @@ def test_repo_gitignore_covers_local_packaging_and_backup_artifacts() -> None:
     assert ".pkg-venv/" in gitignore
     assert "!.env.example" in gitignore
     assert "*-pre-publication-fix-*.bundle" in gitignore
+    assert "Audit_Results/" in gitignore
+    assert ".local-meta/" in gitignore
+    assert "dist/" in gitignore
+    assert "*.egg-info/" in gitignore
+
+
+def test_public_repository_operating_contract_is_documented() -> None:
+    root = _repo_root()
+    readme = (root / "README.MD").read_text(encoding="utf-8")
+    agents = (root / "AGENTS.MD").read_text(encoding="utf-8")
+    local_development = (root / "docs" / "LOCAL_DEVELOPMENT.md").read_text(encoding="utf-8")
+    operations = (root / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
+    checklist = (root / "docs" / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+
+    for text in (readme, agents, local_development, operations, checklist):
+        assert "already public" in text or "already a public" in text
+        assert "git status --short" in text
+        assert "git diff --check" in text
+        assert "Audit_Results/" in text
+        assert ".local-meta/" in text
+        assert "unredacted logs" in text
+
+    assert "This repository itself is already public." in readme
+    assert "Treat every commit, branch push, PR, tag, screenshot, and documentation edit as immediately internet-visible." in agents
+    assert "Confirm no raw secrets" in checklist
 
 
 def test_ci_workflow_uses_sha_pinned_actions_and_least_privilege() -> None:

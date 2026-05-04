@@ -2,6 +2,18 @@
 
 This runbook covers the local operator path for validating, shipping, and recovering Repo Privacy Guardian.
 
+## Public repository posture
+
+RepoPrivacyGuardian itself is already public on GitHub. Operational discipline must assume that every pushed branch, commit, tag, PR, release artifact reference, screenshot, and documentation change may be read by anyone on the internet.
+
+Public-repo hygiene for maintainers:
+
+- inspect `git status --short` and `git diff --check` before staging
+- commit only intentional tracked source, tests, docs, and sanitized public assets
+- keep generated reports, GUI QA captures, build outputs, coverage files, logs, local notes, and release backup bundles in ignored paths such as `Audit_Results/`, `.local-meta/`, `dist/`, `build/`, `*.egg-info/`, and `*-pre-publication-fix-*.bundle`
+- do not commit raw secrets, private emails, internal hostnames, private URLs, personal absolute paths, unredacted logs, credentials in examples, or screenshots that reveal private local context
+- if sensitive material reaches a commit, pause release work, preserve only redacted evidence, rotate affected credentials outside this repository, and coordinate reviewed history cleanup before pushing additional work
+
 ## Local preflight
 
 Install the tool and the local validation dependencies you need:

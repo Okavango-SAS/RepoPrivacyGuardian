@@ -11,6 +11,17 @@ This document defines how coding agents should use Repo Privacy Guardian from CL
 - The GUI is a CLI companion for manual use: `Audit` for targets/runs, `Reports` for local evidence, `Prompts` for agentic CLI workflows, `Settings` for advanced parity controls, and `Repair` for gated reviewed writes.
 - Prefer CLI in agentic IDE workflows (Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, and similar tools). This is the primary automation use case.
 
+## Public Repository Operating Rule
+
+RepoPrivacyGuardian itself is already a public GitHub repository. Treat every commit, branch push, PR, tag, screenshot, and documentation edit as immediately internet-visible.
+
+- Inspect `git status --short` and `git diff --check` before staging.
+- Stage only intentional tracked source, test, and documentation changes.
+- Keep local run artifacts, generated screenshots, release builds, coverage files, scratch prompts, logs, and audit evidence in ignored paths such as `Audit_Results/`, `.local-meta/`, `dist/`, `build/`, `*.egg-info/`, and `*-pre-publication-fix-*.bundle`.
+- Do not commit raw secrets, private emails, internal hostnames, private URLs, personal absolute paths, unredacted logs, tokens in command examples, or screenshots that reveal private local context.
+- Do not add secrets to Git remotes, command-line arguments, CI config, docs, tests, or examples. Use obvious placeholders and `.env.example` for non-secret variable names.
+- If a sensitive value ever reaches a commit, stop normal work, preserve only redacted evidence, rotate the affected credential outside this repo, and plan a reviewed history cleanup before pushing more changes.
+
 ## CLI First Workflow
 
 1. Start with help.
@@ -125,7 +136,7 @@ Platform notes:
 - Prefer explicit owner allowlist when needed:
 
 ```sh
-repo-privacy-guardian --fix --push --allow-remote-owner axeljackal
+repo-privacy-guardian --fix --push --allow-remote-owner <expected-owner>
 ```
 
 ## User Experience Contract

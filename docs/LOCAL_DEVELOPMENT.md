@@ -2,6 +2,14 @@
 
 This guide is the shortest practical path to understand, run, and change Repo Privacy Guardian from a repository checkout.
 
+## Public checkout rule
+
+RepoPrivacyGuardian is already public. Treat every local change as a potential public internet artifact once it is committed or pushed.
+
+Before staging, check `git status --short` and `git diff --check`. Stage only intentional source, test, documentation, and sanitized asset changes. Keep generated evidence and scratch material in ignored paths such as `Audit_Results/`, `.local-meta/`, `dist/`, `build/`, `*.egg-info/`, and `*-pre-publication-fix-*.bundle`.
+
+Never commit raw secrets, private emails, internal hostnames, private URLs, personal absolute paths, unredacted logs, real tokens in examples, or screenshots that reveal private local context. Use `.env.example` for non-secret variable names and obvious placeholder values in tests/docs.
+
 ## 1. Setup
 
 Install the local development dependencies from the repository root:
