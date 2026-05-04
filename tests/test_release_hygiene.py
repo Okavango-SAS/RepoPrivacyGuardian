@@ -112,6 +112,7 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian_resources/POLICY.md",
     "scripts/check_release_contract.py",
     "scripts/release_readiness.py",
+    "scripts/visual_qa_gui.py",
     "docs/DOGFOODING.md",
     "docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md",
     "docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md",
@@ -711,6 +712,21 @@ def test_ci_workflow_uses_sha_pinned_actions_and_least_privilege() -> None:
     assert workflow.count("persist-credentials: false") == 5
     assert len(pinned_actions) == 10
     assert not re.search(r"uses:\s+actions/(?:checkout|setup-python)@v\d", workflow)
+
+
+def test_ci_workflow_triggers_for_modular_runtime_surfaces() -> None:
+    workflow = (_repo_root() / CI_WORKFLOW).read_text(encoding="utf-8")
+
+    required_paths = [
+        '"repo_privacy_guardian/**"',
+        '"repo_privacy_guardian*.py"',
+        '"repo_privacy_guardian_assets/**"',
+        '"repo_privacy_guardian_resources/**"',
+        '"scripts/visual_qa_gui.py"',
+    ]
+    missing = [item for item in required_paths if item not in workflow]
+
+    assert not missing, "CI workflow path filters miss release runtime surfaces:\n" + "\n".join(missing)
 
 
 def test_design_md_external_spec_hygiene_is_pinned_and_least_privilege() -> None:

@@ -23,7 +23,8 @@
     "repo_privacy_guardian_prompts.py",
     "repo_privacy_guardian_runtime.py",
     "scripts/check_release_contract.py",
-    "scripts/release_readiness.py"
+    "scripts/release_readiness.py",
+    "scripts/visual_qa_gui.py"
   ],
   "pythonVersion": "3.10",
   "typeCheckingMode": "standard"

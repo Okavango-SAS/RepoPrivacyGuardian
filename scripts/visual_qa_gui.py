@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +31,7 @@ def _validate_screenshot(path: Path, *, min_width: int, min_height: int) -> None
             raise RuntimeError(f"{path.name} appears blank or single-color")
 
 
-def _capture_root(root: object, path: Path) -> None:
+def _capture_root(root: Any, path: Path) -> None:
     try:
         from PIL import ImageGrab
     except ImportError as exc:  # pragma: no cover - environment preflight

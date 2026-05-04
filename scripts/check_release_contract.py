@@ -178,8 +178,12 @@ WORKFLOW_REQUIREMENTS = [
     '- "docs/VERSIONING.md"',
     '- "docs/prompts/**"',
     '- "config/requirements/**"',
+    '- "repo_privacy_guardian/**"',
+    '- "repo_privacy_guardian_assets/**"',
+    '- "repo_privacy_guardian_resources/**"',
     '- "scripts/check_release_contract.py"',
     '- "scripts/release_readiness.py"',
+    '- "scripts/visual_qa_gui.py"',
     '- "tests/**"',
 ]
 

@@ -22,10 +22,13 @@ on:
       - "config/requirements/**"
       - "pyproject.toml"
       - "Repo_Privacy_Guardian.py"
+      - "repo_privacy_guardian/**"
       - "repo_privacy_guardian*.py"
+      - "repo_privacy_guardian_assets/**"
       - "repo_privacy_guardian_resources/**"
       - "scripts/check_release_contract.py"
       - "scripts/release_readiness.py"
+      - "scripts/visual_qa_gui.py"
       - "tests/**"
   workflow_dispatch:
     inputs:

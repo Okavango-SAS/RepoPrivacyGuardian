@@ -58,6 +58,7 @@ RELEASE_BYTE_COMPILE_PATHS = (
     "repo_privacy_guardian_runtime.py",
     "scripts/check_release_contract.py",
     "scripts/release_readiness.py",
+    "scripts/visual_qa_gui.py",
 )
 BUILD_ARTIFACT_CLEANUP_ATTEMPTS = 5
 BUILD_ARTIFACT_CLEANUP_RETRY_SECONDS = 1.0
