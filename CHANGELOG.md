@@ -4,6 +4,10 @@ All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Added dark-mode GUI screenshots to the README desktop preview with neutral visible paths.
+
 ## [1.5.0] - 2026-05-04
 
 ### Added
