@@ -145,12 +145,12 @@ Action:
 
 Recommended baseline:
 
-- Protect the default branch.
+- Protect the default branch with admin enforcement.
 - Require at least one pull request review.
 - Require code owner review when `CODEOWNERS` is present.
 - Require conversation resolution before merge.
 - Disable force pushes and branch deletion on the protected branch.
-- Require status checks for CI before merge.
+- Require strict status checks produced by automatic CI before merge.
 - Restrict GitHub Actions, require SHA pinning, keep default workflow permissions at `read`, and do not allow Actions to approve pull requests.
 - Enable Dependabot vulnerability alerts, automated security fixes, secret scanning, and secret scanning push protection.
 - Enable immutable releases when the repository publishes release assets.

@@ -111,9 +111,11 @@ Manual GitHub hardening fix guide:
 - enable private vulnerability reporting for public repositories when desired
 - enable secret scanning and secret scanning push protection
 - protect `main` with a branch protection rule or ruleset
-- require pull requests, code-owner review when `CODEOWNERS` exists, conversation resolution, and current required checks
+- require one approving pull request review, code-owner review when `CODEOWNERS` exists, stale-review dismissal, conversation resolution, strict current automatic CI checks, admin enforcement, and disabled force-push/deletion
 - keep GitHub Actions workflow permissions least-privilege
 - re-run `--audit-github-hardening` after changes
+
+RepoPrivacyGuardian's own public repository should keep the automatic required check aligned to `CLI smoke + release contract (automatic, ubuntu-latest, py3.13)`. Manual extended workflow jobs remain maintainer-invoked release evidence and are not required on every push.
 
 ## Artifacts and outputs
 

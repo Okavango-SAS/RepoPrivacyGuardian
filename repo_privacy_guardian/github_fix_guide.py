@@ -24,7 +24,7 @@ def build_github_hardening_fix_guide(
         guide.append("Enable secret scanning for the repository or organization.")
     if "branch protection" in text or "ruleset" in text or "default branch protection" in text:
         guide.append(
-            "Create a branch protection rule or ruleset for main with pull requests, required status checks, and admin enforcement as appropriate."
+            "Protect the default branch with one approving pull request review, code-owner review when CODEOWNERS exists, stale-review dismissal, conversation resolution, strict required status checks from current automatic CI, admin enforcement, and force-push/deletion disabled."
         )
     if "workflow permission" in text or "actions permissions" in text:
         guide.append(

@@ -385,6 +385,8 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
     agents = (_repo_root() / "AGENTS.MD").read_text(encoding="utf-8")
     policy = (_repo_root() / "docs" / "POLICY.md").read_text(encoding="utf-8")
+    operations = (_repo_root() / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
+    release_checklist = (_repo_root() / "docs" / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
 
     assert "--audit-github-hardening" in readme
     assert "--check-tooling" in readme
@@ -404,6 +406,11 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
     assert "Token-gated checks" in policy
     assert "secret scanning push protection" in policy
     assert "Alert findings stay redacted" in policy
+    assert "admin enforcement" in policy
+    assert "strict automatic CI status checks" in readme
+    assert "strict current automatic CI checks" in operations
+    assert "CLI smoke + release contract (automatic, ubuntu-latest, py3.13)" in operations
+    assert "CLI smoke + release contract (automatic, ubuntu-latest, py3.13)" in release_checklist
 
 
 def test_docs_cover_agentic_ide_prompt_library() -> None:

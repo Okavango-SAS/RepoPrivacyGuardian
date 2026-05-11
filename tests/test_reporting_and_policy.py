@@ -14,6 +14,7 @@ import pytest
 
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_github as rpg_github
+from repo_privacy_guardian.github_fix_guide import build_github_hardening_fix_guide
 
 
 def _fixture_secret() -> str:
@@ -2125,6 +2126,22 @@ def test_audit_github_release_hardening_reports_missing_controls(tmp_path: Path,
     assert any("immutable releases are not enabled" in item for item in findings)
     assert not any("raw-secret-value" in item for item in findings)
     assert not any("private-package-name" in item for item in findings)
+
+
+def test_github_hardening_fix_guide_names_protected_branch_baseline() -> None:
+    guide = build_github_hardening_fix_guide(
+        findings=[
+            "GitHub default branch protection is not enabled.",
+            "GitHub security and analysis: secret scanning status is disabled.",
+        ],
+        warnings=[],
+    )
+
+    joined = "\n".join(guide)
+    assert "strict required status checks from current automatic CI" in joined
+    assert "code-owner review when CODEOWNERS exists" in joined
+    assert "admin enforcement" in joined
+    assert "force-push/deletion disabled" in joined
 
 
 def test_audit_github_release_hardening_reports_stale_required_status_checks(tmp_path: Path, monkeypatch) -> None:

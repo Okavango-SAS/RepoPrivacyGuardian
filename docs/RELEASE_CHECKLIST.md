@@ -13,11 +13,11 @@ Use this checklist before tagging a public release.
 - Confirm local-only outputs remain ignored: `Audit_Results/`, `.local-meta/`, `dist/`, `build/`, `*.egg-info/`, and `*-pre-publication-fix-*.bundle`.
 - Clear stale local build outputs (`dist/`, `build/`, and `*.egg-info/`) before the final package build if you are reusing a workspace.
 - Prefer `python scripts/release_readiness.py` as the final local pre-tag validation path.
-- Confirm the public repository keeps `main` protected with pull-request-only changes and code-owner review.
+- Confirm the public repository keeps `main` protected with pull-request-only changes, one approving code-owner review, stale-review dismissal, conversation resolution, admin enforcement, and disabled force-push/deletion.
 - Confirm issues remain enabled if public issue intake is desired.
 - Confirm public support matrix in README still matches validated platforms.
 - Confirm README still distinguishes automatic CI smoke, manual extended CI, and the local release harness.
-- Confirm branch protection required status checks match the current automatic CI smoke job names.
+- Confirm branch protection required status checks match the current automatic CI smoke job names; the current required check is `CLI smoke + release contract (automatic, ubuntu-latest, py3.13)`.
 - Review GitHub Actions workflows for least-privilege permissions, explicit timeouts, and SHA-pinned actions.
 - Confirm the manual GitHub hardening checklist is current: private vulnerability reporting, secret scanning, push protection, `main` branch protection/ruleset, required checks, and least-privilege workflow permissions.
 

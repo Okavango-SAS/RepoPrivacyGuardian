@@ -418,6 +418,8 @@ Token-gated coverage:
 - secret scanning configuration, push protection, and open secret-scanning alert presence
 - immutable releases
 
+The generated fix guide expects protected default branches to require one approving review, CODEOWNERS review when present, stale-review dismissal, conversation resolution, strict automatic CI status checks, admin enforcement, and disabled force-push/deletion.
+
 Use `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, or an authenticated `gh auth login` session for token-gated checks. GitHub still decides completion from the token permissions: branch protection, Actions, Dependabot security updates, and immutable releases typically require repository `Administration` read access; Dependabot and secret-scanning alert listing require security-alert permissions such as `security_events`, `Dependabot alerts` read, or an equivalent admin/security-manager role. Reports only state that open alerts exist; they do not copy secret values or dependency names from GitHub alert payloads.
 
 Opt-in GitHub owner/org remote audit:

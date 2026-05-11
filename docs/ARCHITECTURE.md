@@ -107,7 +107,7 @@ The script captures Audit, Reports, Prompts, and Repair tabs in System, Light, a
 
 ## GitHub Hardening Governance
 
-Repo Privacy Guardian does not mutate GitHub repository settings. Hardening findings include a non-mutating checklist in JSON, HTML, and agent summary context. Branch protection and rulesets must be configured manually in GitHub, then re-audited.
+Repo Privacy Guardian does not mutate GitHub repository settings. Hardening findings include a non-mutating checklist in JSON, HTML, and agent summary context. Branch protection and rulesets must be configured manually in GitHub, then re-audited. The protected-branch baseline is explicit: pull request review, CODEOWNERS review when present, stale-review dismissal, conversation resolution, strict automatic CI status checks, admin enforcement, and disabled force-push/deletion.
 
 ## Current Technical Debt
 
