@@ -50,6 +50,7 @@ from repo_privacy_guardian import prompts as prompt_helpers  # noqa: F401 - re-e
 from repo_privacy_guardian import runtime
 from repo_privacy_guardian import strict_profiles
 from repo_privacy_guardian import suppressions as suppression_helpers
+from repo_privacy_guardian import report_diff as report_diff_helpers
 from repo_privacy_guardian.runtime import (
     CancellationToken,  # noqa: F401 - re-exported for extracted GUI
     EXIT_ABORTED,
@@ -61,6 +62,12 @@ from repo_privacy_guardian.runtime import (
     resolve_run_status,
     validate_repository_root,
 )
+
+REPORT_DIFF_SCHEMA_VERSION = report_diff_helpers.REPORT_DIFF_SCHEMA_VERSION
+compare_report_files = report_diff_helpers.compare_report_files
+compare_report_payloads = report_diff_helpers.compare_report_payloads
+find_previous_report_json = report_diff_helpers.find_previous_report_json
+format_report_diff_summary = report_diff_helpers.format_report_diff_summary
 
 
 def default_root_dir() -> Path:
@@ -401,6 +408,7 @@ EMAIL_FIXTURE_PATH_RE = re.compile(
     r"(^|/)(test|tests|fixture|fixtures|mock|mocks|sample|samples|demo|benchmarks?|spec)(/|$)",
     re.IGNORECASE,
 )
+
 EMAIL_FIXTURE_SNIPPET_RE = re.compile(
     r"\b(mock|fixture|dummy|sample|placeholder|test|assert|expect|pytest|unittest)\b|"
     r"vi\.spyon|mockresolvedvalue|auth\.login\(",
@@ -2964,7 +2972,18 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-matches", type=parse_positive_int, default=50, help="Max findings per check")
     parser.add_argument(
         "--report-json",
-        help="Optional extra JSON export path. Main JSON/LOG/HTML artifacts are always written to a timestamped run folder",
+        help=(
+            "Optional extra JSON export path. Main JSON/LOG/HTML artifacts are always written to a timestamped "
+            "run folder; with --compare-reports, this writes the comparison JSON."
+        ),
+    )
+    parser.add_argument(
+        "--compare-reports",
+        nargs=2,
+        metavar=("BEFORE_REPORT_JSON", "AFTER_REPORT_JSON"),
+        help=(
+            "Compare two redacted report.json artifacts and print count-only deltas without running a new audit."
+        ),
     )
     parser.add_argument(
         "--report-dir",
@@ -3059,7 +3078,33 @@ def build_cli_guard_run_config(args: argparse.Namespace) -> GuardRunConfig:
     )
 
 
+def run_report_comparison(args: argparse.Namespace) -> int:
+    compare_reports = getattr(args, "compare_reports", None)
+    if not compare_reports or len(compare_reports) != 2:
+        print("[ERROR] --compare-reports requires BEFORE_REPORT_JSON and AFTER_REPORT_JSON.", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    before_path = Path(str(compare_reports[0]))
+    after_path = Path(str(compare_reports[1]))
+    try:
+        diff = compare_report_files(before_path, after_path)
+    except Exception as exc:
+        print(f"[ERROR] Could not compare reports: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    if args.report_json:
+        try:
+            write_private_text_file(Path(args.report_json), json.dumps(diff, indent=2))
+        except Exception as exc:
+            print(f"[ERROR] Could not write comparison JSON: {exc}", file=sys.stderr)
+            return EXIT_RUNTIME_ERROR
+        print(f"[INFO] Report comparison JSON written to {args.report_json}")
+    print(format_report_diff_summary(diff))
+    return EXIT_OK
+
+
 def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
+    if getattr(args, "compare_reports", None):
+        return run_report_comparison(args)
+
     config = build_cli_guard_run_config(args)
 
     tooling_checks = build_cli_tooling_checks(config)

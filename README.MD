@@ -432,6 +432,14 @@ repo-privacy-guardian --github-owner MyOrg --github-include-forks --public-only 
 
 The GUI exposes the same GitHub owner/org fields: owner/org, comma-separated remote repo filters, include forks, fast shallow clone, clone workers, and public-only filtering.
 
+Compare two re-audit artifacts without running a new scan:
+
+```sh
+repo-privacy-guardian --compare-reports Audit_Results/<old-run>/report.json Audit_Results/<new-run>/report.json
+```
+
+The comparison prints only repository counts, category deltas, and a recommended next action. It does not paste raw finding evidence. Add `--report-json /path/to/diff.json` when an automation needs the same count-only comparison as structured JSON.
+
 Safe fix preview:
 
 ```sh
@@ -499,7 +507,7 @@ Behavioral parity means the GUI preserves the same audit, report, hardening, rem
 
 The GUI is now a CLI companion for manual use: Audit stays simple, Reports keeps the latest local evidence visible, Prompts helps copy the maintained agentic CLI workflows, Settings holds advanced parity controls, and Repair remains gated.
 
-After a GUI run, `Reports` can also copy a privacy-safe agent handoff prompt that references the latest local artifacts without pasting raw findings into chat. Artifact labels prefer repository-relative paths when possible; the open buttons still use the real local paths.
+After a GUI run, `Reports` can also copy a privacy-safe agent handoff prompt that references the latest local artifacts without pasting raw findings into chat. The same tab can compare the latest `report.json` with the previous local run and copy a count-only regression summary. Artifact labels prefer repository-relative paths when possible; the open buttons still use the real local paths.
 
 The GUI keeps the staged safety contract:
 
@@ -530,6 +538,8 @@ Each run writes local artifacts under `Audit_Results/<run_id>/`:
 - `run_state.json`
 
 The HTML report starts with a `Decision first` section that separates blockers, advisory/manual-review signals, fixture/documentation context, suppressed findings, and the next action. Artifacts are redacted, but they still contain operational security context and should be treated as sensitive local outputs.
+
+Use `--compare-reports` or the GUI `Compare previous run` action after a re-audit to confirm whether blocking or manual-review categories were resolved, added, or unchanged before deciding the next repair step.
 
 ## 🛠️ What `--fix` Can Do
 

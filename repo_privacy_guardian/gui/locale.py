@@ -146,6 +146,9 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
     "copy_agent_handoff": (
         "Copies a privacy-safe agent handoff prompt that references the latest redacted artifacts without pasting raw findings."
     ),
+    "compare_previous_report": (
+        "Compares the latest report.json with the previous local run and copies a count-only regression summary."
+    ),
     "copy_prompt": "Copies the full prompt text to the clipboard so it can be pasted into an agentic IDE session.",
     "copy_prompt_command": "Copies the recommended CLI command template for this prompt.",
     "open_prompt_file": "Opens the tracked prompt file for review in the default local application.",
@@ -320,6 +323,9 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
     "copy_agent_handoff": (
         "Copia una instrucción segura de traspaso agéntico que referencia los últimos artefactos redactados sin pegar hallazgos crudos."
     ),
+    "compare_previous_report": (
+        "Compara el último report.json con la corrida local anterior y copia un resumen de regresión sólo con conteos."
+    ),
     "copy_prompt": "Copia la instrucción completa al portapapeles para pegarla en una sesión de IDE agéntica.",
     "copy_prompt_command": "Copia el comando CLI recomendado para esta instrucción.",
     "open_prompt_file": "Abre el archivo de instrucción versionado para revisarlo en la aplicación local predeterminada.",
@@ -440,6 +446,10 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         ),
         "open_html_report_action": "Open HTML report",
         "open_json_report_action": "Open report.json",
+        "compare_previous_report_action": "Compare previous run",
+        "report_diff_copied": "Run comparison copied to clipboard.",
+        "report_diff_no_previous": "No previous report.json was found under Audit_Results.",
+        "report_diff_failed": "Run comparison failed: {error}",
         "open_run_log_action": "Open run.log",
         "open_artifacts_folder_action": "Open artifacts folder",
         "prompts_library": "Agent Workflow Prompts",
@@ -773,6 +783,10 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         ),
         "open_html_report_action": "Abrir reporte HTML",
         "open_json_report_action": "Abrir report.json",
+        "compare_previous_report_action": "Comparar corrida anterior",
+        "report_diff_copied": "Comparación de corridas copiada al portapapeles.",
+        "report_diff_no_previous": "No se encontró un report.json anterior en Audit_Results.",
+        "report_diff_failed": "Falló la comparación de corridas: {error}",
         "open_run_log_action": "Abrir run.log",
         "open_artifacts_folder_action": "Abrir carpeta de artefactos",
         "prompts_library": "Instrucciones para flujo agéntico",

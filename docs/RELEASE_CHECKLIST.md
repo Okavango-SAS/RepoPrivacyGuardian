@@ -46,6 +46,7 @@ Use this checklist before tagging a public release.
 
 - Execute fix with explicit flags.
 - Re-run audit immediately after fix.
+- Compare the pre-fix and post-fix `report.json` files with `--compare-reports` or the GUI Reports action.
 - Confirm no new regressions introduced.
 
 ## 5. Post-rewrite controls (if applicable)

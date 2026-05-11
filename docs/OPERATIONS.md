@@ -135,6 +135,7 @@ The tool also applies a few local-safety defaults during normal operation:
 - run artifacts are created with private directory/file permissions where the platform supports them
 - `agent_summary.json` is written as a privacy-safe compact handoff for coding agents
 - `report.html` starts with `Decision first` so blockers, advisory/manual-review signals, fixtures/docs, suppressions, and next action are visible before details
+- `--compare-reports Audit_Results/<old>/report.json Audit_Results/<new>/report.json` compares re-audits with count-only category deltas and does not create a new run directory
 - run artifact directory collision handling is bounded and fails visibly instead of looping indefinitely
 - repository execution is guarded by an OS-backed lock file in the Git metadata directory to prevent overlapping runs on the same checkout without relying on PID/timestamp stale-lock reclamation
 - automatic `--fix` refuses to mutate a repository when the worktree is dirty, `git fsck` has already failed, or the audit recorded runtime/timeout errors

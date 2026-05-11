@@ -69,6 +69,7 @@ def test_parser_help_mentions_common_cli_flow() -> None:
     assert "Common CLI flow:" in help_text
     assert "repo-privacy-guardian --check-tooling" in help_text
     assert "repo-privacy-guardian --gui" in help_text
+    assert "--compare-reports" in help_text
 
 
 def test_render_ignore_baseline_keeps_env_example_exception_after_env_wildcard() -> None:
@@ -576,6 +577,9 @@ def test_public_facade_exports_refactor_feature_helpers() -> None:
         "format_agent_summary_handoff",
         "load_configured_suppressions",
         "apply_report_policy_post_processing",
+        "REPORT_DIFF_SCHEMA_VERSION",
+        "compare_report_payloads",
+        "format_report_diff_summary",
     ):
         assert hasattr(rpg, name), name
     for name in (
@@ -588,6 +592,11 @@ def test_public_facade_exports_refactor_feature_helpers() -> None:
         "build_agent_summary",
         "format_agent_summary_handoff",
         "load_configured_suppressions",
+        "REPORT_DIFF_SCHEMA_VERSION",
+        "compare_report_files",
+        "compare_report_payloads",
+        "find_previous_report_json",
+        "format_report_diff_summary",
     ):
         assert hasattr(package, name), name
 
@@ -2073,6 +2082,7 @@ def test_gui_tooltip_catalog_covers_non_obvious_controls() -> None:
         "open_settings_tab",
         "open_agent_prompts_tab",
         "copy_agent_handoff",
+        "compare_previous_report",
         "copy_prompt",
         "copy_prompt_command",
         "open_prompt_file",

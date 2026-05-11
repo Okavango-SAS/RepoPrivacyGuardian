@@ -26,6 +26,7 @@ The public compatibility contract remains:
 - `repo_privacy_guardian/redaction.py`: finding-context classification and redaction helpers for emails, email fixtures, identity tokens, secrets, URLs, and local paths
 - `repo_privacy_guardian/reporting.py`: status/severity classification, redacted JSON export, `Decision first` HTML rendering, report persistence, and sensitive-artifact warnings
 - `repo_privacy_guardian/agent_summary.py`: safe, compact agent handoff artifact and CLI handoff formatting
+- `repo_privacy_guardian/report_diff.py`: count-only `report.json` comparison for re-audit regression checks shared by CLI and GUI Reports
 - `repo_privacy_guardian/strict_profiles.py`: documented `audit-only`, `internal`, and `release` profile normalization
 - `repo_privacy_guardian/suppressions.py`: versioned advisory/manual-review suppression parsing and traceable application
 - `repo_privacy_guardian/github_fix_guide.py`: non-mutating GitHub hardening checklist generation
@@ -51,6 +52,8 @@ Normal CLI flow:
 8. JSON, HTML, log, `agent_summary.json`, and `run_state.json` are persisted.
 9. `run_state.json` records phase timings and per-repository timing snapshots.
 
+`--compare-reports BEFORE_REPORT_JSON AFTER_REPORT_JSON` is a separate CLI utility path: it loads two existing redacted `report.json` artifacts, compares category fingerprints in memory, prints count-only deltas, and exits without creating a new audit run directory or touching repositories.
+
 GUI flow uses the same backend pipeline, but keeps the companion-style staged contract:
 
 1. `Audit`
@@ -68,6 +71,8 @@ Each run writes:
 - `report.html`: human review report that starts with `Decision first`
 - `run.log`: redacted execution log
 - `run_state.json`: status manifest with phase and performance diagnostics
+
+Re-audit comparison is derived from existing `report.json` artifacts. The public CLI/GUI summary contains repository counts, category deltas, status-change counts, and next action only; raw finding values are not printed or copied.
 
 ## Policy Surfaces
 

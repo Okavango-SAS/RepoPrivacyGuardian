@@ -79,6 +79,7 @@ Presentation-only GUI features and launcher-only CLI flags are permitted only wh
 | Dry-run behavior | Yes | Yes | No |
 | Secret purge flags | Yes | Yes | No |
 | Report artifacts JSON/LOG/HTML | Yes | Yes | No |
+| Re-audit report comparison | Yes (`--compare-reports`) | Yes (Reports action) | No |
 | `public_only` default | False | False | No |
 | Repo scope when filters are omitted | All repos under root | All repos under root (with explicit confirmation) | No |
 | `max_matches` configurability | Yes | Yes | No |

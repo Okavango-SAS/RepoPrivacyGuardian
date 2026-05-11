@@ -22,6 +22,11 @@ _PUBLIC_COMPAT_NAMES = frozenset(
         "build_agent_summary",
         "format_agent_summary_handoff",
         "load_configured_suppressions",
+        "REPORT_DIFF_SCHEMA_VERSION",
+        "compare_report_files",
+        "compare_report_payloads",
+        "find_previous_report_json",
+        "format_report_diff_summary",
     }
 )
 

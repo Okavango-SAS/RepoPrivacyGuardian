@@ -2698,13 +2698,19 @@ class GuiApp:  # pragma: no cover
         self._bind_tooltip_key(self._reports_agent_handoff_button, "copy_agent_handoff")
         self._reports_agent_handoff_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
         report_actions = [
-            ("open_html_report_action", "icon-report.png", lambda: self._open_last_artifact("html")),
-            ("open_json_report_action", "icon-report.png", lambda: self._open_last_artifact("json")),
-            ("open_run_log_action", "icon-open.png", lambda: self._open_last_artifact("log")),
-            ("open_artifacts_folder_action", "icon-folder.png", lambda: self._open_last_artifact("folder")),
+            ("open_html_report_action", "icon-report.png", lambda: self._open_last_artifact("html"), "reports_tab"),
+            ("open_json_report_action", "icon-report.png", lambda: self._open_last_artifact("json"), "reports_tab"),
+            (
+                "compare_previous_report_action",
+                "icon-report.png",
+                self._compare_previous_report_to_latest,
+                "compare_previous_report",
+            ),
+            ("open_run_log_action", "icon-open.png", lambda: self._open_last_artifact("log"), "reports_tab"),
+            ("open_artifacts_folder_action", "icon-folder.png", lambda: self._open_last_artifact("folder"), "reports_tab"),
         ]
         self._reports_action_buttons = []
-        for idx, (text_key, icon_filename, command) in enumerate(report_actions):
+        for idx, (text_key, icon_filename, command, tooltip_key) in enumerate(report_actions):
             button = ctk.CTkButton(
                 actions,
                 text=self._t(text_key),
@@ -2715,7 +2721,7 @@ class GuiApp:  # pragma: no cover
                 **self._secondary_button_options(),
             )
             self._localize_widget(button, "text", text_key)
-            self._bind_tooltip_key(button, "reports_tab")
+            self._bind_tooltip_key(button, tooltip_key)
             button.grid(row=0, column=idx + 1, sticky="w", padx=(0, 8))
             self._reports_action_buttons.append(button)
         self._refresh_reports_tab()
@@ -2987,6 +2993,30 @@ class GuiApp:  # pragma: no cover
             self._open_local_path(target)
         except Exception as exc:
             self.log(f"[WARN] Could not open {target}: {exc}")
+
+    def _compare_previous_report_to_latest(self) -> None:
+        artifacts = getattr(self, "_last_run_artifacts", None)
+        if artifacts is None:
+            self.log(f"[INFO] {self._t('latest_artifacts_none')}")
+            return
+        previous_report = find_previous_report_json(artifacts.json_path)
+        if previous_report is None:
+            self.log(f"[INFO] {self._t('report_diff_no_previous')}")
+            return
+        try:
+            diff = compare_report_files(
+                previous_report,
+                artifacts.json_path,
+                before_label=self._artifact_handoff_path(previous_report),
+                after_label=self._artifact_handoff_path(artifacts.json_path),
+            )
+            summary = format_report_diff_summary(diff)
+        except Exception as exc:
+            self.log(f"[WARN] {self._t('report_diff_failed', error=exc)}")
+            return
+        for line in summary.splitlines():
+            self.log(line)
+        self._copy_text_to_clipboard(summary, self._t("report_diff_copied"))
 
     def _artifact_handoff_path(self, path: Path) -> str:
         repo_root = source_tree_root()

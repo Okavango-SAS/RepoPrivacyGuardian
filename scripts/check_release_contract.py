@@ -40,6 +40,7 @@ README_REQUIREMENTS = [
     "agent_summary.json",
     "--strict-profile",
     "--suppressions",
+    "--compare-reports",
     "Root is intentionally small and allowlisted by tests",
     "Developed and maintained by **Okavango SAS**",
     "docs/ux-audit/after/audit-default-desktop-after.png",
