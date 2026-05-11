@@ -211,5 +211,5 @@ Presentation-only GUI features and launcher-only CLI flags are permitted only wh
 ## Future candidates
 
 - Scoped allowlists to reduce false positives beyond suppression files.
-- Continue replacing transitional compatibility bridges in extracted modules with narrower explicit dependency injection; redaction, tooling, and reporting now use explicit dependencies, while scanner and GUI remain the next larger slices.
+- Continue replacing transitional compatibility bridges in extracted modules with narrower explicit dependency injection; redaction, tooling, reporting, and scanner now use explicit dependencies, while GUI remains the next larger slice.
 - Optional policy profiles by organization.

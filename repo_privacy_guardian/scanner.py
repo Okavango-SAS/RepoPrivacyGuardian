@@ -2,15 +2,81 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403,F405
-from repo_privacy_guardian.core import *
-from repo_privacy_guardian import core as _core
+import errno
+import json
+import os
+import re
+import shlex
+import socket
+import subprocess
+import sys
+import threading
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable
 
-_apply_private_permissions = _core._apply_private_permissions
-_close_fd_safely = _core._close_fd_safely
-_missing_executable_message = _core._missing_executable_message
-_read_json_from_locked_fd = _core._read_json_from_locked_fd
-_write_json_to_locked_fd = _core._write_json_to_locked_fd
+if TYPE_CHECKING:
+    from repo_privacy_guardian.core import (
+        CODE_EXTENSIONS,
+        DEFAULT_GIT_STREAM_TIMEOUT_SECONDS,
+        DEFAULT_IGNORE_BASELINE,
+        DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+        EMAIL_RE,
+        LITELLM_COMPROMISED_VERSION_RE,
+        LITELLM_INSTALL_COMMAND_RE,
+        LITELLM_IOC_RE,
+        LITELLM_REFERENCE_RE,
+        LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE,
+        PERSONAL_PATH_RE,
+        POLICY_MINIMUM_BASELINE_END_RE,
+        POLICY_MINIMUM_BASELINE_RE,
+        REDACTED_PATH,
+        REMEDIATION_INSTALL_PACKAGES,
+        REPO_LOCK_FILENAME,
+        REPO_LOCK_RETRY_SECONDS,
+        REPO_LOCK_WAIT_SECONDS,
+        SECRET_CONTENT_RE,
+        SECRET_REMEDIATE_FILENAME_RE,
+        SENSITIVE_FILENAME_RE,
+        SIMPLE_EMAIL_RE,
+        SUPPLY_CHAIN_CANDIDATE_FILENAMES,
+        CommandResult,
+        RepoExecutionLock,
+        RepoReport,
+        _apply_private_permissions,
+        _close_fd_safely,
+        _missing_executable_message,
+        _read_json_from_locked_fd,
+        _write_json_to_locked_fd,
+        acquire_advisory_file_lock,
+        audit_github_release_hardening,
+        classify_litellm_incident_severity,
+        classify_secret_match_context,
+        cleanup_private_temp_text_file,
+        create_private_temp_text_file,
+        discover_repository_targets,
+        ensure_private_directory,
+        extract_personal_path_literals,
+        github_fix_guide,
+        infer_github_username_from_noreply,
+        is_public_github_remote,
+        is_relevant_email_candidate,
+        is_repo_privacy_guardian_reviewed_network_indicator,
+        is_repo_privacy_guardian_source_tree,
+        line_has_exfil_indicator,
+        normalize_text_values,
+        parse_github_remote_owner,
+        read_text_file_for_scan,
+        release_advisory_file_lock,
+        repo_display_name,
+        split_email_matches_by_taxonomy,
+        split_unexpected_emails_by_origin_ownership,
+        streaming_popen_kwargs,
+        subprocess_stdin,
+        validate_fix_preconditions,
+        write_private_text_file,
+    )
 
 
 class RepoPublicationGuard:  # pragma: no cover
@@ -36,6 +102,7 @@ class RepoPublicationGuard:  # pragma: no cover
         replace_text_file: str | None,
         logger: Callable[[str], None],
     ) -> None:
+        _sync_scanner_public_overrides()
         self.root = root
         self.policy_path = policy_path
         self.noreply_email = noreply_email
@@ -621,11 +688,12 @@ class RepoPublicationGuard:  # pragma: no cover
     def _finalize_git_stream_process(
         self,
         proc: subprocess.Popen[str],
-        timeout: int = DEFAULT_GIT_STREAM_TIMEOUT_SECONDS,
+        timeout: int | None = None,
     ) -> tuple[int | None, str]:
         stderr_text = ""
+        effective_timeout = DEFAULT_GIT_STREAM_TIMEOUT_SECONDS if timeout is None else timeout
         try:
-            proc.wait(timeout=timeout)
+            proc.wait(timeout=effective_timeout)
         except subprocess.TimeoutExpired:
             self._terminate_process_if_running(proc)
             try:
@@ -1693,18 +1761,92 @@ class RepoPublicationGuard:  # pragma: no cover
         return report
 
 
-_SCANNER_OVERRIDE_NAMES = tuple(
-    name for name in globals() if not name.startswith("__") and name != "_core" and hasattr(_core, name)
+from repo_privacy_guardian import core as _core  # noqa: E402
+
+_SCANNER_OVERRIDE_NAMES = (
+    "CODE_EXTENSIONS",
+    "CommandResult",
+    "DEFAULT_GIT_STREAM_TIMEOUT_SECONDS",
+    "DEFAULT_IGNORE_BASELINE",
+    "DEFAULT_SUBPROCESS_TIMEOUT_SECONDS",
+    "EMAIL_RE",
+    "LITELLM_COMPROMISED_VERSION_RE",
+    "LITELLM_INSTALL_COMMAND_RE",
+    "LITELLM_IOC_RE",
+    "LITELLM_REFERENCE_RE",
+    "LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE",
+    "PERSONAL_PATH_RE",
+    "POLICY_MINIMUM_BASELINE_END_RE",
+    "POLICY_MINIMUM_BASELINE_RE",
+    "Path",
+    "REDACTED_PATH",
+    "REMEDIATION_INSTALL_PACKAGES",
+    "REPO_LOCK_FILENAME",
+    "REPO_LOCK_RETRY_SECONDS",
+    "REPO_LOCK_WAIT_SECONDS",
+    "RepoExecutionLock",
+    "RepoReport",
+    "SECRET_CONTENT_RE",
+    "SECRET_REMEDIATE_FILENAME_RE",
+    "SENSITIVE_FILENAME_RE",
+    "SIMPLE_EMAIL_RE",
+    "SUPPLY_CHAIN_CANDIDATE_FILENAMES",
+    "_apply_private_permissions",
+    "_close_fd_safely",
+    "_missing_executable_message",
+    "_read_json_from_locked_fd",
+    "_write_json_to_locked_fd",
+    "acquire_advisory_file_lock",
+    "audit_github_release_hardening",
+    "classify_litellm_incident_severity",
+    "classify_secret_match_context",
+    "cleanup_private_temp_text_file",
+    "create_private_temp_text_file",
+    "datetime",
+    "discover_repository_targets",
+    "ensure_private_directory",
+    "errno",
+    "extract_personal_path_literals",
+    "github_fix_guide",
+    "infer_github_username_from_noreply",
+    "is_public_github_remote",
+    "is_relevant_email_candidate",
+    "is_repo_privacy_guardian_reviewed_network_indicator",
+    "is_repo_privacy_guardian_source_tree",
+    "json",
+    "line_has_exfil_indicator",
+    "normalize_text_values",
+    "os",
+    "parse_github_remote_owner",
+    "re",
+    "read_text_file_for_scan",
+    "release_advisory_file_lock",
+    "repo_display_name",
+    "shlex",
+    "socket",
+    "split_email_matches_by_taxonomy",
+    "split_unexpected_emails_by_origin_ownership",
+    "streaming_popen_kwargs",
+    "subprocess",
+    "subprocess_stdin",
+    "sys",
+    "threading",
+    "time",
+    "validate_fix_preconditions",
+    "write_private_text_file",
 )
 
 
 def _sync_scanner_public_overrides() -> None:
     for name in _SCANNER_OVERRIDE_NAMES:
-        globals()[name] = getattr(_core, name, globals()[name])
+        globals()[name] = getattr(_core, name)
 
 
-def _wrap_guard_method(method):
-    def synced(self, *args, **kwargs):
+_sync_scanner_public_overrides()
+
+
+def _wrap_guard_method(method: Callable[..., Any]) -> Callable[..., Any]:
+    def synced(self: object, *args: Any, **kwargs: Any) -> Any:
         _sync_scanner_public_overrides()
         return method(self, *args, **kwargs)
 
