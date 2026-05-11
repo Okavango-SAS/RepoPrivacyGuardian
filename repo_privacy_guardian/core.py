@@ -45,6 +45,7 @@ from repo_privacy_guardian import artifacts as artifact_helpers
 from repo_privacy_guardian import agent_summary as agent_summary_helpers  # noqa: F401 - re-exported for extracted reporting
 from repo_privacy_guardian import github as github_helpers
 from repo_privacy_guardian import github_fix_guide
+from repo_privacy_guardian.gui import locale as gui_locale_helpers
 from repo_privacy_guardian import metrics as metrics_helpers
 from repo_privacy_guardian import prompts as prompt_helpers  # noqa: F401 - re-exported for extracted GUI
 from repo_privacy_guardian import runtime
@@ -118,12 +119,9 @@ REMEDIATION_INSTALL_PACKAGES = ["git-filter-repo>=2.45,<3"]
 GUI_SETTINGS_ENV_VAR = "REPO_PRIVACY_GUARDIAN_GUI_SETTINGS"
 GUI_SETTINGS_SCHEMA_VERSION = 1
 GUI_SETTINGS_MAX_BYTES = 32 * 1024
-GUI_LOCALE_DEFAULT = "en"
-GUI_LOCALE_ES_419 = "es-419"
-GUI_LOCALE_OPTIONS: tuple[tuple[str, str], ...] = (
-    (GUI_LOCALE_DEFAULT, "English"),
-    (GUI_LOCALE_ES_419, "Español (Latinoamérica)"),
-)
+GUI_LOCALE_DEFAULT = gui_locale_helpers.GUI_LOCALE_DEFAULT
+GUI_LOCALE_ES_419 = gui_locale_helpers.GUI_LOCALE_ES_419
+GUI_LOCALE_OPTIONS = gui_locale_helpers.GUI_LOCALE_OPTIONS
 GUI_APPEARANCE_LIGHT = "light"
 GUI_APPEARANCE_DARK = "dark"
 GUI_APPEARANCE_SYSTEM = "system"
@@ -240,10 +238,7 @@ SSH_REMOTE_PSEUDO_EMAILS = {
     ("git", "vs-ssh.visualstudio.com"),
     ("hg", "bitbucket.org"),
 }
-GITHUB_EMAIL_PRIVACY_HELP = (
-    "Use GitHub Email Settings to verify private-email and push-block protections, "
-    "and to copy your noreply address when needed."
-)
+GITHUB_EMAIL_PRIVACY_HELP = gui_locale_helpers.GITHUB_EMAIL_PRIVACY_HELP
 
 DEFAULT_IGNORE_BASELINE = [
     ".venv/",
@@ -1022,8 +1017,6 @@ class RunStateTracker(artifact_helpers.RunStateTracker):
             now_factory=datetime.now,
         )
 
-
-from repo_privacy_guardian.gui import locale as gui_locale_helpers  # noqa: E402
 
 GUI_TOOLTIP_TEXT = gui_locale_helpers.GUI_TOOLTIP_TEXT
 GUI_TOOLTIP_TEXT_BY_LOCALE = gui_locale_helpers.GUI_TOOLTIP_TEXT_BY_LOCALE

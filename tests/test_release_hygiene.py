@@ -493,6 +493,30 @@ def test_gui_app_module_imports_without_core_circularity() -> None:
     assert "GuiApp" in proc.stdout
 
 
+def test_gui_locale_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.gui.locale as locale; "
+                "print(locale.GUI_LOCALE_DEFAULT); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["en", "False"]
+
+
 def test_docs_cover_agentic_ide_prompt_library() -> None:
     root = _repo_root()
     readme = (root / "README.MD").read_text(encoding="utf-8")

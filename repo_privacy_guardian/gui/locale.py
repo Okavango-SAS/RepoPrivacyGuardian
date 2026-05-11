@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import sys
 
-from repo_privacy_guardian import core as _core
-
-GUI_LOCALE_DEFAULT = _core.GUI_LOCALE_DEFAULT
-GUI_LOCALE_ES_419 = _core.GUI_LOCALE_ES_419
-GITHUB_EMAIL_PRIVACY_HELP = _core.GITHUB_EMAIL_PRIVACY_HELP
+GUI_LOCALE_DEFAULT = "en"
+GUI_LOCALE_ES_419 = "es-419"
+GUI_LOCALE_OPTIONS: tuple[tuple[str, str], ...] = (
+    (GUI_LOCALE_DEFAULT, "English"),
+    (GUI_LOCALE_ES_419, "Español (Latinoamérica)"),
+)
+GITHUB_EMAIL_PRIVACY_HELP = (
+    "Use GitHub Email Settings to verify private-email and push-block protections, "
+    "and to copy your noreply address when needed."
+)
 
 
 def gui_font_candidates(platform_name: str | None = None) -> dict[str, tuple[str, ...]]:

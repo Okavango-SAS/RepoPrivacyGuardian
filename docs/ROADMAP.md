@@ -27,7 +27,7 @@ These are the next improvements that still fit the current product scope:
 - expand target-resolution and preflight regression coverage further as local and GitHub owner/org repo-selection modes evolve
 - keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract
 - keep docs, help text, packaged policy, and smoke fixtures aligned as defaults evolve
-- continue extracting `repo_privacy_guardian/core.py` by policy/remediation and GUI locale domains without breaking compatibility shims; redaction, tooling, reporting, scanner, and GUI app already use explicit dependencies
+- continue extracting `repo_privacy_guardian/core.py` by policy/remediation domains without breaking compatibility shims; redaction, tooling, reporting, scanner, GUI app, and GUI locale already use explicit dependencies or local constants
 
 ## Deprioritized for this repository phase
 

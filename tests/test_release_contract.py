@@ -1716,6 +1716,15 @@ def test_gui_locale_helpers_normalize_supported_languages() -> None:
     assert rpg.gui_locale_from_label("Español (Latinoamérica)") == rpg.GUI_LOCALE_ES_419
 
 
+def test_gui_locale_constants_are_reexported_from_locale_module() -> None:
+    from repo_privacy_guardian.gui import locale as gui_locale
+
+    assert rpg.GUI_LOCALE_DEFAULT == gui_locale.GUI_LOCALE_DEFAULT
+    assert rpg.GUI_LOCALE_ES_419 == gui_locale.GUI_LOCALE_ES_419
+    assert rpg.GUI_LOCALE_OPTIONS == gui_locale.GUI_LOCALE_OPTIONS
+    assert rpg.GITHUB_EMAIL_PRIVACY_HELP == gui_locale.GITHUB_EMAIL_PRIVACY_HELP
+
+
 def test_gui_appearance_helpers_normalize_supported_modes() -> None:
     assert rpg.normalize_gui_appearance("system") == rpg.GUI_APPEARANCE_SYSTEM
     assert rpg.normalize_gui_appearance("Sistema") == rpg.GUI_APPEARANCE_SYSTEM
