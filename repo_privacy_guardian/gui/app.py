@@ -1,21 +1,94 @@
-"""Desktop GUI coordinator.
-
-This module intentionally imports the pre-GUI core namespace during the
-transitional refactor so the extracted class keeps behavior identical while
-core shrinks and GUI ownership becomes explicit.
-"""
+"""Desktop GUI coordinator."""
 
 from __future__ import annotations
 
-from typing import Any, cast
+import argparse
+import json
+import os
+import threading
+import traceback
+import webbrowser
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, cast
 
-# ruff: noqa: F403,F405
-from repo_privacy_guardian.core import *
-from repo_privacy_guardian import core as _core
+if TYPE_CHECKING:
+    from repo_privacy_guardian.core import (
+        DEFAULT_NOREPLY,
+        DEFAULT_PLACEHOLDER,
+        DEFAULT_POLICY,
+        EXIT_ABORTED,
+        EXIT_OK,
+        EXIT_POLICY_FAILED,
+        EXIT_RUNTIME_ERROR,
+        GUI_APPEARANCE_DARK,
+        GUI_APPEARANCE_DEFAULT,
+        GUI_APPEARANCE_LIGHT,
+        GUI_APPEARANCE_SYSTEM,
+        GUI_ASSET_FILENAMES,
+        GUI_DEFAULT_PUBLIC_ONLY,
+        GUI_LOCALE_DEFAULT,
+        GUI_LOCALE_OPTIONS,
+        GUI_THEMEABLE_ASSET_FILENAMES,
+        GUI_TOOLTIP_TEXT,
+        GUI_TOOLTIP_TEXT_BY_LOCALE,
+        GUI_UI_TEXT_BY_LOCALE,
+        CancellationToken,
+        RunLogger,
+        apply_git_identity_config,
+        artifact_helpers,
+        blend_near_white_gui_asset_background,
+        build_github_optional_tooling_checks,
+        build_guard_run_config,
+        choose_gui_font_family,
+        compare_report_files,
+        create_run_artifacts,
+        default_gui_settings_path,
+        default_results_dir,
+        default_root_dir,
+        discover_repository_targets,
+        enforce_results_dir,
+        execute_guard_pipeline,
+        find_previous_report_json,
+        format_git_identity_status,
+        format_report_diff_summary,
+        gui_appearance_from_label,
+        gui_appearance_label,
+        gui_appearance_options,
+        gui_asset_path,
+        gui_font_candidates,
+        gui_locale_from_label,
+        gui_locale_label,
+        gui_setting_bool,
+        gui_setting_str,
+        install_missing_tooling,
+        load_gui_runtime,
+        load_gui_settings,
+        normalize_csv_values,
+        normalize_gui_appearance,
+        normalize_gui_locale,
+        normalize_repo_filters,
+        open_github_email_settings,
+        parse_hex_rgb,
+        parse_positive_int,
+        parse_tk_drop_paths,
+        prompt_gui_tooling_install,
+        prompt_helpers,
+        read_git_identity_config,
+        redact_sensitive_text,
+        repo_display_name,
+        resolve_dropped_repository_targets,
+        resolve_identity_repo_path,
+        save_gui_settings,
+        source_tree_root,
+        strict_profiles,
+        validate_git_identity_inputs,
+        validate_repository_root,
+    )
 
 
 class GuiApp:  # pragma: no cover
     def __init__(self) -> None:
+        _sync_gui_public_overrides()
         tk, messagebox, filedialog, ctk, tcl_error = load_gui_runtime()
 
         self._gui_settings_path = default_gui_settings_path()
@@ -5470,18 +5543,99 @@ class GuiApp:  # pragma: no cover
         self.root.mainloop()
 
 
-_GUI_OVERRIDE_NAMES = tuple(
-    name for name in globals() if not name.startswith("__") and name != "_core" and hasattr(_core, name)
+from repo_privacy_guardian import core as _core  # noqa: E402
+
+_GUI_OVERRIDE_NAMES = (
+    "CancellationToken",
+    "DEFAULT_NOREPLY",
+    "DEFAULT_PLACEHOLDER",
+    "DEFAULT_POLICY",
+    "EXIT_ABORTED",
+    "EXIT_OK",
+    "EXIT_POLICY_FAILED",
+    "EXIT_RUNTIME_ERROR",
+    "GUI_APPEARANCE_DARK",
+    "GUI_APPEARANCE_DEFAULT",
+    "GUI_APPEARANCE_LIGHT",
+    "GUI_APPEARANCE_SYSTEM",
+    "GUI_ASSET_FILENAMES",
+    "GUI_DEFAULT_PUBLIC_ONLY",
+    "GUI_LOCALE_DEFAULT",
+    "GUI_LOCALE_OPTIONS",
+    "GUI_THEMEABLE_ASSET_FILENAMES",
+    "GUI_TOOLTIP_TEXT",
+    "GUI_TOOLTIP_TEXT_BY_LOCALE",
+    "GUI_UI_TEXT_BY_LOCALE",
+    "Path",
+    "RunLogger",
+    "apply_git_identity_config",
+    "argparse",
+    "artifact_helpers",
+    "blend_near_white_gui_asset_background",
+    "build_github_optional_tooling_checks",
+    "build_guard_run_config",
+    "choose_gui_font_family",
+    "compare_report_files",
+    "create_run_artifacts",
+    "default_gui_settings_path",
+    "default_results_dir",
+    "default_root_dir",
+    "discover_repository_targets",
+    "enforce_results_dir",
+    "execute_guard_pipeline",
+    "find_previous_report_json",
+    "format_git_identity_status",
+    "format_report_diff_summary",
+    "gui_appearance_from_label",
+    "gui_appearance_label",
+    "gui_appearance_options",
+    "gui_asset_path",
+    "gui_font_candidates",
+    "gui_locale_from_label",
+    "gui_locale_label",
+    "gui_setting_bool",
+    "gui_setting_str",
+    "install_missing_tooling",
+    "json",
+    "load_gui_runtime",
+    "load_gui_settings",
+    "normalize_csv_values",
+    "normalize_gui_appearance",
+    "normalize_gui_locale",
+    "normalize_repo_filters",
+    "open_github_email_settings",
+    "os",
+    "parse_hex_rgb",
+    "parse_positive_int",
+    "parse_tk_drop_paths",
+    "prompt_gui_tooling_install",
+    "prompt_helpers",
+    "read_git_identity_config",
+    "redact_sensitive_text",
+    "repo_display_name",
+    "resolve_dropped_repository_targets",
+    "resolve_identity_repo_path",
+    "save_gui_settings",
+    "source_tree_root",
+    "strict_profiles",
+    "threading",
+    "traceback",
+    "validate_git_identity_inputs",
+    "validate_repository_root",
+    "webbrowser",
 )
 
 
 def _sync_gui_public_overrides() -> None:
     for name in _GUI_OVERRIDE_NAMES:
-        globals()[name] = getattr(_core, name, globals()[name])
+        globals()[name] = getattr(_core, name)
 
 
-def _wrap_gui_method(method):
-    def synced(self, *args, **kwargs):
+_sync_gui_public_overrides()
+
+
+def _wrap_gui_method(method: Callable[..., Any]) -> Callable[..., Any]:
+    def synced(self: object, *args: Any, **kwargs: Any) -> Any:
         _sync_gui_public_overrides()
         return method(self, *args, **kwargs)
 

@@ -420,6 +420,7 @@ def test_low_risk_extracted_modules_use_explicit_core_imports() -> None:
         "repo_privacy_guardian/tooling.py",
         "repo_privacy_guardian/reporting.py",
         "repo_privacy_guardian/scanner.py",
+        "repo_privacy_guardian/gui/app.py",
     ):
         text = (_repo_root() / rel_path).read_text(encoding="utf-8")
         assert "from repo_privacy_guardian.core import *" not in text
@@ -468,6 +469,28 @@ def test_scanner_module_imports_without_core_circularity() -> None:
 
     assert proc.returncode == 0, proc.stderr or proc.stdout
     assert "RepoPublicationGuard" in proc.stdout
+
+
+def test_gui_app_module_imports_without_core_circularity() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import repo_privacy_guardian.gui.app as gui_app; "
+                "print(gui_app.GuiApp.__name__)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert "GuiApp" in proc.stdout
 
 
 def test_docs_cover_agentic_ide_prompt_library() -> None:
