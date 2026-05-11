@@ -2187,6 +2187,9 @@ def test_gui_agent_handoff_uses_repo_relative_artifact_paths() -> None:
             "failures": ["tracked secret matches"],
             "exfil_code_indicators": ["main.py:1:<redacted-url>"],
             "tracked_secret_fixture_matches": ["tests/fixtures/example.env:1:<redacted-secret>"],
+            "reviewed_network_indicators": [
+                "repo_privacy_guardian/github.py:1:with urllib.request.urlopen(request, timeout=8) as response:"
+            ],
         }
     ]
 
@@ -2199,7 +2202,7 @@ def test_gui_agent_handoff_uses_repo_relative_artifact_paths() -> None:
     assert "Run status: FAIL" in handoff
     assert "Blocking categories: 1" in handoff
     assert "Manual-review signals: 1" in handoff
-    assert "Fixture/documentation context: 1" in handoff
+    assert "Fixture/documentation context: 2" in handoff
     assert "Recommended next action:" in handoff
     assert "Do not paste raw secrets" in handoff
 
@@ -2225,11 +2228,22 @@ def test_gui_reports_next_action_tracks_policy_state() -> None:
             }
         ]
     )
+    reviewed_context_counts = app._reports_summary_counts(
+        [
+            {
+                "name": "SampleRepo",
+                "status": "PASS",
+                "reviewed_network_indicators": ["repo_privacy_guardian/github.py:1:urlopen(request)"],
+            }
+        ]
+    )
 
     assert app._reports_status_label(blocking_counts, rpg.EXIT_POLICY_FAILED) == "FAIL"
     assert app._reports_next_action_key(blocking_counts, rpg.EXIT_POLICY_FAILED, True) == "next_action_failed"
     assert app._reports_status_label(manual_counts, rpg.EXIT_OK) == "PASS/REVIEW"
     assert app._reports_next_action_key(manual_counts, rpg.EXIT_OK, True) == "next_action_manual"
+    assert app._reports_status_label(reviewed_context_counts, rpg.EXIT_OK) == "PASS"
+    assert reviewed_context_counts["fixture"] == 1
     empty_counts = {
         "total": 0,
         "passed": 0,

@@ -10,7 +10,7 @@ Workaround: use ignored placeholder domains such as `.invalid` or `.example` in 
 1. Exfil indicator heuristic is keyword-based and can over-report in backend/service repos.
 
 Impact: medium.
-Workaround: treat exfil hits as advisory/manual-review signals; validate by code intent before remediation. They do not change PASS/FAIL by default.
+Workaround: treat exfil hits as advisory/manual-review signals; validate by code intent before remediation. They do not change PASS/FAIL by default. Repo Privacy Guardian's own narrow, reviewed GitHub API and Windows App Installer bootstrap code paths are separated into `reviewed_network_indicators` so self-audits stay traceable without forcing manual exfil review.
 
 1. Safe secret auto-purge is intentionally conservative.
 
@@ -53,6 +53,7 @@ Workaround: treat rotation as an external mandatory post-remediation step.
 - Local paths in synthetic test fixtures.
 - Security examples intentionally containing placeholder token shapes.
 - Generic terms such as "webhook" or "telemetry" used in legitimate service code.
+- Lookalike package paths in repositories that are not Repo Privacy Guardian stay advisory instead of being auto-classified as reviewed network context.
 
 ## Intentional behavior (not a bug)
 
@@ -60,6 +61,7 @@ Workaround: treat rotation as an external mandatory post-remediation step.
 - `Repair` is intentionally visually locked until a valid audit produces actionable remediation context.
 - Malformed/non-email author/committer email-field values are treated as suspicious commit identity tokens.
 - `exfil_code_indicators` is advisory by default. It elevates review guidance, but it does not automatically fail a repository.
+- `reviewed_network_indicators` is non-blocking safe context for narrow Repo Privacy Guardian self-audit network paths, not a general allowlist.
 - `pytest` release validation intentionally ignores untracked/local-only `tests/test_*.py` files so the release signal matches a clean clone.
 - Suppression files are intentionally narrow: high-confidence secrets, path leaks, dirty tree state, fsck failures, execution errors, fix errors, and Git metadata blocking secrets cannot be suppressed.
 

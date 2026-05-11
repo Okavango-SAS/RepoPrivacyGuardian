@@ -138,6 +138,7 @@ Presentation-only GUI features and launcher-only CLI flags are permitted only wh
 - Implementation notes:
   - report guidance and severity highlights must mention the advisory/manual-review contract;
   - JSON, HTML, CLI and GUI views must surface the signal consistently;
+  - narrow Repo Privacy Guardian self-audit network calls can be moved to `reviewed_network_indicators` only when the repository identity and exact code shape are recognized;
   - a future strict mode can promote the signal, but the default release contract does not.
 
 ## DEC-009 - Pytest release signal must come only from tracked tests

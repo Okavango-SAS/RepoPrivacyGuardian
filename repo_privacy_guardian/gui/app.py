@@ -4362,6 +4362,7 @@ class GuiApp:  # pragma: no cover
             "history_secret_documentation_matches",
             "tracked_email_fixture_matches",
             "history_email_fixture_matches",
+            "reviewed_network_indicators",
         )
 
     def _build_repair_status_summary(self, reports_payload: list[dict[str, object]]) -> str:

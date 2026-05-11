@@ -37,6 +37,7 @@ README_REQUIREMENTS = [
     "@google/design.md@0.1.0",
     "tracked_secret_low_confidence",
     "git_metadata_secret_low_confidence",
+    "reviewed_network_indicators",
     "agent_summary.json",
     "--strict-profile",
     "--suppressions",

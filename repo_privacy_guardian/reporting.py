@@ -84,6 +84,7 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload["tracked_but_ignored"] = _redact_text_list(report.tracked_but_ignored)
     payload["gitignore_missing_patterns"] = _redact_text_list(report.gitignore_missing_patterns)
     payload["exfil_code_indicators"] = _redact_text_list(report.exfil_code_indicators)
+    payload["reviewed_network_indicators"] = _redact_text_list(report.reviewed_network_indicators)
     payload["github_hardening_findings"] = _redact_text_list(report.github_hardening_findings)
     payload["github_hardening_warnings"] = _redact_text_list(report.github_hardening_warnings)
     payload["github_hardening_fix_guide"] = _redact_text_list(report.github_hardening_fix_guide)
@@ -508,6 +509,7 @@ def build_detected_findings_preview(report: RepoReport) -> list[str]:
     add("history sensitive add", report.history_sensitive_added)
     add("history sensitive delete", report.history_sensitive_deleted)
     add("exfil advisory", report.exfil_code_indicators)
+    add("reviewed network context", report.reviewed_network_indicators)
     add("github advisory", report.github_hardening_findings)
     add("github audit warning", report.github_hardening_warnings)
     add("github fix guide", report.github_hardening_fix_guide)
@@ -810,6 +812,7 @@ def render_html_report(
             f"<td class=\"num\">{len(owned_unexpected)}</td>"
             f"<td class=\"num\">{len(owned_unexpected_identity_tokens)}</td>"
             f"<td class=\"num\">{len(rep.exfil_code_indicators)}</td>"
+            f"<td class=\"num\">{len(rep.reviewed_network_indicators)}</td>"
             f"<td class=\"num\">{len(rep.github_hardening_findings)}</td>"
             f"<td class=\"num\">{len(rep.litellm_ioc_hits)}</td>"
             f"<td class=\"num\">{len(rep.gitignore_missing_patterns)}</td>"
@@ -869,6 +872,7 @@ def render_html_report(
             f"<tr><td>tracked_but_ignored</td><td class=\"num\">{len(rep.tracked_but_ignored)}</td></tr>"
             f"<tr><td>gitignore_missing_patterns</td><td class=\"num\">{len(rep.gitignore_missing_patterns)}</td></tr>"
             f"<tr><td>exfil_code_indicators</td><td class=\"num\">{len(rep.exfil_code_indicators)}</td></tr>"
+            f"<tr><td>reviewed_network_indicators</td><td class=\"num\">{len(rep.reviewed_network_indicators)}</td></tr>"
             f"<tr><td>github_hardening_checked</td><td>{esc(str(rep.github_hardening_checked))}</td></tr>"
             f"<tr><td>github_hardening_findings</td><td class=\"num\">{len(rep.github_hardening_findings)}</td></tr>"
             f"<tr><td>github_hardening_warnings</td><td class=\"num\">{len(rep.github_hardening_warnings)}</td></tr>"
@@ -980,8 +984,13 @@ def render_html_report(
             "<section><h5>Malformed commit identity tokens (third-party repositories)</h5>"
             f"{render_lines(third_party_unexpected_identity_tokens)}"
             "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
             "<section><h5>Exfil indicators (advisory sample)</h5>"
             f"{render_lines(rep.exfil_code_indicators)}"
+            "</section>"
+            "<section><h5>Reviewed network indicators (safe context)</h5>"
+            f"{render_lines(rep.reviewed_network_indicators)}"
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
@@ -1239,6 +1248,7 @@ def render_html_report(
             <th class=\"num\">Unexpected emails (owned repo)</th>
             <th class=\"num\">Identity tokens (owned repo)</th>
             <th class=\"num\">Exfil indicators</th>
+            <th class=\"num\">Reviewed network</th>
             <th class=\"num\">GitHub findings</th>
             <th class=\"num\">LiteLLM IoCs</th>
             <th class=\"num\">Missing .gitignore rules</th>

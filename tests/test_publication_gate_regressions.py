@@ -441,6 +441,13 @@ def test_exfil_indicator_filters_ignore_imports_and_detector_scaffolding() -> No
     assert rpg.line_has_exfil_indicator('"pattern": "*requests.post*",') is False
     assert rpg.line_has_exfil_indicator('rule = {"pattern": "*requests.post*"}') is False
     assert rpg.line_has_exfil_indicator("urllib.request.Request(url)") is False
+    assert rpg.line_has_exfil_indicator("def fetch(request):") is False
+    assert rpg.line_has_exfil_indicator('RPG_REVIEWED_NETWORK_LINE_RE = re.compile("Invoke-WebRequest")') is False
+    assert rpg.line_has_exfil_indicator('r"Invoke-WebRequest\\s+-Uri\\s+\'\\{WINGET_BOOTSTRAP_URL\\}\'"') is False
+    assert rpg.line_has_exfil_indicator(
+        '"def fetch(request):\\n    with urllib.request.urlopen(request, timeout=8) as response:\\n"',
+        rel_path="tests/test_publication_gate_regressions.py",
+    ) is False
 
 
 def test_exfil_indicator_keeps_active_network_sinks_and_contextual_terms() -> None:
@@ -452,6 +459,57 @@ def test_exfil_indicator_keeps_active_network_sinks_and_contextual_terms() -> No
     assert rpg.line_has_exfil_indicator('const send = fetch("https://collector.example")') is True
     assert rpg.line_has_exfil_indicator('webhook = "https://collector.example/hooks/release"') is True
     assert rpg.line_has_exfil_indicator("analytics_enabled = True") is False
+
+
+def test_repo_privacy_guardian_network_calls_are_reviewed_context_only(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "RepoPrivacyGuardian")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "pyproject.toml", '[project]\nname = "repo-privacy-guardian"\n')
+    _write(repo / "Repo_Privacy_Guardian.py", "def main():\n    return 0\n")
+    _write(repo / "repo_privacy_guardian" / "core.py", "EXFIL_INDICATOR_MODE = 'advisory'\n")
+    _write(
+        repo / "repo_privacy_guardian" / "github.py",
+        "def fetch(request):\n    with urllib.request.urlopen(request, timeout=8) as response:\n        return response.read()\n",
+    )
+    _write(
+        repo / "repo_privacy_guardian" / "tooling.py",
+        "WINGET_BOOTSTRAP_URL = 'https://aka.ms/getwinget'\n"
+        "command = f\"Invoke-WebRequest -Uri '{WINGET_BOOTSTRAP_URL}' -OutFile $temp; \"\n",
+    )
+    _commit_all(repo, "add reviewed network calls")
+
+    guard = _make_guard(tmp_path)
+    report = guard.audit_repo(repo)
+    guidance_level, _risk, _consequence, _suggestion = rpg.repo_user_guidance(report)
+
+    assert rpg.is_repo_privacy_guardian_source_tree(repo) is True
+    assert rpg.is_repo_privacy_guardian_reviewed_network_indicator(
+        "with urllib.request.urlopen(request, timeout=8) as response:",
+        rel_path="repo_privacy_guardian/github.py",
+    ) is True
+    assert report.status == "PASS"
+    assert report.exfil_code_indicators == []
+    assert len(report.reviewed_network_indicators) == 2
+    assert guidance_level == "SKIP"
+
+
+def test_repo_privacy_guardian_reviewed_network_rules_do_not_hide_other_repos(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "lookalike")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(repo / "Repo_Privacy_Guardian.py", "def main():\n    return 0\n")
+    _write(repo / "repo_privacy_guardian" / "core.py", "EXFIL_INDICATOR_MODE = 'advisory'\n")
+    _write(
+        repo / "repo_privacy_guardian" / "github.py",
+        "def fetch(request):\n    with urllib.request.urlopen(request, timeout=8) as response:\n        return response.read()\n",
+    )
+    _commit_all(repo, "add lookalike network call")
+
+    guard = _make_guard(tmp_path)
+    report = guard.audit_repo(repo)
+
+    assert rpg.is_repo_privacy_guardian_source_tree(repo) is False
+    assert report.reviewed_network_indicators == []
+    assert report.exfil_code_indicators
 
 
 def test_exfil_indicator_audit_ignores_library_import_noise_in_repo_code(tmp_path: Path) -> None:

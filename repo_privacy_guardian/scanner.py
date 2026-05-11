@@ -490,8 +490,10 @@ class RepoPublicationGuard:  # pragma: no cover
                 )
         return high_confidence, low_confidence, fixtures, documentation
 
-    def _scan_exfil_code_indicators(self, repo: Path) -> list[str]:
+    def _scan_network_code_indicators(self, repo: Path) -> tuple[list[str], list[str]]:
         matches: list[str] = []
+        reviewed: list[str] = []
+        is_rpg_source_tree = is_repo_privacy_guardian_source_tree(repo)
         for file_path in self._iter_tracked_files(repo):
             rel = file_path.relative_to(repo).as_posix()
             if file_path.suffix.lower() not in CODE_EXTENSIONS:
@@ -501,10 +503,15 @@ class RepoPublicationGuard:  # pragma: no cover
                 continue
             for idx, line in enumerate(text.splitlines(), start=1):
                 if line_has_exfil_indicator(line, rel_path=rel):
-                    matches.append(f"{rel}:{idx}:{line.strip()[:240]}")
+                    entry = f"{rel}:{idx}:{line.strip()[:240]}"
+                    if is_rpg_source_tree and is_repo_privacy_guardian_reviewed_network_indicator(line, rel_path=rel):
+                        if len(reviewed) < self.max_matches:
+                            reviewed.append(entry)
+                        continue
+                    matches.append(entry)
                     if len(matches) >= self.max_matches:
-                        return matches
-        return matches
+                        return matches, reviewed
+        return matches, reviewed
 
     def _is_supply_chain_candidate_path(self, rel_path: str) -> bool:
         normalized = rel_path.replace("\\", "/").strip().lower()
@@ -1206,7 +1213,7 @@ class RepoPublicationGuard:  # pragma: no cover
                 line.strip() for line in ignored.stdout.splitlines() if line.strip()
             ][: self.max_matches]
 
-        report.exfil_code_indicators = self._scan_exfil_code_indicators(repo)
+        report.exfil_code_indicators, report.reviewed_network_indicators = self._scan_network_code_indicators(repo)
 
         if self.audit_github_hardening:
             self._scan_github_hardening(repo, report)

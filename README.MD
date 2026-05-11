@@ -166,10 +166,13 @@ Advisory checks that do not change `PASS` or `FAIL` by default:
 - `tracked_secret_low_confidence`, `history_secret_low_confidence`, and `git_metadata_secret_low_confidence`
 - `tracked_secret_fixture_matches`, `history_secret_fixture_matches`, `tracked_secret_documentation_matches`, and `history_secret_documentation_matches`
 - `tracked_email_fixture_matches` and `history_email_fixture_matches`
+- `reviewed_network_indicators`
 - `github_hardening_findings`
 - `github_hardening_warnings`
 
 `exfil_code_indicators` is intentionally manual-review only by default. It is surfaced in CLI guidance, JSON, HTML, and severity highlights, but it does not fail a repository unless a future strict mode is introduced.
+
+`reviewed_network_indicators` preserves known-intent network calls that belong to Repo Privacy Guardian itself, such as read-only GitHub API probes and the optional Windows App Installer bootstrap command. Those entries stay visible in JSON, HTML, logs, GUI safe-context counts, and agent summaries, but they do not require manual exfil review. The classifier only applies when the audited checkout is recognized as this project and the line matches a narrow reviewed pattern; lookalike paths in other repositories still remain `exfil_code_indicators`.
 
 Generic `password = ...`, `api_key = ...`, `client_secret = ...`, and similar assignments are separated as low-confidence advisory findings unless they also match a high-confidence provider pattern. Placeholder-looking values in tests, fixtures, docs, examples, and README-style files are surfaced separately as safe fixture/documentation evidence instead of blocking publication. Email addresses in tracked or historical test/fixture contexts are also preserved in safe fixture buckets, while README/docs contact examples that look real remain low-confidence review items.
 

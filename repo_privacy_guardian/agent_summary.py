@@ -45,6 +45,7 @@ FIXTURE_DOCUMENTATION_CATEGORY_KEYS = (
     "history_secret_documentation_matches",
     "tracked_email_fixture_matches",
     "history_email_fixture_matches",
+    "reviewed_network_indicators",
 )
 
 

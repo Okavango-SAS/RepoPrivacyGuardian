@@ -2453,6 +2453,9 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     report.history_email_high_confidence = ["L1:dev@example.com:+ email = 'dev@example.com'"]
     report.history_email_low_confidence = ["L2:dev@example.com:+ assert foo('dev@example.com')"]
     report.history_email_fixture_matches = ["L3:tests/test_fixture.py:dev@example.com:+ assert foo('dev@example.com')"]
+    report.reviewed_network_indicators = [
+        "repo_privacy_guardian/github.py:1:with urllib.request.urlopen(request, timeout=8) as response:"
+    ]
     report.github_hardening_findings = ["GitHub repository hardening: .github/CODEOWNERS is missing."]
     report.github_hardening_warnings = ["GitHub default branch protection could not be audited (http_403)."]
     report.fix_actions = ["replace dev@example.com"]
@@ -2487,6 +2490,7 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     assert rpg.REDACTED_EMAIL in payload["history_email_high_confidence"][0]
     assert rpg.REDACTED_EMAIL in payload["history_email_low_confidence"][0]
     assert rpg.REDACTED_EMAIL in payload["history_email_fixture_matches"][0]
+    assert payload["reviewed_network_indicators"] == report.reviewed_network_indicators
     assert payload["github_hardening_findings"] == [
         "GitHub repository hardening: .github/CODEOWNERS is missing."
     ]

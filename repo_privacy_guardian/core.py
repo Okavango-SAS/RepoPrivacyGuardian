@@ -791,14 +791,31 @@ EXFIL_REVIEW_CONTEXT_RE = re.compile(
 )
 EXFIL_IMPORT_LINE_RE = re.compile(r"^\s*(?:from\s+\S+\s+import\s+.+|import\s+.+)$")
 EXFIL_META_LINE_RE = re.compile(
-    r"\b(?:line_has_exfil_indicator|is_exfil_indicator_noise|exfil_code_indicators|EXFIL_[A-Z_]+)\b"
+    r"\b(?:line_has_exfil_indicator|is_exfil_indicator_noise|"
+    r"is_repo_privacy_guardian_reviewed_network_indicator|"
+    r"is_repo_privacy_guardian_source_tree|"
+    r"exfil_code_indicators|reviewed_network_indicators|"
+    r"EXFIL_[A-Z_]+|RPG_REVIEWED_NETWORK_[A-Z_]+)\b"
 )
-EXFIL_PATTERN_LITERAL_RE = re.compile(r"^\s*r?[\"'][A-Za-z0-9_.\\|?*+()[\]-]+[\"']\s*,?\s*$")
+EXFIL_PATTERN_LITERAL_RE = re.compile(r"^\s*r?[\"'][A-Za-z0-9_./\\|?*+()[\]{}$^:';,\s-]+[\"']\s*,?\s*$")
 EXFIL_PATTERN_FIELD_RE = re.compile(r"[\"']pattern[\"']\s*:\s*(?:[rRuUbBfF]+)?[\"']")
 EXFIL_QUOTED_STRING_RE = re.compile(
     r"(?i)(?:[rubf]{0,3})(?:\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*')"
 )
 EXFIL_TEST_FIXTURE_WRITE_RE = re.compile(r"\b(?:_write|write_text|write_bytes)\s*\(")
+EXFIL_TEST_STRING_LITERAL_RE = re.compile(r"(?i)^(?:[rubf]{0,3})?[\"']")
+EXFIL_FETCH_FUNCTION_DEF_RE = re.compile(r"^(?:async\s+)?def\s+fetch\s*\(")
+REVIEWED_NETWORK_INDICATOR_MODE = "trusted-project-context"
+RPG_REVIEWED_NETWORK_PATHS = frozenset(
+    {
+        "repo_privacy_guardian/github.py",
+        "repo_privacy_guardian/tooling.py",
+    }
+)
+RPG_REVIEWED_NETWORK_LINE_RE = re.compile(
+    r"urllib\.request\.urlopen\s*\(\s*request\s*,\s*timeout\s*=\s*\d+|"
+    r"Invoke-WebRequest\s+-Uri\s+'\{WINGET_BOOTSTRAP_URL\}'"
+)
 
 
 def is_exfil_indicator_noise(line: str, *, rel_path: str | None = None) -> bool:
@@ -818,6 +835,10 @@ def is_exfil_indicator_noise(line: str, *, rel_path: str | None = None) -> bool:
         unquoted = EXFIL_QUOTED_STRING_RE.sub('""', stripped)
         if not EXFIL_ACTIVE_CODE_RE.search(unquoted):
             return True
+    if EXFIL_FETCH_FUNCTION_DEF_RE.match(stripped):
+        return True
+    if normalized_rel.startswith("tests/") and EXFIL_TEST_STRING_LITERAL_RE.match(stripped):
+        return True
     if normalized_rel.startswith("tests/") and EXFIL_TEST_FIXTURE_WRITE_RE.search(stripped) and "\\n" in stripped:
         return True
     return False
@@ -832,6 +853,27 @@ def line_has_exfil_indicator(line: str, *, rel_path: str | None = None) -> bool:
     if EXFIL_REVIEW_TERM_RE.search(stripped) and EXFIL_REVIEW_CONTEXT_RE.search(stripped):
         return True
     return False
+
+
+def is_repo_privacy_guardian_source_tree(repo: Path) -> bool:
+    pyproject = repo / "pyproject.toml"
+    if not pyproject.exists():
+        return False
+    text = read_text_file_for_scan(pyproject, max_bytes=64 * 1024) or ""
+    return (
+        'name = "repo-privacy-guardian"' in text
+        and (repo / "Repo_Privacy_Guardian.py").is_file()
+        and (repo / "repo_privacy_guardian" / "core.py").is_file()
+    )
+
+
+def is_repo_privacy_guardian_reviewed_network_indicator(line: str, *, rel_path: str) -> bool:
+    normalized_rel = rel_path.replace("\\", "/").lower()
+    if normalized_rel not in RPG_REVIEWED_NETWORK_PATHS:
+        return False
+    if is_exfil_indicator_noise(line, rel_path=rel_path):
+        return False
+    return bool(RPG_REVIEWED_NETWORK_LINE_RE.search(line.strip()))
 
 LITELLM_REFERENCE_RE = re.compile(r"(?i)\blitellm\b")
 LITELLM_COMPROMISED_VERSION_RE = re.compile(r"(?i)\blitellm\b[^\n]{0,64}\b1\.82\.(?:7|8)\b")
@@ -1056,6 +1098,7 @@ class RepoReport:
     tracked_but_ignored: list[str] = field(default_factory=list)
     gitignore_missing_patterns: list[str] = field(default_factory=list)
     exfil_code_indicators: list[str] = field(default_factory=list)
+    reviewed_network_indicators: list[str] = field(default_factory=list)
     github_hardening_checked: bool = False
     github_hardening_findings: list[str] = field(default_factory=list)
     github_hardening_warnings: list[str] = field(default_factory=list)
@@ -1213,6 +1256,8 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"gitignore_missing_patterns: {len(report.gitignore_missing_patterns)}")
     logger(f"exfil_code_indicators: {len(report.exfil_code_indicators)}")
     logger(f"exfil_indicator_mode: {EXFIL_INDICATOR_MODE}")
+    logger(f"reviewed_network_indicators: {len(report.reviewed_network_indicators)}")
+    logger(f"reviewed_network_indicator_mode: {REVIEWED_NETWORK_INDICATOR_MODE}")
     logger(f"github_hardening_checked: {report.github_hardening_checked}")
     logger(f"github_hardening_findings: {len(report.github_hardening_findings)}")
     logger(f"github_hardening_warnings: {len(report.github_hardening_warnings)}")
@@ -1237,6 +1282,10 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     if report.exfil_code_indicators:
         logger("exfil_code_indicator_samples:")
         for item in report.exfil_code_indicators[:8]:
+            logger(f"  - {item}")
+    if report.reviewed_network_indicators:
+        logger("reviewed_network_indicator_samples:")
+        for item in report.reviewed_network_indicators[:8]:
             logger(f"  - {item}")
     if report.github_hardening_findings:
         logger("github_hardening_findings_samples:")

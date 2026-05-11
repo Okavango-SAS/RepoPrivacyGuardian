@@ -87,7 +87,7 @@ Repo Privacy Guardian's built-in scanner separates secret evidence into confiden
 - Email addresses found in tracked or historical tests, fixtures, mocks, samples, demos, benchmarks, and specs are preserved as safe fixture context in `tracked_email_fixture_matches` and `history_email_fixture_matches`. Real-looking emails in README/docs/contact examples remain low-confidence review items unless they use ignored placeholder domains such as `.invalid` or `.example`.
 - Git metadata is included: credentialed remotes, URL rewrite rules, credential-related local config, and HTTP extra headers are scanned and redacted in reports.
 
-Report fields preserve that taxonomy: `tracked_secret_matches`, `history_secret_matches`, and `git_metadata_secret_matches` are high-confidence blocking buckets; `tracked_secret_low_confidence`, `history_secret_low_confidence`, and `git_metadata_secret_low_confidence` are advisory; `tracked_secret_fixture_matches`, `history_secret_fixture_matches`, `tracked_secret_documentation_matches`, `history_secret_documentation_matches`, `tracked_email_fixture_matches`, and `history_email_fixture_matches` are safe-example buckets.
+Report fields preserve that taxonomy: `tracked_secret_matches`, `history_secret_matches`, and `git_metadata_secret_matches` are high-confidence blocking buckets; `tracked_secret_low_confidence`, `history_secret_low_confidence`, and `git_metadata_secret_low_confidence` are advisory; `tracked_secret_fixture_matches`, `history_secret_fixture_matches`, `tracked_secret_documentation_matches`, `history_secret_documentation_matches`, `tracked_email_fixture_matches`, `history_email_fixture_matches`, and `reviewed_network_indicators` are safe/reviewed context buckets.
 
 Search for personal/local paths in history:
 
@@ -139,6 +139,7 @@ Action:
 - Default to opt-in for outbound operations whenever possible.
 - Treat heuristic exfil/outbound findings as mandatory manual review.
 - Repo Privacy Guardian reports these indicators as advisory by default; they do not change PASS/FAIL on their own.
+- Repo Privacy Guardian may classify its own narrow, reviewed GitHub API and Windows App Installer bootstrap code paths as `reviewed_network_indicators`; this does not apply to lookalike paths in other repositories.
 
 ### E) GitHub repository hardening (recommended for public GitHub repos)
 
@@ -212,6 +213,7 @@ Strict profiles:
 - `--strict-profile release` treats low-confidence emails as blocking and treats GitHub hardening findings as blocking only when `--audit-github-hardening` was explicitly enabled.
 - `--strict-profile release` must not enable network access by itself.
 - `exfil_code_indicators` remains advisory/manual-review in all profiles.
+- `reviewed_network_indicators` remains non-blocking safe/reviewed context and does not require exfil review.
 
 Suppression files:
 
