@@ -4,6 +4,7 @@ import json
 import re
 import struct
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -417,10 +418,33 @@ def test_low_risk_extracted_modules_use_explicit_core_imports() -> None:
     for rel_path in (
         "repo_privacy_guardian/redaction.py",
         "repo_privacy_guardian/tooling.py",
+        "repo_privacy_guardian/reporting.py",
     ):
         text = (_repo_root() / rel_path).read_text(encoding="utf-8")
         assert "from repo_privacy_guardian.core import *" not in text
         assert "ruff: noqa: F403" not in text
+
+
+def test_reporting_module_imports_without_core_circularity() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import repo_privacy_guardian.reporting as reporting; "
+                "print(reporting.sanitize_report_for_export.__name__)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert "sanitize_report_for_export" in proc.stdout
 
 
 def test_docs_cover_agentic_ide_prompt_library() -> None:

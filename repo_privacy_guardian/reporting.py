@@ -2,13 +2,49 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403,F405
-from repo_privacy_guardian.core import *
-from repo_privacy_guardian import core as _core
+import html
+import json
+import webbrowser
+from datetime import datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Callable
 
-_redact_email_list = _core._redact_email_list
-_redact_identity_list = _core._redact_identity_list
-_redact_text_list = _core._redact_text_list
+from repo_privacy_guardian import agent_summary as agent_summary_helpers
+from repo_privacy_guardian import artifacts as artifact_helpers
+from repo_privacy_guardian.artifacts import RunArtifacts
+
+if TYPE_CHECKING:
+    from repo_privacy_guardian.core import GuardRunConfig, RepoReport
+
+
+def redact_sensitive_text(value: str) -> str:
+    from repo_privacy_guardian.redaction import redact_sensitive_text as redact
+
+    return redact(value)
+
+
+def _redact_email_list(emails: list[str]) -> list[str]:
+    from repo_privacy_guardian.redaction import _redact_email_list as redact
+
+    return redact(emails)
+
+
+def _redact_identity_list(items: list[str]) -> list[str]:
+    from repo_privacy_guardian.redaction import _redact_identity_list as redact
+
+    return redact(items)
+
+
+def _redact_text_list(items: list[str]) -> list[str]:
+    from repo_privacy_guardian.redaction import _redact_text_list as redact
+
+    return redact(items)
+
+
+def _repo_has_dirty_worktree(clean_status: str | None) -> bool:
+    from repo_privacy_guardian.core import repo_has_dirty_worktree
+
+    return repo_has_dirty_worktree(clean_status)
 
 
 def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
@@ -105,7 +141,7 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
 
 def validate_fix_preconditions(report: RepoReport) -> list[str]:
     issues: list[str] = []
-    if repo_has_dirty_worktree(report.clean_status):
+    if _repo_has_dirty_worktree(report.clean_status):
         issues.append(
             "automatic fix blocked: working tree is not clean; commit, stash, or discard local edits before remediation"
         )
@@ -223,7 +259,7 @@ def repo_user_guidance(report: RepoReport) -> tuple[str, str, str, str]:
     ) = email_decision_context(report)
     low_blocking = report.low_confidence_email_mode == "blocking"
     litellm_severity = classify_litellm_incident_severity(report)
-    worktree_dirty = repo_has_dirty_worktree(report.clean_status)
+    worktree_dirty = _repo_has_dirty_worktree(report.clean_status)
 
     if report.execution_errors:
         return (
@@ -378,7 +414,7 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
     ) = email_decision_context(report)
     low_confidence_blocking = report.low_confidence_email_mode == "blocking"
     litellm_severity = classify_litellm_incident_severity(report)
-    worktree_dirty = repo_has_dirty_worktree(report.clean_status)
+    worktree_dirty = _repo_has_dirty_worktree(report.clean_status)
 
     if report.execution_errors:
         score = max(score, 85)
@@ -464,6 +500,11 @@ def classify_repo_severity(report: RepoReport) -> tuple[str, int, list[str]]:
 
 
 def classify_litellm_incident_severity(report: RepoReport) -> str:
+    from repo_privacy_guardian.core import (
+        LITELLM_COMPROMISED_1827_RE,
+        LITELLM_COMPROMISED_1828_RE,
+    )
+
     if report.litellm_incident_severity and report.litellm_incident_severity != "NONE":
         return report.litellm_incident_severity
 
@@ -1279,6 +1320,11 @@ def persist_run_outputs(
     optional_supply_chain_payload: dict[str, object] | None = None,
     exit_code: int | None = None,
 ) -> None:
+    from repo_privacy_guardian.core import (
+        resolve_optional_json_export_path,
+        write_private_text_file,
+    )
+
     artifact_helpers.persist_run_outputs(
         reports=reports,
         artifacts=artifacts,
