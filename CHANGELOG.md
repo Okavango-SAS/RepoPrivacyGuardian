@@ -7,6 +7,7 @@ All notable user-facing changes to this project are documented here.
 ### Added
 
 - Added dark-mode GUI screenshots to the README desktop preview with neutral visible paths.
+- Added safe email fixture buckets for tracked and historical test/fixture email examples so strict release profiles keep traceability without blocking on intentional test data.
 
 ## [1.5.0] - 2026-05-04
 

@@ -397,6 +397,16 @@ PERSONAL_PATH_LITERAL_PATTERNS = (
 EMAIL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 SIMPLE_EMAIL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
+EMAIL_FIXTURE_PATH_RE = re.compile(
+    r"(^|/)(test|tests|fixture|fixtures|mock|mocks|sample|samples|demo|benchmarks?|spec)(/|$)",
+    re.IGNORECASE,
+)
+EMAIL_FIXTURE_SNIPPET_RE = re.compile(
+    r"\b(mock|fixture|dummy|sample|placeholder|test|assert|expect|pytest|unittest)\b|"
+    r"vi\.spyon|mockresolvedvalue|auth\.login\(",
+    re.IGNORECASE,
+)
+
 EMAIL_LOW_CONFIDENCE_PATH_RE = re.compile(
     r"(^|/)(test|tests|docs|doc|example|examples|fixture|fixtures|mock|mocks|"
     r"sample|samples|demo|benchmarks?|spec)(/|$)",
@@ -1007,6 +1017,7 @@ class RepoReport:
     tracked_email_matches: list[str] = field(default_factory=list)
     tracked_email_high_confidence: list[str] = field(default_factory=list)
     tracked_email_low_confidence: list[str] = field(default_factory=list)
+    tracked_email_fixture_matches: list[str] = field(default_factory=list)
     tracked_secret_files: list[str] = field(default_factory=list)
 
     history_secret_matches: list[str] = field(default_factory=list)
@@ -1018,6 +1029,7 @@ class RepoReport:
     history_email_matches: list[str] = field(default_factory=list)
     history_email_high_confidence: list[str] = field(default_factory=list)
     history_email_low_confidence: list[str] = field(default_factory=list)
+    history_email_fixture_matches: list[str] = field(default_factory=list)
     email_confidence_evaluated: bool = False
     secret_confidence_evaluated: bool = False
     low_confidence_email_mode: str = "informational"
@@ -1172,6 +1184,7 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"tracked_email_matches: {len(report.tracked_email_matches)}")
     logger(f"tracked_email_high_confidence: {len(report.tracked_email_high_confidence)}")
     logger(f"tracked_email_low_confidence: {len(report.tracked_email_low_confidence)}")
+    logger(f"tracked_email_fixture_matches: {len(report.tracked_email_fixture_matches)}")
     logger(f"history_secret_matches: {len(report.history_secret_matches)}")
     logger(f"history_secret_high_confidence: {len(report.history_secret_high_confidence)}")
     logger(f"history_secret_low_confidence: {len(report.history_secret_low_confidence)}")
@@ -1182,6 +1195,7 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"history_email_matches: {len(report.history_email_matches)}")
     logger(f"history_email_high_confidence: {len(report.history_email_high_confidence)}")
     logger(f"history_email_low_confidence: {len(report.history_email_low_confidence)}")
+    logger(f"history_email_fixture_matches: {len(report.history_email_fixture_matches)}")
     logger(f"history_sensitive_added: {len(report.history_sensitive_added)}")
     logger(f"history_sensitive_deleted: {len(report.history_sensitive_deleted)}")
     logger(f"secret_file_candidates: {len(report.secret_file_candidates)}")
@@ -1571,9 +1585,11 @@ from repo_privacy_guardian import redaction as redaction_helpers  # noqa: E402
 
 is_relevant_email_candidate = redaction_helpers.is_relevant_email_candidate
 extract_email_match_context = redaction_helpers.extract_email_match_context
+classify_email_match_context = redaction_helpers.classify_email_match_context
 is_low_confidence_email_context = redaction_helpers.is_low_confidence_email_context
 extract_secret_match_context = redaction_helpers.extract_secret_match_context
 classify_secret_match_context = redaction_helpers.classify_secret_match_context
+split_email_matches_by_taxonomy = redaction_helpers.split_email_matches_by_taxonomy
 split_email_matches_by_confidence = redaction_helpers.split_email_matches_by_confidence
 extract_personal_path_literals = redaction_helpers.extract_personal_path_literals
 split_unexpected_emails_by_origin_ownership = redaction_helpers.split_unexpected_emails_by_origin_ownership

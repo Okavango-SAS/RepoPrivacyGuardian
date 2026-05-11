@@ -1174,7 +1174,8 @@ class RepoPublicationGuard:  # pragma: no cover
         (
             report.tracked_email_high_confidence,
             report.tracked_email_low_confidence,
-        ) = split_email_matches_by_confidence(report.tracked_email_matches)
+            report.tracked_email_fixture_matches,
+        ) = split_email_matches_by_taxonomy(report.tracked_email_matches)
 
         (
             report.history_secret_high_confidence,
@@ -1189,7 +1190,8 @@ class RepoPublicationGuard:  # pragma: no cover
         (
             report.history_email_high_confidence,
             report.history_email_low_confidence,
-        ) = split_email_matches_by_confidence(report.history_email_matches)
+            report.history_email_fixture_matches,
+        ) = split_email_matches_by_taxonomy(report.history_email_matches)
         report.email_confidence_evaluated = True
         report.secret_confidence_evaluated = True
 

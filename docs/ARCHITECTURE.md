@@ -23,7 +23,7 @@ The public compatibility contract remains:
 - `repo_privacy_guardian/prompts.py`: GUI/README prompt-card registry without importing desktop GUI dependencies
 - `repo_privacy_guardian/tooling.py`: CLI/GUI tooling preflight, optional local installer prompts, Windows App Installer / `winget` bootstrap helpers, and GitHub hardening auth readiness checks
 - `repo_privacy_guardian/scanner.py`: `RepoPublicationGuard`, repository discovery, execution locks, deterministic scans, reviewed remediation, and re-audit behavior
-- `repo_privacy_guardian/redaction.py`: finding-context classification and redaction helpers for emails, identity tokens, secrets, URLs, and local paths
+- `repo_privacy_guardian/redaction.py`: finding-context classification and redaction helpers for emails, email fixtures, identity tokens, secrets, URLs, and local paths
 - `repo_privacy_guardian/reporting.py`: status/severity classification, redacted JSON export, `Decision first` HTML rendering, report persistence, and sensitive-artifact warnings
 - `repo_privacy_guardian/agent_summary.py`: safe, compact agent handoff artifact and CLI handoff formatting
 - `repo_privacy_guardian/strict_profiles.py`: documented `audit-only`, `internal`, and `release` profile normalization

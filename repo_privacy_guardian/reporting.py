@@ -48,6 +48,9 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload["tracked_email_matches"] = _redact_text_list(report.tracked_email_matches)
     payload["tracked_email_high_confidence"] = _redact_text_list(report.tracked_email_high_confidence)
     payload["tracked_email_low_confidence"] = _redact_text_list(report.tracked_email_low_confidence)
+    payload["tracked_email_fixture_matches"] = _redact_text_list(
+        report.tracked_email_fixture_matches
+    )
     payload["tracked_secret_files"] = _redact_text_list(report.tracked_secret_files)
     payload["history_secret_matches"] = _redact_text_list(report.history_secret_matches)
     payload["history_secret_high_confidence"] = _redact_text_list(
@@ -64,6 +67,9 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload["history_email_matches"] = _redact_text_list(report.history_email_matches)
     payload["history_email_high_confidence"] = _redact_text_list(report.history_email_high_confidence)
     payload["history_email_low_confidence"] = _redact_text_list(report.history_email_low_confidence)
+    payload["history_email_fixture_matches"] = _redact_text_list(
+        report.history_email_fixture_matches
+    )
     payload["history_secret_files"] = _redact_text_list(report.history_secret_files)
     payload["git_metadata_secret_matches"] = _redact_text_list(report.git_metadata_secret_matches)
     payload["git_metadata_secret_low_confidence"] = _redact_text_list(
@@ -490,6 +496,8 @@ def build_detected_findings_preview(report: RepoReport) -> list[str]:
     add("history secret fixture", report.history_secret_fixture_matches)
     add("tracked secret safe documentation", report.tracked_secret_documentation_matches)
     add("history secret safe documentation", report.history_secret_documentation_matches)
+    add("tracked email fixture", report.tracked_email_fixture_matches)
+    add("history email fixture", report.history_email_fixture_matches)
     add("secret file candidate", report.secret_file_candidates)
     add("tracked path", report.tracked_path_matches)
     add("history path", report.history_path_matches)
@@ -774,6 +782,9 @@ def render_html_report(
         tracked_email_low_confidence = (
             rep.tracked_email_low_confidence if rep.email_confidence_evaluated else []
         )
+        tracked_email_fixture_matches = (
+            rep.tracked_email_fixture_matches if rep.email_confidence_evaluated else []
+        )
         history_email_high_confidence = (
             rep.history_email_high_confidence
             if rep.email_confidence_evaluated
@@ -781,6 +792,9 @@ def render_html_report(
         )
         history_email_low_confidence = (
             rep.history_email_low_confidence if rep.email_confidence_evaluated else []
+        )
+        history_email_fixture_matches = (
+            rep.history_email_fixture_matches if rep.email_confidence_evaluated else []
         )
 
         sev_class = f"sev-{sev_label.lower()}"
@@ -845,9 +859,11 @@ def render_html_report(
             f"<tr><td>tracked_email_matches</td><td class=\"num\">{len(rep.tracked_email_matches)}</td></tr>"
             f"<tr><td>tracked_email_high_confidence</td><td class=\"num\">{len(tracked_email_high_confidence)}</td></tr>"
             f"<tr><td>tracked_email_low_confidence</td><td class=\"num\">{len(tracked_email_low_confidence)}</td></tr>"
+            f"<tr><td>tracked_email_fixture_matches</td><td class=\"num\">{len(tracked_email_fixture_matches)}</td></tr>"
             f"<tr><td>history_email_matches</td><td class=\"num\">{len(rep.history_email_matches)}</td></tr>"
             f"<tr><td>history_email_high_confidence</td><td class=\"num\">{len(history_email_high_confidence)}</td></tr>"
             f"<tr><td>history_email_low_confidence</td><td class=\"num\">{len(history_email_low_confidence)}</td></tr>"
+            f"<tr><td>history_email_fixture_matches</td><td class=\"num\">{len(history_email_fixture_matches)}</td></tr>"
             f"<tr><td>history_sensitive_added</td><td class=\"num\">{len(rep.history_sensitive_added)}</td></tr>"
             f"<tr><td>history_sensitive_deleted</td><td class=\"num\">{len(rep.history_sensitive_deleted)}</td></tr>"
             f"<tr><td>tracked_but_ignored</td><td class=\"num\">{len(rep.tracked_but_ignored)}</td></tr>"
@@ -926,6 +942,14 @@ def render_html_report(
             "</section>"
             "<section><h5>Secret documentation examples (safe)</h5>"
             f"{render_lines(rep.tracked_secret_documentation_matches + rep.history_secret_documentation_matches)}"
+            "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
+            "<section><h5>Email fixtures/examples (safe)</h5>"
+            f"{render_lines(tracked_email_fixture_matches + history_email_fixture_matches)}"
+            "</section>"
+            "<section><h5>Email examples requiring review</h5>"
+            f"{render_lines(tracked_email_low_confidence + history_email_low_confidence)}"
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"

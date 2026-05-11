@@ -72,7 +72,12 @@ def _init_repo(
     return repo
 
 
-def _make_guard(tmp_path: Path, *, policy_path: Path | None = None) -> rpg.RepoPublicationGuard:
+def _make_guard(
+    tmp_path: Path,
+    *,
+    policy_path: Path | None = None,
+    low_confidence_email_mode: str = "informational",
+) -> rpg.RepoPublicationGuard:
     return rpg.RepoPublicationGuard(
         root=tmp_path,
         policy_path=policy_path or (tmp_path / "POLICY.md"),
@@ -83,7 +88,7 @@ def _make_guard(tmp_path: Path, *, policy_path: Path | None = None) -> rpg.RepoP
         redact_third_party=False,
         purge_detected_secret_files=False,
         purge_all_detected_secret_files=False,
-        low_confidence_email_mode="informational",
+        low_confidence_email_mode=low_confidence_email_mode,
         push=False,
         dry_run=False,
         max_matches=50,
@@ -302,6 +307,27 @@ def test_history_email_classification_keeps_readme_examples_low_confidence(tmp_p
     assert report.tracked_email_low_confidence
     assert report.history_email_low_confidence
     assert report.history_email_high_confidence == []
+
+
+def test_test_fixture_email_examples_do_not_block_release_profile(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "fixture-email-release")
+    _write(repo / ".gitignore", DEFAULT_BASELINE)
+    _write(
+        repo / "tests" / "test_contact_fixture.py",
+        "def test_contact_fixture():\n"
+        "    assert 'helper@privacy.dev'.endswith('@privacy.dev')\n",
+    )
+    _commit_all(repo, "test fixture email example")
+
+    guard = _make_guard(tmp_path, low_confidence_email_mode="blocking")
+    report = guard.audit_repo(repo)
+
+    assert report.status == "PASS"
+    assert report.tracked_email_fixture_matches
+    assert report.history_email_fixture_matches
+    assert report.tracked_email_low_confidence == []
+    assert report.history_email_low_confidence == []
+    assert "low-confidence email matches configured as blocking" not in report.failures
 
 
 def test_dirty_worktree_blocks_publication_gate(tmp_path: Path) -> None:

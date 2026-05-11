@@ -165,12 +165,13 @@ Advisory checks that do not change `PASS` or `FAIL` by default:
 - `exfil_code_indicators`
 - `tracked_secret_low_confidence`, `history_secret_low_confidence`, and `git_metadata_secret_low_confidence`
 - `tracked_secret_fixture_matches`, `history_secret_fixture_matches`, `tracked_secret_documentation_matches`, and `history_secret_documentation_matches`
+- `tracked_email_fixture_matches` and `history_email_fixture_matches`
 - `github_hardening_findings`
 - `github_hardening_warnings`
 
 `exfil_code_indicators` is intentionally manual-review only by default. It is surfaced in CLI guidance, JSON, HTML, and severity highlights, but it does not fail a repository unless a future strict mode is introduced.
 
-Generic `password = ...`, `api_key = ...`, `client_secret = ...`, and similar assignments are separated as low-confidence advisory findings unless they also match a high-confidence provider pattern. Placeholder-looking values in tests, fixtures, docs, examples, and README-style files are surfaced separately as safe fixture/documentation evidence instead of blocking publication.
+Generic `password = ...`, `api_key = ...`, `client_secret = ...`, and similar assignments are separated as low-confidence advisory findings unless they also match a high-confidence provider pattern. Placeholder-looking values in tests, fixtures, docs, examples, and README-style files are surfaced separately as safe fixture/documentation evidence instead of blocking publication. Email addresses in tracked or historical test/fixture contexts are also preserved in safe fixture buckets, while README/docs contact examples that look real remain low-confidence review items.
 
 GitHub hardening findings and warnings are also advisory/manual-review only by default when `--audit-github-hardening` is enabled. Passing `--strict-profile release` promotes GitHub hardening findings to blocking only when `--audit-github-hardening` was explicitly enabled; it does not enable network checks by itself.
 

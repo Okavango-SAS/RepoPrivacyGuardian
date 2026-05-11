@@ -2,10 +2,10 @@
 
 ## Current limitations
 
-1. Real-shaped examples without obvious placeholders may still require manual classification.
+1. Real-shaped examples outside test/fixture contexts may still require manual classification.
 
 Impact: low.
-Workaround: use obvious placeholders in tests/docs/examples so findings land in the non-blocking fixture or safe-documentation buckets; verify context before applying destructive fixes.
+Workaround: use ignored placeholder domains such as `.invalid` or `.example` in docs/examples so findings do not look like real contact data and can stay in non-blocking fixture or safe-documentation buckets; verify context before applying destructive fixes. Test and fixture email examples are preserved in safe fixture buckets.
 
 1. Exfil indicator heuristic is keyword-based and can over-report in backend/service repos.
 

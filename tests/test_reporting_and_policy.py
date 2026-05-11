@@ -2338,11 +2338,23 @@ def test_email_match_confidence_helpers_and_ownership_split() -> None:
 
     tracked_high, tracked_low = rpg.split_email_matches_by_confidence(tracked)
     history_high, history_low = rpg.split_email_matches_by_confidence(history)
+    tracked_taxonomy_high, tracked_taxonomy_low, tracked_fixtures = (
+        rpg.split_email_matches_by_taxonomy(tracked)
+    )
+    history_taxonomy_high, history_taxonomy_low, history_fixtures = (
+        rpg.split_email_matches_by_taxonomy(history)
+    )
 
     assert tracked_high == [tracked[1]]
     assert tracked_low == [tracked[0]]
     assert history_high == [history[1]]
     assert history_low == [history[0]]
+    assert tracked_taxonomy_high == [tracked[1]]
+    assert tracked_taxonomy_low == []
+    assert tracked_fixtures == [tracked[0]]
+    assert history_taxonomy_high == [history[1]]
+    assert history_taxonomy_low == []
+    assert history_fixtures == [history[0]]
 
     owned, third_party = rpg.split_unexpected_emails_by_origin_ownership(
         ["redacted-contributor@example.invalid"],
@@ -2367,7 +2379,9 @@ def test_email_match_context_edge_cases_and_empty_ownership_split() -> None:
     assert rpg.extract_email_match_context("no-colon") == (None, "no-colon")
 
     assert rpg.is_low_confidence_email_context("README.md", "contact") is True
+    assert rpg.classify_email_match_context("README.md", "contact") == "low_confidence"
     assert rpg.is_low_confidence_email_context(None, "assert user.email") is True
+    assert rpg.classify_email_match_context(None, "assert user.email") == "fixture"
     assert rpg.is_low_confidence_email_context("src/service.py", "prod_email = 'redacted-contributor@example.invalid'") is False
 
     owned, third_party = rpg.split_unexpected_emails_by_origin_ownership([], None, {"example"})
@@ -2432,11 +2446,13 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     report.tracked_email_matches = ["file.txt:2:dev@example.com"]
     report.tracked_email_high_confidence = ["src/main.py:2:dev@example.com"]
     report.tracked_email_low_confidence = ["tests/test_main.py:2:dev@example.com"]
+    report.tracked_email_fixture_matches = ["tests/test_fixture.py:2:dev@example.com"]
     report.history_email_matches = ["L1:dev@example.com:+ email = 'dev@example.com'"]
     report.history_secret_low_confidence = [f"L1:src/settings.py:{low_confidence_secret}"]
     report.git_metadata_secret_matches = [f"origin_url:{credentialed_url}"]
     report.history_email_high_confidence = ["L1:dev@example.com:+ email = 'dev@example.com'"]
     report.history_email_low_confidence = ["L2:dev@example.com:+ assert foo('dev@example.com')"]
+    report.history_email_fixture_matches = ["L3:tests/test_fixture.py:dev@example.com:+ assert foo('dev@example.com')"]
     report.github_hardening_findings = ["GitHub repository hardening: .github/CODEOWNERS is missing."]
     report.github_hardening_warnings = ["GitHub default branch protection could not be audited (http_403)."]
     report.fix_actions = ["replace dev@example.com"]
@@ -2467,8 +2483,10 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     assert rpg.REDACTED_EMAIL in payload["tracked_email_matches"][0]
     assert rpg.REDACTED_EMAIL in payload["tracked_email_high_confidence"][0]
     assert rpg.REDACTED_EMAIL in payload["tracked_email_low_confidence"][0]
+    assert rpg.REDACTED_EMAIL in payload["tracked_email_fixture_matches"][0]
     assert rpg.REDACTED_EMAIL in payload["history_email_high_confidence"][0]
     assert rpg.REDACTED_EMAIL in payload["history_email_low_confidence"][0]
+    assert rpg.REDACTED_EMAIL in payload["history_email_fixture_matches"][0]
     assert payload["github_hardening_findings"] == [
         "GitHub repository hardening: .github/CODEOWNERS is missing."
     ]

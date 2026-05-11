@@ -56,21 +56,54 @@ def extract_email_match_context(match_line: str) -> tuple[str | None, str]:
     return None, match_line
 
 
-def is_low_confidence_email_context(rel_path: str | None, snippet: str) -> bool:
+def classify_email_match_context(rel_path: str | None, snippet: str) -> str:
     normalized_path = (rel_path or "").replace("\\", "/").strip().lower()
     normalized_snippet = (snippet or "").strip().lower()
 
     if normalized_path:
-        if EMAIL_LOW_CONFIDENCE_PATH_RE.search(normalized_path):
-            return True
+        if EMAIL_FIXTURE_PATH_RE.search(normalized_path):
+            return "fixture"
         file_name = Path(normalized_path).name
         if EMAIL_LOW_CONFIDENCE_FILE_RE.search(file_name):
-            return True
+            return "low_confidence"
+        if EMAIL_LOW_CONFIDENCE_PATH_RE.search(normalized_path):
+            return "low_confidence"
 
+    if EMAIL_FIXTURE_SNIPPET_RE.search(normalized_snippet):
+        return "fixture"
     if EMAIL_LOW_CONFIDENCE_SNIPPET_RE.search(normalized_snippet):
-        return True
+        return "low_confidence"
 
-    return False
+    return "active"
+
+
+def is_low_confidence_email_context(rel_path: str | None, snippet: str) -> bool:
+    return classify_email_match_context(rel_path, snippet) != "active"
+
+
+def split_email_matches_by_taxonomy(
+    matches: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    high_confidence: list[str] = []
+    low_confidence: list[str] = []
+    fixtures: list[str] = []
+
+    for item in matches:
+        rel_path, snippet = extract_email_match_context(item)
+        context = classify_email_match_context(rel_path, snippet)
+        if context == "fixture":
+            fixtures.append(item)
+        elif context == "low_confidence":
+            low_confidence.append(item)
+        else:
+            high_confidence.append(item)
+
+    return high_confidence, low_confidence, fixtures
+
+
+def split_email_matches_by_confidence(matches: list[str]) -> tuple[list[str], list[str]]:
+    high_confidence, low_confidence, fixtures = split_email_matches_by_taxonomy(matches)
+    return high_confidence, low_confidence + fixtures
 
 
 def extract_secret_match_context(match_line: str) -> tuple[str | None, str]:
@@ -110,20 +143,6 @@ def classify_secret_match_context(rel_path: str | None, snippet: str) -> str:
         return "documentation"
 
     return "active"
-
-
-def split_email_matches_by_confidence(matches: list[str]) -> tuple[list[str], list[str]]:
-    high_confidence: list[str] = []
-    low_confidence: list[str] = []
-
-    for item in matches:
-        rel_path, snippet = extract_email_match_context(item)
-        if is_low_confidence_email_context(rel_path, snippet):
-            low_confidence.append(item)
-        else:
-            high_confidence.append(item)
-
-    return high_confidence, low_confidence
 
 
 def extract_personal_path_literals(text: str) -> list[str]:
