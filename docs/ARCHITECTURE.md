@@ -111,4 +111,4 @@ Repo Privacy Guardian does not mutate GitHub repository settings. Hardening find
 
 ## Current Technical Debt
 
-`repo_privacy_guardian/core.py` is no longer the 12k-line monolith, but it remains the compatibility nexus for the `1.x` public API. The next debt is to replace transitional star-import bridges in extracted GUI/scanner/reporting/tooling modules with narrower explicit dependencies once more domain-level tests exist. Future extraction should continue by small slices with regression tests after each slice and no behavior drift in CLI/GUI parity.
+`repo_privacy_guardian/core.py` is no longer the 12k-line monolith, but it remains the compatibility nexus for the `1.x` public API. The first low-risk bridge cleanup moved `redaction` and `tooling` from broad core star imports to explicit dependencies. The remaining debt is to keep replacing transitional bridges in scanner, reporting, and GUI modules with narrower explicit dependencies once each slice has domain-level tests. Future extraction should continue by small slices with regression tests after each slice and no behavior drift in CLI/GUI parity.

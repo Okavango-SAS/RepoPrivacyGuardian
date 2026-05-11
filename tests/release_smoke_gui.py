@@ -4,6 +4,7 @@ import sys
 import json
 import os
 import tempfile
+import time
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,17 @@ REPO_ROOT = bootstrap_repo_root()
 
 import Repo_Privacy_Guardian as rpg  # noqa: E402
 from repo_privacy_guardian_artifacts import RunArtifacts  # noqa: E402
+
+
+def wait_for_viewable(app, widget, expected: bool = True, timeout_seconds: float = 2.0) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        app.root.update_idletasks()
+        app.root.update()
+        if bool(widget.winfo_viewable()) is expected:
+            return
+        time.sleep(0.05)
+    assert bool(widget.winfo_viewable()) is expected
 
 
 def main() -> int:
@@ -132,9 +144,8 @@ def main() -> int:
             assert "No pegues secretos crudos" in handoff_text
             app._last_run_artifacts = None
             app._refresh_reports_tab()
-            app.root.update_idletasks()
-            app.root.update()
-            assert app._reports_go_audit_button.winfo_viewable()
+            app._set_active_flow_tab(app._reports_tab_name)
+            wait_for_viewable(app, app._reports_go_audit_button)
             assert not app._reports_agent_handoff_button.winfo_viewable()
             assert not app._reports_open_prompts_button.winfo_viewable()
             assert not any(button.winfo_viewable() for button in app._reports_action_buttons)

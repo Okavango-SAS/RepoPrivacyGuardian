@@ -413,6 +413,16 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
     assert "CLI smoke + release contract (automatic, ubuntu-latest, py3.13)" in release_checklist
 
 
+def test_low_risk_extracted_modules_use_explicit_core_imports() -> None:
+    for rel_path in (
+        "repo_privacy_guardian/redaction.py",
+        "repo_privacy_guardian/tooling.py",
+    ):
+        text = (_repo_root() / rel_path).read_text(encoding="utf-8")
+        assert "from repo_privacy_guardian.core import *" not in text
+        assert "ruff: noqa: F403" not in text
+
+
 def test_docs_cover_agentic_ide_prompt_library() -> None:
     root = _repo_root()
     readme = (root / "README.MD").read_text(encoding="utf-8")

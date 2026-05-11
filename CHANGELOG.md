@@ -12,6 +12,10 @@ All notable user-facing changes to this project are documented here.
 - Added safe email fixture buckets for tracked and historical test/fixture email examples so strict release profiles keep traceability without blocking on intentional test data.
 - Clarified the GitHub hardening fix guide and release docs around the exact protected-branch baseline, including admin enforcement and the current automatic CI smoke check.
 
+### Changed
+
+- Reduced compatibility-bridge coupling in the redaction and tooling modules by replacing broad core star imports with explicit dependencies while preserving public facades.
+
 ## [1.5.0] - 2026-05-04
 
 ### Added
