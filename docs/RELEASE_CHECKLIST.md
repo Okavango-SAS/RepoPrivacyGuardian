@@ -75,7 +75,7 @@ Use this checklist before tagging a public release.
 - `python scripts/visual_qa_gui.py` has been run for GUI-impacting changes when a desktop session is available.
 - Clean-clone validation passes: `python -m pip install .`, `repo-privacy-guardian --help`, `python -m pip install ".[test]"`, `python -m pytest`.
 - Package build succeeds (`python -m build`) and both `wheel` and `sdist` installs complete cleanly.
-- Automatic CI smoke is green.
+- Automatic CI smoke is green. Confirm it passed on the protected-branch pull request and on the final `main` push.
 - If the release depends on broader packaging/test/platform evidence, the manual extended CI suite has been run and recorded.
 - Supported Python and platform claims remain aligned with the validation tiers documented in README.
 - Risk exceptions are documented and approved.

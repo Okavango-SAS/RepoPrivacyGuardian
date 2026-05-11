@@ -674,7 +674,7 @@ Pytest collection is restricted to tracked test files so local ignored test file
 
 Validation tiers for this repository:
 
-- automatic CI smoke: `repo-privacy-guardian --help`, module/direct-script help, `python scripts/check_release_contract.py`, and `python tests/release_smoke_cli.py`
+- automatic CI smoke: runs on protected-branch pull requests and `main` pushes; checks `repo-privacy-guardian --help`, module/direct-script help, `python scripts/check_release_contract.py`, and `python tests/release_smoke_cli.py`
 - manual extended CI: `ruff`, `pyright`, tracked `pytest`, package smoke for `wheel` and `sdist`, plus Windows GUI smoke
 - local maintainer release gate: `python scripts/release_readiness.py`, including `pip-audit` checks for dev/GUI/remediation requirement files
 

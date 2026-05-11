@@ -115,7 +115,7 @@ Manual GitHub hardening fix guide:
 - keep GitHub Actions workflow permissions least-privilege
 - re-run `--audit-github-hardening` after changes
 
-RepoPrivacyGuardian's own public repository should keep the automatic required check aligned to `CLI smoke + release contract (automatic, ubuntu-latest, py3.13)`. Manual extended workflow jobs remain maintainer-invoked release evidence and are not required on every push.
+RepoPrivacyGuardian's own public repository should keep the automatic required check aligned to `CLI smoke + release contract (automatic, ubuntu-latest, py3.13)`. That smoke workflow must run for protected-branch pull requests as well as `main` pushes. Manual extended workflow jobs remain maintainer-invoked release evidence and are not required on every push.
 
 ## Artifacts and outputs
 

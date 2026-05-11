@@ -794,6 +794,8 @@ def test_ci_workflow_matches_cost_first_validation_contract() -> None:
     workflow = (_repo_root() / CI_WORKFLOW).read_text(encoding="utf-8")
 
     assert "Cost-first policy" in workflow
+    assert "pull_request:" in workflow
+    assert workflow.count("branches:\n      - main") >= 2
     assert "manual extended validation suite" in workflow
     assert 'python-version: "3.13"' in workflow
     assert 'python-version: "3.11"' in workflow
