@@ -16,6 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from repo_privacy_guardian import remediation as remediation_helpers
+
 if TYPE_CHECKING:
     from repo_privacy_guardian.core import (
         CODE_EXTENSIONS,
@@ -1374,67 +1376,38 @@ class RepoPublicationGuard:  # pragma: no cover
         )
 
     def _write_replace_text_file(self, report: RepoReport) -> Path | None:
-        replacement_map: dict[str, str] = {}
-
-        candidate_lines = (
-            report.tracked_email_matches
-            + report.history_email_matches
-            + report.tracked_path_matches
-            + report.history_path_matches
-        )
-
-        for line in candidate_lines:
-            for email in EMAIL_RE.findall(line):
-                if not is_relevant_email_candidate(email):
-                    continue
-                if self._is_allowed_email(email):
-                    continue
-
-                if email in self.owner_emails:
-                    replacement_map[email] = self.noreply_email
-                elif self.redact_third_party:
-                    replacement_map[email] = self.placeholder_email
-
-        if getattr(self, "rewrite_personal_paths", False):
-            for line in report.tracked_path_matches + report.history_path_matches:
-                for path_literal in extract_personal_path_literals(line):
-                    replacement_map[path_literal] = REDACTED_PATH
-        elif report.tracked_path_matches or report.history_path_matches:
-            report.fix_actions.append(
-                "path remediation skipped: explicit opt-in required (--rewrite-personal-paths)"
-            )
-
-        extra_replace_lines: list[str] = []
+        explicit_replace_lines: tuple[str, ...] = ()
+        explicit_replace_source: Path | None = None
         replace_text_file = getattr(self, "replace_text_file", None)
         if replace_text_file:
-            replace_path = Path(replace_text_file).expanduser().resolve()
-            try:
-                raw_extra_lines = replace_path.read_text(encoding="utf-8-sig", errors="replace")
-            except OSError as exc:
-                raise RuntimeError(
-                    f"Unable to read --replace-text-file '{replace_path}': {exc}"
-                ) from exc
+            explicit_rules = remediation_helpers.load_explicit_replace_text_rules(replace_text_file)
+            explicit_replace_lines = explicit_rules.lines
+            explicit_replace_source = explicit_rules.path
 
-            extra_replace_lines = [
-                line.strip()
-                for line in raw_extra_lines.splitlines()
-                if line.strip() and not line.lstrip().startswith("#")
-            ]
-            if extra_replace_lines:
-                report.fix_actions.append(
-                    f"merged explicit replace-text mappings from {replace_path}"
-                )
+        plan = remediation_helpers.build_replace_text_plan(
+            report,
+            email_pattern=EMAIL_RE,
+            is_relevant_email_candidate=is_relevant_email_candidate,
+            is_allowed_email=self._is_allowed_email,
+            owner_emails=self.owner_emails,
+            noreply_email=self.noreply_email,
+            placeholder_email=self.placeholder_email,
+            redact_third_party=self.redact_third_party,
+            rewrite_personal_paths=getattr(self, "rewrite_personal_paths", False),
+            extract_personal_path_literals=extract_personal_path_literals,
+            redacted_path=REDACTED_PATH,
+            explicit_replace_lines=explicit_replace_lines,
+            explicit_replace_source=explicit_replace_source,
+        )
+        report.fix_actions.extend(plan.fix_actions)
 
-        if not replacement_map and not extra_replace_lines:
+        if not plan.lines:
             return None
 
-        lines = [f"literal:{src}==>{dst}" for src, dst in sorted(replacement_map.items())]
-        lines.extend(extra_replace_lines)
-        lines = list(dict.fromkeys(lines))
         return create_private_temp_text_file(
             "repo-publication-guard-",
             "replace-text.txt",
-            "\n".join(lines) + "\n",
+            "\n".join(plan.lines) + "\n",
         )
 
     def _append_missing_gitignore_patterns(self, repo: Path, missing: list[str]) -> bool:
@@ -1574,28 +1547,19 @@ class RepoPublicationGuard:  # pragma: no cover
     def _rewrite_history(self, repo: Path, report: RepoReport) -> None:
         mailmap = self._write_mailmap(report)
         replace_text = self._write_replace_text_file(report)
-
-        purge_by_filename_signals = bool(report.history_sensitive_added or report.history_sensitive_deleted)
-        purge_paths = sorted(set(report.secret_history_purge_paths))
-        needs_history_purge = bool(purge_by_filename_signals or purge_paths)
-        do_rewrite = bool(mailmap) or bool(replace_text) or needs_history_purge
-        if not do_rewrite:
+        rewrite_plan = remediation_helpers.build_history_rewrite_plan(
+            report,
+            mailmap_enabled=bool(mailmap),
+            replace_text_enabled=bool(replace_text),
+        )
+        if not rewrite_plan.do_rewrite:
             report.fix_actions.append("history rewrite skipped (no mappings required)")
             return
 
         remotes = self._save_remotes(repo)
 
         if self.dry_run:
-            report.fix_actions.append("[dry-run] history rewrite would run")
-            report.fix_actions.append(f"[dry-run] mailmap enabled: {bool(mailmap)}")
-            report.fix_actions.append(f"[dry-run] replace-text enabled: {bool(replace_text)}")
-            if purge_paths:
-                preview_paths = ", ".join(purge_paths[:5])
-                report.fix_actions.append(f"[dry-run] purge paths preview: {preview_paths}")
-                if len(purge_paths) > 5:
-                    report.fix_actions.append("[dry-run] purge paths preview truncated")
-            if purge_by_filename_signals:
-                report.fix_actions.append("[dry-run] sensitive filename signal purge regex enabled")
+            report.fix_actions.extend(rewrite_plan.dry_run_actions())
             return
 
         try:
@@ -1607,21 +1571,7 @@ class RepoPublicationGuard:  # pragma: no cover
             if replace_text:
                 cmd.extend(["--replace-text", str(replace_text)])
 
-            if needs_history_purge:
-                for purge_path in purge_paths:
-                    cmd.extend(["--path", purge_path])
-
-                if purge_by_filename_signals:
-                    # Purge common sensitive/local artifacts from whole history.
-                    cmd.extend(
-                        [
-                            "--path-regex",
-                            r"(^|.*/)__pycache__/.*|.*\.pyc$|(^|.*/)\.env(\..*)?$|"
-                            r".*\.(pem|key|p12|pfx|kdbx)$|(^|.*/)id_rsa$",
-                        ]
-                    )
-
-                cmd.append("--invert-paths")
+            cmd.extend(rewrite_plan.filter_repo_purge_args())
 
             self._run_checked(cmd, cwd=repo, input_text="y\n")
             self._restore_remotes(repo, remotes)

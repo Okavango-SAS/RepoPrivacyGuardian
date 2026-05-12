@@ -80,6 +80,7 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian/policy.py",
     "repo_privacy_guardian/prompts.py",
     "repo_privacy_guardian/redaction.py",
+    "repo_privacy_guardian/remediation.py",
     "repo_privacy_guardian/report_diff.py",
     "repo_privacy_guardian/reporting.py",
     "repo_privacy_guardian/runtime.py",
@@ -423,6 +424,7 @@ def test_low_risk_extracted_modules_use_explicit_core_imports() -> None:
         "repo_privacy_guardian/scanner.py",
         "repo_privacy_guardian/gui/app.py",
         "repo_privacy_guardian/policy.py",
+        "repo_privacy_guardian/remediation.py",
     ):
         text = (_repo_root() / rel_path).read_text(encoding="utf-8")
         assert "from repo_privacy_guardian.core import *" not in text
@@ -528,6 +530,30 @@ def test_policy_module_imports_without_core_dependency() -> None:
                 "import sys; "
                 "import repo_privacy_guardian.policy as policy; "
                 "print(policy.repo_has_dirty_worktree('## main\\n M README.md')); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["True", "False"]
+
+
+def test_remediation_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.remediation as remediation; "
+                "print(hasattr(remediation, 'build_history_rewrite_plan')); "
                 "print('repo_privacy_guardian.core' in sys.modules)"
             ),
         ],

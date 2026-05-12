@@ -47,6 +47,7 @@ RELEASE_BYTE_COMPILE_PATHS = (
     "repo_privacy_guardian/policy.py",
     "repo_privacy_guardian/prompts.py",
     "repo_privacy_guardian/redaction.py",
+    "repo_privacy_guardian/remediation.py",
     "repo_privacy_guardian/report_diff.py",
     "repo_privacy_guardian/reporting.py",
     "repo_privacy_guardian/runtime.py",

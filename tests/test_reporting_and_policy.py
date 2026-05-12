@@ -14,6 +14,7 @@ import pytest
 
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_github as rpg_github
+from repo_privacy_guardian import remediation
 from repo_privacy_guardian.github_fix_guide import build_github_hardening_fix_guide
 
 
@@ -2689,6 +2690,83 @@ def test_write_replace_text_file_accepts_utf8_bom_explicit_file(
 
     contents = replace_file.read_text(encoding="utf-8")
     assert contents.splitlines()[0] == "literal:fixture-token==>redacted-fixture-token"
+
+
+def test_remediation_replace_text_plan_combines_rules(tmp_path: Path) -> None:
+    explicit = tmp_path / "explicit-replace-bom.txt"
+    explicit.write_text(
+        "# operator-provided mapping\n"
+        "literal:fixture-token==>redacted-fixture-token\n"
+        "literal:fixture-token==>redacted-fixture-token\n",
+        encoding="utf-8-sig",
+    )
+    explicit_rules = remediation.load_explicit_replace_text_rules(explicit)
+
+    report = _make_report("repo-replace-plan")
+    repo_cli_path = _fixture_repo_cli_path()
+    report.tracked_email_matches = [
+        "README.md:1:owner@privacy.dev contributor@outside.dev allowed@safe.dev"
+    ]
+    report.tracked_path_matches = [f"AGENTS.MD:24:- {repo_cli_path}"]
+
+    plan = remediation.build_replace_text_plan(
+        report,
+        email_pattern=rpg.EMAIL_RE,
+        is_relevant_email_candidate=rpg.is_relevant_email_candidate,
+        is_allowed_email=lambda email: email == "allowed@safe.dev",
+        owner_emails={"owner@privacy.dev"},
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        redact_third_party=True,
+        rewrite_personal_paths=True,
+        extract_personal_path_literals=rpg.extract_personal_path_literals,
+        redacted_path=rpg.REDACTED_PATH,
+        explicit_replace_lines=explicit_rules.lines,
+        explicit_replace_source=explicit_rules.path,
+    )
+
+    assert f"literal:{repo_cli_path}==>{rpg.REDACTED_PATH}" in plan.lines
+    assert f"literal:owner@privacy.dev==>{rpg.DEFAULT_NOREPLY}" in plan.lines
+    assert f"literal:contributor@outside.dev==>{rpg.DEFAULT_PLACEHOLDER}" in plan.lines
+    assert not any("allowed@safe.dev" in line for line in plan.lines)
+    assert plan.lines.count("literal:fixture-token==>redacted-fixture-token") == 1
+    assert any("merged explicit replace-text mappings" in item for item in plan.fix_actions)
+
+
+def test_remediation_history_rewrite_plan_builds_purge_args_and_preview() -> None:
+    report = _make_report("repo-rewrite-plan")
+    report.secret_history_purge_paths = ["z.env", "a.env", "a.env"]
+    report.history_sensitive_added = ["L1:.env:+API_KEY=value"]
+
+    plan = remediation.build_history_rewrite_plan(
+        report,
+        mailmap_enabled=False,
+        replace_text_enabled=True,
+    )
+
+    assert plan.do_rewrite is True
+    assert plan.needs_history_purge is True
+    assert plan.purge_paths == ("a.env", "z.env")
+    assert plan.filter_repo_purge_args() == [
+        "--path",
+        "a.env",
+        "--path",
+        "z.env",
+        "--path-regex",
+        remediation.SENSITIVE_FILENAME_PURGE_REGEX,
+        "--invert-paths",
+    ]
+    assert "[dry-run] replace-text enabled: True" in plan.dry_run_actions()
+    assert "[dry-run] purge paths preview: a.env, z.env" in plan.dry_run_actions()
+    assert "[dry-run] sensitive filename signal purge regex enabled" in plan.dry_run_actions()
+
+    empty_plan = remediation.build_history_rewrite_plan(
+        _make_report("repo-no-rewrite"),
+        mailmap_enabled=False,
+        replace_text_enabled=False,
+    )
+    assert empty_plan.do_rewrite is False
+    assert empty_plan.filter_repo_purge_args() == []
 
 
 def test_append_gitignore_lines_rejects_symlinked_target(tmp_path: Path, monkeypatch) -> None:
