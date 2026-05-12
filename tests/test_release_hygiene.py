@@ -579,7 +579,13 @@ def test_config_module_imports_without_core_dependency() -> None:
             (
                 "import sys; "
                 "import repo_privacy_guardian.config as config; "
-                "print(config.normalize_csv_values('a,b,a')); "
+                "parser = config.make_parser("
+                "default_root=config.Path('C:/repos'), "
+                "default_policy=config.Path('C:/repos/docs/POLICY.md'), "
+                "default_results_dir=config.Path('C:/repos/Audit_Results'), "
+                "default_noreply='noreply@github.com', "
+                "default_placeholder='redacted-contributor@example.invalid'); "
+                "print(parser.parse_args(['--github-jobs', '2']).github_jobs); "
                 "print('repo_privacy_guardian.core' in sys.modules)"
             ),
         ],
@@ -592,7 +598,7 @@ def test_config_module_imports_without_core_dependency() -> None:
     )
 
     assert proc.returncode == 0, proc.stderr or proc.stdout
-    assert proc.stdout.splitlines() == ["['a', 'b']", "False"]
+    assert proc.stdout.splitlines() == ["2", "False"]
 
 
 def test_docs_cover_agentic_ide_prompt_library() -> None:

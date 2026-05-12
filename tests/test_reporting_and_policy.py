@@ -3118,6 +3118,24 @@ def test_make_parser_defaults_and_flags() -> None:
     assert args.github_jobs == 2
 
 
+def test_config_parser_matches_public_parser_help_and_defaults() -> None:
+    parser = config_helpers.make_parser(
+        default_root=rpg.default_root_dir(),
+        default_policy=rpg.DEFAULT_POLICY,
+        default_results_dir=rpg.DEFAULT_RESULTS_DIR,
+        default_noreply=rpg.DEFAULT_NOREPLY,
+        default_placeholder=rpg.DEFAULT_PLACEHOLDER,
+        public_only_default=rpg.GUI_DEFAULT_PUBLIC_ONLY,
+    )
+
+    assert parser.format_help() == rpg.make_parser().format_help()
+
+    args = parser.parse_args(["--public-only", "--no-open-report"])
+    assert args.public_only is True
+    assert args.open_report is False
+    assert args.no_open_report is True
+
+
 def test_make_parser_rejects_non_positive_max_matches() -> None:
     parser = rpg.make_parser()
     with pytest.raises(SystemExit):
