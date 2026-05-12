@@ -211,5 +211,5 @@ Presentation-only GUI features and launcher-only CLI flags are permitted only wh
 ## Future candidates
 
 - Scoped allowlists to reduce false positives beyond suppression files.
-- Continue replacing transitional compatibility bridges in extracted modules with narrower explicit dependency injection; config, redaction, tooling, reporting, policy, remediation, scanner, GUI app, and GUI locale now use explicit dependencies or local constants. Remediation owns pure `git-filter-repo` command planning; the next candidates are deeper scanner execution adapters and GUI support helpers that still live in the compatibility nexus.
+- Continue replacing transitional compatibility bridges in extracted modules with narrower explicit dependency injection; config, redaction, tooling, execution, reporting, policy, remediation, scanner, GUI app, and GUI locale now use explicit dependencies or local constants. Remediation owns pure `git-filter-repo` command planning, and execution owns the side-effecting Git/subprocess adapter; the next candidates are scanner streaming helpers and GUI support helpers that still live in the compatibility nexus.
 - Optional policy profiles by organization.

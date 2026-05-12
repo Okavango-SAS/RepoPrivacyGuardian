@@ -6,7 +6,6 @@ import errno
 import json
 import os
 import re
-import shlex
 import socket
 import subprocess
 import sys
@@ -16,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
+from repo_privacy_guardian import execution as execution_helpers
 from repo_privacy_guardian import remediation as remediation_helpers
 
 if TYPE_CHECKING:
@@ -152,35 +152,24 @@ class RepoPublicationGuard:  # pragma: no cover
         self._repo_runtime_issues = []
         return issues
 
+    def _command_adapter(self) -> execution_helpers.GitSubprocessAdapter[CommandResult]:
+        return execution_helpers.GitSubprocessAdapter(
+            timeout_seconds=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+            result_factory=CommandResult,
+            missing_executable_message=_missing_executable_message,
+            stdin_selector=subprocess_stdin,
+            remediation_install_packages=tuple(REMEDIATION_INSTALL_PACKAGES),
+            python_executable=sys.executable,
+            runner=subprocess.run,
+        )
+
     def _run(
         self,
         cmd: list[str],
         cwd: Path | None = None,
         input_text: str | None = None,
     ) -> CommandResult:
-        try:
-            proc = subprocess.run(
-                cmd,
-                cwd=str(cwd) if cwd else None,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                input=input_text,
-                stdin=subprocess_stdin(input_text),
-                timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
-            )
-        except FileNotFoundError:
-            return CommandResult(127, "", _missing_executable_message(cmd[0]))
-        except subprocess.TimeoutExpired:
-            return CommandResult(
-                124,
-                "",
-                f"Command timed out after {DEFAULT_SUBPROCESS_TIMEOUT_SECONDS}s: {shlex.join(cmd)}",
-            )
-        except Exception as exc:
-            return CommandResult(1, "", f"Unable to execute {shlex.join(cmd)}: {exc}")
-        return CommandResult(proc.returncode, proc.stdout, proc.stderr)
+        return self._command_adapter().run(cmd, cwd=cwd, input_text=input_text)
 
     def _run_checked(
         self,
@@ -188,19 +177,13 @@ class RepoPublicationGuard:  # pragma: no cover
         cwd: Path | None = None,
         input_text: str | None = None,
     ) -> CommandResult:
-        result = self._run(cmd, cwd=cwd, input_text=input_text)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"Command failed ({result.returncode}): {shlex.join(cmd)}\n"
-                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
-        return result
+        return self._command_adapter().run_checked(cmd, cwd=cwd, input_text=input_text)
 
     def _git(self, repo: Path, *args: str) -> CommandResult:
-        return self._run(["git", "-C", str(repo), *args])
+        return self._command_adapter().git(repo, *args)
 
     def _git_checked(self, repo: Path, *args: str) -> CommandResult:
-        return self._run_checked(["git", "-C", str(repo), *args])
+        return self._command_adapter().git_checked(repo, *args)
 
     def _read_text(self, path: Path) -> str:
         return path.read_text(encoding="utf-8", errors="replace")
@@ -1309,16 +1292,7 @@ class RepoPublicationGuard:  # pragma: no cover
         return report
 
     def _ensure_git_filter_repo(self) -> None:
-        probe = self._run([sys.executable, "-m", "git_filter_repo", "--help"])
-        if probe.returncode == 0:
-            return
-        detail = probe.stderr.strip() or probe.stdout.strip()
-        raise RuntimeError(
-            "git-filter-repo is required for remediation that rewrites history. "
-            f"Install it with: {sys.executable} -m pip install {' '.join(REMEDIATION_INSTALL_PACKAGES)} "
-            "or re-run with --install-missing-tools."
-            + (f"\nDetails: {detail}" if detail else "")
-        )
+        self._command_adapter().ensure_git_filter_repo()
 
     def _write_mailmap(self, report: RepoReport) -> Path | None:
         lines: list[str] = []
@@ -1769,7 +1743,6 @@ _SCANNER_OVERRIDE_NAMES = (
     "read_text_file_for_scan",
     "release_advisory_file_lock",
     "repo_display_name",
-    "shlex",
     "socket",
     "split_email_matches_by_taxonomy",
     "split_unexpected_emails_by_origin_ownership",

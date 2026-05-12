@@ -15,6 +15,7 @@ import pytest
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_github as rpg_github
 from repo_privacy_guardian import config as config_helpers
+from repo_privacy_guardian import execution as execution_helpers
 from repo_privacy_guardian import remediation
 from repo_privacy_guardian.github_fix_guide import build_github_hardening_fix_guide
 
@@ -4499,6 +4500,157 @@ def test_run_git_command_mocked_subprocess(monkeypatch) -> None:
     assert calls["kwargs"]["stdin"] == subprocess.DEVNULL
 
 
+def test_execution_adapter_preserves_cwd_input_and_timeout_contract() -> None:
+    class DummyProc:
+        returncode = 0
+        stdout = "ok\n"
+        stderr = ""
+
+    calls: list[dict[str, object]] = []
+
+    def fake_runner(cmd: list[str], **kwargs) -> DummyProc:
+        calls.append({"cmd": cmd, "kwargs": dict(kwargs)})
+        return DummyProc()
+
+    adapter = execution_helpers.GitSubprocessAdapter(
+        timeout_seconds=7,
+        result_factory=rpg.CommandResult,
+        missing_executable_message=lambda executable: f"missing {executable}",
+        stdin_selector=rpg.subprocess_stdin,
+        remediation_install_packages=("git-filter-repo>=2.45,<3",),
+        python_executable="python",
+        runner=fake_runner,
+    )
+
+    result = adapter.run(["tool", "arg"], cwd=Path("C:/repos/demo"), input_text="y\n")
+
+    assert result == rpg.CommandResult(0, "ok\n", "")
+    assert calls[0]["cmd"] == ["tool", "arg"]
+    kwargs = calls[0]["kwargs"]
+    assert kwargs["cwd"] == str(Path("C:/repos/demo"))
+    assert kwargs["input"] == "y\n"
+    assert kwargs["stdin"] == subprocess.PIPE
+    assert kwargs["timeout"] == 7
+    assert kwargs["capture_output"] is True
+    assert kwargs["encoding"] == "utf-8"
+
+
+def test_execution_adapter_reports_start_timeout_and_checked_errors() -> None:
+    adapter = execution_helpers.GitSubprocessAdapter(
+        timeout_seconds=3,
+        result_factory=rpg.CommandResult,
+        missing_executable_message=lambda executable: f"missing {executable}",
+        stdin_selector=rpg.subprocess_stdin,
+        remediation_install_packages=("git-filter-repo>=2.45,<3",),
+        python_executable="python",
+        runner=lambda _cmd, **_kwargs: (_ for _ in ()).throw(FileNotFoundError()),
+    )
+
+    assert adapter.run(["missing-tool"]).stderr == "missing missing-tool"
+
+    timeout_adapter = execution_helpers.GitSubprocessAdapter(
+        timeout_seconds=3,
+        result_factory=rpg.CommandResult,
+        missing_executable_message=lambda executable: f"missing {executable}",
+        stdin_selector=rpg.subprocess_stdin,
+        remediation_install_packages=("git-filter-repo>=2.45,<3",),
+        python_executable="python",
+        runner=lambda cmd, **_kwargs: (_ for _ in ()).throw(
+            subprocess.TimeoutExpired(cmd, timeout=3)
+        ),
+    )
+
+    timeout_result = timeout_adapter.run(["tool", "arg"])
+    assert timeout_result.returncode == 124
+    assert "Command timed out after 3s: tool arg" in timeout_result.stderr
+
+    crash_adapter = execution_helpers.GitSubprocessAdapter(
+        timeout_seconds=3,
+        result_factory=rpg.CommandResult,
+        missing_executable_message=lambda executable: f"missing {executable}",
+        stdin_selector=rpg.subprocess_stdin,
+        remediation_install_packages=("git-filter-repo>=2.45,<3",),
+        python_executable="python",
+        runner=lambda _cmd, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    crash_result = crash_adapter.run(["tool"])
+    assert crash_result.returncode == 1
+    assert "Unable to execute tool: boom" in crash_result.stderr
+
+    failing_adapter = execution_helpers.GitSubprocessAdapter(
+        timeout_seconds=3,
+        result_factory=rpg.CommandResult,
+        missing_executable_message=lambda executable: f"missing {executable}",
+        stdin_selector=rpg.subprocess_stdin,
+        remediation_install_packages=("git-filter-repo>=2.45,<3",),
+        python_executable="python",
+        runner=lambda _cmd, **_kwargs: rpg.CommandResult(9, "out", "err"),
+    )
+
+    with pytest.raises(RuntimeError, match=r"Command failed \(9\): tool arg"):
+        failing_adapter.run_checked(["tool", "arg"])
+
+
+def test_guard_git_wrappers_delegate_to_execution_adapter(monkeypatch, tmp_path: Path) -> None:
+    class DummyProc:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+
+    calls: list[list[str]] = []
+
+    def fake_runner(cmd: list[str], **_kwargs) -> DummyProc:
+        calls.append(cmd)
+        return DummyProc()
+
+    monkeypatch.setattr(rpg.subprocess, "run", fake_runner)
+    guard = _make_guard(tmp_path)
+
+    assert guard._git(Path("C:/repos/demo"), "status").stdout == "ok"
+    assert guard._git_checked(Path("C:/repos/demo"), "config", "user.name").stdout == "ok"
+    assert calls == [
+        ["git", "-C", str(Path("C:/repos/demo")), "status"],
+        ["git", "-C", str(Path("C:/repos/demo")), "config", "user.name"],
+    ]
+
+
+def test_guard_ensure_git_filter_repo_preserves_error_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    class DummyProc:
+        returncode = 1
+        stdout = ""
+        stderr = "missing module"
+
+    calls: list[list[str]] = []
+
+    def fake_runner(cmd: list[str], **_kwargs) -> DummyProc:
+        calls.append(cmd)
+        return DummyProc()
+
+    monkeypatch.setattr(rpg.subprocess, "run", fake_runner)
+    guard = _make_guard(tmp_path)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        guard._ensure_git_filter_repo()
+
+    assert calls == [[sys.executable, "-m", "git_filter_repo", "--help"]]
+    message = str(exc_info.value)
+    assert "git-filter-repo is required" in message
+    assert "pip install git-filter-repo" in message
+    assert "Details: missing module" in message
+
+    class SuccessProc:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+
+    monkeypatch.setattr(rpg.subprocess, "run", lambda _cmd, **_kwargs: SuccessProc())
+    _make_guard(tmp_path)._ensure_git_filter_repo()
+
+
 def test_guard_run_uses_non_interactive_stdin(monkeypatch, tmp_path: Path) -> None:
     class DummyProc:
         returncode = 0
@@ -4522,6 +4674,34 @@ def test_guard_run_uses_non_interactive_stdin(monkeypatch, tmp_path: Path) -> No
     assert captured[0]["input"] is None
     assert captured[1]["stdin"] == subprocess.PIPE
     assert captured[1]["input"] == "y\n"
+
+
+def test_rewrite_history_dry_run_does_not_execute_git_filter_repo(tmp_path: Path) -> None:
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    guard.dry_run = True
+    guard.replace_text_file = None
+    guard.rewrite_personal_paths = False
+    guard.owner_name = "Owner"
+    guard.owner_emails = set()
+    guard.noreply_email = rpg.DEFAULT_NOREPLY
+    guard.placeholder_email = rpg.DEFAULT_PLACEHOLDER
+    guard.redact_third_party = False
+    guard._is_allowed_email = lambda _email: False
+    guard._save_remotes = lambda _repo: {"origin": "https://example.test/repo.git"}
+    guard._ensure_git_filter_repo = lambda: (_ for _ in ()).throw(
+        AssertionError("dry-run must not require git-filter-repo")
+    )
+    guard._run_checked = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("dry-run must not execute git-filter-repo")
+    )
+
+    report = _make_report("rewrite-dry-run")
+    report.secret_history_purge_paths = [".env"]
+
+    guard._rewrite_history(tmp_path, report)
+
+    assert "[dry-run] history rewrite would run" in report.fix_actions
+    assert "[dry-run] purge paths preview: .env" in report.fix_actions
 
 
 def test_history_patch_scan_starts_stream_process_isolated(tmp_path: Path, monkeypatch) -> None:

@@ -72,6 +72,7 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian/artifacts.py",
     "repo_privacy_guardian/config.py",
     "repo_privacy_guardian/core.py",
+    "repo_privacy_guardian/execution.py",
     "repo_privacy_guardian/gui/__init__.py",
     "repo_privacy_guardian/gui/app.py",
     "repo_privacy_guardian/gui/locale.py",
@@ -422,6 +423,7 @@ def test_low_risk_extracted_modules_use_explicit_core_imports() -> None:
         "repo_privacy_guardian/redaction.py",
         "repo_privacy_guardian/tooling.py",
         "repo_privacy_guardian/config.py",
+        "repo_privacy_guardian/execution.py",
         "repo_privacy_guardian/reporting.py",
         "repo_privacy_guardian/scanner.py",
         "repo_privacy_guardian/gui/app.py",
@@ -557,6 +559,30 @@ def test_remediation_module_imports_without_core_dependency() -> None:
                 "import repo_privacy_guardian.remediation as remediation; "
                 "print(hasattr(remediation, 'build_history_rewrite_plan') "
                 "and hasattr(remediation, 'build_git_filter_repo_command')); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["True", "False"]
+
+
+def test_execution_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.execution as execution; "
+                "print(hasattr(execution, 'GitSubprocessAdapter')); "
                 "print('repo_privacy_guardian.core' in sys.modules)"
             ),
         ],
