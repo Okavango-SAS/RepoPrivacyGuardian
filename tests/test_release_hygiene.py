@@ -971,10 +971,14 @@ def test_design_md_adapts_frontend_guidance_to_desktop_gui_contract() -> None:
 
 def test_ci_workflow_matches_cost_first_validation_contract() -> None:
     workflow = (_repo_root() / CI_WORKFLOW).read_text(encoding="utf-8")
+    push_block = workflow.split("  push:", 1)[1].split("  pull_request:", 1)[0]
+    pull_request_block = workflow.split("  pull_request:", 1)[1].split("  workflow_dispatch:", 1)[0]
 
     assert "Cost-first policy" in workflow
     assert "pull_request:" in workflow
     assert workflow.count("branches:\n      - main") >= 2
+    assert "paths:" in push_block
+    assert "paths:" not in pull_request_block
     assert "manual extended validation suite" in workflow
     assert 'python-version: "3.13"' in workflow
     assert 'python-version: "3.11"' in workflow

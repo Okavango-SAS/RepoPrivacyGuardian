@@ -33,32 +33,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - ".github/CODEOWNERS"
-      - ".github/workflows/ci.yml"
-      - "CHANGELOG.md"
-      - "README.MD"
-      - "AGENTS.MD"
-      - "DESIGN.md"
-      - "docs/**"
-      - "docs/DOGFOODING.md"
-      - "docs/KNOWN_ISSUES.md"
-      - "docs/POLICY.md"
-      - "docs/RELEASE_CHECKLIST.md"
-      - "docs/TROUBLESHOOTING.md"
-      - "docs/VERSIONING.md"
-      - "docs/prompts/**"
-      - "config/requirements/**"
-      - "pyproject.toml"
-      - "Repo_Privacy_Guardian.py"
-      - "repo_privacy_guardian/**"
-      - "repo_privacy_guardian*.py"
-      - "repo_privacy_guardian_assets/**"
-      - "repo_privacy_guardian_resources/**"
-      - "scripts/check_release_contract.py"
-      - "scripts/release_readiness.py"
-      - "scripts/visual_qa_gui.py"
-      - "tests/**"
   workflow_dispatch:
     inputs:
       extended_checks:
