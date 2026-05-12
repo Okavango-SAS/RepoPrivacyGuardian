@@ -24,7 +24,8 @@ The public compatibility contract remains:
 - `repo_privacy_guardian/tooling.py`: CLI/GUI tooling preflight, optional local installer prompts, Windows App Installer / `winget` bootstrap helpers, and GitHub hardening auth readiness checks
 - `repo_privacy_guardian/scanner.py`: `RepoPublicationGuard`, repository discovery, execution locks, deterministic scans, reviewed remediation, and re-audit behavior
 - `repo_privacy_guardian/redaction.py`: finding-context classification and redaction helpers for emails, email fixtures, identity tokens, secrets, URLs, and local paths
-- `repo_privacy_guardian/reporting.py`: status/severity classification, redacted JSON export, `Decision first` HTML rendering, report persistence, and sensitive-artifact warnings
+- `repo_privacy_guardian/reporting.py`: redacted JSON export, `Decision first` HTML rendering, report persistence, and sensitive-artifact warnings
+- `repo_privacy_guardian/policy.py`: report severity classification, user-facing guidance, fix precondition checks, email remediation decisions, and LiteLLM incident severity helpers
 - `repo_privacy_guardian/agent_summary.py`: safe, compact agent handoff artifact and CLI handoff formatting
 - `repo_privacy_guardian/report_diff.py`: count-only `report.json` comparison for re-audit regression checks shared by CLI and GUI Reports
 - `repo_privacy_guardian/strict_profiles.py`: documented `audit-only`, `internal`, and `release` profile normalization
@@ -111,4 +112,4 @@ Repo Privacy Guardian does not mutate GitHub repository settings. Hardening find
 
 ## Current Technical Debt
 
-`repo_privacy_guardian/core.py` is no longer the 12k-line monolith, but it remains the compatibility nexus for the `1.x` public API. The bridge cleanup moved `redaction`, `tooling`, `reporting`, `scanner`, and `gui/app` from broad core star imports to explicit dependencies, and `gui/locale` now owns its locale identifiers and shared GUI text constants. Reporting, scanner, GUI app, and GUI locale also import cleanly as standalone modules instead of relying on partially initialized core cycles. The remaining debt is to keep moving policy/remediation helpers out of the compatibility nexus once each slice has domain-level tests. Future extraction should continue by small slices with regression tests after each slice and no behavior drift in CLI/GUI parity.
+`repo_privacy_guardian/core.py` is no longer the 12k-line monolith, but it remains the compatibility nexus for the `1.x` public API. The bridge cleanup moved `redaction`, `tooling`, `reporting`, `policy`, `scanner`, and `gui/app` from broad core star imports or core-owned helpers to explicit dependencies, and `gui/locale` now owns its locale identifiers and shared GUI text constants. Reporting, policy, scanner, GUI app, and GUI locale also import cleanly as standalone modules instead of relying on partially initialized core cycles. The remaining debt is to keep moving remediation planning and CLI/config helpers out of the compatibility nexus once each slice has domain-level tests. Future extraction should continue by small slices with regression tests after each slice and no behavior drift in CLI/GUI parity.

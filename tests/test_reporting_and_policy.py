@@ -4159,6 +4159,18 @@ def test_validate_fix_preconditions_clean_repo_is_empty() -> None:
     assert rpg.validate_fix_preconditions(report) == []
 
 
+def test_policy_helpers_are_public_compatibility_reexports() -> None:
+    from repo_privacy_guardian import policy
+    from repo_privacy_guardian import reporting
+
+    assert rpg.validate_fix_preconditions is policy.validate_fix_preconditions
+    assert rpg.repo_user_guidance is policy.repo_user_guidance
+    assert rpg.classify_repo_severity is policy.classify_repo_severity
+    assert rpg.classify_litellm_incident_severity is policy.classify_litellm_incident_severity
+    assert reporting.validate_fix_preconditions is policy.validate_fix_preconditions
+    assert reporting.repo_user_guidance is policy.repo_user_guidance
+
+
 def test_repo_has_dirty_worktree_variants() -> None:
     assert rpg.repo_has_dirty_worktree("## main...origin/main") is False
     assert rpg.repo_has_dirty_worktree("## main...origin/main\n M README.md") is True

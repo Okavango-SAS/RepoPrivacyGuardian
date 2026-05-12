@@ -44,6 +44,7 @@ RELEASE_BYTE_COMPILE_PATHS = (
     "repo_privacy_guardian/github.py",
     "repo_privacy_guardian/github_fix_guide.py",
     "repo_privacy_guardian/metrics.py",
+    "repo_privacy_guardian/policy.py",
     "repo_privacy_guardian/prompts.py",
     "repo_privacy_guardian/redaction.py",
     "repo_privacy_guardian/report_diff.py",

@@ -47,6 +47,7 @@ from repo_privacy_guardian import github as github_helpers
 from repo_privacy_guardian import github_fix_guide
 from repo_privacy_guardian.gui import locale as gui_locale_helpers
 from repo_privacy_guardian import metrics as metrics_helpers
+from repo_privacy_guardian import policy as policy_helpers
 from repo_privacy_guardian import prompts as prompt_helpers  # noqa: F401 - re-exported for extracted GUI
 from repo_privacy_guardian import runtime
 from repo_privacy_guardian import strict_profiles
@@ -603,8 +604,7 @@ def release_advisory_file_lock(fd: int) -> None:
     fcntl.flock(fd, fcntl.LOCK_UN)
 
 
-def repo_has_dirty_worktree(clean_status: str | None) -> bool:
-    return len((clean_status or "").splitlines()) > 1
+repo_has_dirty_worktree = policy_helpers.repo_has_dirty_worktree
 
 
 def _path_has_existing_symlink_ancestor(path: Path) -> bool:
@@ -876,8 +876,8 @@ LITELLM_INSTALL_COMMAND_RE = re.compile(
     r"(?i)(pip\s+install\s+litellm|uv\s+add\s+litellm|poetry\s+add\s+litellm)"
 )
 LITELLM_IOC_RE = re.compile(r"(?i)litellm_init\.pth|models\.litellm\.cloud|checkmarx\.zone")
-LITELLM_COMPROMISED_1828_RE = re.compile(r"(?i)\b1\.82\.8\b")
-LITELLM_COMPROMISED_1827_RE = re.compile(r"(?i)\b1\.82\.7\b")
+LITELLM_COMPROMISED_1828_RE = policy_helpers.LITELLM_COMPROMISED_1828_RE
+LITELLM_COMPROMISED_1827_RE = policy_helpers.LITELLM_COMPROMISED_1827_RE
 
 SUPPLY_CHAIN_CANDIDATE_FILENAMES = {
     "requirements.txt",
@@ -1651,13 +1651,13 @@ _redact_text_list = redaction_helpers._redact_text_list
 from repo_privacy_guardian import reporting as reporting_helpers  # noqa: E402
 
 sanitize_report_for_export = reporting_helpers.sanitize_report_for_export
-validate_fix_preconditions = reporting_helpers.validate_fix_preconditions
+validate_fix_preconditions = policy_helpers.validate_fix_preconditions
 build_fix_preflight_summary = reporting_helpers.build_fix_preflight_summary
-email_decision_context = reporting_helpers.email_decision_context
-email_remediation_decision = reporting_helpers.email_remediation_decision
-repo_user_guidance = reporting_helpers.repo_user_guidance
-classify_repo_severity = reporting_helpers.classify_repo_severity
-classify_litellm_incident_severity = reporting_helpers.classify_litellm_incident_severity
+email_decision_context = policy_helpers.email_decision_context
+email_remediation_decision = policy_helpers.email_remediation_decision
+repo_user_guidance = policy_helpers.repo_user_guidance
+classify_repo_severity = policy_helpers.classify_repo_severity
+classify_litellm_incident_severity = policy_helpers.classify_litellm_incident_severity
 build_detected_findings_preview = reporting_helpers.build_detected_findings_preview
 build_planned_removals_preview = reporting_helpers.build_planned_removals_preview
 report_contains_sensitive_findings = reporting_helpers.report_contains_sensitive_findings

@@ -14,7 +14,7 @@ All notable user-facing changes to this project are documented here.
 
 ### Changed
 
-- Reduced compatibility-bridge coupling in the redaction, tooling, reporting, scanner/remediation, GUI app, and GUI locale modules by replacing broad core star imports or core-owned constants with explicit dependencies while preserving public facades.
+- Reduced compatibility-bridge coupling in the redaction, tooling, reporting, policy, scanner/remediation, GUI app, and GUI locale modules by replacing broad core star imports or core-owned constants with explicit dependencies while preserving public facades.
 - Run the automatic CI smoke workflow for protected-branch pull requests as well as `main` pushes so required status checks can satisfy branch protection before merge.
 
 ## [1.5.0] - 2026-05-04
