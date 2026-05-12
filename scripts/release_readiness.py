@@ -37,6 +37,7 @@ RELEASE_BYTE_COMPILE_PATHS = (
     "repo_privacy_guardian/__init__.py",
     "repo_privacy_guardian/agent_summary.py",
     "repo_privacy_guardian/artifacts.py",
+    "repo_privacy_guardian/config.py",
     "repo_privacy_guardian/core.py",
     "repo_privacy_guardian/gui/__init__.py",
     "repo_privacy_guardian/gui/app.py",

@@ -14,6 +14,7 @@ import pytest
 
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_github as rpg_github
+from repo_privacy_guardian import config as config_helpers
 from repo_privacy_guardian import remediation
 from repo_privacy_guardian.github_fix_guide import build_github_hardening_fix_guide
 
@@ -3256,6 +3257,15 @@ def test_normalize_csv_values_and_text_values_helpers() -> None:
     assert rpg.normalize_text_values(["  one  ", "", "two", "one"]) == ["one", "two"]
 
 
+def test_config_helpers_are_public_compatibility_reexports() -> None:
+    assert rpg.parse_positive_int is config_helpers.parse_positive_int
+    assert rpg.normalize_github_jobs is config_helpers.normalize_github_jobs
+    assert rpg.normalize_repo_filters is config_helpers.normalize_repo_filters
+    assert rpg.normalize_csv_values is config_helpers.normalize_csv_values
+    assert rpg.normalize_text_values is config_helpers.normalize_text_values
+    assert rpg.MAX_GITHUB_CLONE_JOBS == config_helpers.MAX_GITHUB_CLONE_JOBS
+
+
 def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
     config = rpg.build_guard_run_config(
         mode="cli",
@@ -3299,6 +3309,102 @@ def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
     assert config.github_include_forks is True
     assert config.github_fast is True
     assert config.github_jobs == 1
+
+
+def test_config_module_builds_normalized_guard_config_kwargs() -> None:
+    config = config_helpers.build_guard_run_config(
+        config_factory=dict,
+        mode="cli",
+        root=Path("C:/repos"),
+        policy=Path("C:/repos/docs/POLICY.md"),
+        repos=["repo-a"],
+        public_only=False,
+        fix=True,
+        push=True,
+        dry_run=True,
+        redact_third_party_emails=True,
+        purge_detected_secret_files=True,
+        purge_all_detected_secret_files=False,
+        rewrite_personal_paths=True,
+        low_confidence_email_mode="informational",
+        owner_name="Owner",
+        owner_emails=["dev@example.com", " dev@example.com "],
+        noreply_email="12345+octocat@users.noreply.github.com",
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        max_matches=50,
+        audit_github_hardening=True,
+        open_report=False,
+        confirm_each_repo_fix=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=["axeljackal", "axeljackal"],
+        replace_text_file="ops/replace-text.txt",
+        report_json=None,
+        github_owner=" acme ",
+        github_include_forks=True,
+        github_fast=True,
+        github_jobs=0,
+        suppressions=" suppressions.json ",
+    )
+
+    assert config["owner_emails"] == ["dev@example.com"]
+    assert config["allowed_remote_owners"] == ["axeljackal", "octocat"]
+    assert config["github_owner"] == "acme"
+    assert config["github_jobs"] == 1
+    assert config["suppressions"] == "suppressions.json"
+
+
+def test_config_module_builds_cli_guard_config_kwargs() -> None:
+    parser = rpg.make_parser()
+    args = parser.parse_args(
+        [
+            "--root",
+            "C:/repos",
+            "--repos",
+            "repo-a",
+            "--fix",
+            "--dry-run",
+            "--rewrite-personal-paths",
+            "--owner-email",
+            "dev@example.com",
+            "--noreply-email",
+            "12345+octocat@users.noreply.github.com",
+            "--allow-remote-owner",
+            "axeljackal",
+            "--replace-text-file",
+            "ops/replace-text.txt",
+            "--github-owner",
+            "acme",
+            "--github-jobs",
+            "2",
+            "--audit-github-hardening",
+            "--agent-summary",
+            "--strict-profile",
+            "release",
+            "--suppressions",
+            "suppressions.json",
+            "--no-confirm-each-repo",
+        ]
+    )
+
+    config = config_helpers.build_cli_guard_run_config(args, config_factory=dict)
+
+    assert config["mode"] == "cli"
+    assert config["root"] == Path("C:/repos")
+    assert config["repos"] == ["repo-a"]
+    assert config["fix"] is True
+    assert config["dry_run"] is True
+    assert config["rewrite_personal_paths"] is True
+    assert config["owner_emails"] == ["dev@example.com"]
+    assert config["allowed_remote_owners"] == ["axeljackal", "octocat"]
+    assert config["replace_text_file"] == "ops/replace-text.txt"
+    assert config["github_owner"] == "acme"
+    assert config["github_jobs"] == 2
+    assert config["agent_summary"] is True
+    assert config["confirm_each_repo_fix"] is False
+    assert config["strict_profile"] == "release"
+    assert config["low_confidence_email_mode"] == "blocking"
+    assert config["github_hardening_findings_blocking"] is True
+    assert config["suppressions"] == "suppressions.json"
 
 
 def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
