@@ -2770,6 +2770,42 @@ def test_remediation_history_rewrite_plan_builds_purge_args_and_preview() -> Non
     assert empty_plan.filter_repo_purge_args() == []
 
 
+def test_remediation_builds_git_filter_repo_command() -> None:
+    report = _make_report("repo-filter-command")
+    report.secret_history_purge_paths = ["z.env", "a.env", "a.env"]
+    report.history_sensitive_deleted = ["L1:.env:-API_KEY=value"]
+    plan = remediation.build_history_rewrite_plan(
+        report,
+        mailmap_enabled=True,
+        replace_text_enabled=True,
+    )
+
+    cmd = remediation.build_git_filter_repo_command(
+        python_executable="python",
+        mailmap=Path("mailmap.txt"),
+        replace_text=Path("replace-text.txt"),
+        rewrite_plan=plan,
+    )
+
+    assert cmd == [
+        "python",
+        "-m",
+        "git_filter_repo",
+        "--force",
+        "--mailmap",
+        "mailmap.txt",
+        "--replace-text",
+        "replace-text.txt",
+        "--path",
+        "a.env",
+        "--path",
+        "z.env",
+        "--path-regex",
+        remediation.SENSITIVE_FILENAME_PURGE_REGEX,
+        "--invert-paths",
+    ]
+
+
 def test_append_gitignore_lines_rejects_symlinked_target(tmp_path: Path, monkeypatch) -> None:
     guard = object.__new__(rpg.RepoPublicationGuard)
     gitignore = tmp_path / ".gitignore"
@@ -2825,8 +2861,11 @@ def test_rewrite_history_auto_confirms_git_filter_repo_continuation(tmp_path: Pa
 
     assert captured["cwd"] == tmp_path
     assert captured["input_text"] == "y\n"
-    assert "--mailmap" in captured["cmd"]
-    mailmap_path = Path(captured["cmd"][captured["cmd"].index("--mailmap") + 1])
+    cmd = captured["cmd"]
+    assert isinstance(cmd, list)
+    assert cmd[:4] == [sys.executable, "-m", "git_filter_repo", "--force"]
+    assert "--mailmap" in cmd
+    mailmap_path = Path(cmd[cmd.index("--mailmap") + 1])
     assert mailmap_path.exists() is False
     assert "history rewritten with git-filter-repo" in report.fix_actions
 

@@ -1564,15 +1564,12 @@ class RepoPublicationGuard:  # pragma: no cover
 
         try:
             self._ensure_git_filter_repo()
-
-            cmd = [sys.executable, "-m", "git_filter_repo", "--force"]
-            if mailmap:
-                cmd.extend(["--mailmap", str(mailmap)])
-            if replace_text:
-                cmd.extend(["--replace-text", str(replace_text)])
-
-            cmd.extend(rewrite_plan.filter_repo_purge_args())
-
+            cmd = remediation_helpers.build_git_filter_repo_command(
+                python_executable=sys.executable,
+                mailmap=mailmap,
+                replace_text=replace_text,
+                rewrite_plan=rewrite_plan,
+            )
             self._run_checked(cmd, cwd=repo, input_text="y\n")
             self._restore_remotes(repo, remotes)
             report.fix_actions.append("history rewritten with git-filter-repo")

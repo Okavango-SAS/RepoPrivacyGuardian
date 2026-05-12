@@ -555,7 +555,8 @@ def test_remediation_module_imports_without_core_dependency() -> None:
             (
                 "import sys; "
                 "import repo_privacy_guardian.remediation as remediation; "
-                "print(hasattr(remediation, 'build_history_rewrite_plan')); "
+                "print(hasattr(remediation, 'build_history_rewrite_plan') "
+                "and hasattr(remediation, 'build_git_filter_repo_command')); "
                 "print('repo_privacy_guardian.core' in sys.modules)"
             ),
         ],

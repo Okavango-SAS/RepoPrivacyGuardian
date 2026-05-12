@@ -74,6 +74,22 @@ class HistoryRewritePlan:
         return args
 
 
+def build_git_filter_repo_command(
+    *,
+    python_executable: str | Path,
+    mailmap: Path | None,
+    replace_text: Path | None,
+    rewrite_plan: HistoryRewritePlan,
+) -> list[str]:
+    cmd = [str(python_executable), "-m", "git_filter_repo", "--force"]
+    if mailmap:
+        cmd.extend(["--mailmap", str(mailmap)])
+    if replace_text:
+        cmd.extend(["--replace-text", str(replace_text)])
+    cmd.extend(rewrite_plan.filter_repo_purge_args())
+    return cmd
+
+
 def load_explicit_replace_text_rules(replace_text_file: str | Path) -> ExplicitReplaceTextRules:
     replace_path = Path(replace_text_file).expanduser().resolve()
     try:
