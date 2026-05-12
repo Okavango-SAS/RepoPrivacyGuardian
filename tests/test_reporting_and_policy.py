@@ -4651,6 +4651,122 @@ def test_guard_ensure_git_filter_repo_preserves_error_contract(
     _make_guard(tmp_path)._ensure_git_filter_repo()
 
 
+def test_streaming_adapter_starts_git_history_patch_and_finalizes(tmp_path: Path) -> None:
+    class DummyStream:
+        def __init__(self, payload: str = "") -> None:
+            self.payload = payload
+            self.closed = False
+
+        def read(self) -> str:
+            return self.payload
+
+        def close(self) -> None:
+            self.closed = True
+
+    class DummyProc:
+        def __init__(self) -> None:
+            self.stdout = DummyStream()
+            self.stderr = DummyStream("fatal: nope")
+            self.returncode: int | None = 0
+
+        def wait(self, timeout=None):
+            del timeout
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    captured: dict[str, object] = {}
+    proc = DummyProc()
+
+    def fake_popen(cmd: list[str], **kwargs) -> DummyProc:
+        captured["cmd"] = cmd
+        captured["kwargs"] = dict(kwargs)
+        return proc
+
+    adapter = execution_helpers.GitStreamingAdapter(
+        timeout_seconds=11,
+        popen_kwargs_factory=lambda: {"stdin": subprocess.DEVNULL, "start_new_session": True},
+        popen_factory=fake_popen,
+    )
+
+    started = adapter.start_git_history_patch(tmp_path)
+    assert started is proc
+    assert captured["cmd"] == [
+        "git",
+        "-C",
+        str(tmp_path),
+        "log",
+        "--all",
+        "-p",
+        "--no-color",
+        "--pretty=format:",
+    ]
+    kwargs = captured["kwargs"]
+    assert kwargs["stdout"] == subprocess.PIPE
+    assert kwargs["stderr"] == subprocess.PIPE
+    assert kwargs["stdin"] == subprocess.DEVNULL
+    assert kwargs["start_new_session"] is True
+    assert kwargs["encoding"] == "utf-8"
+
+    returncode, stderr_text = adapter.finalize(proc)
+
+    assert returncode == 0
+    assert stderr_text == "fatal: nope"
+    assert proc.stdout.closed is True
+    assert proc.stderr.closed is True
+
+
+def test_streaming_adapter_timeout_terminates_then_kills() -> None:
+    class DummyStream:
+        def read(self) -> str:
+            return ""
+
+        def close(self) -> None:
+            return None
+
+    class DummyProc:
+        def __init__(self) -> None:
+            self.stdout = DummyStream()
+            self.stderr = DummyStream()
+            self.returncode: int | None = None
+            self.terminated = False
+            self.killed = False
+
+        def wait(self, timeout=None):
+            raise subprocess.TimeoutExpired(["git"], timeout=timeout)
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.terminated = True
+            raise RuntimeError("cannot terminate")
+
+        def kill(self) -> None:
+            self.killed = True
+
+    proc = DummyProc()
+    adapter = execution_helpers.GitStreamingAdapter(
+        timeout_seconds=1,
+        popen_kwargs_factory=lambda: {},
+        popen_factory=lambda *_args, **_kwargs: proc,
+    )
+
+    returncode, stderr_text = adapter.finalize(proc)
+
+    assert returncode is None
+    assert stderr_text == ""
+    assert proc.terminated is True
+    assert proc.killed is True
+
+
 def test_guard_run_uses_non_interactive_stdin(monkeypatch, tmp_path: Path) -> None:
     class DummyProc:
         returncode = 0
@@ -4749,6 +4865,102 @@ def test_history_patch_scan_starts_stream_process_isolated(tmp_path: Path, monke
     assert guard._scan_history_patch(repo, rpg.SECRET_CONTENT_RE) == []
     assert captured["kwargs"]["stdin"] == subprocess.DEVNULL
     assert captured["kwargs"]["start_new_session"] is True
+
+
+def test_history_patch_scan_records_stderr_on_nonzero_exit(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    repo.mkdir()
+
+    class DummyStream:
+        def __init__(self, lines: list[str] | None = None, stderr: str = "") -> None:
+            self.lines = lines or []
+            self.stderr = stderr
+
+        def __iter__(self):
+            return iter(self.lines)
+
+        def read(self) -> str:
+            return self.stderr
+
+        def close(self) -> None:
+            return None
+
+    class DummyProc:
+        def __init__(self) -> None:
+            self.stdout = DummyStream([])
+            self.stderr = DummyStream(stderr="fatal: bad revision")
+            self.returncode = 2
+
+        def wait(self, timeout=None):
+            del timeout
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    monkeypatch.setattr(rpg.subprocess, "Popen", lambda *_args, **_kwargs: DummyProc())
+    guard = _make_guard(tmp_path)
+
+    assert guard._scan_history_patch(repo, rpg.SECRET_CONTENT_RE) == []
+    assert guard._flush_repo_runtime_issues() == [
+        "history patch scan failed with exit code 2: fatal: bad revision"
+    ]
+
+
+def test_history_patch_scan_terminates_after_max_matches(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    repo.mkdir()
+
+    class DummyStream:
+        def __iter__(self):
+            return iter([f"+token={_fixture_secret()}\n", f"+other={_fixture_aws_key()}\n"])
+
+        def read(self) -> str:
+            return ""
+
+        def close(self) -> None:
+            return None
+
+    class DummyProc:
+        def __init__(self) -> None:
+            self.stdout = DummyStream()
+            self.stderr = DummyStream()
+            self.returncode: int | None = None
+            self.terminated = False
+
+        def wait(self, timeout=None):
+            del timeout
+            if self.returncode is None:
+                self.returncode = 0
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.terminated = True
+            self.returncode = 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    proc = DummyProc()
+    monkeypatch.setattr(rpg.subprocess, "Popen", lambda *_args, **_kwargs: proc)
+    guard = _make_guard(tmp_path)
+    guard.max_matches = 1
+
+    matches = guard._scan_history_patch(repo, rpg.SECRET_CONTENT_RE)
+
+    assert len(matches) == 1
+    assert matches[0].startswith("L1:+token=")
+    assert proc.terminated is True
+    assert guard._flush_repo_runtime_issues() == []
 
 
 def test_validate_git_identity_inputs() -> None:

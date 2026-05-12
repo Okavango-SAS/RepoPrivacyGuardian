@@ -8,7 +8,7 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generic, Protocol, TypeVar
+from typing import Any, Generic, Protocol, TypeVar
 
 
 class CommandResultLike(Protocol):
@@ -21,6 +21,20 @@ class CompletedProcessLike(Protocol):
     returncode: int
     stdout: str
     stderr: str
+
+
+class StreamingProcessLike(Protocol):
+    stdout: Any | None
+    stderr: Any | None
+    returncode: int | None
+
+    def wait(self, timeout: float | None = None) -> int | None: ...
+
+    def poll(self) -> int | None: ...
+
+    def terminate(self) -> None: ...
+
+    def kill(self) -> None: ...
 
 
 CommandResultT = TypeVar("CommandResultT", bound=CommandResultLike)
@@ -98,3 +112,78 @@ class GitSubprocessAdapter(Generic[CommandResultT]):
             "or re-run with --install-missing-tools."
             + (f"\nDetails: {detail}" if detail else "")
         )
+
+
+@dataclass(frozen=True)
+class GitStreamingAdapter:
+    timeout_seconds: int
+    popen_kwargs_factory: Callable[[], dict[str, Any]]
+    popen_factory: Callable[..., StreamingProcessLike] = subprocess.Popen
+
+    def start(self, cmd: list[str]) -> StreamingProcessLike:
+        return self.popen_factory(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **self.popen_kwargs_factory(),
+        )
+
+    def start_git_history_patch(self, repo: Path) -> StreamingProcessLike:
+        return self.start(
+            [
+                "git",
+                "-C",
+                str(repo),
+                "log",
+                "--all",
+                "-p",
+                "--no-color",
+                "--pretty=format:",
+            ]
+        )
+
+    def finalize(self, proc: StreamingProcessLike, timeout: int | None = None) -> tuple[int | None, str]:
+        stderr_text = ""
+        effective_timeout = self.timeout_seconds if timeout is None else timeout
+        try:
+            proc.wait(timeout=effective_timeout)
+        except subprocess.TimeoutExpired:
+            self.terminate_if_running(proc)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+        finally:
+            if proc.stderr is not None:
+                try:
+                    stderr_text = proc.stderr.read()
+                except Exception:
+                    stderr_text = ""
+            if proc.stdout is not None:
+                try:
+                    proc.stdout.close()
+                except Exception:
+                    pass
+            if proc.stderr is not None:
+                try:
+                    proc.stderr.close()
+                except Exception:
+                    pass
+        return proc.returncode, stderr_text
+
+    def terminate_if_running(self, proc: StreamingProcessLike) -> None:
+        if proc.poll() is not None:
+            return
+        try:
+            proc.terminate()
+            proc.wait(timeout=2)
+            return
+        except Exception:
+            pass
+        try:
+            proc.kill()
+        except Exception:
+            pass

@@ -163,6 +163,13 @@ class RepoPublicationGuard:  # pragma: no cover
             runner=subprocess.run,
         )
 
+    def _stream_adapter(self) -> execution_helpers.GitStreamingAdapter:
+        return execution_helpers.GitStreamingAdapter(
+            timeout_seconds=DEFAULT_GIT_STREAM_TIMEOUT_SECONDS,
+            popen_kwargs_factory=streaming_popen_kwargs,
+            popen_factory=subprocess.Popen,
+        )
+
     def _run(
         self,
         cmd: list[str],
@@ -672,72 +679,17 @@ class RepoPublicationGuard:  # pragma: no cover
 
     def _finalize_git_stream_process(
         self,
-        proc: subprocess.Popen[str],
+        proc: execution_helpers.StreamingProcessLike,
         timeout: int | None = None,
     ) -> tuple[int | None, str]:
-        stderr_text = ""
-        effective_timeout = DEFAULT_GIT_STREAM_TIMEOUT_SECONDS if timeout is None else timeout
-        try:
-            proc.wait(timeout=effective_timeout)
-        except subprocess.TimeoutExpired:
-            self._terminate_process_if_running(proc)
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                pass
-        finally:
-            if proc.stderr is not None:
-                try:
-                    stderr_text = proc.stderr.read()
-                except Exception:
-                    stderr_text = ""
-            if proc.stdout is not None:
-                try:
-                    proc.stdout.close()
-                except Exception:
-                    pass
-            if proc.stderr is not None:
-                try:
-                    proc.stderr.close()
-                except Exception:
-                    pass
-        return proc.returncode, stderr_text
+        return self._stream_adapter().finalize(proc, timeout=timeout)
 
-    def _terminate_process_if_running(self, proc: subprocess.Popen[str]) -> None:
-        if proc.poll() is not None:
-            return
-        try:
-            proc.terminate()
-            proc.wait(timeout=2)
-            return
-        except Exception:
-            pass
-        try:
-            proc.kill()
-        except Exception:
-            pass
+    def _terminate_process_if_running(self, proc: execution_helpers.StreamingProcessLike) -> None:
+        self._stream_adapter().terminate_if_running(proc)
 
     def _scan_history_patch(self, repo: Path, regex: re.Pattern[str]) -> list[str]:
-        cmd = [
-            "git",
-            "-C",
-            str(repo),
-            "log",
-            "--all",
-            "-p",
-            "--no-color",
-            "--pretty=format:",
-        ]
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                **streaming_popen_kwargs(),
-            )
+            proc = self._stream_adapter().start_git_history_patch(repo)
         except FileNotFoundError:
             self._record_repo_runtime_issue("history patch scan failed to start: Git executable not found")
             return []
@@ -784,26 +736,8 @@ class RepoPublicationGuard:  # pragma: no cover
         self,
         repo: Path,
     ) -> tuple[list[str], list[str], list[str], list[str]]:
-        cmd = [
-            "git",
-            "-C",
-            str(repo),
-            "log",
-            "--all",
-            "-p",
-            "--no-color",
-            "--pretty=format:",
-        ]
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                **streaming_popen_kwargs(),
-            )
+            proc = self._stream_adapter().start_git_history_patch(repo)
         except FileNotFoundError:
             self._record_repo_runtime_issue("history secret taxonomy scan failed to start: Git executable not found")
             return [], [], [], []
@@ -864,26 +798,8 @@ class RepoPublicationGuard:  # pragma: no cover
         return high_confidence, low_confidence, fixtures, documentation
 
     def _scan_history_non_allowed_emails(self, repo: Path) -> list[str]:
-        cmd = [
-            "git",
-            "-C",
-            str(repo),
-            "log",
-            "--all",
-            "-p",
-            "--no-color",
-            "--pretty=format:",
-        ]
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                **streaming_popen_kwargs(),
-            )
+            proc = self._stream_adapter().start_git_history_patch(repo)
         except FileNotFoundError:
             self._record_repo_runtime_issue("history email scan failed to start: Git executable not found")
             return []
@@ -962,26 +878,8 @@ class RepoPublicationGuard:  # pragma: no cover
         return matches
 
     def _scan_history_secret_files(self, repo: Path) -> list[str]:
-        cmd = [
-            "git",
-            "-C",
-            str(repo),
-            "log",
-            "--all",
-            "-p",
-            "--no-color",
-            "--pretty=format:",
-        ]
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                **streaming_popen_kwargs(),
-            )
+            proc = self._stream_adapter().start_git_history_patch(repo)
         except FileNotFoundError:
             self._record_repo_runtime_issue("history secret-file scan failed to start: Git executable not found")
             return []
