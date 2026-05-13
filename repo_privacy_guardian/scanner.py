@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from repo_privacy_guardian import execution as execution_helpers
+from repo_privacy_guardian import evidence_taxonomy as evidence_taxonomy_helpers
 from repo_privacy_guardian import history_parsing as history_parsing_helpers
 from repo_privacy_guardian import remediation as remediation_helpers
 
@@ -496,42 +497,29 @@ class RepoPublicationGuard:  # pragma: no cover
         documentation: list[str],
         history: bool = False,
     ) -> None:
-        has_high_confidence_secret = SECRET_CONTENT_RE.search(line) is not None
-        has_low_confidence_secret = (
-            not has_high_confidence_secret
-            and LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE.search(line) is not None
+        buckets = evidence_taxonomy_helpers.SecretTaxonomyBuckets(
+            high_confidence=high_confidence,
+            low_confidence=low_confidence,
+            fixtures=fixtures,
+            documentation=documentation,
         )
-        if not has_high_confidence_secret and not has_low_confidence_secret:
-            return
-
-        rel = rel_path or "-"
-        snippet = line.strip()[:240]
-        entry = f"L{line_number}:{rel}:{snippet}" if history else f"{rel}:{line_number}:{snippet}"
-        context = classify_secret_match_context(rel_path, snippet)
-
-        if context == "fixture":
-            if len(fixtures) < self.max_matches:
-                fixtures.append(entry)
-            return
-        if context == "documentation":
-            if len(documentation) < self.max_matches:
-                documentation.append(entry)
-            return
-        if has_high_confidence_secret:
-            if len(high_confidence) < self.max_matches:
-                high_confidence.append(entry)
-            return
-        if len(low_confidence) < self.max_matches:
-            low_confidence.append(entry)
+        evidence_taxonomy_helpers.append_secret_taxonomy_match(
+            buckets=buckets,
+            rel_path=rel_path,
+            line_number=line_number,
+            line=line,
+            secret_pattern=SECRET_CONTENT_RE,
+            low_confidence_pattern=LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE,
+            classify_secret_match_context=classify_secret_match_context,
+            max_matches=self.max_matches,
+            history=history,
+        )
 
     def _scan_tracked_secret_taxonomy(
         self,
         repo: Path,
     ) -> tuple[list[str], list[str], list[str], list[str]]:
-        high_confidence: list[str] = []
-        low_confidence: list[str] = []
-        fixtures: list[str] = []
-        documentation: list[str] = []
+        buckets = evidence_taxonomy_helpers.SecretTaxonomyBuckets()
 
         for file_path in self._iter_tracked_files(repo):
             rel = file_path.relative_to(repo).as_posix()
@@ -539,16 +527,17 @@ class RepoPublicationGuard:  # pragma: no cover
             if text is None:
                 continue
             for idx, line in enumerate(text.splitlines(), start=1):
-                self._append_secret_taxonomy_match(
+                evidence_taxonomy_helpers.append_secret_taxonomy_match(
+                    buckets=buckets,
                     rel_path=rel,
                     line_number=idx,
                     line=line,
-                    high_confidence=high_confidence,
-                    low_confidence=low_confidence,
-                    fixtures=fixtures,
-                    documentation=documentation,
+                    secret_pattern=SECRET_CONTENT_RE,
+                    low_confidence_pattern=LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE,
+                    classify_secret_match_context=classify_secret_match_context,
+                    max_matches=self.max_matches,
                 )
-        return high_confidence, low_confidence, fixtures, documentation
+        return buckets.as_tuple()
 
     def _scan_network_code_indicators(self, repo: Path) -> tuple[list[str], list[str]]:
         matches: list[str] = []
@@ -746,17 +735,14 @@ class RepoPublicationGuard:  # pragma: no cover
             self._record_repo_runtime_issue(f"history secret taxonomy scan failed to start: {exc}")
             return [], [], [], []
 
-        high_confidence: list[str] = []
-        low_confidence: list[str] = []
-        fixtures: list[str] = []
-        documentation: list[str] = []
+        buckets = evidence_taxonomy_helpers.SecretTaxonomyBuckets()
         current_file: str | None = None
         deadline = time.monotonic() + DEFAULT_GIT_STREAM_TIMEOUT_SECONDS
         timed_out = False
         try:
             stream = proc.stdout
             if stream is None:
-                return high_confidence, low_confidence, fixtures, documentation
+                return buckets.as_tuple()
             for idx, raw_line in enumerate(stream, start=1):
                 if time.monotonic() >= deadline:
                     self.log(
@@ -772,14 +758,15 @@ class RepoPublicationGuard:  # pragma: no cover
                 line_context = history_parsing_helpers.extract_patch_change_context(raw_line)
                 if line_context is None:
                     continue
-                self._append_secret_taxonomy_match(
+                evidence_taxonomy_helpers.append_secret_taxonomy_match(
+                    buckets=buckets,
                     rel_path=current_file,
                     line_number=idx,
                     line=line_context,
-                    high_confidence=high_confidence,
-                    low_confidence=low_confidence,
-                    fixtures=fixtures,
-                    documentation=documentation,
+                    secret_pattern=SECRET_CONTENT_RE,
+                    low_confidence_pattern=LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE,
+                    classify_secret_match_context=classify_secret_match_context,
+                    max_matches=self.max_matches,
                     history=True,
                 )
         finally:
@@ -794,7 +781,7 @@ class RepoPublicationGuard:  # pragma: no cover
             self._record_repo_runtime_issue(
                 f"history secret taxonomy scan failed with exit code {returncode}{suffix}"
             )
-        return high_confidence, low_confidence, fixtures, documentation
+        return buckets.as_tuple()
 
     def _scan_history_non_allowed_emails(self, repo: Path) -> list[str]:
         try:

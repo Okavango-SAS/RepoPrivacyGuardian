@@ -72,6 +72,7 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian/artifacts.py",
     "repo_privacy_guardian/config.py",
     "repo_privacy_guardian/core.py",
+    "repo_privacy_guardian/evidence_taxonomy.py",
     "repo_privacy_guardian/execution.py",
     "repo_privacy_guardian/gui/__init__.py",
     "repo_privacy_guardian/gui/app.py",
@@ -424,6 +425,7 @@ def test_low_risk_extracted_modules_use_explicit_core_imports() -> None:
         "repo_privacy_guardian/redaction.py",
         "repo_privacy_guardian/tooling.py",
         "repo_privacy_guardian/config.py",
+        "repo_privacy_guardian/evidence_taxonomy.py",
         "repo_privacy_guardian/execution.py",
         "repo_privacy_guardian/history_parsing.py",
         "repo_privacy_guardian/reporting.py",
@@ -622,6 +624,30 @@ def test_history_parsing_module_imports_without_core_dependency() -> None:
 
     assert proc.returncode == 0, proc.stderr or proc.stdout
     assert proc.stdout.splitlines() == ["b", "False"]
+
+
+def test_evidence_taxonomy_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.evidence_taxonomy as evidence_taxonomy; "
+                "print(evidence_taxonomy.SecretTaxonomyBuckets().as_tuple()); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["([], [], [], [])", "False"]
 
 
 def test_config_module_imports_without_core_dependency() -> None:

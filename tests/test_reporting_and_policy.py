@@ -16,6 +16,7 @@ import pytest
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_github as rpg_github
 from repo_privacy_guardian import config as config_helpers
+from repo_privacy_guardian import evidence_taxonomy
 from repo_privacy_guardian import execution as execution_helpers
 from repo_privacy_guardian import history_parsing
 from repo_privacy_guardian import remediation
@@ -456,6 +457,101 @@ def test_history_parsing_formats_findings_and_filters_active_secret_files() -> N
             line_context="TOKEN=SECRET",
             secret_pattern=secret_pattern,
             classify_secret_match_context=lambda _path, _line: "fixture",
+        )
+        is None
+    )
+
+
+def test_secret_taxonomy_aggregates_buckets_and_preserves_entry_format() -> None:
+    high_pattern = re.compile("HIGH")
+    low_pattern = re.compile("LOW")
+    context_calls: list[tuple[str | None, str]] = []
+
+    def classify_context(rel_path: str | None, snippet: str) -> str:
+        context_calls.append((rel_path, snippet))
+        if rel_path and rel_path.startswith("tests/"):
+            return "fixture"
+        if rel_path and rel_path.startswith("docs/"):
+            return "documentation"
+        return "active"
+
+    buckets = evidence_taxonomy.SecretTaxonomyBuckets()
+    assert evidence_taxonomy.append_secret_taxonomy_match(
+        buckets=buckets,
+        rel_path="src/settings.py",
+        line_number=3,
+        line="token=HIGH",
+        secret_pattern=high_pattern,
+        low_confidence_pattern=low_pattern,
+        classify_secret_match_context=classify_context,
+        max_matches=2,
+        history=True,
+    ) == evidence_taxonomy.SecretTaxonomyMatch("high_confidence", "L3:src/settings.py:token=HIGH")
+    evidence_taxonomy.append_secret_taxonomy_match(
+        buckets=buckets,
+        rel_path="src/settings.py",
+        line_number=4,
+        line="api_key=LOW",
+        secret_pattern=high_pattern,
+        low_confidence_pattern=low_pattern,
+        classify_secret_match_context=classify_context,
+        max_matches=2,
+    )
+    evidence_taxonomy.append_secret_taxonomy_match(
+        buckets=buckets,
+        rel_path="tests/fixtures/example.env",
+        line_number=5,
+        line="token=HIGH",
+        secret_pattern=high_pattern,
+        low_confidence_pattern=low_pattern,
+        classify_secret_match_context=classify_context,
+        max_matches=2,
+        history=True,
+    )
+    evidence_taxonomy.append_secret_taxonomy_match(
+        buckets=buckets,
+        rel_path="docs/guide.md",
+        line_number=6,
+        line="token=HIGH",
+        secret_pattern=high_pattern,
+        low_confidence_pattern=low_pattern,
+        classify_secret_match_context=classify_context,
+        max_matches=2,
+        history=True,
+    )
+    assert buckets.as_tuple() == (
+        ["L3:src/settings.py:token=HIGH"],
+        ["src/settings.py:4:api_key=LOW"],
+        ["L5:tests/fixtures/example.env:token=HIGH"],
+        ["L6:docs/guide.md:token=HIGH"],
+    )
+
+    capped = evidence_taxonomy.SecretTaxonomyBuckets(high_confidence=["existing"])
+    match = evidence_taxonomy.append_secret_taxonomy_match(
+        buckets=capped,
+        rel_path=None,
+        line_number=7,
+        line="HIGH" + ("x" * 300),
+        secret_pattern=high_pattern,
+        low_confidence_pattern=low_pattern,
+        classify_secret_match_context=classify_context,
+        max_matches=1,
+        history=True,
+    )
+    assert match is not None
+    assert match.entry == "L7:-:" + ("HIGH" + ("x" * 300))[:240]
+    assert capped.high_confidence == ["existing"]
+    assert context_calls[-1] == (None, ("HIGH" + ("x" * 300))[:240])
+    assert (
+        evidence_taxonomy.append_secret_taxonomy_match(
+            buckets=capped,
+            rel_path="src/settings.py",
+            line_number=8,
+            line="no secret here",
+            secret_pattern=high_pattern,
+            low_confidence_pattern=low_pattern,
+            classify_secret_match_context=classify_context,
+            max_matches=1,
         )
         is None
     )
@@ -5046,6 +5142,70 @@ def test_history_patch_scan_terminates_after_max_matches(tmp_path: Path, monkeyp
     assert len(matches) == 1
     assert matches[0].startswith("L1:+token=")
     assert proc.terminated is True
+    assert guard._flush_repo_runtime_issues() == []
+
+
+def test_history_secret_taxonomy_scan_preserves_bucket_parity(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    repo.mkdir()
+    low_confidence_secret = "synthetic-review-token" * 2
+
+    class DummyStream:
+        def __init__(self, lines: list[str] | None = None, stderr: str = "") -> None:
+            self.lines = lines or []
+            self.stderr = stderr
+
+        def __iter__(self):
+            return iter(self.lines)
+
+        def read(self) -> str:
+            return self.stderr
+
+        def close(self) -> None:
+            return None
+
+    class DummyProc:
+        def __init__(self) -> None:
+            self.stdout = DummyStream(
+                [
+                    "diff --git a/src/settings.py b/src/settings.py\n",
+                    "+++ b/src/settings.py\n",
+                    f"+token={_fixture_aws_key()}\n",
+                    f"+api_key={low_confidence_secret}\n",
+                    " context should not scan AKIAAAAAAAAAAAAAAAA\n",
+                    "diff --git a/tests/fixtures/example.env b/tests/fixtures/example.env\n",
+                    f"+token={_fixture_secret()}\n",
+                    "diff --git a/docs/guide.md b/docs/guide.md\n",
+                    f"+token={_fixture_secret()}\n",
+                    "--- a/docs/guide.md\n",
+                ]
+            )
+            self.stderr = DummyStream()
+            self.returncode: int | None = None
+
+        def wait(self, timeout=None):
+            del timeout
+            self.returncode = 0
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    monkeypatch.setattr(rpg.subprocess, "Popen", lambda *_args, **_kwargs: DummyProc())
+    guard = _make_guard(tmp_path)
+
+    high_confidence, low_confidence, fixtures, documentation = guard._scan_history_secret_taxonomy(repo)
+
+    assert high_confidence == [f"L3:src/settings.py:token={_fixture_aws_key()}"]
+    assert low_confidence == [f"L4:src/settings.py:api_key={low_confidence_secret}"]
+    assert fixtures == [f"L7:tests/fixtures/example.env:token={_fixture_secret()}"]
+    assert documentation == [f"L9:docs/guide.md:token={_fixture_secret()}"]
     assert guard._flush_repo_runtime_issues() == []
 
 
