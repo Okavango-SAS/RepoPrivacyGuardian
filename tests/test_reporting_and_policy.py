@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,7 @@ import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_github as rpg_github
 from repo_privacy_guardian import config as config_helpers
 from repo_privacy_guardian import execution as execution_helpers
+from repo_privacy_guardian import history_parsing
 from repo_privacy_guardian import remediation
 from repo_privacy_guardian.github_fix_guide import build_github_hardening_fix_guide
 
@@ -373,6 +375,90 @@ def test_secret_taxonomy_classifies_generic_assignments_and_safe_examples() -> N
     assert fixture_context == "fixture"
     assert doc_context == "documentation"
     assert active_context == "active"
+
+
+def test_history_parsing_extracts_diff_targets_and_patch_change_context() -> None:
+    assert (
+        history_parsing.parse_git_diff_target(
+            "diff --git a/docs/old name.md b/docs/new name.md\n"
+        )
+        == "docs/new name.md"
+    )
+    assert history_parsing.parse_git_diff_target("diff --git malformed") is None
+    assert history_parsing.extract_patch_change_context("+token=value\n") == "token=value\n"
+    assert history_parsing.extract_patch_change_context("-old=value\n") == "old=value\n"
+    assert history_parsing.extract_patch_change_context("+++ b/.env\n") is None
+    assert history_parsing.extract_patch_change_context("--- a/.env\n") is None
+    assert history_parsing.extract_patch_change_context(" context line\n") is None
+
+
+def test_history_parsing_formats_findings_and_filters_active_secret_files() -> None:
+    assert history_parsing.format_history_patch_match(4, "  " + ("x" * 300)) == (
+        "L4:" + ("x" * 240)
+    )
+    assert (
+        history_parsing.format_history_email_match(
+            line_number=9,
+            current_file=None,
+            leaked_emails=[
+                "owner-b@example.invalid",
+                "owner-a@example.invalid",
+                "owner-a@example.invalid",
+            ],
+            line="Contact owner-a@example.invalid and owner-b@example.invalid",
+        )
+        == (
+            "L9:-:owner-a@example.invalid, owner-b@example.invalid:"
+            "Contact owner-a@example.invalid and owner-b@example.invalid"
+        )
+    )
+    assert (
+        history_parsing.format_history_email_match(
+            line_number=9,
+            current_file="src/app.py",
+            leaked_emails=[],
+            line="no leaked email",
+        )
+        is None
+    )
+
+    secret_pattern = re.compile("SECRET")
+    assert (
+        history_parsing.active_secret_file_from_patch_change(
+            current_file=".env",
+            line_context="TOKEN=SECRET",
+            secret_pattern=secret_pattern,
+            classify_secret_match_context=lambda _path, _line: "active",
+        )
+        == ".env"
+    )
+    assert (
+        history_parsing.active_secret_file_from_patch_change(
+            current_file=None,
+            line_context="TOKEN=SECRET",
+            secret_pattern=secret_pattern,
+            classify_secret_match_context=lambda _path, _line: "active",
+        )
+        is None
+    )
+    assert (
+        history_parsing.active_secret_file_from_patch_change(
+            current_file=".env",
+            line_context="TOKEN=SAFE",
+            secret_pattern=secret_pattern,
+            classify_secret_match_context=lambda _path, _line: "active",
+        )
+        is None
+    )
+    assert (
+        history_parsing.active_secret_file_from_patch_change(
+            current_file=".env",
+            line_context="TOKEN=SECRET",
+            secret_pattern=secret_pattern,
+            classify_secret_match_context=lambda _path, _line: "fixture",
+        )
+        is None
+    )
 
 
 def test_sensitive_filename_patterns_cover_env_provider_and_git_artifacts() -> None:

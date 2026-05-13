@@ -76,6 +76,7 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian/gui/__init__.py",
     "repo_privacy_guardian/gui/app.py",
     "repo_privacy_guardian/gui/locale.py",
+    "repo_privacy_guardian/history_parsing.py",
     "repo_privacy_guardian/github_fix_guide.py",
     "repo_privacy_guardian/github.py",
     "repo_privacy_guardian/metrics.py",
@@ -424,6 +425,7 @@ def test_low_risk_extracted_modules_use_explicit_core_imports() -> None:
         "repo_privacy_guardian/tooling.py",
         "repo_privacy_guardian/config.py",
         "repo_privacy_guardian/execution.py",
+        "repo_privacy_guardian/history_parsing.py",
         "repo_privacy_guardian/reporting.py",
         "repo_privacy_guardian/scanner.py",
         "repo_privacy_guardian/gui/app.py",
@@ -596,6 +598,30 @@ def test_execution_module_imports_without_core_dependency() -> None:
 
     assert proc.returncode == 0, proc.stderr or proc.stdout
     assert proc.stdout.splitlines() == ["True", "False"]
+
+
+def test_history_parsing_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.history_parsing as history_parsing; "
+                "print(history_parsing.parse_git_diff_target('diff --git a/a b/b')); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["b", "False"]
 
 
 def test_config_module_imports_without_core_dependency() -> None:

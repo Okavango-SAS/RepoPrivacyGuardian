@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from repo_privacy_guardian import execution as execution_helpers
+from repo_privacy_guardian import history_parsing as history_parsing_helpers
 from repo_privacy_guardian import remediation as remediation_helpers
 
 if TYPE_CHECKING:
@@ -713,7 +714,7 @@ class RepoPublicationGuard:  # pragma: no cover
                     timed_out = True
                     break
                 if regex.search(line):
-                    matches.append(f"L{idx}:{line.strip()[:240]}")
+                    matches.append(history_parsing_helpers.format_history_patch_match(idx, line))
                     if len(matches) >= self.max_matches:
                         self._terminate_process_if_running(proc)
                         terminated_early = True
@@ -765,18 +766,16 @@ class RepoPublicationGuard:  # pragma: no cover
                     timed_out = True
                     break
                 if raw_line.startswith("diff --git "):
-                    match = re.match(r"diff --git a/(.+?) b/(.+)$", raw_line.strip())
-                    current_file = match.group(2) if match else None
-                    continue
-                if raw_line.startswith("+++") or raw_line.startswith("---"):
-                    continue
-                if not (raw_line.startswith("+") or raw_line.startswith("-")):
+                    current_file = history_parsing_helpers.parse_git_diff_target(raw_line)
                     continue
 
+                line_context = history_parsing_helpers.extract_patch_change_context(raw_line)
+                if line_context is None:
+                    continue
                 self._append_secret_taxonomy_match(
                     rel_path=current_file,
                     line_number=idx,
-                    line=raw_line[1:],
+                    line=line_context,
                     high_confidence=high_confidence,
                     low_confidence=low_confidence,
                     fixtures=fixtures,
@@ -824,8 +823,7 @@ class RepoPublicationGuard:  # pragma: no cover
                     timed_out = True
                     break
                 if line.startswith("diff --git "):
-                    match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
-                    current_file = match.group(2) if match else None
+                    current_file = history_parsing_helpers.parse_git_diff_target(line)
                     continue
                 emails = [
                     email
@@ -833,14 +831,19 @@ class RepoPublicationGuard:  # pragma: no cover
                     if is_relevant_email_candidate(email)
                 ]
                 leaked = [email for email in emails if not self._is_allowed_email(email)]
-                if leaked:
-                    uniq = ", ".join(sorted(set(leaked)))
-                    rel_path = current_file or "-"
-                    matches.append(f"L{idx}:{rel_path}:{uniq}:{line.strip()[:200]}")
-                    if len(matches) >= self.max_matches:
-                        self._terminate_process_if_running(proc)
-                        terminated_early = True
-                        break
+                finding = history_parsing_helpers.format_history_email_match(
+                    line_number=idx,
+                    current_file=current_file,
+                    leaked_emails=leaked,
+                    line=line,
+                )
+                if finding is None:
+                    continue
+                matches.append(finding)
+                if len(matches) >= self.max_matches:
+                    self._terminate_process_if_running(proc)
+                    terminated_early = True
+                    break
         finally:
             returncode, stderr_text = self._finalize_git_stream_process(proc)
         if timed_out:
@@ -907,30 +910,22 @@ class RepoPublicationGuard:  # pragma: no cover
                     timed_out = True
                     break
                 if line.startswith("diff --git "):
-                    match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
-                    if match:
-                        current_file = match.group(2)
-                    else:
-                        current_file = None
+                    current_file = history_parsing_helpers.parse_git_diff_target(line)
                     continue
 
-                if not current_file:
+                line_context = history_parsing_helpers.extract_patch_change_context(line)
+                if line_context is None:
                     continue
 
-                if line.startswith("+++") or line.startswith("---"):
-                    continue
-
-                if not (line.startswith("+") or line.startswith("-")):
-                    continue
-
-                line_context = line[1:] if line.startswith(("+", "-")) else line
-                if (
-                    SECRET_CONTENT_RE.search(line_context)
-                    and classify_secret_match_context(current_file, line_context) == "active"
-                    and current_file not in seen
-                ):
-                    seen.add(current_file)
-                    files.append(current_file)
+                secret_file = history_parsing_helpers.active_secret_file_from_patch_change(
+                    current_file=current_file,
+                    line_context=line_context,
+                    secret_pattern=SECRET_CONTENT_RE,
+                    classify_secret_match_context=classify_secret_match_context,
+                )
+                if secret_file and secret_file not in seen:
+                    seen.add(secret_file)
+                    files.append(secret_file)
                     if len(files) >= self.max_matches:
                         self._terminate_process_if_running(proc)
                         terminated_early = True
