@@ -384,8 +384,9 @@ def test_ux_audit_doc_avoids_absolute_local_asset_paths() -> None:
     ux_audit = (_repo_root() / "docs" / "UX_UI_AUDIT.md").read_text(encoding="utf-8")
 
     assert "/C:/Users/" not in ux_audit
-    assert "ux-audit/before/" in ux_audit
     assert "ux-audit/after/" in ux_audit
+    assert "ux-audit/before/" not in ux_audit
+    assert "Historical before-state screenshots were removed" in ux_audit
 
 
 def test_docs_cover_optional_github_hardening_audit() -> None:

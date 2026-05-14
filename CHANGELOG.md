@@ -14,6 +14,7 @@ All notable user-facing changes to this project are documented here.
 
 ### Changed
 
+- Consolidated the historical UX/UI audit notes into a current visual QA record and removed obsolete tracked before-state screenshots.
 - Reduced compatibility-bridge coupling in the config, redaction, tooling, reporting, policy, remediation, scanner, GUI app, and GUI locale modules by replacing broad core star imports or core-owned constants with explicit dependencies while preserving public facades.
 - Moved `git-filter-repo` rewrite command construction into remediation planning helpers so dry-run previews and real rewrite commands stay covered by focused contract tests.
 - Extracted scanner Git/subprocess execution into a dedicated adapter with contract coverage for cwd, stdin, checked failures, streaming `git log` process lifecycle, `git-filter-repo` probing, and dry-run rewrite behavior.
