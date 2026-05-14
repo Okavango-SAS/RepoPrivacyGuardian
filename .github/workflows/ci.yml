@@ -30,6 +30,9 @@ on:
       - "scripts/release_readiness.py"
       - "scripts/visual_qa_gui.py"
       - "tests/**"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       extended_checks:

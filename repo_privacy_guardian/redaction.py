@@ -2,8 +2,31 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403,F405
-from repo_privacy_guardian.core import *
+import re
+from pathlib import Path
+
+from repo_privacy_guardian.core import (
+    DEFAULT_PLACEHOLDER,
+    EMAIL_FIXTURE_PATH_RE,
+    EMAIL_FIXTURE_SNIPPET_RE,
+    EMAIL_LOW_CONFIDENCE_FILE_RE,
+    EMAIL_LOW_CONFIDENCE_PATH_RE,
+    EMAIL_LOW_CONFIDENCE_SNIPPET_RE,
+    EMAIL_NOISE_DOMAINS,
+    EMAIL_RE,
+    LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE,
+    PERSONAL_PATH_LITERAL_PATTERNS,
+    REDACTED_EMAIL,
+    REDACTED_IDENTITY_TOKEN,
+    REDACTED_SECRET,
+    SECRET_CONTENT_RE,
+    SECRET_DOCUMENTATION_FILE_RE,
+    SECRET_DOCUMENTATION_PATH_RE,
+    SECRET_FIXTURE_PATH_RE,
+    SECRET_SAFE_PLACEHOLDER_RE,
+    SSH_REMOTE_PSEUDO_EMAILS,
+)
+from repo_privacy_guardian.github import parse_github_remote_owner
 
 
 def is_relevant_email_candidate(email: str) -> bool:

@@ -165,6 +165,7 @@ DESIGN_REQUIREMENTS = [
 ]
 
 WORKFLOW_REQUIREMENTS = [
+    'pull_request:',
     'description: Run the manual extended validation suite',
     'run: python scripts/check_release_contract.py',
     'run: python tests/release_smoke_cli.py',

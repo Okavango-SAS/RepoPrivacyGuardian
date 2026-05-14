@@ -21,10 +21,16 @@ The public compatibility contract remains:
 - `repo_privacy_guardian/runtime.py`: exit codes, run-status names, cancellation token, root validation, and target discovery
 - `repo_privacy_guardian/github.py`: GitHub remote parsing, API access, owner/org discovery, clone orchestration, and release-hardening audit helpers
 - `repo_privacy_guardian/prompts.py`: GUI/README prompt-card registry without importing desktop GUI dependencies
+- `repo_privacy_guardian/config.py`: CLI parser construction, argument value parsing, comma/text normalization, GitHub owner/job normalization, and shared `GuardRunConfig` construction helpers
+- `repo_privacy_guardian/evidence_taxonomy.py`: pure secret finding bucket classification and aggregation for tracked and historical scanner findings
 - `repo_privacy_guardian/tooling.py`: CLI/GUI tooling preflight, optional local installer prompts, Windows App Installer / `winget` bootstrap helpers, and GitHub hardening auth readiness checks
-- `repo_privacy_guardian/scanner.py`: `RepoPublicationGuard`, repository discovery, execution locks, deterministic scans, reviewed remediation, and re-audit behavior
+- `repo_privacy_guardian/execution.py`: side-effecting subprocess and Git execution adapters for scanner operations, including checked commands, streaming `git log` process lifecycle, and `git-filter-repo` availability probes
+- `repo_privacy_guardian/history_parsing.py`: pure Git history patch parsing and finding-format helpers for scanner history scans
+- `repo_privacy_guardian/scanner.py`: `RepoPublicationGuard`, repository discovery, execution locks, deterministic scans, mechanical remediation execution, and re-audit behavior
+- `repo_privacy_guardian/remediation.py`: replace-text rule planning, explicit operator mapping loading, history rewrite/purge planning, `git-filter-repo` command construction, and dry-run rewrite preview text
 - `repo_privacy_guardian/redaction.py`: finding-context classification and redaction helpers for emails, email fixtures, identity tokens, secrets, URLs, and local paths
-- `repo_privacy_guardian/reporting.py`: status/severity classification, redacted JSON export, `Decision first` HTML rendering, report persistence, and sensitive-artifact warnings
+- `repo_privacy_guardian/reporting.py`: redacted JSON export, `Decision first` HTML rendering, report persistence, and sensitive-artifact warnings
+- `repo_privacy_guardian/policy.py`: report severity classification, user-facing guidance, fix precondition checks, email remediation decisions, and LiteLLM incident severity helpers
 - `repo_privacy_guardian/agent_summary.py`: safe, compact agent handoff artifact and CLI handoff formatting
 - `repo_privacy_guardian/report_diff.py`: count-only `report.json` comparison for re-audit regression checks shared by CLI and GUI Reports
 - `repo_privacy_guardian/strict_profiles.py`: documented `audit-only`, `internal`, and `release` profile normalization
@@ -111,4 +117,4 @@ Repo Privacy Guardian does not mutate GitHub repository settings. Hardening find
 
 ## Current Technical Debt
 
-`repo_privacy_guardian/core.py` is no longer the 12k-line monolith, but it remains the compatibility nexus for the `1.x` public API. The next debt is to replace transitional star-import bridges in extracted GUI/scanner/reporting/tooling modules with narrower explicit dependencies once more domain-level tests exist. Future extraction should continue by small slices with regression tests after each slice and no behavior drift in CLI/GUI parity.
+`repo_privacy_guardian/core.py` is no longer the 12k-line monolith, but it remains the compatibility nexus for the `1.x` public API. The bridge cleanup moved `config`, `redaction`, `tooling`, `reporting`, `policy`, `remediation`, `scanner`, and `gui/app` from broad core star imports or core-owned helpers to explicit dependencies, and `gui/locale` now owns its locale identifiers and shared GUI text constants. Config, evidence taxonomy, execution, history parsing, reporting, policy, remediation, scanner, GUI app, and GUI locale also import cleanly as standalone modules instead of relying on partially initialized core cycles. Remediation now owns the pure `git-filter-repo` rewrite command plan, execution owns the side-effecting subprocess/Git adapters used by scanner, history parsing owns pure `git log -p` line parsing and finding formatting, and evidence taxonomy owns the bucket aggregation for high-confidence, low-confidence, fixture, and documentation secret findings. The remaining debt is to keep moving GUI support helpers out of the compatibility nexus once each slice has domain-level tests. Future extraction should continue by small slices with regression tests after each slice and no behavior drift in CLI/GUI parity.

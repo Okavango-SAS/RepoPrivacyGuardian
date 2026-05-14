@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,11 @@ import pytest
 
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_github as rpg_github
+from repo_privacy_guardian import config as config_helpers
+from repo_privacy_guardian import evidence_taxonomy
+from repo_privacy_guardian import execution as execution_helpers
+from repo_privacy_guardian import history_parsing
+from repo_privacy_guardian import remediation
 from repo_privacy_guardian.github_fix_guide import build_github_hardening_fix_guide
 
 
@@ -370,6 +376,185 @@ def test_secret_taxonomy_classifies_generic_assignments_and_safe_examples() -> N
     assert fixture_context == "fixture"
     assert doc_context == "documentation"
     assert active_context == "active"
+
+
+def test_history_parsing_extracts_diff_targets_and_patch_change_context() -> None:
+    assert (
+        history_parsing.parse_git_diff_target(
+            "diff --git a/docs/old name.md b/docs/new name.md\n"
+        )
+        == "docs/new name.md"
+    )
+    assert history_parsing.parse_git_diff_target("diff --git malformed") is None
+    assert history_parsing.extract_patch_change_context("+token=value\n") == "token=value\n"
+    assert history_parsing.extract_patch_change_context("-old=value\n") == "old=value\n"
+    assert history_parsing.extract_patch_change_context("+++ b/.env\n") is None
+    assert history_parsing.extract_patch_change_context("--- a/.env\n") is None
+    assert history_parsing.extract_patch_change_context(" context line\n") is None
+
+
+def test_history_parsing_formats_findings_and_filters_active_secret_files() -> None:
+    assert history_parsing.format_history_patch_match(4, "  " + ("x" * 300)) == (
+        "L4:" + ("x" * 240)
+    )
+    assert (
+        history_parsing.format_history_email_match(
+            line_number=9,
+            current_file=None,
+            leaked_emails=[
+                "owner-b@example.invalid",
+                "owner-a@example.invalid",
+                "owner-a@example.invalid",
+            ],
+            line="Contact owner-a@example.invalid and owner-b@example.invalid",
+        )
+        == (
+            "L9:-:owner-a@example.invalid, owner-b@example.invalid:"
+            "Contact owner-a@example.invalid and owner-b@example.invalid"
+        )
+    )
+    assert (
+        history_parsing.format_history_email_match(
+            line_number=9,
+            current_file="src/app.py",
+            leaked_emails=[],
+            line="no leaked email",
+        )
+        is None
+    )
+
+    secret_pattern = re.compile("SECRET")
+    assert (
+        history_parsing.active_secret_file_from_patch_change(
+            current_file=".env",
+            line_context="TOKEN=SECRET",
+            secret_pattern=secret_pattern,
+            classify_secret_match_context=lambda _path, _line: "active",
+        )
+        == ".env"
+    )
+    assert (
+        history_parsing.active_secret_file_from_patch_change(
+            current_file=None,
+            line_context="TOKEN=SECRET",
+            secret_pattern=secret_pattern,
+            classify_secret_match_context=lambda _path, _line: "active",
+        )
+        is None
+    )
+    assert (
+        history_parsing.active_secret_file_from_patch_change(
+            current_file=".env",
+            line_context="TOKEN=SAFE",
+            secret_pattern=secret_pattern,
+            classify_secret_match_context=lambda _path, _line: "active",
+        )
+        is None
+    )
+    assert (
+        history_parsing.active_secret_file_from_patch_change(
+            current_file=".env",
+            line_context="TOKEN=SECRET",
+            secret_pattern=secret_pattern,
+            classify_secret_match_context=lambda _path, _line: "fixture",
+        )
+        is None
+    )
+
+
+def test_secret_taxonomy_aggregates_buckets_and_preserves_entry_format() -> None:
+    high_pattern = re.compile("HIGH")
+    low_pattern = re.compile("LOW")
+    context_calls: list[tuple[str | None, str]] = []
+
+    def classify_context(rel_path: str | None, snippet: str) -> str:
+        context_calls.append((rel_path, snippet))
+        if rel_path and rel_path.startswith("tests/"):
+            return "fixture"
+        if rel_path and rel_path.startswith("docs/"):
+            return "documentation"
+        return "active"
+
+    buckets = evidence_taxonomy.SecretTaxonomyBuckets()
+    assert evidence_taxonomy.append_secret_taxonomy_match(
+        buckets=buckets,
+        rel_path="src/settings.py",
+        line_number=3,
+        line="token=HIGH",
+        secret_pattern=high_pattern,
+        low_confidence_pattern=low_pattern,
+        classify_secret_match_context=classify_context,
+        max_matches=2,
+        history=True,
+    ) == evidence_taxonomy.SecretTaxonomyMatch("high_confidence", "L3:src/settings.py:token=HIGH")
+    evidence_taxonomy.append_secret_taxonomy_match(
+        buckets=buckets,
+        rel_path="src/settings.py",
+        line_number=4,
+        line="api_key=LOW",
+        secret_pattern=high_pattern,
+        low_confidence_pattern=low_pattern,
+        classify_secret_match_context=classify_context,
+        max_matches=2,
+    )
+    evidence_taxonomy.append_secret_taxonomy_match(
+        buckets=buckets,
+        rel_path="tests/fixtures/example.env",
+        line_number=5,
+        line="token=HIGH",
+        secret_pattern=high_pattern,
+        low_confidence_pattern=low_pattern,
+        classify_secret_match_context=classify_context,
+        max_matches=2,
+        history=True,
+    )
+    evidence_taxonomy.append_secret_taxonomy_match(
+        buckets=buckets,
+        rel_path="docs/guide.md",
+        line_number=6,
+        line="token=HIGH",
+        secret_pattern=high_pattern,
+        low_confidence_pattern=low_pattern,
+        classify_secret_match_context=classify_context,
+        max_matches=2,
+        history=True,
+    )
+    assert buckets.as_tuple() == (
+        ["L3:src/settings.py:token=HIGH"],
+        ["src/settings.py:4:api_key=LOW"],
+        ["L5:tests/fixtures/example.env:token=HIGH"],
+        ["L6:docs/guide.md:token=HIGH"],
+    )
+
+    capped = evidence_taxonomy.SecretTaxonomyBuckets(high_confidence=["existing"])
+    match = evidence_taxonomy.append_secret_taxonomy_match(
+        buckets=capped,
+        rel_path=None,
+        line_number=7,
+        line="HIGH" + ("x" * 300),
+        secret_pattern=high_pattern,
+        low_confidence_pattern=low_pattern,
+        classify_secret_match_context=classify_context,
+        max_matches=1,
+        history=True,
+    )
+    assert match is not None
+    assert match.entry == "L7:-:" + ("HIGH" + ("x" * 300))[:240]
+    assert capped.high_confidence == ["existing"]
+    assert context_calls[-1] == (None, ("HIGH" + ("x" * 300))[:240])
+    assert (
+        evidence_taxonomy.append_secret_taxonomy_match(
+            buckets=capped,
+            rel_path="src/settings.py",
+            line_number=8,
+            line="no secret here",
+            secret_pattern=high_pattern,
+            low_confidence_pattern=low_pattern,
+            classify_secret_match_context=classify_context,
+            max_matches=1,
+        )
+        is None
+    )
 
 
 def test_sensitive_filename_patterns_cover_env_provider_and_git_artifacts() -> None:
@@ -2691,6 +2876,119 @@ def test_write_replace_text_file_accepts_utf8_bom_explicit_file(
     assert contents.splitlines()[0] == "literal:fixture-token==>redacted-fixture-token"
 
 
+def test_remediation_replace_text_plan_combines_rules(tmp_path: Path) -> None:
+    explicit = tmp_path / "explicit-replace-bom.txt"
+    explicit.write_text(
+        "# operator-provided mapping\n"
+        "literal:fixture-token==>redacted-fixture-token\n"
+        "literal:fixture-token==>redacted-fixture-token\n",
+        encoding="utf-8-sig",
+    )
+    explicit_rules = remediation.load_explicit_replace_text_rules(explicit)
+
+    report = _make_report("repo-replace-plan")
+    repo_cli_path = _fixture_repo_cli_path()
+    report.tracked_email_matches = [
+        "README.md:1:owner@privacy.dev contributor@outside.dev allowed@safe.dev"
+    ]
+    report.tracked_path_matches = [f"AGENTS.MD:24:- {repo_cli_path}"]
+
+    plan = remediation.build_replace_text_plan(
+        report,
+        email_pattern=rpg.EMAIL_RE,
+        is_relevant_email_candidate=rpg.is_relevant_email_candidate,
+        is_allowed_email=lambda email: email == "allowed@safe.dev",
+        owner_emails={"owner@privacy.dev"},
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        redact_third_party=True,
+        rewrite_personal_paths=True,
+        extract_personal_path_literals=rpg.extract_personal_path_literals,
+        redacted_path=rpg.REDACTED_PATH,
+        explicit_replace_lines=explicit_rules.lines,
+        explicit_replace_source=explicit_rules.path,
+    )
+
+    assert f"literal:{repo_cli_path}==>{rpg.REDACTED_PATH}" in plan.lines
+    assert f"literal:owner@privacy.dev==>{rpg.DEFAULT_NOREPLY}" in plan.lines
+    assert f"literal:contributor@outside.dev==>{rpg.DEFAULT_PLACEHOLDER}" in plan.lines
+    assert not any("allowed@safe.dev" in line for line in plan.lines)
+    assert plan.lines.count("literal:fixture-token==>redacted-fixture-token") == 1
+    assert any("merged explicit replace-text mappings" in item for item in plan.fix_actions)
+
+
+def test_remediation_history_rewrite_plan_builds_purge_args_and_preview() -> None:
+    report = _make_report("repo-rewrite-plan")
+    report.secret_history_purge_paths = ["z.env", "a.env", "a.env"]
+    report.history_sensitive_added = ["L1:.env:+API_KEY=value"]
+
+    plan = remediation.build_history_rewrite_plan(
+        report,
+        mailmap_enabled=False,
+        replace_text_enabled=True,
+    )
+
+    assert plan.do_rewrite is True
+    assert plan.needs_history_purge is True
+    assert plan.purge_paths == ("a.env", "z.env")
+    assert plan.filter_repo_purge_args() == [
+        "--path",
+        "a.env",
+        "--path",
+        "z.env",
+        "--path-regex",
+        remediation.SENSITIVE_FILENAME_PURGE_REGEX,
+        "--invert-paths",
+    ]
+    assert "[dry-run] replace-text enabled: True" in plan.dry_run_actions()
+    assert "[dry-run] purge paths preview: a.env, z.env" in plan.dry_run_actions()
+    assert "[dry-run] sensitive filename signal purge regex enabled" in plan.dry_run_actions()
+
+    empty_plan = remediation.build_history_rewrite_plan(
+        _make_report("repo-no-rewrite"),
+        mailmap_enabled=False,
+        replace_text_enabled=False,
+    )
+    assert empty_plan.do_rewrite is False
+    assert empty_plan.filter_repo_purge_args() == []
+
+
+def test_remediation_builds_git_filter_repo_command() -> None:
+    report = _make_report("repo-filter-command")
+    report.secret_history_purge_paths = ["z.env", "a.env", "a.env"]
+    report.history_sensitive_deleted = ["L1:.env:-API_KEY=value"]
+    plan = remediation.build_history_rewrite_plan(
+        report,
+        mailmap_enabled=True,
+        replace_text_enabled=True,
+    )
+
+    cmd = remediation.build_git_filter_repo_command(
+        python_executable="python",
+        mailmap=Path("mailmap.txt"),
+        replace_text=Path("replace-text.txt"),
+        rewrite_plan=plan,
+    )
+
+    assert cmd == [
+        "python",
+        "-m",
+        "git_filter_repo",
+        "--force",
+        "--mailmap",
+        "mailmap.txt",
+        "--replace-text",
+        "replace-text.txt",
+        "--path",
+        "a.env",
+        "--path",
+        "z.env",
+        "--path-regex",
+        remediation.SENSITIVE_FILENAME_PURGE_REGEX,
+        "--invert-paths",
+    ]
+
+
 def test_append_gitignore_lines_rejects_symlinked_target(tmp_path: Path, monkeypatch) -> None:
     guard = object.__new__(rpg.RepoPublicationGuard)
     gitignore = tmp_path / ".gitignore"
@@ -2746,8 +3044,11 @@ def test_rewrite_history_auto_confirms_git_filter_repo_continuation(tmp_path: Pa
 
     assert captured["cwd"] == tmp_path
     assert captured["input_text"] == "y\n"
-    assert "--mailmap" in captured["cmd"]
-    mailmap_path = Path(captured["cmd"][captured["cmd"].index("--mailmap") + 1])
+    cmd = captured["cmd"]
+    assert isinstance(cmd, list)
+    assert cmd[:4] == [sys.executable, "-m", "git_filter_repo", "--force"]
+    assert "--mailmap" in cmd
+    mailmap_path = Path(cmd[cmd.index("--mailmap") + 1])
     assert mailmap_path.exists() is False
     assert "history rewritten with git-filter-repo" in report.fix_actions
 
@@ -3039,6 +3340,24 @@ def test_make_parser_defaults_and_flags() -> None:
     assert args.github_jobs == 2
 
 
+def test_config_parser_matches_public_parser_help_and_defaults() -> None:
+    parser = config_helpers.make_parser(
+        default_root=rpg.default_root_dir(),
+        default_policy=rpg.DEFAULT_POLICY,
+        default_results_dir=rpg.DEFAULT_RESULTS_DIR,
+        default_noreply=rpg.DEFAULT_NOREPLY,
+        default_placeholder=rpg.DEFAULT_PLACEHOLDER,
+        public_only_default=rpg.GUI_DEFAULT_PUBLIC_ONLY,
+    )
+
+    assert parser.format_help() == rpg.make_parser().format_help()
+
+    args = parser.parse_args(["--public-only", "--no-open-report"])
+    assert args.public_only is True
+    assert args.open_report is False
+    assert args.no_open_report is True
+
+
 def test_make_parser_rejects_non_positive_max_matches() -> None:
     parser = rpg.make_parser()
     with pytest.raises(SystemExit):
@@ -3178,6 +3497,15 @@ def test_normalize_csv_values_and_text_values_helpers() -> None:
     assert rpg.normalize_text_values(["  one  ", "", "two", "one"]) == ["one", "two"]
 
 
+def test_config_helpers_are_public_compatibility_reexports() -> None:
+    assert rpg.parse_positive_int is config_helpers.parse_positive_int
+    assert rpg.normalize_github_jobs is config_helpers.normalize_github_jobs
+    assert rpg.normalize_repo_filters is config_helpers.normalize_repo_filters
+    assert rpg.normalize_csv_values is config_helpers.normalize_csv_values
+    assert rpg.normalize_text_values is config_helpers.normalize_text_values
+    assert rpg.MAX_GITHUB_CLONE_JOBS == config_helpers.MAX_GITHUB_CLONE_JOBS
+
+
 def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
     config = rpg.build_guard_run_config(
         mode="cli",
@@ -3221,6 +3549,102 @@ def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
     assert config.github_include_forks is True
     assert config.github_fast is True
     assert config.github_jobs == 1
+
+
+def test_config_module_builds_normalized_guard_config_kwargs() -> None:
+    config = config_helpers.build_guard_run_config(
+        config_factory=dict,
+        mode="cli",
+        root=Path("C:/repos"),
+        policy=Path("C:/repos/docs/POLICY.md"),
+        repos=["repo-a"],
+        public_only=False,
+        fix=True,
+        push=True,
+        dry_run=True,
+        redact_third_party_emails=True,
+        purge_detected_secret_files=True,
+        purge_all_detected_secret_files=False,
+        rewrite_personal_paths=True,
+        low_confidence_email_mode="informational",
+        owner_name="Owner",
+        owner_emails=["dev@example.com", " dev@example.com "],
+        noreply_email="12345+octocat@users.noreply.github.com",
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        max_matches=50,
+        audit_github_hardening=True,
+        open_report=False,
+        confirm_each_repo_fix=False,
+        allow_non_owner_push=False,
+        allowed_remote_owners=["axeljackal", "axeljackal"],
+        replace_text_file="ops/replace-text.txt",
+        report_json=None,
+        github_owner=" acme ",
+        github_include_forks=True,
+        github_fast=True,
+        github_jobs=0,
+        suppressions=" suppressions.json ",
+    )
+
+    assert config["owner_emails"] == ["dev@example.com"]
+    assert config["allowed_remote_owners"] == ["axeljackal", "octocat"]
+    assert config["github_owner"] == "acme"
+    assert config["github_jobs"] == 1
+    assert config["suppressions"] == "suppressions.json"
+
+
+def test_config_module_builds_cli_guard_config_kwargs() -> None:
+    parser = rpg.make_parser()
+    args = parser.parse_args(
+        [
+            "--root",
+            "C:/repos",
+            "--repos",
+            "repo-a",
+            "--fix",
+            "--dry-run",
+            "--rewrite-personal-paths",
+            "--owner-email",
+            "dev@example.com",
+            "--noreply-email",
+            "12345+octocat@users.noreply.github.com",
+            "--allow-remote-owner",
+            "axeljackal",
+            "--replace-text-file",
+            "ops/replace-text.txt",
+            "--github-owner",
+            "acme",
+            "--github-jobs",
+            "2",
+            "--audit-github-hardening",
+            "--agent-summary",
+            "--strict-profile",
+            "release",
+            "--suppressions",
+            "suppressions.json",
+            "--no-confirm-each-repo",
+        ]
+    )
+
+    config = config_helpers.build_cli_guard_run_config(args, config_factory=dict)
+
+    assert config["mode"] == "cli"
+    assert config["root"] == Path("C:/repos")
+    assert config["repos"] == ["repo-a"]
+    assert config["fix"] is True
+    assert config["dry_run"] is True
+    assert config["rewrite_personal_paths"] is True
+    assert config["owner_emails"] == ["dev@example.com"]
+    assert config["allowed_remote_owners"] == ["axeljackal", "octocat"]
+    assert config["replace_text_file"] == "ops/replace-text.txt"
+    assert config["github_owner"] == "acme"
+    assert config["github_jobs"] == 2
+    assert config["agent_summary"] is True
+    assert config["confirm_each_repo_fix"] is False
+    assert config["strict_profile"] == "release"
+    assert config["low_confidence_email_mode"] == "blocking"
+    assert config["github_hardening_findings_blocking"] is True
+    assert config["suppressions"] == "suppressions.json"
 
 
 def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
@@ -4159,6 +4583,18 @@ def test_validate_fix_preconditions_clean_repo_is_empty() -> None:
     assert rpg.validate_fix_preconditions(report) == []
 
 
+def test_policy_helpers_are_public_compatibility_reexports() -> None:
+    from repo_privacy_guardian import policy
+    from repo_privacy_guardian import reporting
+
+    assert rpg.validate_fix_preconditions is policy.validate_fix_preconditions
+    assert rpg.repo_user_guidance is policy.repo_user_guidance
+    assert rpg.classify_repo_severity is policy.classify_repo_severity
+    assert rpg.classify_litellm_incident_severity is policy.classify_litellm_incident_severity
+    assert reporting.validate_fix_preconditions is policy.validate_fix_preconditions
+    assert reporting.repo_user_guidance is policy.repo_user_guidance
+
+
 def test_repo_has_dirty_worktree_variants() -> None:
     assert rpg.repo_has_dirty_worktree("## main...origin/main") is False
     assert rpg.repo_has_dirty_worktree("## main...origin/main\n M README.md") is True
@@ -4246,6 +4682,273 @@ def test_run_git_command_mocked_subprocess(monkeypatch) -> None:
     assert calls["kwargs"]["stdin"] == subprocess.DEVNULL
 
 
+def test_execution_adapter_preserves_cwd_input_and_timeout_contract() -> None:
+    class DummyProc:
+        returncode = 0
+        stdout = "ok\n"
+        stderr = ""
+
+    calls: list[dict[str, object]] = []
+
+    def fake_runner(cmd: list[str], **kwargs) -> DummyProc:
+        calls.append({"cmd": cmd, "kwargs": dict(kwargs)})
+        return DummyProc()
+
+    adapter = execution_helpers.GitSubprocessAdapter(
+        timeout_seconds=7,
+        result_factory=rpg.CommandResult,
+        missing_executable_message=lambda executable: f"missing {executable}",
+        stdin_selector=rpg.subprocess_stdin,
+        remediation_install_packages=("git-filter-repo>=2.45,<3",),
+        python_executable="python",
+        runner=fake_runner,
+    )
+
+    result = adapter.run(["tool", "arg"], cwd=Path("C:/repos/demo"), input_text="y\n")
+
+    assert result == rpg.CommandResult(0, "ok\n", "")
+    assert calls[0]["cmd"] == ["tool", "arg"]
+    kwargs = calls[0]["kwargs"]
+    assert kwargs["cwd"] == str(Path("C:/repos/demo"))
+    assert kwargs["input"] == "y\n"
+    assert kwargs["stdin"] == subprocess.PIPE
+    assert kwargs["timeout"] == 7
+    assert kwargs["capture_output"] is True
+    assert kwargs["encoding"] == "utf-8"
+
+
+def test_execution_adapter_reports_start_timeout_and_checked_errors() -> None:
+    adapter = execution_helpers.GitSubprocessAdapter(
+        timeout_seconds=3,
+        result_factory=rpg.CommandResult,
+        missing_executable_message=lambda executable: f"missing {executable}",
+        stdin_selector=rpg.subprocess_stdin,
+        remediation_install_packages=("git-filter-repo>=2.45,<3",),
+        python_executable="python",
+        runner=lambda _cmd, **_kwargs: (_ for _ in ()).throw(FileNotFoundError()),
+    )
+
+    assert adapter.run(["missing-tool"]).stderr == "missing missing-tool"
+
+    timeout_adapter = execution_helpers.GitSubprocessAdapter(
+        timeout_seconds=3,
+        result_factory=rpg.CommandResult,
+        missing_executable_message=lambda executable: f"missing {executable}",
+        stdin_selector=rpg.subprocess_stdin,
+        remediation_install_packages=("git-filter-repo>=2.45,<3",),
+        python_executable="python",
+        runner=lambda cmd, **_kwargs: (_ for _ in ()).throw(
+            subprocess.TimeoutExpired(cmd, timeout=3)
+        ),
+    )
+
+    timeout_result = timeout_adapter.run(["tool", "arg"])
+    assert timeout_result.returncode == 124
+    assert "Command timed out after 3s: tool arg" in timeout_result.stderr
+
+    crash_adapter = execution_helpers.GitSubprocessAdapter(
+        timeout_seconds=3,
+        result_factory=rpg.CommandResult,
+        missing_executable_message=lambda executable: f"missing {executable}",
+        stdin_selector=rpg.subprocess_stdin,
+        remediation_install_packages=("git-filter-repo>=2.45,<3",),
+        python_executable="python",
+        runner=lambda _cmd, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    crash_result = crash_adapter.run(["tool"])
+    assert crash_result.returncode == 1
+    assert "Unable to execute tool: boom" in crash_result.stderr
+
+    failing_adapter = execution_helpers.GitSubprocessAdapter(
+        timeout_seconds=3,
+        result_factory=rpg.CommandResult,
+        missing_executable_message=lambda executable: f"missing {executable}",
+        stdin_selector=rpg.subprocess_stdin,
+        remediation_install_packages=("git-filter-repo>=2.45,<3",),
+        python_executable="python",
+        runner=lambda _cmd, **_kwargs: rpg.CommandResult(9, "out", "err"),
+    )
+
+    with pytest.raises(RuntimeError, match=r"Command failed \(9\): tool arg"):
+        failing_adapter.run_checked(["tool", "arg"])
+
+
+def test_guard_git_wrappers_delegate_to_execution_adapter(monkeypatch, tmp_path: Path) -> None:
+    class DummyProc:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+
+    calls: list[list[str]] = []
+
+    def fake_runner(cmd: list[str], **_kwargs) -> DummyProc:
+        calls.append(cmd)
+        return DummyProc()
+
+    monkeypatch.setattr(rpg.subprocess, "run", fake_runner)
+    guard = _make_guard(tmp_path)
+
+    assert guard._git(Path("C:/repos/demo"), "status").stdout == "ok"
+    assert guard._git_checked(Path("C:/repos/demo"), "config", "user.name").stdout == "ok"
+    assert calls == [
+        ["git", "-C", str(Path("C:/repos/demo")), "status"],
+        ["git", "-C", str(Path("C:/repos/demo")), "config", "user.name"],
+    ]
+
+
+def test_guard_ensure_git_filter_repo_preserves_error_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    class DummyProc:
+        returncode = 1
+        stdout = ""
+        stderr = "missing module"
+
+    calls: list[list[str]] = []
+
+    def fake_runner(cmd: list[str], **_kwargs) -> DummyProc:
+        calls.append(cmd)
+        return DummyProc()
+
+    monkeypatch.setattr(rpg.subprocess, "run", fake_runner)
+    guard = _make_guard(tmp_path)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        guard._ensure_git_filter_repo()
+
+    assert calls == [[sys.executable, "-m", "git_filter_repo", "--help"]]
+    message = str(exc_info.value)
+    assert "git-filter-repo is required" in message
+    assert "pip install git-filter-repo" in message
+    assert "Details: missing module" in message
+
+    class SuccessProc:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+
+    monkeypatch.setattr(rpg.subprocess, "run", lambda _cmd, **_kwargs: SuccessProc())
+    _make_guard(tmp_path)._ensure_git_filter_repo()
+
+
+def test_streaming_adapter_starts_git_history_patch_and_finalizes(tmp_path: Path) -> None:
+    class DummyStream:
+        def __init__(self, payload: str = "") -> None:
+            self.payload = payload
+            self.closed = False
+
+        def read(self) -> str:
+            return self.payload
+
+        def close(self) -> None:
+            self.closed = True
+
+    class DummyProc:
+        def __init__(self) -> None:
+            self.stdout = DummyStream()
+            self.stderr = DummyStream("fatal: nope")
+            self.returncode: int | None = 0
+
+        def wait(self, timeout=None):
+            del timeout
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    captured: dict[str, object] = {}
+    proc = DummyProc()
+
+    def fake_popen(cmd: list[str], **kwargs) -> DummyProc:
+        captured["cmd"] = cmd
+        captured["kwargs"] = dict(kwargs)
+        return proc
+
+    adapter = execution_helpers.GitStreamingAdapter(
+        timeout_seconds=11,
+        popen_kwargs_factory=lambda: {"stdin": subprocess.DEVNULL, "start_new_session": True},
+        popen_factory=fake_popen,
+    )
+
+    started = adapter.start_git_history_patch(tmp_path)
+    assert started is proc
+    assert captured["cmd"] == [
+        "git",
+        "-C",
+        str(tmp_path),
+        "log",
+        "--all",
+        "-p",
+        "--no-color",
+        "--pretty=format:",
+    ]
+    kwargs = captured["kwargs"]
+    assert kwargs["stdout"] == subprocess.PIPE
+    assert kwargs["stderr"] == subprocess.PIPE
+    assert kwargs["stdin"] == subprocess.DEVNULL
+    assert kwargs["start_new_session"] is True
+    assert kwargs["encoding"] == "utf-8"
+
+    returncode, stderr_text = adapter.finalize(proc)
+
+    assert returncode == 0
+    assert stderr_text == "fatal: nope"
+    assert proc.stdout.closed is True
+    assert proc.stderr.closed is True
+
+
+def test_streaming_adapter_timeout_terminates_then_kills() -> None:
+    class DummyStream:
+        def read(self) -> str:
+            return ""
+
+        def close(self) -> None:
+            return None
+
+    class DummyProc:
+        def __init__(self) -> None:
+            self.stdout = DummyStream()
+            self.stderr = DummyStream()
+            self.returncode: int | None = None
+            self.terminated = False
+            self.killed = False
+
+        def wait(self, timeout=None):
+            raise subprocess.TimeoutExpired(["git"], timeout=timeout)
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.terminated = True
+            raise RuntimeError("cannot terminate")
+
+        def kill(self) -> None:
+            self.killed = True
+
+    proc = DummyProc()
+    adapter = execution_helpers.GitStreamingAdapter(
+        timeout_seconds=1,
+        popen_kwargs_factory=lambda: {},
+        popen_factory=lambda *_args, **_kwargs: proc,
+    )
+
+    returncode, stderr_text = adapter.finalize(proc)
+
+    assert returncode is None
+    assert stderr_text == ""
+    assert proc.terminated is True
+    assert proc.killed is True
+
+
 def test_guard_run_uses_non_interactive_stdin(monkeypatch, tmp_path: Path) -> None:
     class DummyProc:
         returncode = 0
@@ -4269,6 +4972,34 @@ def test_guard_run_uses_non_interactive_stdin(monkeypatch, tmp_path: Path) -> No
     assert captured[0]["input"] is None
     assert captured[1]["stdin"] == subprocess.PIPE
     assert captured[1]["input"] == "y\n"
+
+
+def test_rewrite_history_dry_run_does_not_execute_git_filter_repo(tmp_path: Path) -> None:
+    guard = object.__new__(rpg.RepoPublicationGuard)
+    guard.dry_run = True
+    guard.replace_text_file = None
+    guard.rewrite_personal_paths = False
+    guard.owner_name = "Owner"
+    guard.owner_emails = set()
+    guard.noreply_email = rpg.DEFAULT_NOREPLY
+    guard.placeholder_email = rpg.DEFAULT_PLACEHOLDER
+    guard.redact_third_party = False
+    guard._is_allowed_email = lambda _email: False
+    guard._save_remotes = lambda _repo: {"origin": "https://example.test/repo.git"}
+    guard._ensure_git_filter_repo = lambda: (_ for _ in ()).throw(
+        AssertionError("dry-run must not require git-filter-repo")
+    )
+    guard._run_checked = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("dry-run must not execute git-filter-repo")
+    )
+
+    report = _make_report("rewrite-dry-run")
+    report.secret_history_purge_paths = [".env"]
+
+    guard._rewrite_history(tmp_path, report)
+
+    assert "[dry-run] history rewrite would run" in report.fix_actions
+    assert "[dry-run] purge paths preview: .env" in report.fix_actions
 
 
 def test_history_patch_scan_starts_stream_process_isolated(tmp_path: Path, monkeypatch) -> None:
@@ -4316,6 +5047,166 @@ def test_history_patch_scan_starts_stream_process_isolated(tmp_path: Path, monke
     assert guard._scan_history_patch(repo, rpg.SECRET_CONTENT_RE) == []
     assert captured["kwargs"]["stdin"] == subprocess.DEVNULL
     assert captured["kwargs"]["start_new_session"] is True
+
+
+def test_history_patch_scan_records_stderr_on_nonzero_exit(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    repo.mkdir()
+
+    class DummyStream:
+        def __init__(self, lines: list[str] | None = None, stderr: str = "") -> None:
+            self.lines = lines or []
+            self.stderr = stderr
+
+        def __iter__(self):
+            return iter(self.lines)
+
+        def read(self) -> str:
+            return self.stderr
+
+        def close(self) -> None:
+            return None
+
+    class DummyProc:
+        def __init__(self) -> None:
+            self.stdout = DummyStream([])
+            self.stderr = DummyStream(stderr="fatal: bad revision")
+            self.returncode = 2
+
+        def wait(self, timeout=None):
+            del timeout
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    monkeypatch.setattr(rpg.subprocess, "Popen", lambda *_args, **_kwargs: DummyProc())
+    guard = _make_guard(tmp_path)
+
+    assert guard._scan_history_patch(repo, rpg.SECRET_CONTENT_RE) == []
+    assert guard._flush_repo_runtime_issues() == [
+        "history patch scan failed with exit code 2: fatal: bad revision"
+    ]
+
+
+def test_history_patch_scan_terminates_after_max_matches(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    repo.mkdir()
+
+    class DummyStream:
+        def __iter__(self):
+            return iter([f"+token={_fixture_secret()}\n", f"+other={_fixture_aws_key()}\n"])
+
+        def read(self) -> str:
+            return ""
+
+        def close(self) -> None:
+            return None
+
+    class DummyProc:
+        def __init__(self) -> None:
+            self.stdout = DummyStream()
+            self.stderr = DummyStream()
+            self.returncode: int | None = None
+            self.terminated = False
+
+        def wait(self, timeout=None):
+            del timeout
+            if self.returncode is None:
+                self.returncode = 0
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.terminated = True
+            self.returncode = 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    proc = DummyProc()
+    monkeypatch.setattr(rpg.subprocess, "Popen", lambda *_args, **_kwargs: proc)
+    guard = _make_guard(tmp_path)
+    guard.max_matches = 1
+
+    matches = guard._scan_history_patch(repo, rpg.SECRET_CONTENT_RE)
+
+    assert len(matches) == 1
+    assert matches[0].startswith("L1:+token=")
+    assert proc.terminated is True
+    assert guard._flush_repo_runtime_issues() == []
+
+
+def test_history_secret_taxonomy_scan_preserves_bucket_parity(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo-a"
+    repo.mkdir()
+    low_confidence_secret = "synthetic-review-token" * 2
+
+    class DummyStream:
+        def __init__(self, lines: list[str] | None = None, stderr: str = "") -> None:
+            self.lines = lines or []
+            self.stderr = stderr
+
+        def __iter__(self):
+            return iter(self.lines)
+
+        def read(self) -> str:
+            return self.stderr
+
+        def close(self) -> None:
+            return None
+
+    class DummyProc:
+        def __init__(self) -> None:
+            self.stdout = DummyStream(
+                [
+                    "diff --git a/src/settings.py b/src/settings.py\n",
+                    "+++ b/src/settings.py\n",
+                    f"+token={_fixture_aws_key()}\n",
+                    f"+api_key={low_confidence_secret}\n",
+                    " context should not scan AKIAAAAAAAAAAAAAAAA\n",
+                    "diff --git a/tests/fixtures/example.env b/tests/fixtures/example.env\n",
+                    f"+token={_fixture_secret()}\n",
+                    "diff --git a/docs/guide.md b/docs/guide.md\n",
+                    f"+token={_fixture_secret()}\n",
+                    "--- a/docs/guide.md\n",
+                ]
+            )
+            self.stderr = DummyStream()
+            self.returncode: int | None = None
+
+        def wait(self, timeout=None):
+            del timeout
+            self.returncode = 0
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    monkeypatch.setattr(rpg.subprocess, "Popen", lambda *_args, **_kwargs: DummyProc())
+    guard = _make_guard(tmp_path)
+
+    high_confidence, low_confidence, fixtures, documentation = guard._scan_history_secret_taxonomy(repo)
+
+    assert high_confidence == [f"L3:src/settings.py:token={_fixture_aws_key()}"]
+    assert low_confidence == [f"L4:src/settings.py:api_key={low_confidence_secret}"]
+    assert fixtures == [f"L7:tests/fixtures/example.env:token={_fixture_secret()}"]
+    assert documentation == [f"L9:docs/guide.md:token={_fixture_secret()}"]
+    assert guard._flush_repo_runtime_issues() == []
 
 
 def test_validate_git_identity_inputs() -> None:

@@ -43,9 +43,12 @@ from typing import Any, Callable, Iterable, Mapping, cast
 
 from repo_privacy_guardian import artifacts as artifact_helpers
 from repo_privacy_guardian import agent_summary as agent_summary_helpers  # noqa: F401 - re-exported for extracted reporting
+from repo_privacy_guardian import config as config_helpers
 from repo_privacy_guardian import github as github_helpers
 from repo_privacy_guardian import github_fix_guide
+from repo_privacy_guardian.gui import locale as gui_locale_helpers
 from repo_privacy_guardian import metrics as metrics_helpers
+from repo_privacy_guardian import policy as policy_helpers
 from repo_privacy_guardian import prompts as prompt_helpers  # noqa: F401 - re-exported for extracted GUI
 from repo_privacy_guardian import runtime
 from repo_privacy_guardian import strict_profiles
@@ -118,12 +121,9 @@ REMEDIATION_INSTALL_PACKAGES = ["git-filter-repo>=2.45,<3"]
 GUI_SETTINGS_ENV_VAR = "REPO_PRIVACY_GUARDIAN_GUI_SETTINGS"
 GUI_SETTINGS_SCHEMA_VERSION = 1
 GUI_SETTINGS_MAX_BYTES = 32 * 1024
-GUI_LOCALE_DEFAULT = "en"
-GUI_LOCALE_ES_419 = "es-419"
-GUI_LOCALE_OPTIONS: tuple[tuple[str, str], ...] = (
-    (GUI_LOCALE_DEFAULT, "English"),
-    (GUI_LOCALE_ES_419, "Español (Latinoamérica)"),
-)
+GUI_LOCALE_DEFAULT = gui_locale_helpers.GUI_LOCALE_DEFAULT
+GUI_LOCALE_ES_419 = gui_locale_helpers.GUI_LOCALE_ES_419
+GUI_LOCALE_OPTIONS = gui_locale_helpers.GUI_LOCALE_OPTIONS
 GUI_APPEARANCE_LIGHT = "light"
 GUI_APPEARANCE_DARK = "dark"
 GUI_APPEARANCE_SYSTEM = "system"
@@ -240,10 +240,7 @@ SSH_REMOTE_PSEUDO_EMAILS = {
     ("git", "vs-ssh.visualstudio.com"),
     ("hg", "bitbucket.org"),
 }
-GITHUB_EMAIL_PRIVACY_HELP = (
-    "Use GitHub Email Settings to verify private-email and push-block protections, "
-    "and to copy your noreply address when needed."
-)
+GITHUB_EMAIL_PRIVACY_HELP = gui_locale_helpers.GITHUB_EMAIL_PRIVACY_HELP
 
 DEFAULT_IGNORE_BASELINE = [
     ".venv/",
@@ -276,10 +273,16 @@ DEFAULT_GIT_STREAM_TIMEOUT_SECONDS = 300
 REPO_LOCK_FILENAME = "repo-privacy-guardian.lock"
 REPO_LOCK_WAIT_SECONDS = 10.0
 REPO_LOCK_RETRY_SECONDS = 0.2
-MAX_GITHUB_CLONE_JOBS = 16
+MAX_GITHUB_CLONE_JOBS = config_helpers.MAX_GITHUB_CLONE_JOBS
 TEMP_TREE_CLEANUP_ATTEMPTS = 5
 TEMP_TREE_CLEANUP_RETRY_SECONDS = 0.2
 RUN_STATE_FILENAME = "run_state.json"
+
+parse_positive_int = config_helpers.parse_positive_int
+normalize_github_jobs = config_helpers.normalize_github_jobs
+normalize_repo_filters = config_helpers.normalize_repo_filters
+normalize_csv_values = config_helpers.normalize_csv_values
+normalize_text_values = config_helpers.normalize_text_values
 
 # Allow committed template files such as `.env.example` while keeping real
 # environment files and local variants sensitive by default.
@@ -608,8 +611,7 @@ def release_advisory_file_lock(fd: int) -> None:
     fcntl.flock(fd, fcntl.LOCK_UN)
 
 
-def repo_has_dirty_worktree(clean_status: str | None) -> bool:
-    return len((clean_status or "").splitlines()) > 1
+repo_has_dirty_worktree = policy_helpers.repo_has_dirty_worktree
 
 
 def _path_has_existing_symlink_ancestor(path: Path) -> bool:
@@ -881,8 +883,8 @@ LITELLM_INSTALL_COMMAND_RE = re.compile(
     r"(?i)(pip\s+install\s+litellm|uv\s+add\s+litellm|poetry\s+add\s+litellm)"
 )
 LITELLM_IOC_RE = re.compile(r"(?i)litellm_init\.pth|models\.litellm\.cloud|checkmarx\.zone")
-LITELLM_COMPROMISED_1828_RE = re.compile(r"(?i)\b1\.82\.8\b")
-LITELLM_COMPROMISED_1827_RE = re.compile(r"(?i)\b1\.82\.7\b")
+LITELLM_COMPROMISED_1828_RE = policy_helpers.LITELLM_COMPROMISED_1828_RE
+LITELLM_COMPROMISED_1827_RE = policy_helpers.LITELLM_COMPROMISED_1827_RE
 
 SUPPLY_CHAIN_CANDIDATE_FILENAMES = {
     "requirements.txt",
@@ -1022,8 +1024,6 @@ class RunStateTracker(artifact_helpers.RunStateTracker):
             now_factory=datetime.now,
         )
 
-
-from repo_privacy_guardian.gui import locale as gui_locale_helpers  # noqa: E402
 
 GUI_TOOLTIP_TEXT = gui_locale_helpers.GUI_TOOLTIP_TEXT
 GUI_TOOLTIP_TEXT_BY_LOCALE = gui_locale_helpers.GUI_TOOLTIP_TEXT_BY_LOCALE
@@ -1658,13 +1658,13 @@ _redact_text_list = redaction_helpers._redact_text_list
 from repo_privacy_guardian import reporting as reporting_helpers  # noqa: E402
 
 sanitize_report_for_export = reporting_helpers.sanitize_report_for_export
-validate_fix_preconditions = reporting_helpers.validate_fix_preconditions
+validate_fix_preconditions = policy_helpers.validate_fix_preconditions
 build_fix_preflight_summary = reporting_helpers.build_fix_preflight_summary
-email_decision_context = reporting_helpers.email_decision_context
-email_remediation_decision = reporting_helpers.email_remediation_decision
-repo_user_guidance = reporting_helpers.repo_user_guidance
-classify_repo_severity = reporting_helpers.classify_repo_severity
-classify_litellm_incident_severity = reporting_helpers.classify_litellm_incident_severity
+email_decision_context = policy_helpers.email_decision_context
+email_remediation_decision = policy_helpers.email_remediation_decision
+repo_user_guidance = policy_helpers.repo_user_guidance
+classify_repo_severity = policy_helpers.classify_repo_severity
+classify_litellm_incident_severity = policy_helpers.classify_litellm_incident_severity
 build_detected_findings_preview = reporting_helpers.build_detected_findings_preview
 build_planned_removals_preview = reporting_helpers.build_planned_removals_preview
 report_contains_sensitive_findings = reporting_helpers.report_contains_sensitive_findings
@@ -2219,20 +2219,6 @@ def execute_guard_pipeline(
     return exit_code
 
 
-def parse_positive_int(raw_value: str) -> int:
-    try:
-        parsed = int(raw_value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("must be a positive integer") from exc
-    if parsed <= 0:
-        raise argparse.ArgumentTypeError("must be a positive integer")
-    return parsed
-
-
-def normalize_github_jobs(value: int) -> int:
-    return min(MAX_GITHUB_CLONE_JOBS, max(1, value))
-
-
 def is_github_noreply_email(email: str) -> bool:
     lowered = email.strip().lower()
     if not lowered:
@@ -2402,20 +2388,6 @@ def resolve_identity_repo_path(root: Path, selected_repo_names: list[str]) -> tu
         return root, None
 
     return None, "Select one repository first (or set Root to a git repository)."
-
-
-def normalize_repo_filters(repo_names: list[str]) -> list[str] | None:
-    return repo_names if repo_names else None
-
-
-def normalize_csv_values(raw_value: str) -> list[str]:
-    if not raw_value:
-        return []
-    return list(dict.fromkeys(item.strip() for item in raw_value.split(",") if item.strip()))
-
-
-def normalize_text_values(values: list[str]) -> list[str]:
-    return list(dict.fromkeys(value.strip() for value in values if value and value.strip()))
 
 
 from repo_privacy_guardian.scanner import RepoPublicationGuard  # noqa: E402
@@ -2626,18 +2598,8 @@ def build_guard_run_config(
     strict_profile: str | None = None,
     suppressions: str | None = None,
 ) -> GuardRunConfig:
-    normalized_owner_emails = normalize_text_values(owner_emails)
-    normalized_allowed_remote_owners = normalize_text_values(allowed_remote_owners)
-    inferred_owner = infer_github_username_from_noreply(noreply_email)
-    if inferred_owner and inferred_owner not in normalized_allowed_remote_owners:
-        normalized_allowed_remote_owners.append(inferred_owner)
-    strict_profile_config = strict_profiles.build_strict_profile_config(
-        profile=strict_profile,
-        low_confidence_email_mode=low_confidence_email_mode,
-        audit_github_hardening=audit_github_hardening,
-    )
-
-    return GuardRunConfig(
+    return config_helpers.build_guard_run_config(
+        config_factory=GuardRunConfig,
         mode=mode,
         root=root,
         policy=policy,
@@ -2650,9 +2612,9 @@ def build_guard_run_config(
         purge_detected_secret_files=purge_detected_secret_files,
         purge_all_detected_secret_files=purge_all_detected_secret_files,
         rewrite_personal_paths=rewrite_personal_paths,
-        low_confidence_email_mode=strict_profile_config.low_confidence_email_mode,
+        low_confidence_email_mode=low_confidence_email_mode,
         owner_name=owner_name,
-        owner_emails=normalized_owner_emails,
+        owner_emails=owner_emails,
         noreply_email=noreply_email,
         placeholder_email=placeholder_email,
         max_matches=max_matches,
@@ -2661,17 +2623,16 @@ def build_guard_run_config(
         open_report=open_report,
         confirm_each_repo_fix=confirm_each_repo_fix,
         allow_non_owner_push=allow_non_owner_push,
-        allowed_remote_owners=normalized_allowed_remote_owners,
+        allowed_remote_owners=allowed_remote_owners,
         replace_text_file=replace_text_file,
         report_json=report_json,
-        github_owner=(github_owner.strip() if github_owner and github_owner.strip() else None),
+        github_owner=github_owner,
         github_include_forks=github_include_forks,
         github_fast=github_fast,
-        github_jobs=normalize_github_jobs(github_jobs),
+        github_jobs=github_jobs,
         agent_summary=agent_summary,
-        strict_profile=strict_profile_config.name,
-        github_hardening_findings_blocking=strict_profile_config.github_hardening_findings_blocking,
-        suppressions=(suppressions.strip() if suppressions and suppressions.strip() else None),
+        strict_profile=strict_profile,
+        suppressions=suppressions,
     )
 
 
@@ -2882,248 +2843,20 @@ def persist_litellm_supply_chain_output(
 from repo_privacy_guardian.gui.app import GuiApp  # noqa: E402
 
 def make_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Audit/fix repository public-release safety based on docs/POLICY.md. "
-            "Start safely with --check-tooling, then a --dry-run audit; fixes are opt-in. "
-            "Outbound/exfil indicators remain advisory/manual-review by default."
-        ),
-        epilog=(
-            "First-time safe path (no writes):\n"
-            "  repo-privacy-guardian --check-tooling\n"
-            "  repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes\n"
-            "\n"
-            "Read the result:\n"
-            "  PASS   no blocking publication issues were found\n"
-            "  REVIEW inspect advisory findings before publishing\n"
-            "  FAIL   do not publish until blocking findings are fixed\n"
-            "\n"
-            "Common CLI flow:\n"
-            "  repo-privacy-guardian --check-tooling\n"
-            "  repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes\n"
-            "  repo-privacy-guardian --root /path/to/repos --repos MyRepo --fix --dry-run --yes\n"
-            "  repo-privacy-guardian --gui\n"
-            "\n"
-            "Agentic handoff:\n"
-            "  Paste the README 60-Second First Run prompt into your coding agent; keep fixes and pushes approval-gated."
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+    return config_helpers.make_parser(
+        default_root=default_root_dir(),
+        default_policy=DEFAULT_POLICY,
+        default_results_dir=DEFAULT_RESULTS_DIR,
+        default_noreply=DEFAULT_NOREPLY,
+        default_placeholder=DEFAULT_PLACEHOLDER,
+        public_only_default=GUI_DEFAULT_PUBLIC_ONLY,
     )
-    parser.add_argument("--root", default=str(default_root_dir()), help="Root folder containing repositories")
-    parser.add_argument("--policy", default=str(DEFAULT_POLICY), help="Policy markdown path")
-    parser.add_argument("--repos", nargs="*", help="Repo folder names or absolute paths")
-    parser.add_argument(
-        "--public-only",
-        action="store_true",
-        help="Only include repositories with publicly accessible GitHub origin",
-    )
-
-    parser.add_argument("--fix", action="store_true", help="Apply automated fixes")
-    parser.add_argument("--push", action="store_true", help="Force-push rewritten history to origin")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be changed")
-    parser.add_argument(
-        "--redact-third-party-emails",
-        action="store_true",
-        help="Redact non-owner emails to placeholder",
-    )
-    parser.add_argument(
-        "--purge-detected-secret-files",
-        action="store_true",
-        help="When fixing, add secret files to .gitignore, untrack them, and purge them from history (safe candidates only)",
-    )
-    parser.add_argument(
-        "--purge-all-detected-secret-files",
-        action="store_true",
-        help="When fixing, purge all detected secret files including risky/manual-review candidates",
-    )
-    parser.add_argument(
-        "--rewrite-personal-paths",
-        action="store_true",
-        help="When fixing, rewrite detected personal absolute paths in tracked content/history",
-    )
-    parser.add_argument(
-        "--low-confidence-email-mode",
-        choices=["informational", "blocking"],
-        default="informational",
-        help="Treat low-confidence email findings as informational (default) or blocking",
-    )
-    parser.add_argument(
-        "--strict-profile",
-        choices=list(strict_profiles.STRICT_PROFILE_CHOICES),
-        help=(
-            "Apply a documented policy preset: audit-only rejects writes, internal is explicit current behavior, "
-            "release promotes low-confidence emails and opt-in GitHub hardening findings to blocking."
-        ),
-    )
-    parser.add_argument(
-        "--suppressions",
-        help=(
-            "Versioned JSON suppression file for advisory/manual-review findings. "
-            "High-confidence secrets, path leaks, git metadata blocking findings, fsck, dirty tree, and runtime errors cannot be suppressed."
-        ),
-    )
-    parser.add_argument(
-        "--agent-summary",
-        action="store_true",
-        help="Print a safe agent handoff summary and always write agent_summary.json in the run artifacts.",
-    )
-    parser.add_argument(
-        "--audit-litellm-incident",
-        action="store_true",
-        help="Enable supply-chain incident audit checks for LiteLLM March-2026 indicators",
-    )
-    parser.add_argument(
-            "--audit-github-hardening",
-            action="store_true",
-            help=(
-                "Enable optional GitHub repository settings audit for GitHub remotes. "
-                "Uses read-only GitHub API calls; token-gated checks require "
-                "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, GH_TOKEN, or authenticated gh."
-            ),
-        )
-    parser.add_argument(
-        "--github-owner",
-        help=(
-            "Opt-in remote audit: discover repositories for this GitHub user/org, "
-            "clone them into a temporary private directory, audit, then remove the clones"
-        ),
-    )
-    parser.add_argument(
-        "--github-include-forks",
-        action="store_true",
-        help="With --github-owner, include forked repositories (forks are skipped by default)",
-    )
-    parser.add_argument(
-        "--github-fast",
-        action="store_true",
-        help="With --github-owner, use shallow clones before auditing current files and available history",
-    )
-    parser.add_argument(
-        "--github-jobs",
-        type=parse_positive_int,
-        default=4,
-        help=f"With --github-owner, number of concurrent clone workers (default: 4, max: {MAX_GITHUB_CLONE_JOBS})",
-    )
-
-    parser.add_argument("--owner-name", default="Owner", help="Owner display name for rewritten commits")
-    parser.add_argument(
-        "--owner-email",
-        action="append",
-        default=[],
-        help="Owner private email(s) to replace with noreply (can repeat)",
-    )
-    parser.add_argument("--noreply-email", default=DEFAULT_NOREPLY, help="Target noreply email")
-    parser.add_argument(
-        "--placeholder-email",
-        default=DEFAULT_PLACEHOLDER,
-        help="Placeholder email for redacted contributors",
-    )
-    parser.add_argument("--max-matches", type=parse_positive_int, default=50, help="Max findings per check")
-    parser.add_argument(
-        "--report-json",
-        help=(
-            "Optional extra JSON export path. Main JSON/LOG/HTML artifacts are always written to a timestamped "
-            "run folder; with --compare-reports, this writes the comparison JSON."
-        ),
-    )
-    parser.add_argument(
-        "--compare-reports",
-        nargs=2,
-        metavar=("BEFORE_REPORT_JSON", "AFTER_REPORT_JSON"),
-        help=(
-            "Compare two redacted report.json artifacts and print count-only deltas without running a new audit."
-        ),
-    )
-    parser.add_argument(
-        "--report-dir",
-        default=str(default_results_dir()),
-        help="Requested base directory for timestamped run folders; values outside Audit_Results are ignored by policy",
-    )
-    parser.add_argument(
-        "--replace-text-file",
-        help=(
-            "Advanced remediation input: merge an explicit git-filter-repo replace-text file "
-            "into the generated rewrite plan"
-        ),
-    )
-
-    parser.add_argument("--yes", action="store_true", help="Skip destructive action confirmation prompt")
-    parser.add_argument(
-        "--check-tooling",
-        action="store_true",
-        help="Check required/optional local tooling for the selected mode and exit",
-    )
-    parser.add_argument(
-        "--install-missing-tools",
-        action="store_true",
-        help="Attempt to install supported missing tools before continuing",
-    )
-    report_open_group = parser.add_mutually_exclusive_group()
-    report_open_group.add_argument(
-        "--open-report",
-        action="store_true",
-        help="Open the generated HTML report in a browser after a CLI run completes",
-    )
-    report_open_group.add_argument(
-        "--no-open-report",
-        action="store_true",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
-        "--no-confirm-each-repo",
-        action="store_true",
-        help="Disable per-repository fix confirmation prompts in CLI mode",
-    )
-    parser.add_argument(
-        "--allow-non-owner-push",
-        action="store_true",
-        help="Bypass remote owner verification before force push (unsafe)",
-    )
-    parser.add_argument(
-        "--allow-remote-owner",
-        action="append",
-        default=[],
-        help="Allow force-push only when origin owner matches this value (can repeat)",
-    )
-    parser.add_argument("--gui", action="store_true", help="Launch the optional desktop GUI")
-    return parser
 
 
 def build_cli_guard_run_config(args: argparse.Namespace) -> GuardRunConfig:
-    return build_guard_run_config(
-        mode="cli",
-        root=Path(args.root),
-        policy=Path(args.policy),
-        repos=args.repos,
-        public_only=args.public_only,
-        fix=args.fix,
-        push=args.push,
-        dry_run=args.dry_run,
-        redact_third_party_emails=args.redact_third_party_emails,
-        purge_detected_secret_files=args.purge_detected_secret_files,
-        purge_all_detected_secret_files=args.purge_all_detected_secret_files,
-        rewrite_personal_paths=args.rewrite_personal_paths,
-        low_confidence_email_mode=args.low_confidence_email_mode,
-        owner_name=args.owner_name,
-        owner_emails=args.owner_email,
-        noreply_email=args.noreply_email,
-        placeholder_email=args.placeholder_email,
-        max_matches=args.max_matches,
-        open_report=bool(args.open_report),
-        confirm_each_repo_fix=not args.no_confirm_each_repo,
-        allow_non_owner_push=args.allow_non_owner_push,
-        allowed_remote_owners=args.allow_remote_owner,
-        replace_text_file=args.replace_text_file,
-        report_json=args.report_json,
-        github_owner=args.github_owner,
-        github_include_forks=args.github_include_forks,
-        github_fast=args.github_fast,
-        github_jobs=args.github_jobs,
-        audit_litellm_incident=args.audit_litellm_incident,
-        audit_github_hardening=args.audit_github_hardening,
-        agent_summary=args.agent_summary,
-        strict_profile=args.strict_profile,
-        suppressions=args.suppressions,
+    return config_helpers.build_cli_guard_run_config(
+        args,
+        config_factory=GuardRunConfig,
     )
 
 

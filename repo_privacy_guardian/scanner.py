@@ -2,15 +2,85 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403,F405
-from repo_privacy_guardian.core import *
-from repo_privacy_guardian import core as _core
+import errno
+import json
+import os
+import re
+import socket
+import subprocess
+import sys
+import threading
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable
 
-_apply_private_permissions = _core._apply_private_permissions
-_close_fd_safely = _core._close_fd_safely
-_missing_executable_message = _core._missing_executable_message
-_read_json_from_locked_fd = _core._read_json_from_locked_fd
-_write_json_to_locked_fd = _core._write_json_to_locked_fd
+from repo_privacy_guardian import execution as execution_helpers
+from repo_privacy_guardian import evidence_taxonomy as evidence_taxonomy_helpers
+from repo_privacy_guardian import history_parsing as history_parsing_helpers
+from repo_privacy_guardian import remediation as remediation_helpers
+
+if TYPE_CHECKING:
+    from repo_privacy_guardian.core import (
+        CODE_EXTENSIONS,
+        DEFAULT_GIT_STREAM_TIMEOUT_SECONDS,
+        DEFAULT_IGNORE_BASELINE,
+        DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+        EMAIL_RE,
+        LITELLM_COMPROMISED_VERSION_RE,
+        LITELLM_INSTALL_COMMAND_RE,
+        LITELLM_IOC_RE,
+        LITELLM_REFERENCE_RE,
+        LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE,
+        PERSONAL_PATH_RE,
+        POLICY_MINIMUM_BASELINE_END_RE,
+        POLICY_MINIMUM_BASELINE_RE,
+        REDACTED_PATH,
+        REMEDIATION_INSTALL_PACKAGES,
+        REPO_LOCK_FILENAME,
+        REPO_LOCK_RETRY_SECONDS,
+        REPO_LOCK_WAIT_SECONDS,
+        SECRET_CONTENT_RE,
+        SECRET_REMEDIATE_FILENAME_RE,
+        SENSITIVE_FILENAME_RE,
+        SIMPLE_EMAIL_RE,
+        SUPPLY_CHAIN_CANDIDATE_FILENAMES,
+        CommandResult,
+        RepoExecutionLock,
+        RepoReport,
+        _apply_private_permissions,
+        _close_fd_safely,
+        _missing_executable_message,
+        _read_json_from_locked_fd,
+        _write_json_to_locked_fd,
+        acquire_advisory_file_lock,
+        audit_github_release_hardening,
+        classify_litellm_incident_severity,
+        classify_secret_match_context,
+        cleanup_private_temp_text_file,
+        create_private_temp_text_file,
+        discover_repository_targets,
+        ensure_private_directory,
+        extract_personal_path_literals,
+        github_fix_guide,
+        infer_github_username_from_noreply,
+        is_public_github_remote,
+        is_relevant_email_candidate,
+        is_repo_privacy_guardian_reviewed_network_indicator,
+        is_repo_privacy_guardian_source_tree,
+        line_has_exfil_indicator,
+        normalize_text_values,
+        parse_github_remote_owner,
+        read_text_file_for_scan,
+        release_advisory_file_lock,
+        repo_display_name,
+        split_email_matches_by_taxonomy,
+        split_unexpected_emails_by_origin_ownership,
+        streaming_popen_kwargs,
+        subprocess_stdin,
+        validate_fix_preconditions,
+        write_private_text_file,
+    )
 
 
 class RepoPublicationGuard:  # pragma: no cover
@@ -36,6 +106,7 @@ class RepoPublicationGuard:  # pragma: no cover
         replace_text_file: str | None,
         logger: Callable[[str], None],
     ) -> None:
+        _sync_scanner_public_overrides()
         self.root = root
         self.policy_path = policy_path
         self.noreply_email = noreply_email
@@ -83,35 +154,31 @@ class RepoPublicationGuard:  # pragma: no cover
         self._repo_runtime_issues = []
         return issues
 
+    def _command_adapter(self) -> execution_helpers.GitSubprocessAdapter[CommandResult]:
+        return execution_helpers.GitSubprocessAdapter(
+            timeout_seconds=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+            result_factory=CommandResult,
+            missing_executable_message=_missing_executable_message,
+            stdin_selector=subprocess_stdin,
+            remediation_install_packages=tuple(REMEDIATION_INSTALL_PACKAGES),
+            python_executable=sys.executable,
+            runner=subprocess.run,
+        )
+
+    def _stream_adapter(self) -> execution_helpers.GitStreamingAdapter:
+        return execution_helpers.GitStreamingAdapter(
+            timeout_seconds=DEFAULT_GIT_STREAM_TIMEOUT_SECONDS,
+            popen_kwargs_factory=streaming_popen_kwargs,
+            popen_factory=subprocess.Popen,
+        )
+
     def _run(
         self,
         cmd: list[str],
         cwd: Path | None = None,
         input_text: str | None = None,
     ) -> CommandResult:
-        try:
-            proc = subprocess.run(
-                cmd,
-                cwd=str(cwd) if cwd else None,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                input=input_text,
-                stdin=subprocess_stdin(input_text),
-                timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
-            )
-        except FileNotFoundError:
-            return CommandResult(127, "", _missing_executable_message(cmd[0]))
-        except subprocess.TimeoutExpired:
-            return CommandResult(
-                124,
-                "",
-                f"Command timed out after {DEFAULT_SUBPROCESS_TIMEOUT_SECONDS}s: {shlex.join(cmd)}",
-            )
-        except Exception as exc:
-            return CommandResult(1, "", f"Unable to execute {shlex.join(cmd)}: {exc}")
-        return CommandResult(proc.returncode, proc.stdout, proc.stderr)
+        return self._command_adapter().run(cmd, cwd=cwd, input_text=input_text)
 
     def _run_checked(
         self,
@@ -119,19 +186,13 @@ class RepoPublicationGuard:  # pragma: no cover
         cwd: Path | None = None,
         input_text: str | None = None,
     ) -> CommandResult:
-        result = self._run(cmd, cwd=cwd, input_text=input_text)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"Command failed ({result.returncode}): {shlex.join(cmd)}\n"
-                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
-        return result
+        return self._command_adapter().run_checked(cmd, cwd=cwd, input_text=input_text)
 
     def _git(self, repo: Path, *args: str) -> CommandResult:
-        return self._run(["git", "-C", str(repo), *args])
+        return self._command_adapter().git(repo, *args)
 
     def _git_checked(self, repo: Path, *args: str) -> CommandResult:
-        return self._run_checked(["git", "-C", str(repo), *args])
+        return self._command_adapter().git_checked(repo, *args)
 
     def _read_text(self, path: Path) -> str:
         return path.read_text(encoding="utf-8", errors="replace")
@@ -436,42 +497,29 @@ class RepoPublicationGuard:  # pragma: no cover
         documentation: list[str],
         history: bool = False,
     ) -> None:
-        has_high_confidence_secret = SECRET_CONTENT_RE.search(line) is not None
-        has_low_confidence_secret = (
-            not has_high_confidence_secret
-            and LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE.search(line) is not None
+        buckets = evidence_taxonomy_helpers.SecretTaxonomyBuckets(
+            high_confidence=high_confidence,
+            low_confidence=low_confidence,
+            fixtures=fixtures,
+            documentation=documentation,
         )
-        if not has_high_confidence_secret and not has_low_confidence_secret:
-            return
-
-        rel = rel_path or "-"
-        snippet = line.strip()[:240]
-        entry = f"L{line_number}:{rel}:{snippet}" if history else f"{rel}:{line_number}:{snippet}"
-        context = classify_secret_match_context(rel_path, snippet)
-
-        if context == "fixture":
-            if len(fixtures) < self.max_matches:
-                fixtures.append(entry)
-            return
-        if context == "documentation":
-            if len(documentation) < self.max_matches:
-                documentation.append(entry)
-            return
-        if has_high_confidence_secret:
-            if len(high_confidence) < self.max_matches:
-                high_confidence.append(entry)
-            return
-        if len(low_confidence) < self.max_matches:
-            low_confidence.append(entry)
+        evidence_taxonomy_helpers.append_secret_taxonomy_match(
+            buckets=buckets,
+            rel_path=rel_path,
+            line_number=line_number,
+            line=line,
+            secret_pattern=SECRET_CONTENT_RE,
+            low_confidence_pattern=LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE,
+            classify_secret_match_context=classify_secret_match_context,
+            max_matches=self.max_matches,
+            history=history,
+        )
 
     def _scan_tracked_secret_taxonomy(
         self,
         repo: Path,
     ) -> tuple[list[str], list[str], list[str], list[str]]:
-        high_confidence: list[str] = []
-        low_confidence: list[str] = []
-        fixtures: list[str] = []
-        documentation: list[str] = []
+        buckets = evidence_taxonomy_helpers.SecretTaxonomyBuckets()
 
         for file_path in self._iter_tracked_files(repo):
             rel = file_path.relative_to(repo).as_posix()
@@ -479,16 +527,17 @@ class RepoPublicationGuard:  # pragma: no cover
             if text is None:
                 continue
             for idx, line in enumerate(text.splitlines(), start=1):
-                self._append_secret_taxonomy_match(
+                evidence_taxonomy_helpers.append_secret_taxonomy_match(
+                    buckets=buckets,
                     rel_path=rel,
                     line_number=idx,
                     line=line,
-                    high_confidence=high_confidence,
-                    low_confidence=low_confidence,
-                    fixtures=fixtures,
-                    documentation=documentation,
+                    secret_pattern=SECRET_CONTENT_RE,
+                    low_confidence_pattern=LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE,
+                    classify_secret_match_context=classify_secret_match_context,
+                    max_matches=self.max_matches,
                 )
-        return high_confidence, low_confidence, fixtures, documentation
+        return buckets.as_tuple()
 
     def _scan_network_code_indicators(self, repo: Path) -> tuple[list[str], list[str]]:
         matches: list[str] = []
@@ -620,71 +669,17 @@ class RepoPublicationGuard:  # pragma: no cover
 
     def _finalize_git_stream_process(
         self,
-        proc: subprocess.Popen[str],
-        timeout: int = DEFAULT_GIT_STREAM_TIMEOUT_SECONDS,
+        proc: execution_helpers.StreamingProcessLike,
+        timeout: int | None = None,
     ) -> tuple[int | None, str]:
-        stderr_text = ""
-        try:
-            proc.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            self._terminate_process_if_running(proc)
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                pass
-        finally:
-            if proc.stderr is not None:
-                try:
-                    stderr_text = proc.stderr.read()
-                except Exception:
-                    stderr_text = ""
-            if proc.stdout is not None:
-                try:
-                    proc.stdout.close()
-                except Exception:
-                    pass
-            if proc.stderr is not None:
-                try:
-                    proc.stderr.close()
-                except Exception:
-                    pass
-        return proc.returncode, stderr_text
+        return self._stream_adapter().finalize(proc, timeout=timeout)
 
-    def _terminate_process_if_running(self, proc: subprocess.Popen[str]) -> None:
-        if proc.poll() is not None:
-            return
-        try:
-            proc.terminate()
-            proc.wait(timeout=2)
-            return
-        except Exception:
-            pass
-        try:
-            proc.kill()
-        except Exception:
-            pass
+    def _terminate_process_if_running(self, proc: execution_helpers.StreamingProcessLike) -> None:
+        self._stream_adapter().terminate_if_running(proc)
 
     def _scan_history_patch(self, repo: Path, regex: re.Pattern[str]) -> list[str]:
-        cmd = [
-            "git",
-            "-C",
-            str(repo),
-            "log",
-            "--all",
-            "-p",
-            "--no-color",
-            "--pretty=format:",
-        ]
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                **streaming_popen_kwargs(),
-            )
+            proc = self._stream_adapter().start_git_history_patch(repo)
         except FileNotFoundError:
             self._record_repo_runtime_issue("history patch scan failed to start: Git executable not found")
             return []
@@ -708,7 +703,7 @@ class RepoPublicationGuard:  # pragma: no cover
                     timed_out = True
                     break
                 if regex.search(line):
-                    matches.append(f"L{idx}:{line.strip()[:240]}")
+                    matches.append(history_parsing_helpers.format_history_patch_match(idx, line))
                     if len(matches) >= self.max_matches:
                         self._terminate_process_if_running(proc)
                         terminated_early = True
@@ -731,26 +726,8 @@ class RepoPublicationGuard:  # pragma: no cover
         self,
         repo: Path,
     ) -> tuple[list[str], list[str], list[str], list[str]]:
-        cmd = [
-            "git",
-            "-C",
-            str(repo),
-            "log",
-            "--all",
-            "-p",
-            "--no-color",
-            "--pretty=format:",
-        ]
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                **streaming_popen_kwargs(),
-            )
+            proc = self._stream_adapter().start_git_history_patch(repo)
         except FileNotFoundError:
             self._record_repo_runtime_issue("history secret taxonomy scan failed to start: Git executable not found")
             return [], [], [], []
@@ -758,17 +735,14 @@ class RepoPublicationGuard:  # pragma: no cover
             self._record_repo_runtime_issue(f"history secret taxonomy scan failed to start: {exc}")
             return [], [], [], []
 
-        high_confidence: list[str] = []
-        low_confidence: list[str] = []
-        fixtures: list[str] = []
-        documentation: list[str] = []
+        buckets = evidence_taxonomy_helpers.SecretTaxonomyBuckets()
         current_file: str | None = None
         deadline = time.monotonic() + DEFAULT_GIT_STREAM_TIMEOUT_SECONDS
         timed_out = False
         try:
             stream = proc.stdout
             if stream is None:
-                return high_confidence, low_confidence, fixtures, documentation
+                return buckets.as_tuple()
             for idx, raw_line in enumerate(stream, start=1):
                 if time.monotonic() >= deadline:
                     self.log(
@@ -778,22 +752,21 @@ class RepoPublicationGuard:  # pragma: no cover
                     timed_out = True
                     break
                 if raw_line.startswith("diff --git "):
-                    match = re.match(r"diff --git a/(.+?) b/(.+)$", raw_line.strip())
-                    current_file = match.group(2) if match else None
-                    continue
-                if raw_line.startswith("+++") or raw_line.startswith("---"):
-                    continue
-                if not (raw_line.startswith("+") or raw_line.startswith("-")):
+                    current_file = history_parsing_helpers.parse_git_diff_target(raw_line)
                     continue
 
-                self._append_secret_taxonomy_match(
+                line_context = history_parsing_helpers.extract_patch_change_context(raw_line)
+                if line_context is None:
+                    continue
+                evidence_taxonomy_helpers.append_secret_taxonomy_match(
+                    buckets=buckets,
                     rel_path=current_file,
                     line_number=idx,
-                    line=raw_line[1:],
-                    high_confidence=high_confidence,
-                    low_confidence=low_confidence,
-                    fixtures=fixtures,
-                    documentation=documentation,
+                    line=line_context,
+                    secret_pattern=SECRET_CONTENT_RE,
+                    low_confidence_pattern=LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE,
+                    classify_secret_match_context=classify_secret_match_context,
+                    max_matches=self.max_matches,
                     history=True,
                 )
         finally:
@@ -808,29 +781,11 @@ class RepoPublicationGuard:  # pragma: no cover
             self._record_repo_runtime_issue(
                 f"history secret taxonomy scan failed with exit code {returncode}{suffix}"
             )
-        return high_confidence, low_confidence, fixtures, documentation
+        return buckets.as_tuple()
 
     def _scan_history_non_allowed_emails(self, repo: Path) -> list[str]:
-        cmd = [
-            "git",
-            "-C",
-            str(repo),
-            "log",
-            "--all",
-            "-p",
-            "--no-color",
-            "--pretty=format:",
-        ]
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                **streaming_popen_kwargs(),
-            )
+            proc = self._stream_adapter().start_git_history_patch(repo)
         except FileNotFoundError:
             self._record_repo_runtime_issue("history email scan failed to start: Git executable not found")
             return []
@@ -855,8 +810,7 @@ class RepoPublicationGuard:  # pragma: no cover
                     timed_out = True
                     break
                 if line.startswith("diff --git "):
-                    match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
-                    current_file = match.group(2) if match else None
+                    current_file = history_parsing_helpers.parse_git_diff_target(line)
                     continue
                 emails = [
                     email
@@ -864,14 +818,19 @@ class RepoPublicationGuard:  # pragma: no cover
                     if is_relevant_email_candidate(email)
                 ]
                 leaked = [email for email in emails if not self._is_allowed_email(email)]
-                if leaked:
-                    uniq = ", ".join(sorted(set(leaked)))
-                    rel_path = current_file or "-"
-                    matches.append(f"L{idx}:{rel_path}:{uniq}:{line.strip()[:200]}")
-                    if len(matches) >= self.max_matches:
-                        self._terminate_process_if_running(proc)
-                        terminated_early = True
-                        break
+                finding = history_parsing_helpers.format_history_email_match(
+                    line_number=idx,
+                    current_file=current_file,
+                    leaked_emails=leaked,
+                    line=line,
+                )
+                if finding is None:
+                    continue
+                matches.append(finding)
+                if len(matches) >= self.max_matches:
+                    self._terminate_process_if_running(proc)
+                    terminated_early = True
+                    break
         finally:
             returncode, stderr_text = self._finalize_git_stream_process(proc)
         if timed_out:
@@ -909,26 +868,8 @@ class RepoPublicationGuard:  # pragma: no cover
         return matches
 
     def _scan_history_secret_files(self, repo: Path) -> list[str]:
-        cmd = [
-            "git",
-            "-C",
-            str(repo),
-            "log",
-            "--all",
-            "-p",
-            "--no-color",
-            "--pretty=format:",
-        ]
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                **streaming_popen_kwargs(),
-            )
+            proc = self._stream_adapter().start_git_history_patch(repo)
         except FileNotFoundError:
             self._record_repo_runtime_issue("history secret-file scan failed to start: Git executable not found")
             return []
@@ -956,30 +897,22 @@ class RepoPublicationGuard:  # pragma: no cover
                     timed_out = True
                     break
                 if line.startswith("diff --git "):
-                    match = re.match(r"diff --git a/(.+?) b/(.+)$", line.strip())
-                    if match:
-                        current_file = match.group(2)
-                    else:
-                        current_file = None
+                    current_file = history_parsing_helpers.parse_git_diff_target(line)
                     continue
 
-                if not current_file:
+                line_context = history_parsing_helpers.extract_patch_change_context(line)
+                if line_context is None:
                     continue
 
-                if line.startswith("+++") or line.startswith("---"):
-                    continue
-
-                if not (line.startswith("+") or line.startswith("-")):
-                    continue
-
-                line_context = line[1:] if line.startswith(("+", "-")) else line
-                if (
-                    SECRET_CONTENT_RE.search(line_context)
-                    and classify_secret_match_context(current_file, line_context) == "active"
-                    and current_file not in seen
-                ):
-                    seen.add(current_file)
-                    files.append(current_file)
+                secret_file = history_parsing_helpers.active_secret_file_from_patch_change(
+                    current_file=current_file,
+                    line_context=line_context,
+                    secret_pattern=SECRET_CONTENT_RE,
+                    classify_secret_match_context=classify_secret_match_context,
+                )
+                if secret_file and secret_file not in seen:
+                    seen.add(secret_file)
+                    files.append(secret_file)
                     if len(files) >= self.max_matches:
                         self._terminate_process_if_running(proc)
                         terminated_early = True
@@ -1239,16 +1172,7 @@ class RepoPublicationGuard:  # pragma: no cover
         return report
 
     def _ensure_git_filter_repo(self) -> None:
-        probe = self._run([sys.executable, "-m", "git_filter_repo", "--help"])
-        if probe.returncode == 0:
-            return
-        detail = probe.stderr.strip() or probe.stdout.strip()
-        raise RuntimeError(
-            "git-filter-repo is required for remediation that rewrites history. "
-            f"Install it with: {sys.executable} -m pip install {' '.join(REMEDIATION_INSTALL_PACKAGES)} "
-            "or re-run with --install-missing-tools."
-            + (f"\nDetails: {detail}" if detail else "")
-        )
+        self._command_adapter().ensure_git_filter_repo()
 
     def _write_mailmap(self, report: RepoReport) -> Path | None:
         lines: list[str] = []
@@ -1306,67 +1230,38 @@ class RepoPublicationGuard:  # pragma: no cover
         )
 
     def _write_replace_text_file(self, report: RepoReport) -> Path | None:
-        replacement_map: dict[str, str] = {}
-
-        candidate_lines = (
-            report.tracked_email_matches
-            + report.history_email_matches
-            + report.tracked_path_matches
-            + report.history_path_matches
-        )
-
-        for line in candidate_lines:
-            for email in EMAIL_RE.findall(line):
-                if not is_relevant_email_candidate(email):
-                    continue
-                if self._is_allowed_email(email):
-                    continue
-
-                if email in self.owner_emails:
-                    replacement_map[email] = self.noreply_email
-                elif self.redact_third_party:
-                    replacement_map[email] = self.placeholder_email
-
-        if getattr(self, "rewrite_personal_paths", False):
-            for line in report.tracked_path_matches + report.history_path_matches:
-                for path_literal in extract_personal_path_literals(line):
-                    replacement_map[path_literal] = REDACTED_PATH
-        elif report.tracked_path_matches or report.history_path_matches:
-            report.fix_actions.append(
-                "path remediation skipped: explicit opt-in required (--rewrite-personal-paths)"
-            )
-
-        extra_replace_lines: list[str] = []
+        explicit_replace_lines: tuple[str, ...] = ()
+        explicit_replace_source: Path | None = None
         replace_text_file = getattr(self, "replace_text_file", None)
         if replace_text_file:
-            replace_path = Path(replace_text_file).expanduser().resolve()
-            try:
-                raw_extra_lines = replace_path.read_text(encoding="utf-8-sig", errors="replace")
-            except OSError as exc:
-                raise RuntimeError(
-                    f"Unable to read --replace-text-file '{replace_path}': {exc}"
-                ) from exc
+            explicit_rules = remediation_helpers.load_explicit_replace_text_rules(replace_text_file)
+            explicit_replace_lines = explicit_rules.lines
+            explicit_replace_source = explicit_rules.path
 
-            extra_replace_lines = [
-                line.strip()
-                for line in raw_extra_lines.splitlines()
-                if line.strip() and not line.lstrip().startswith("#")
-            ]
-            if extra_replace_lines:
-                report.fix_actions.append(
-                    f"merged explicit replace-text mappings from {replace_path}"
-                )
+        plan = remediation_helpers.build_replace_text_plan(
+            report,
+            email_pattern=EMAIL_RE,
+            is_relevant_email_candidate=is_relevant_email_candidate,
+            is_allowed_email=self._is_allowed_email,
+            owner_emails=self.owner_emails,
+            noreply_email=self.noreply_email,
+            placeholder_email=self.placeholder_email,
+            redact_third_party=self.redact_third_party,
+            rewrite_personal_paths=getattr(self, "rewrite_personal_paths", False),
+            extract_personal_path_literals=extract_personal_path_literals,
+            redacted_path=REDACTED_PATH,
+            explicit_replace_lines=explicit_replace_lines,
+            explicit_replace_source=explicit_replace_source,
+        )
+        report.fix_actions.extend(plan.fix_actions)
 
-        if not replacement_map and not extra_replace_lines:
+        if not plan.lines:
             return None
 
-        lines = [f"literal:{src}==>{dst}" for src, dst in sorted(replacement_map.items())]
-        lines.extend(extra_replace_lines)
-        lines = list(dict.fromkeys(lines))
         return create_private_temp_text_file(
             "repo-publication-guard-",
             "replace-text.txt",
-            "\n".join(lines) + "\n",
+            "\n".join(plan.lines) + "\n",
         )
 
     def _append_missing_gitignore_patterns(self, repo: Path, missing: list[str]) -> bool:
@@ -1506,55 +1401,29 @@ class RepoPublicationGuard:  # pragma: no cover
     def _rewrite_history(self, repo: Path, report: RepoReport) -> None:
         mailmap = self._write_mailmap(report)
         replace_text = self._write_replace_text_file(report)
-
-        purge_by_filename_signals = bool(report.history_sensitive_added or report.history_sensitive_deleted)
-        purge_paths = sorted(set(report.secret_history_purge_paths))
-        needs_history_purge = bool(purge_by_filename_signals or purge_paths)
-        do_rewrite = bool(mailmap) or bool(replace_text) or needs_history_purge
-        if not do_rewrite:
+        rewrite_plan = remediation_helpers.build_history_rewrite_plan(
+            report,
+            mailmap_enabled=bool(mailmap),
+            replace_text_enabled=bool(replace_text),
+        )
+        if not rewrite_plan.do_rewrite:
             report.fix_actions.append("history rewrite skipped (no mappings required)")
             return
 
         remotes = self._save_remotes(repo)
 
         if self.dry_run:
-            report.fix_actions.append("[dry-run] history rewrite would run")
-            report.fix_actions.append(f"[dry-run] mailmap enabled: {bool(mailmap)}")
-            report.fix_actions.append(f"[dry-run] replace-text enabled: {bool(replace_text)}")
-            if purge_paths:
-                preview_paths = ", ".join(purge_paths[:5])
-                report.fix_actions.append(f"[dry-run] purge paths preview: {preview_paths}")
-                if len(purge_paths) > 5:
-                    report.fix_actions.append("[dry-run] purge paths preview truncated")
-            if purge_by_filename_signals:
-                report.fix_actions.append("[dry-run] sensitive filename signal purge regex enabled")
+            report.fix_actions.extend(rewrite_plan.dry_run_actions())
             return
 
         try:
             self._ensure_git_filter_repo()
-
-            cmd = [sys.executable, "-m", "git_filter_repo", "--force"]
-            if mailmap:
-                cmd.extend(["--mailmap", str(mailmap)])
-            if replace_text:
-                cmd.extend(["--replace-text", str(replace_text)])
-
-            if needs_history_purge:
-                for purge_path in purge_paths:
-                    cmd.extend(["--path", purge_path])
-
-                if purge_by_filename_signals:
-                    # Purge common sensitive/local artifacts from whole history.
-                    cmd.extend(
-                        [
-                            "--path-regex",
-                            r"(^|.*/)__pycache__/.*|.*\.pyc$|(^|.*/)\.env(\..*)?$|"
-                            r".*\.(pem|key|p12|pfx|kdbx)$|(^|.*/)id_rsa$",
-                        ]
-                    )
-
-                cmd.append("--invert-paths")
-
+            cmd = remediation_helpers.build_git_filter_repo_command(
+                python_executable=sys.executable,
+                mailmap=mailmap,
+                replace_text=replace_text,
+                rewrite_plan=rewrite_plan,
+            )
             self._run_checked(cmd, cwd=repo, input_text="y\n")
             self._restore_remotes(repo, remotes)
             report.fix_actions.append("history rewritten with git-filter-repo")
@@ -1693,18 +1562,91 @@ class RepoPublicationGuard:  # pragma: no cover
         return report
 
 
-_SCANNER_OVERRIDE_NAMES = tuple(
-    name for name in globals() if not name.startswith("__") and name != "_core" and hasattr(_core, name)
+from repo_privacy_guardian import core as _core  # noqa: E402
+
+_SCANNER_OVERRIDE_NAMES = (
+    "CODE_EXTENSIONS",
+    "CommandResult",
+    "DEFAULT_GIT_STREAM_TIMEOUT_SECONDS",
+    "DEFAULT_IGNORE_BASELINE",
+    "DEFAULT_SUBPROCESS_TIMEOUT_SECONDS",
+    "EMAIL_RE",
+    "LITELLM_COMPROMISED_VERSION_RE",
+    "LITELLM_INSTALL_COMMAND_RE",
+    "LITELLM_IOC_RE",
+    "LITELLM_REFERENCE_RE",
+    "LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE",
+    "PERSONAL_PATH_RE",
+    "POLICY_MINIMUM_BASELINE_END_RE",
+    "POLICY_MINIMUM_BASELINE_RE",
+    "Path",
+    "REDACTED_PATH",
+    "REMEDIATION_INSTALL_PACKAGES",
+    "REPO_LOCK_FILENAME",
+    "REPO_LOCK_RETRY_SECONDS",
+    "REPO_LOCK_WAIT_SECONDS",
+    "RepoExecutionLock",
+    "RepoReport",
+    "SECRET_CONTENT_RE",
+    "SECRET_REMEDIATE_FILENAME_RE",
+    "SENSITIVE_FILENAME_RE",
+    "SIMPLE_EMAIL_RE",
+    "SUPPLY_CHAIN_CANDIDATE_FILENAMES",
+    "_apply_private_permissions",
+    "_close_fd_safely",
+    "_missing_executable_message",
+    "_read_json_from_locked_fd",
+    "_write_json_to_locked_fd",
+    "acquire_advisory_file_lock",
+    "audit_github_release_hardening",
+    "classify_litellm_incident_severity",
+    "classify_secret_match_context",
+    "cleanup_private_temp_text_file",
+    "create_private_temp_text_file",
+    "datetime",
+    "discover_repository_targets",
+    "ensure_private_directory",
+    "errno",
+    "extract_personal_path_literals",
+    "github_fix_guide",
+    "infer_github_username_from_noreply",
+    "is_public_github_remote",
+    "is_relevant_email_candidate",
+    "is_repo_privacy_guardian_reviewed_network_indicator",
+    "is_repo_privacy_guardian_source_tree",
+    "json",
+    "line_has_exfil_indicator",
+    "normalize_text_values",
+    "os",
+    "parse_github_remote_owner",
+    "re",
+    "read_text_file_for_scan",
+    "release_advisory_file_lock",
+    "repo_display_name",
+    "socket",
+    "split_email_matches_by_taxonomy",
+    "split_unexpected_emails_by_origin_ownership",
+    "streaming_popen_kwargs",
+    "subprocess",
+    "subprocess_stdin",
+    "sys",
+    "threading",
+    "time",
+    "validate_fix_preconditions",
+    "write_private_text_file",
 )
 
 
 def _sync_scanner_public_overrides() -> None:
     for name in _SCANNER_OVERRIDE_NAMES:
-        globals()[name] = getattr(_core, name, globals()[name])
+        globals()[name] = getattr(_core, name)
 
 
-def _wrap_guard_method(method):
-    def synced(self, *args, **kwargs):
+_sync_scanner_public_overrides()
+
+
+def _wrap_guard_method(method: Callable[..., Any]) -> Callable[..., Any]:
+    def synced(self: object, *args: Any, **kwargs: Any) -> Any:
         _sync_scanner_public_overrides()
         return method(self, *args, **kwargs)
 

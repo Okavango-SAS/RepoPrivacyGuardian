@@ -12,6 +12,17 @@ All notable user-facing changes to this project are documented here.
 - Added safe email fixture buckets for tracked and historical test/fixture email examples so strict release profiles keep traceability without blocking on intentional test data.
 - Clarified the GitHub hardening fix guide and release docs around the exact protected-branch baseline, including admin enforcement and the current automatic CI smoke check.
 
+### Changed
+
+- Consolidated the historical UX/UI audit notes into a current visual QA record and removed obsolete tracked before-state screenshots.
+- Reduced compatibility-bridge coupling in the config, redaction, tooling, reporting, policy, remediation, scanner, GUI app, and GUI locale modules by replacing broad core star imports or core-owned constants with explicit dependencies while preserving public facades.
+- Moved `git-filter-repo` rewrite command construction into remediation planning helpers so dry-run previews and real rewrite commands stay covered by focused contract tests.
+- Extracted scanner Git/subprocess execution into a dedicated adapter with contract coverage for cwd, stdin, checked failures, streaming `git log` process lifecycle, `git-filter-repo` probing, and dry-run rewrite behavior.
+- Extracted pure scanner history patch parsing and finding formatting into a dedicated helper module with edge-case coverage for diff targets, patch line filtering, email findings, and active secret-file detection.
+- Extracted tracked/history secret taxonomy bucket aggregation into a dedicated helper module with parity coverage for high-confidence, low-confidence, fixture, and documentation findings.
+- Run the automatic CI smoke workflow for protected-branch pull requests as well as `main` pushes so required status checks can satisfy branch protection before merge.
+- Removed the `pull_request` path filter from automatic CI so protected-branch required checks always report on PRs.
+
 ## [1.5.0] - 2026-05-04
 
 ### Added

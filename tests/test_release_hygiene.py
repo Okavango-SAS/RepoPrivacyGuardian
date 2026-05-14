@@ -4,6 +4,7 @@ import json
 import re
 import struct
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -69,15 +70,21 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian/__init__.py",
     "repo_privacy_guardian/agent_summary.py",
     "repo_privacy_guardian/artifacts.py",
+    "repo_privacy_guardian/config.py",
     "repo_privacy_guardian/core.py",
+    "repo_privacy_guardian/evidence_taxonomy.py",
+    "repo_privacy_guardian/execution.py",
     "repo_privacy_guardian/gui/__init__.py",
     "repo_privacy_guardian/gui/app.py",
     "repo_privacy_guardian/gui/locale.py",
+    "repo_privacy_guardian/history_parsing.py",
     "repo_privacy_guardian/github_fix_guide.py",
     "repo_privacy_guardian/github.py",
     "repo_privacy_guardian/metrics.py",
+    "repo_privacy_guardian/policy.py",
     "repo_privacy_guardian/prompts.py",
     "repo_privacy_guardian/redaction.py",
+    "repo_privacy_guardian/remediation.py",
     "repo_privacy_guardian/report_diff.py",
     "repo_privacy_guardian/reporting.py",
     "repo_privacy_guardian/runtime.py",
@@ -377,8 +384,9 @@ def test_ux_audit_doc_avoids_absolute_local_asset_paths() -> None:
     ux_audit = (_repo_root() / "docs" / "UX_UI_AUDIT.md").read_text(encoding="utf-8")
 
     assert "/C:/Users/" not in ux_audit
-    assert "ux-audit/before/" in ux_audit
     assert "ux-audit/after/" in ux_audit
+    assert "ux-audit/before/" not in ux_audit
+    assert "Historical before-state screenshots were removed" in ux_audit
 
 
 def test_docs_cover_optional_github_hardening_audit() -> None:
@@ -411,6 +419,266 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
     assert "strict current automatic CI checks" in operations
     assert "CLI smoke + release contract (automatic, ubuntu-latest, py3.13)" in operations
     assert "CLI smoke + release contract (automatic, ubuntu-latest, py3.13)" in release_checklist
+
+
+def test_low_risk_extracted_modules_use_explicit_core_imports() -> None:
+    for rel_path in (
+        "repo_privacy_guardian/redaction.py",
+        "repo_privacy_guardian/tooling.py",
+        "repo_privacy_guardian/config.py",
+        "repo_privacy_guardian/evidence_taxonomy.py",
+        "repo_privacy_guardian/execution.py",
+        "repo_privacy_guardian/history_parsing.py",
+        "repo_privacy_guardian/reporting.py",
+        "repo_privacy_guardian/scanner.py",
+        "repo_privacy_guardian/gui/app.py",
+        "repo_privacy_guardian/policy.py",
+        "repo_privacy_guardian/remediation.py",
+    ):
+        text = (_repo_root() / rel_path).read_text(encoding="utf-8")
+        assert "from repo_privacy_guardian.core import *" not in text
+        assert "ruff: noqa: F403" not in text
+
+
+def test_reporting_module_imports_without_core_circularity() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import repo_privacy_guardian.reporting as reporting; "
+                "print(reporting.sanitize_report_for_export.__name__)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert "sanitize_report_for_export" in proc.stdout
+
+
+def test_scanner_module_imports_without_core_circularity() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import repo_privacy_guardian.scanner as scanner; "
+                "print(scanner.RepoPublicationGuard.__name__)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert "RepoPublicationGuard" in proc.stdout
+
+
+def test_gui_app_module_imports_without_core_circularity() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import repo_privacy_guardian.gui.app as gui_app; "
+                "print(gui_app.GuiApp.__name__)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert "GuiApp" in proc.stdout
+
+
+def test_gui_locale_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.gui.locale as locale; "
+                "print(locale.GUI_LOCALE_DEFAULT); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["en", "False"]
+
+
+def test_policy_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.policy as policy; "
+                "print(policy.repo_has_dirty_worktree('## main\\n M README.md')); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["True", "False"]
+
+
+def test_remediation_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.remediation as remediation; "
+                "print(hasattr(remediation, 'build_history_rewrite_plan') "
+                "and hasattr(remediation, 'build_git_filter_repo_command')); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["True", "False"]
+
+
+def test_execution_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.execution as execution; "
+                "print(hasattr(execution, 'GitSubprocessAdapter')); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["True", "False"]
+
+
+def test_history_parsing_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.history_parsing as history_parsing; "
+                "print(history_parsing.parse_git_diff_target('diff --git a/a b/b')); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["b", "False"]
+
+
+def test_evidence_taxonomy_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.evidence_taxonomy as evidence_taxonomy; "
+                "print(evidence_taxonomy.SecretTaxonomyBuckets().as_tuple()); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["([], [], [], [])", "False"]
+
+
+def test_config_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.config as config; "
+                "parser = config.make_parser("
+                "default_root=config.Path('C:/repos'), "
+                "default_policy=config.Path('C:/repos/docs/POLICY.md'), "
+                "default_results_dir=config.Path('C:/repos/Audit_Results'), "
+                "default_noreply='noreply@github.com', "
+                "default_placeholder='redacted-contributor@example.invalid'); "
+                "print(parser.parse_args(['--github-jobs', '2']).github_jobs); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["2", "False"]
 
 
 def test_docs_cover_agentic_ide_prompt_library() -> None:
@@ -782,8 +1050,14 @@ def test_design_md_adapts_frontend_guidance_to_desktop_gui_contract() -> None:
 
 def test_ci_workflow_matches_cost_first_validation_contract() -> None:
     workflow = (_repo_root() / CI_WORKFLOW).read_text(encoding="utf-8")
+    push_block = workflow.split("  push:", 1)[1].split("  pull_request:", 1)[0]
+    pull_request_block = workflow.split("  pull_request:", 1)[1].split("  workflow_dispatch:", 1)[0]
 
     assert "Cost-first policy" in workflow
+    assert "pull_request:" in workflow
+    assert workflow.count("branches:\n      - main") >= 2
+    assert "paths:" in push_block
+    assert "paths:" not in pull_request_block
     assert "manual extended validation suite" in workflow
     assert 'python-version: "3.13"' in workflow
     assert 'python-version: "3.11"' in workflow
