@@ -44,6 +44,7 @@ RELEASE_BYTE_COMPILE_PATHS = (
     "repo_privacy_guardian/gui/__init__.py",
     "repo_privacy_guardian/gui/app.py",
     "repo_privacy_guardian/gui/locale.py",
+    "repo_privacy_guardian/gui/state.py",
     "repo_privacy_guardian/history_parsing.py",
     "repo_privacy_guardian/github.py",
     "repo_privacy_guardian/github_fix_guide.py",

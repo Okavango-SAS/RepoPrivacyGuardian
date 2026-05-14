@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_prompts as prompt_helpers
+from repo_privacy_guardian.gui import state as gui_state_helpers
 from repo_privacy_guardian_artifacts import RunArtifacts
 
 
@@ -2318,6 +2319,46 @@ def test_gui_repair_gate_note_tracks_repair_state() -> None:
     assert label.config["text"] == rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]["repair_ready_note"]
 
 
+def test_gui_state_helpers_cover_audit_stop_and_repair_labels() -> None:
+    assert gui_state_helpers.audit_button_state(
+        run_in_progress=False,
+        has_targets=True,
+        has_remote_target=False,
+    ) == gui_state_helpers.ButtonState("run_audit", "normal")
+    assert gui_state_helpers.audit_button_state(
+        run_in_progress=False,
+        has_targets=False,
+        has_remote_target=False,
+    ) == gui_state_helpers.ButtonState("audit_unavailable", "disabled")
+    assert gui_state_helpers.audit_button_state(
+        run_in_progress=True,
+        has_targets=False,
+        has_remote_target=True,
+    ) == gui_state_helpers.ButtonState("run_audit", "disabled")
+    assert gui_state_helpers.cancel_button_state(
+        run_in_progress=True,
+        cancel_requested=False,
+    ) == gui_state_helpers.ButtonState("stop_after_current_step", "normal")
+    assert gui_state_helpers.cancel_button_state(
+        run_in_progress=True,
+        cancel_requested=True,
+    ) == gui_state_helpers.ButtonState("stopping_after_current_step", "disabled")
+    assert gui_state_helpers.repair_button_state(repair_ready=True, run_in_progress=False) == "normal"
+    assert gui_state_helpers.repair_button_state(repair_ready=True, run_in_progress=True) == "disabled"
+    assert gui_state_helpers.repair_gate_note_state(
+        repair_ready=False,
+        has_audit_reports=False,
+    ) == gui_state_helpers.RepairGateNoteState("repair_stays_disabled", "locked")
+    assert gui_state_helpers.repair_gate_note_state(
+        repair_ready=False,
+        has_audit_reports=True,
+    ) == gui_state_helpers.RepairGateNoteState("repair_review_pending_note", "review")
+    assert gui_state_helpers.repair_gate_note_state(
+        repair_ready=True,
+        has_audit_reports=True,
+    ) == gui_state_helpers.RepairGateNoteState("repair_ready_note", "ready")
+
+
 def test_gui_lock_default_text_is_english() -> None:
     app = object.__new__(rpg.GuiApp)
     app._repair_cooldown_after_id = None
@@ -2621,6 +2662,36 @@ def test_build_repair_status_summary_mentions_pass_fail_counts() -> None:
     assert "1 FAIL / 1 PASS" in summary
     assert "repo-a, repo-b" in summary
     assert "1 blocking category" in summary
+    assert "1 manual-review signal" in summary
+    assert "1 fixture/documentation match kept non-blocking" in summary
+
+
+def test_gui_state_repair_status_summary_uses_translation_callback() -> None:
+    translations = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT]
+
+    def translate(key: str, **kwargs: object) -> str:
+        return translations[key].format(**kwargs)
+
+    summary = gui_state_helpers.build_repair_status_summary(
+        [
+            {
+                "name": "repo-a",
+                "status": "PASS",
+                "history_secret_low_confidence": ["L1:src/settings.py:<redacted-secret>"],
+            },
+            {
+                "name": "repo-b",
+                "status": "PASS",
+                "reviewed_network_indicators": ["repo_privacy_guardian/github.py:1:urlopen(request)"],
+            },
+            {"name": "repo-c", "status": "PASS"},
+            {"name": "repo-d", "status": "PASS"},
+        ],
+        translate,
+    )
+
+    assert "repo-a, repo-b, repo-c, +1 more" in summary
+    assert "All selected repositories passed" in summary
     assert "1 manual-review signal" in summary
     assert "1 fixture/documentation match kept non-blocking" in summary
 

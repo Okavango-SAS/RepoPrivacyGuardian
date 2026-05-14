@@ -10,6 +10,7 @@
     "repo_privacy_guardian/execution.py",
     "repo_privacy_guardian/gui/app.py",
     "repo_privacy_guardian/gui/locale.py",
+    "repo_privacy_guardian/gui/state.py",
     "repo_privacy_guardian/history_parsing.py",
     "repo_privacy_guardian/github_fix_guide.py",
     "repo_privacy_guardian/github.py",
