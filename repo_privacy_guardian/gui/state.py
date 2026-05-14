@@ -50,6 +50,18 @@ class RepairGateNoteState:
     tone: RepairGateTone
 
 
+@dataclass(frozen=True)
+class CollapsibleSectionState:
+    visible: bool
+    toggle_text_key: str
+    hint_text_key: str
+    hint_text_kwargs: tuple[tuple[str, object], ...] = ()
+
+    @property
+    def hint_kwargs(self) -> dict[str, object]:
+        return dict(self.hint_text_kwargs)
+
+
 Translate = Callable[..., str]
 
 
@@ -180,3 +192,44 @@ def repair_gate_note_state(
     if has_audit_reports:
         return RepairGateNoteState(text_key="repair_review_pending_note", tone="review")
     return RepairGateNoteState(text_key="repair_stays_disabled", tone="locked")
+
+
+def setup_settings_visibility_state(
+    *,
+    visible: bool,
+    github_owner: str | None,
+) -> CollapsibleSectionState:
+    if visible:
+        return CollapsibleSectionState(
+            visible=True,
+            toggle_text_key="hide_settings",
+            hint_text_key="setup_hint_open",
+        )
+    if github_owner:
+        return CollapsibleSectionState(
+            visible=False,
+            toggle_text_key="open_settings",
+            hint_text_key="setup_hint_remote",
+            hint_text_kwargs=(("github_owner", github_owner),),
+        )
+    return CollapsibleSectionState(
+        visible=False,
+        toggle_text_key="open_settings",
+        hint_text_key="setup_hint_hidden",
+    )
+
+
+def repair_options_visibility_state(*, visible: bool) -> CollapsibleSectionState:
+    return CollapsibleSectionState(
+        visible=visible,
+        toggle_text_key="repair_advanced_toggle_hide" if visible else "repair_advanced_toggle_show",
+        hint_text_key="repair_advanced_hint_visible" if visible else "repair_advanced_hint_hidden",
+    )
+
+
+def advanced_identity_visibility_state(*, visible: bool) -> CollapsibleSectionState:
+    return CollapsibleSectionState(
+        visible=visible,
+        toggle_text_key="hide_advanced_identity" if visible else "show_advanced_identity",
+        hint_text_key="advanced_identity_visible" if visible else "advanced_identity_hidden",
+    )

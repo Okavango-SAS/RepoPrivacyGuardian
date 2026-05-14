@@ -1552,6 +1552,13 @@ def test_gui_advanced_identity_settings_are_collapsible() -> None:
 
 
 def test_gui_setup_settings_are_collapsible() -> None:
+    class DummyVar:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
     class DummyWidget:
         def __init__(self) -> None:
             self.actions: list[str] = []
@@ -1582,6 +1589,11 @@ def test_gui_setup_settings_are_collapsible() -> None:
     assert toggle_button.kwargs["text"] == "Open Settings"
     assert "saved and hidden" in str(hint_label.kwargs["text"])
     assert frame.actions == ["grid_remove"]
+
+    app.github_owner_var = DummyVar("Acme")
+    app._set_setup_settings_visibility(False)
+
+    assert "Acme" in str(hint_label.kwargs["text"])
 
     app._toggle_setup_settings()
 
@@ -2694,6 +2706,42 @@ def test_gui_state_repair_status_summary_uses_translation_callback() -> None:
     assert "All selected repositories passed" in summary
     assert "1 manual-review signal" in summary
     assert "1 fixture/documentation match kept non-blocking" in summary
+
+
+def test_gui_state_collapsible_visibility_helpers_preserve_text_keys() -> None:
+    setup_open = gui_state_helpers.setup_settings_visibility_state(visible=True, github_owner="Acme")
+    assert setup_open.visible is True
+    assert setup_open.toggle_text_key == "hide_settings"
+    assert setup_open.hint_text_key == "setup_hint_open"
+    assert setup_open.hint_kwargs == {}
+
+    setup_remote = gui_state_helpers.setup_settings_visibility_state(visible=False, github_owner="Acme")
+    assert setup_remote.visible is False
+    assert setup_remote.toggle_text_key == "open_settings"
+    assert setup_remote.hint_text_key == "setup_hint_remote"
+    assert setup_remote.hint_kwargs == {"github_owner": "Acme"}
+
+    setup_hidden = gui_state_helpers.setup_settings_visibility_state(visible=False, github_owner=None)
+    assert setup_hidden.hint_text_key == "setup_hint_hidden"
+    assert setup_hidden.hint_kwargs == {}
+
+    repair_open = gui_state_helpers.repair_options_visibility_state(visible=True)
+    assert repair_open.visible is True
+    assert repair_open.toggle_text_key == "repair_advanced_toggle_hide"
+    assert repair_open.hint_text_key == "repair_advanced_hint_visible"
+
+    repair_hidden = gui_state_helpers.repair_options_visibility_state(visible=False)
+    assert repair_hidden.visible is False
+    assert repair_hidden.toggle_text_key == "repair_advanced_toggle_show"
+    assert repair_hidden.hint_text_key == "repair_advanced_hint_hidden"
+
+    identity_open = gui_state_helpers.advanced_identity_visibility_state(visible=True)
+    assert identity_open.toggle_text_key == "hide_advanced_identity"
+    assert identity_open.hint_text_key == "advanced_identity_visible"
+
+    identity_hidden = gui_state_helpers.advanced_identity_visibility_state(visible=False)
+    assert identity_hidden.toggle_text_key == "show_advanced_identity"
+    assert identity_hidden.hint_text_key == "advanced_identity_hidden"
 
 
 def test_gui_browse_helpers_update_variables(tmp_path: Path) -> None:

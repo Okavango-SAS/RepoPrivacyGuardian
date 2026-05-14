@@ -3284,19 +3284,20 @@ class GuiApp:  # pragma: no cover
         self._refresh_reports_tab()
 
     def _set_repair_options_visibility(self, visible: bool) -> None:
-        self._repair_options_visible = visible
+        visibility_state = gui_state_helpers.repair_options_visibility_state(visible=visible)
+        self._repair_options_visible = visibility_state.visible
         card = getattr(self, "_repair_options_card", None)
         if card is not None:
-            if visible:
+            if visibility_state.visible:
                 card.grid()
             else:
                 card.grid_remove()
         button = getattr(self, "_repair_options_toggle_button", None)
         if button is not None:
-            button.configure(text=self._t("repair_advanced_toggle_hide" if visible else "repair_advanced_toggle_show"))
+            button.configure(text=self._t(visibility_state.toggle_text_key))
         hint = getattr(self, "_repair_options_hint_label", None)
         if hint is not None:
-            hint.configure(text=self._t("repair_advanced_hint_visible" if visible else "repair_advanced_hint_hidden"))
+            hint.configure(text=self._t(visibility_state.hint_text_key, **visibility_state.hint_kwargs))
 
     def _toggle_repair_options(self) -> None:
         self._set_repair_options_visibility(not getattr(self, "_repair_options_visible", False))
@@ -3906,30 +3907,31 @@ class GuiApp:  # pragma: no cover
         self._set_setup_settings_visibility(not self._setup_settings_visible)
 
     def _setup_settings_hint_text(self, visible: bool) -> str:
-        if visible:
-            return self._t("setup_hint_open")
+        visibility_state = self._setup_settings_visibility_state(visible)
+        return self._t(visibility_state.hint_text_key, **visibility_state.hint_kwargs)
+
+    def _setup_settings_visibility_state(self, visible: bool) -> gui_state_helpers.CollapsibleSectionState:
         try:
             github_owner = self._github_owner_value()
         except Exception:
             github_owner = None
-        if github_owner:
-            return self._t("setup_hint_remote", github_owner=github_owner)
-        return self._t("setup_hint_hidden")
+        return gui_state_helpers.setup_settings_visibility_state(visible=visible, github_owner=github_owner)
 
     def _set_setup_settings_visibility(self, visible: bool) -> None:
-        self._setup_settings_visible = visible
+        visibility_state = self._setup_settings_visibility_state(visible)
+        self._setup_settings_visible = visibility_state.visible
 
         toggle_button = getattr(self, "_setup_settings_toggle_button", None)
         if toggle_button is not None:
-            toggle_button.configure(text=self._t("hide_settings" if visible else "open_settings"))
+            toggle_button.configure(text=self._t(visibility_state.toggle_text_key))
 
         hint_label = getattr(self, "_setup_settings_hint_label", None)
         if hint_label is not None:
-            hint_label.configure(text=self._setup_settings_hint_text(visible))
+            hint_label.configure(text=self._t(visibility_state.hint_text_key, **visibility_state.hint_kwargs))
 
         frame = getattr(self, "_setup_settings_frame", None)
         if frame is not None:
-            if visible:
+            if visibility_state.visible:
                 frame.grid()
             else:
                 frame.grid_remove()
@@ -3938,19 +3940,20 @@ class GuiApp:  # pragma: no cover
         self._set_advanced_identity_visibility(not self._advanced_identity_visible)
 
     def _set_advanced_identity_visibility(self, visible: bool) -> None:
-        self._advanced_identity_visible = visible
+        visibility_state = gui_state_helpers.advanced_identity_visibility_state(visible=visible)
+        self._advanced_identity_visible = visibility_state.visible
 
         toggle_button = getattr(self, "_advanced_identity_toggle_button", None)
         if toggle_button is not None:
-            toggle_button.configure(text=self._t("hide_advanced_identity" if visible else "show_advanced_identity"))
+            toggle_button.configure(text=self._t(visibility_state.toggle_text_key))
 
         hint_label = getattr(self, "_advanced_identity_hint_label", None)
         if hint_label is not None:
-            hint_label.configure(text=self._t("advanced_identity_visible" if visible else "advanced_identity_hidden"))
+            hint_label.configure(text=self._t(visibility_state.hint_text_key, **visibility_state.hint_kwargs))
 
         identity_card = getattr(self, "_identity_card", None)
         if identity_card is not None:
-            if visible:
+            if visibility_state.visible:
                 identity_card.grid(row=1, column=0, sticky="we", padx=10, pady=(10, 8))
             else:
                 identity_card.grid_remove()
