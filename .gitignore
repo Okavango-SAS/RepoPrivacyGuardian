@@ -36,6 +36,7 @@ sessions/*
 
 # Test and coverage artifacts
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
 pytest-report.xml

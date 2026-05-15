@@ -10,7 +10,7 @@ Public-repo hygiene for maintainers:
 
 - inspect `git status --short` and `git diff --check` before staging
 - commit only intentional tracked source, tests, docs, and sanitized public assets
-- keep generated reports, GUI QA captures, build outputs, coverage files, logs, local notes, and release backup bundles in ignored paths such as `Audit_Results/`, `.local-meta/`, `dist/`, `build/`, `*.egg-info/`, and `*-pre-publication-fix-*.bundle`
+- keep generated reports, GUI QA captures, build outputs, coverage files such as `.coverage` and `.coverage.*`, logs, local notes, and release backup bundles in ignored paths such as `Audit_Results/`, `.local-meta/`, `dist/`, `build/`, `*.egg-info/`, and `*-pre-publication-fix-*.bundle`
 - do not commit raw secrets, private emails, internal hostnames, private URLs, personal absolute paths, unredacted logs, credentials in examples, or screenshots that reveal private local context
 - if sensitive material reaches a commit, pause release work, preserve only redacted evidence, rotate affected credentials outside this repository, and coordinate reviewed history cleanup before pushing additional work
 

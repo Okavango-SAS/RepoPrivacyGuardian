@@ -19,7 +19,7 @@ When working on Repo Privacy Guardian:
 
 - review `git status --short` and `git diff --check` before staging or committing
 - commit only intentional source, test, documentation, and sanitized asset changes
-- keep local audit evidence, generated screenshots, release builds, coverage output, scratch prompts, and logs in ignored paths such as `Audit_Results/`, `.local-meta/`, `dist/`, `build/`, `*.egg-info/`, and `*-pre-publication-fix-*.bundle`
+- keep local audit evidence, generated screenshots, release builds, coverage output, scratch prompts, and logs in ignored paths such as `Audit_Results/`, `.local-meta/`, `.coverage*`, `dist/`, `build/`, `*.egg-info/`, and `*-pre-publication-fix-*.bundle`
 - never commit raw secrets, private emails, internal hostnames, private URLs, personal absolute paths, tokens in command examples, unredacted logs, or screenshots that reveal private local context
 - use obvious placeholders and `.env.example` for non-secret variable names; do not put credentials in Git remotes, docs, tests, examples, CI config, or command arguments
 
@@ -727,7 +727,7 @@ Root is intentionally small and allowlisted by tests. Files that intentionally r
 - `repo_privacy_guardian/` internal package
 - `repo_privacy_guardian_*.py` import-compatibility shims published as `py-modules`
 
-Generated outputs, local agent scratch material, release bundles, coverage files, build outputs, and audit artifacts belong in ignored local paths such as `.local-meta/`, `Audit_Results/`, `dist/`, and `*.egg-info/`, not in the public tracked root.
+Generated outputs, local agent scratch material, release bundles, coverage files such as `.coverage` and `.coverage.*`, build outputs, and audit artifacts belong in ignored local paths such as `.local-meta/`, `Audit_Results/`, `dist/`, and `*.egg-info/`, not in the public tracked root.
 
 ## ⚠️ Limitations
 

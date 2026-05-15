@@ -976,7 +976,8 @@ def test_cli_gui_parity_is_documented_as_release_blocking_repo_rule() -> None:
 
 
 def test_repo_gitignore_covers_local_packaging_and_backup_artifacts() -> None:
-    gitignore = (_repo_root() / ".gitignore").read_text(encoding="utf-8")
+    root = _repo_root()
+    gitignore = (root / ".gitignore").read_text(encoding="utf-8")
 
     assert ".pkg-venv/" in gitignore
     assert "!.env.example" in gitignore
@@ -985,6 +986,26 @@ def test_repo_gitignore_covers_local_packaging_and_backup_artifacts() -> None:
     assert ".local-meta/" in gitignore
     assert "dist/" in gitignore
     assert "*.egg-info/" in gitignore
+    assert ".coverage" in gitignore
+    assert ".coverage.*" in gitignore
+
+    coverage_shard = ".coverage.WIN-C2ANEVBHN6Q.12345.Xsample"
+    check_ignore = subprocess.run(
+        ["git", "check-ignore", ".coverage", coverage_shard],
+        cwd=root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        timeout=30,
+        check=False,
+    )
+    assert check_ignore.returncode == 0, check_ignore.stderr
+    ignored_paths = set(check_ignore.stdout.splitlines())
+    assert ".coverage" in ignored_paths
+    assert coverage_shard in ignored_paths
 
 
 def test_public_repository_operating_contract_is_documented() -> None:
