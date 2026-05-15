@@ -19,7 +19,7 @@ The public compatibility contract remains:
 - `repo_privacy_guardian/core.py`: compatibility runtime, shared dataclasses, CLI parser/config normalization, pipeline orchestration, GitHub remote-audit preparation, Git identity helpers, LiteLLM supply-chain helpers, and public reexports for compatibility
 - `repo_privacy_guardian/artifacts.py`: run directories, `run.log`, `run_state.json`, report persistence helpers, and `agent_summary.json` path wiring
 - `repo_privacy_guardian/runtime.py`: exit codes, run-status names, cancellation token, root validation, and target discovery
-- `repo_privacy_guardian/github.py`: GitHub remote parsing, API access, owner/org discovery, clone orchestration, and release-hardening audit helpers
+- `repo_privacy_guardian/github.py`: GitHub remote parsing, API access, owner/org discovery, clone orchestration, and release-hardening audit helpers with pure payload classifiers for findings, warnings, and accepted risks
 - `repo_privacy_guardian/prompts.py`: GUI/README prompt-card registry without importing desktop GUI dependencies
 - `repo_privacy_guardian/config.py`: CLI parser construction, argument value parsing, comma/text normalization, GitHub owner/job normalization, and shared `GuardRunConfig` construction helpers
 - `repo_privacy_guardian/evidence_taxonomy.py`: pure secret finding bucket classification and aggregation for tracked and historical scanner findings

@@ -206,10 +206,11 @@ Presentation-only GUI features and launcher-only CLI flags are permitted only wh
   - `--strict-profile release` does not enable network access by itself;
   - suppressions can affect only advisory/manual-review categories and keep redacted `suppressed_findings`;
   - high-confidence secrets, path leaks, dirty trees, fsck failures, Git metadata blocking findings, execution errors, and fix errors are not suppressible;
-  - GitHub hardening remains read-only and produces a manual fix guide instead of mutating repository settings.
+  - GitHub hardening remains read-only and produces a manual fix guide instead of mutating repository settings;
+  - GitHub hardening API retrieval is separated from pure payload classifiers so findings, warnings, accepted risks, strict-profile behavior, and redacted normalization can be tested without network mocks.
 
 ## Future candidates
 
 - Scoped allowlists to reduce false positives beyond suppression files.
-- Continue replacing transitional compatibility bridges in extracted modules with narrower explicit dependency injection; config, redaction, tooling, evidence taxonomy, execution, history parsing, reporting, policy, remediation, scanner, GUI app, GUI locale, and GUI state now use explicit dependencies or local constants. Remediation owns pure `git-filter-repo` command planning, execution owns the side-effecting Git/subprocess adapters, including streaming history process lifecycle, history parsing owns pure `git log -p` line parsing/formatting, evidence taxonomy owns tracked/history secret bucket aggregation, and GUI state owns pure Audit/Repair flow button/gate, collapsible-section visibility, and Reports/Prompts responsive layout decisions; the next candidates are GUI widget construction helpers that still live in the compatibility nexus.
+- Continue replacing transitional compatibility bridges in extracted modules with narrower explicit dependency injection; config, redaction, tooling, evidence taxonomy, execution, history parsing, reporting, policy, remediation, scanner, GitHub, GUI app, GUI locale, and GUI state now use explicit dependencies or local constants. Remediation owns pure `git-filter-repo` command planning, execution owns the side-effecting Git/subprocess adapters, including streaming history process lifecycle, history parsing owns pure `git log -p` line parsing/formatting, evidence taxonomy owns tracked/history secret bucket aggregation, GitHub owns pure hardening payload classification, and GUI state owns pure Audit/Repair flow button/gate, collapsible-section visibility, and Reports/Prompts responsive layout decisions; the next candidates are GUI widget construction helpers that still live in the compatibility nexus.
 - Optional policy profiles by organization.

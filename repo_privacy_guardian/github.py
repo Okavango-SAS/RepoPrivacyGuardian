@@ -69,6 +69,54 @@ class GitHubRemoteRepository:
     fork: bool
 
 
+@dataclass(frozen=True)
+class GitHubHardeningClassification:
+    findings: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+    accepted_risks: tuple[str, ...] = ()
+
+
+def _github_hardening_classification(
+    *,
+    findings: tuple[str, ...] = (),
+    warnings: tuple[str, ...] = (),
+    accepted_risks: tuple[str, ...] = (),
+) -> GitHubHardeningClassification:
+    return GitHubHardeningClassification(
+        findings=findings,
+        warnings=warnings,
+        accepted_risks=accepted_risks,
+    )
+
+
+def merge_github_hardening_classifications(
+    *classifications: GitHubHardeningClassification,
+) -> GitHubHardeningClassification:
+    findings: list[str] = []
+    warnings: list[str] = []
+    accepted_risks: list[str] = []
+    for classification in classifications:
+        findings.extend(classification.findings)
+        warnings.extend(classification.warnings)
+        accepted_risks.extend(classification.accepted_risks)
+    return GitHubHardeningClassification(
+        findings=tuple(findings),
+        warnings=tuple(warnings),
+        accepted_risks=tuple(accepted_risks),
+    )
+
+
+def normalize_github_hardening_classification(
+    classification: GitHubHardeningClassification,
+    text_normalizer: Callable[[list[str]], list[str]],
+) -> GitHubHardeningClassification:
+    return GitHubHardeningClassification(
+        findings=tuple(text_normalizer(list(classification.findings))),
+        warnings=tuple(text_normalizer(list(classification.warnings))),
+        accepted_risks=tuple(text_normalizer(list(classification.accepted_risks))),
+    )
+
+
 def read_github_cli_token(
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> tuple[str | None, str]:
@@ -587,142 +635,74 @@ def _append_feature_disabled_finding(
     return True
 
 
-def _audit_private_vulnerability_reporting(
-    *,
-    repo_api_url: str,
-    token: str | None,
-    findings: list[str],
-    warnings: list[str],
-    json_getter: Callable[[str, str | None], tuple[object | None, str]],
-) -> None:
-    payload, reason = json_getter(
-        f"{repo_api_url}/private-vulnerability-reporting",
-        token,
+def classify_github_codeowners(*, has_codeowners: bool) -> GitHubHardeningClassification:
+    if has_codeowners:
+        return GitHubHardeningClassification()
+    return _github_hardening_classification(
+        findings=("GitHub repository hardening: .github/CODEOWNERS is missing.",)
     )
-    if isinstance(payload, dict):
-        if payload.get("enabled") is not True:
-            findings.append(
-                "GitHub private vulnerability reporting is not enabled."
+
+
+def classify_github_repository_metadata(
+    payload: object | None,
+    reason: str,
+    *,
+    resolved_token: str | None,
+) -> GitHubHardeningClassification:
+    if not isinstance(payload, dict):
+        return _github_hardening_classification(
+            warnings=(
+                f"GitHub hardening audit could not read repository metadata ({reason}).",
             )
-    elif reason != "http_422":
-        warnings.append(
-            f"GitHub private vulnerability reporting could not be audited ({reason})."
         )
 
-
-def _audit_alert_presence(
-    *,
-    repo_api_url: str,
-    token: str,
-    path: str,
-    label: str,
-    findings: list[str],
-    warnings: list[str],
-    json_getter: Callable[[str, str | None], tuple[object | None, str]],
-) -> None:
-    url = _github_url_with_query(
-        f"{repo_api_url}/{path}",
-        state="open",
-        per_page="1",
-    )
-    payload, reason = json_getter(url, token)
-    if isinstance(payload, list):
-        if payload:
-            findings.append(f"GitHub {label}: at least one open alert exists.")
-    else:
-        warnings.append(f"GitHub {label} could not be audited ({reason}).")
-
-
-def audit_github_release_hardening(
-    repo: Path,
-    remote_url: str,
-    token: str | None = None,
-    *,
-    token_resolver: Callable[[], str | None] | None = None,
-    json_getter: Callable[[str, str | None], tuple[object | None, str]] = github_api_get_json,
-    probe_enabled: Callable[[str, str | None], tuple[bool | None, str]] = github_api_probe_enabled,
-    text_normalizer: Callable[[list[str]], list[str]] | None = None,
-    accept_admin_bypass: bool = False,
-    accepted_risks: list[str] | None = None,
-) -> tuple[list[str], list[str]]:
     findings: list[str] = []
     warnings: list[str] = []
-    slug = parse_github_remote_slug(remote_url)
-    if not slug:
-        warnings.append("GitHub hardening audit skipped: origin is not a GitHub remote.")
-        return findings, warnings
-
-    if not (repo / ".github" / "CODEOWNERS").exists():
-        findings.append("GitHub repository hardening: .github/CODEOWNERS is missing.")
-
-    owner, repo_name = slug
-    repo_api_url = GITHUB_REPO_API_URL.format(owner=owner, repo=repo_name)
-    if token is not None:
-        resolved_token = token
-    elif token_resolver is not None:
-        resolved_token = token_resolver()
-    else:
-        resolved_token = resolve_github_hardening_token()
-    repo_payload, repo_reason = json_getter(repo_api_url, resolved_token)
-    if not isinstance(repo_payload, dict):
-        warnings.append(
-            f"GitHub hardening audit could not read repository metadata ({repo_reason})."
-        )
-        return findings, warnings
-
-    default_branch = str(repo_payload.get("default_branch") or "main")
-    visibility = str(repo_payload.get("visibility") or "").strip().lower()
+    visibility = str(payload.get("visibility") or "").strip().lower()
     if not visibility:
-        visibility = "private" if repo_payload.get("private") is True else "public"
+        visibility = "private" if payload.get("private") is True else "public"
     if visibility != "public":
         findings.append(
             f"GitHub repository visibility: repository is {visibility}; confirm this matches release intent."
         )
-    if repo_payload.get("archived") is True:
+    if payload.get("archived") is True:
         findings.append("GitHub repository settings: repository is archived.")
-    if repo_payload.get("disabled") is True:
+    if payload.get("disabled") is True:
         findings.append("GitHub repository settings: repository is disabled.")
-    if repo_payload.get("has_issues") is False:
+    if payload.get("has_issues") is False:
         findings.append(
             "GitHub repository settings: issues are disabled; confirm an alternate vulnerability intake path exists."
         )
-    if repo_payload.get("has_wiki") is True:
+    if payload.get("has_wiki") is True:
         findings.append("GitHub repository settings: wiki is enabled.")
-    if repo_payload.get("has_projects") is True:
+    if payload.get("has_projects") is True:
         findings.append("GitHub repository settings: projects are enabled.")
-    if repo_payload.get("allow_auto_merge") is True:
+    if payload.get("allow_auto_merge") is True:
         findings.append("GitHub repository settings: auto-merge is enabled.")
 
-    _audit_private_vulnerability_reporting(
-        repo_api_url=repo_api_url,
-        token=resolved_token,
-        findings=findings,
-        warnings=warnings,
-        json_getter=json_getter,
-    )
-    security_and_analysis_seen = _github_security_and_analysis_present(repo_payload)
+    security_and_analysis_seen = _github_security_and_analysis_present(payload)
     if security_and_analysis_seen:
         _append_feature_disabled_finding(
             findings,
-            repo_payload,
+            payload,
             "secret_scanning",
             "secret scanning",
         )
         _append_feature_disabled_finding(
             findings,
-            repo_payload,
+            payload,
             "secret_scanning_push_protection",
             "secret scanning push protection",
         )
         _append_feature_disabled_finding(
             findings,
-            repo_payload,
+            payload,
             "dependabot_security_updates",
             "Dependabot security updates",
         )
         _append_feature_disabled_finding(
             findings,
-            repo_payload,
+            payload,
             "dependency_graph",
             "dependency graph",
         )
@@ -731,8 +711,34 @@ def audit_github_release_hardening(
             "GitHub security and analysis metadata was not returned; token may lack admin, owner, or security-manager access."
         )
 
-    if not resolved_token:
-        warnings.append(
+    return _github_hardening_classification(
+        findings=tuple(findings),
+        warnings=tuple(warnings),
+    )
+
+
+def classify_github_private_vulnerability_reporting(
+    payload: object | None,
+    reason: str,
+) -> GitHubHardeningClassification:
+    if isinstance(payload, dict):
+        if payload.get("enabled") is not True:
+            return _github_hardening_classification(
+                findings=("GitHub private vulnerability reporting is not enabled.",)
+            )
+        return GitHubHardeningClassification()
+    if reason == "http_422":
+        return GitHubHardeningClassification()
+    return _github_hardening_classification(
+        warnings=(
+            f"GitHub private vulnerability reporting could not be audited ({reason}).",
+        )
+    )
+
+
+def classify_github_token_gated_checks_skipped() -> GitHubHardeningClassification:
+    return _github_hardening_classification(
+        warnings=(
             "Token-gated GitHub hardening checks were skipped. "
             "Unauthenticated coverage is limited to "
             + ", ".join(GITHUB_HARDENING_PUBLIC_METADATA_CHECKS)
@@ -740,22 +746,26 @@ def audit_github_release_hardening(
             "Set REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN, GITHUB_TOKEN, or GH_TOKEN "
             "or authenticate GitHub CLI with `gh auth login` to audit "
             + ", ".join(GITHUB_HARDENING_TOKEN_CHECKS)
-            + "."
+            + ".",
         )
-        if text_normalizer is None:
-            return findings, warnings
-        return text_normalizer(findings), text_normalizer(warnings)
+    )
 
-    protection_url = (
-        f"{repo_api_url}/branches/"
-        f"{urllib.parse.quote(default_branch, safe='')}/protection"
-    )
-    protection_payload, protection_reason = json_getter(
-        protection_url,
-        resolved_token,
-    )
-    if isinstance(protection_payload, dict):
-        pull_request_reviews = protection_payload.get("required_pull_request_reviews") or {}
+
+def classify_github_default_branch_protection(
+    payload: object | None,
+    reason: str,
+    *,
+    accept_admin_bypass: bool = False,
+    local_workflows_present: bool = False,
+    automatic_workflow_check_names: list[str] | None = None,
+) -> GitHubHardeningClassification:
+    findings: list[str] = []
+    warnings: list[str] = []
+    accepted_risks: list[str] = []
+    automatic_check_names = automatic_workflow_check_names or []
+
+    if isinstance(payload, dict):
+        pull_request_reviews = payload.get("required_pull_request_reviews") or {}
         if not isinstance(pull_request_reviews, dict):
             pull_request_reviews = {}
         if not pull_request_reviews:
@@ -783,13 +793,16 @@ def audit_github_release_hardening(
                     "GitHub default branch protection: pull request review bypass allowances are configured."
                 )
 
-        conversation_resolution = protection_payload.get("required_conversation_resolution") or {}
-        if not isinstance(conversation_resolution, dict) or conversation_resolution.get("enabled") is not True:
+        conversation_resolution = payload.get("required_conversation_resolution") or {}
+        if (
+            not isinstance(conversation_resolution, dict)
+            or conversation_resolution.get("enabled") is not True
+        ):
             findings.append(
                 "GitHub default branch protection: conversation resolution is not required."
             )
 
-        status_checks = protection_payload.get("required_status_checks") or {}
+        status_checks = payload.get("required_status_checks") or {}
         if not isinstance(status_checks, dict) or not (
             status_checks.get("contexts") or status_checks.get("checks")
         ):
@@ -802,9 +815,7 @@ def audit_github_release_hardening(
             )
         else:
             required_contexts = _github_actions_required_status_contexts(status_checks)
-            workflows_dir = repo / ".github" / "workflows"
-            if required_contexts and workflows_dir.exists():
-                automatic_check_names = collect_local_automatic_workflow_check_names(repo)
+            if required_contexts and local_workflows_present:
                 if automatic_check_names:
                     stale_contexts = [
                         context
@@ -823,126 +834,319 @@ def audit_github_release_hardening(
                         "could not be audited because no local automatic workflow jobs were found."
                     )
 
-        allow_force_pushes = protection_payload.get("allow_force_pushes") or {}
+        allow_force_pushes = payload.get("allow_force_pushes") or {}
         if isinstance(allow_force_pushes, dict) and allow_force_pushes.get("enabled") is True:
             findings.append("GitHub default branch protection: force pushes are allowed.")
 
-        allow_deletions = protection_payload.get("allow_deletions") or {}
+        allow_deletions = payload.get("allow_deletions") or {}
         if isinstance(allow_deletions, dict) and allow_deletions.get("enabled") is True:
             findings.append("GitHub default branch protection: branch deletion is allowed.")
 
-        enforce_admins = protection_payload.get("enforce_admins") or {}
+        enforce_admins = payload.get("enforce_admins") or {}
         if isinstance(enforce_admins, dict) and enforce_admins.get("enabled") is not True:
             finding = "GitHub default branch protection: administrators can bypass branch protection."
             if accept_admin_bypass:
-                if accepted_risks is not None:
-                    accepted_risks.append(
-                        finding
-                        + " Accepted by --accept-github-admin-bypass for solo-maintainer operations."
-                    )
+                accepted_risks.append(
+                    finding
+                    + " Accepted by --accept-github-admin-bypass for solo-maintainer operations."
+                )
             else:
                 findings.append(finding)
-    elif protection_reason == "http_404":
+    elif reason == "http_404":
         findings.append("GitHub default branch protection is not enabled.")
     else:
         warnings.append(
-            f"GitHub default branch protection could not be audited ({protection_reason})."
+            f"GitHub default branch protection could not be audited ({reason})."
         )
+
+    return _github_hardening_classification(
+        findings=tuple(findings),
+        warnings=tuple(warnings),
+        accepted_risks=tuple(accepted_risks),
+    )
+
+
+def classify_github_actions_permissions(
+    payload: object | None,
+    reason: str,
+) -> GitHubHardeningClassification:
+    findings: list[str] = []
+    warnings: list[str] = []
+    if isinstance(payload, dict):
+        if payload.get("enabled") is False:
+            findings.append("GitHub Actions permissions: Actions are disabled.")
+        if str(payload.get("allowed_actions") or "").lower() == "all":
+            findings.append("GitHub Actions permissions: all external actions are allowed.")
+        if payload.get("sha_pinning_required") is not True:
+            findings.append("GitHub Actions permissions: SHA pinning is not required.")
+    else:
+        warnings.append(f"GitHub Actions permissions could not be audited ({reason}).")
+    return _github_hardening_classification(
+        findings=tuple(findings),
+        warnings=tuple(warnings),
+    )
+
+
+def classify_github_actions_workflow_permissions(
+    payload: object | None,
+    reason: str,
+) -> GitHubHardeningClassification:
+    findings: list[str] = []
+    warnings: list[str] = []
+    if isinstance(payload, dict):
+        if str(payload.get("default_workflow_permissions") or "").lower() != "read":
+            findings.append(
+                "GitHub Actions workflow permissions are broader than read-only."
+            )
+        if payload.get("can_approve_pull_request_reviews") is True:
+            findings.append("GitHub Actions workflow permissions allow PR approval.")
+    else:
+        warnings.append(
+            f"GitHub Actions workflow permissions could not be audited ({reason})."
+        )
+    return _github_hardening_classification(
+        findings=tuple(findings),
+        warnings=tuple(warnings),
+    )
+
+
+def classify_github_vulnerability_alerts(
+    enabled: bool | None,
+    reason: str,
+) -> GitHubHardeningClassification:
+    if enabled is False:
+        return _github_hardening_classification(
+            findings=("GitHub security alerts: Dependabot vulnerability alerts are disabled.",)
+        )
+    if enabled is None:
+        return _github_hardening_classification(
+            warnings=(f"GitHub vulnerability alerts could not be audited ({reason}).",)
+        )
+    return GitHubHardeningClassification()
+
+
+def classify_github_security_fixes(
+    payload: object | None,
+    reason: str,
+) -> GitHubHardeningClassification:
+    if isinstance(payload, dict):
+        if payload.get("enabled") is not True or payload.get("paused") is True:
+            return _github_hardening_classification(
+                findings=(
+                    "GitHub security fixes: automated security fixes are disabled or paused.",
+                )
+            )
+        return GitHubHardeningClassification()
+    if reason == "http_404":
+        return _github_hardening_classification(
+            findings=("GitHub security fixes: automated security fixes are disabled.",)
+        )
+    return _github_hardening_classification(
+        warnings=(f"GitHub automated security fixes could not be audited ({reason}).",)
+    )
+
+
+def classify_github_alert_presence(
+    payload: object | None,
+    reason: str,
+    *,
+    label: str,
+) -> GitHubHardeningClassification:
+    if isinstance(payload, list):
+        if payload:
+            return _github_hardening_classification(
+                findings=(f"GitHub {label}: at least one open alert exists.",)
+            )
+        return GitHubHardeningClassification()
+    return _github_hardening_classification(
+        warnings=(f"GitHub {label} could not be audited ({reason}).",)
+    )
+
+
+def classify_github_immutable_releases(
+    payload: object | None,
+    reason: str,
+) -> GitHubHardeningClassification:
+    if isinstance(payload, dict):
+        if payload.get("enabled") is not True:
+            return _github_hardening_classification(
+                findings=("GitHub releases: immutable releases are not enabled.",)
+            )
+        return GitHubHardeningClassification()
+    if reason == "http_404":
+        return _github_hardening_classification(
+            findings=("GitHub releases: immutable releases are not enabled.",)
+        )
+    return _github_hardening_classification(
+        warnings=(f"GitHub immutable releases could not be audited ({reason}).",)
+    )
+
+
+def audit_github_release_hardening(
+    repo: Path,
+    remote_url: str,
+    token: str | None = None,
+    *,
+    token_resolver: Callable[[], str | None] | None = None,
+    json_getter: Callable[[str, str | None], tuple[object | None, str]] = github_api_get_json,
+    probe_enabled: Callable[[str, str | None], tuple[bool | None, str]] = github_api_probe_enabled,
+    text_normalizer: Callable[[list[str]], list[str]] | None = None,
+    accept_admin_bypass: bool = False,
+    accepted_risks: list[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    classifications: list[GitHubHardeningClassification] = []
+
+    def finish() -> tuple[list[str], list[str]]:
+        classification = merge_github_hardening_classifications(*classifications)
+        if text_normalizer is not None:
+            classification = normalize_github_hardening_classification(
+                classification,
+                text_normalizer,
+            )
+        if accepted_risks is not None:
+            accepted_risks.extend(classification.accepted_risks)
+        return list(classification.findings), list(classification.warnings)
+
+    slug = parse_github_remote_slug(remote_url)
+    if not slug:
+        classifications.append(
+            _github_hardening_classification(
+                warnings=("GitHub hardening audit skipped: origin is not a GitHub remote.",)
+            )
+        )
+        return finish()
+
+    classifications.append(
+        classify_github_codeowners(has_codeowners=(repo / ".github" / "CODEOWNERS").exists())
+    )
+
+    owner, repo_name = slug
+    repo_api_url = GITHUB_REPO_API_URL.format(owner=owner, repo=repo_name)
+    if token is not None:
+        resolved_token = token
+    elif token_resolver is not None:
+        resolved_token = token_resolver()
+    else:
+        resolved_token = resolve_github_hardening_token()
+    repo_payload, repo_reason = json_getter(repo_api_url, resolved_token)
+    classifications.append(
+        classify_github_repository_metadata(
+            repo_payload,
+            repo_reason,
+            resolved_token=resolved_token,
+        )
+    )
+    if not isinstance(repo_payload, dict):
+        return finish()
+
+    default_branch = str(repo_payload.get("default_branch") or "main")
+
+    private_vulnerability_payload, private_vulnerability_reason = json_getter(
+        f"{repo_api_url}/private-vulnerability-reporting",
+        resolved_token,
+    )
+    classifications.append(
+        classify_github_private_vulnerability_reporting(
+            private_vulnerability_payload,
+            private_vulnerability_reason,
+        )
+    )
+
+    if not resolved_token:
+        classifications.append(classify_github_token_gated_checks_skipped())
+        return finish()
+
+    protection_url = (
+        f"{repo_api_url}/branches/"
+        f"{urllib.parse.quote(default_branch, safe='')}/protection"
+    )
+    protection_payload, protection_reason = json_getter(
+        protection_url,
+        resolved_token,
+    )
+    workflows_dir = repo / ".github" / "workflows"
+    workflows_dir_exists = workflows_dir.exists()
+    automatic_workflow_check_names = (
+        sorted(collect_local_automatic_workflow_check_names(repo))
+        if workflows_dir_exists
+        else []
+    )
+    classifications.append(
+        classify_github_default_branch_protection(
+            protection_payload,
+            protection_reason,
+            accept_admin_bypass=accept_admin_bypass,
+            local_workflows_present=workflows_dir_exists,
+            automatic_workflow_check_names=automatic_workflow_check_names,
+        )
+    )
 
     actions_payload, actions_reason = json_getter(
         f"{repo_api_url}/actions/permissions",
         resolved_token,
     )
-    if isinstance(actions_payload, dict):
-        if actions_payload.get("enabled") is False:
-            findings.append("GitHub Actions permissions: Actions are disabled.")
-        if str(actions_payload.get("allowed_actions") or "").lower() == "all":
-            findings.append("GitHub Actions permissions: all external actions are allowed.")
-        if actions_payload.get("sha_pinning_required") is not True:
-            findings.append("GitHub Actions permissions: SHA pinning is not required.")
-    else:
-        warnings.append(
-            f"GitHub Actions permissions could not be audited ({actions_reason})."
-        )
+    classifications.append(classify_github_actions_permissions(actions_payload, actions_reason))
 
     workflow_payload, workflow_reason = json_getter(
         f"{repo_api_url}/actions/permissions/workflow",
         resolved_token,
     )
-    if isinstance(workflow_payload, dict):
-        if str(workflow_payload.get("default_workflow_permissions") or "").lower() != "read":
-            findings.append(
-                "GitHub Actions workflow permissions are broader than read-only."
-            )
-        if workflow_payload.get("can_approve_pull_request_reviews") is True:
-            findings.append("GitHub Actions workflow permissions allow PR approval.")
-    else:
-        warnings.append(
-            f"GitHub Actions workflow permissions could not be audited ({workflow_reason})."
-        )
+    classifications.append(
+        classify_github_actions_workflow_permissions(workflow_payload, workflow_reason)
+    )
 
     vulnerability_enabled, vulnerability_reason = probe_enabled(
         f"{repo_api_url}/vulnerability-alerts",
         resolved_token,
     )
-    if vulnerability_enabled is False:
-        findings.append("GitHub security alerts: Dependabot vulnerability alerts are disabled.")
-    elif vulnerability_enabled is None:
-        warnings.append(
-            f"GitHub vulnerability alerts could not be audited ({vulnerability_reason})."
-        )
+    classifications.append(
+        classify_github_vulnerability_alerts(vulnerability_enabled, vulnerability_reason)
+    )
 
     security_fixes_payload, security_fixes_reason = json_getter(
         f"{repo_api_url}/automated-security-fixes",
         resolved_token,
     )
-    if isinstance(security_fixes_payload, dict):
-        if security_fixes_payload.get("enabled") is not True or security_fixes_payload.get("paused") is True:
-            findings.append(
-                "GitHub security fixes: automated security fixes are disabled or paused."
-            )
-    elif security_fixes_reason == "http_404":
-        findings.append("GitHub security fixes: automated security fixes are disabled.")
-    else:
-        warnings.append(
-            f"GitHub automated security fixes could not be audited ({security_fixes_reason})."
-        )
-
-    _audit_alert_presence(
-        repo_api_url=repo_api_url,
-        token=resolved_token,
-        path="dependabot/alerts",
-        label="Dependabot alerts",
-        findings=findings,
-        warnings=warnings,
-        json_getter=json_getter,
+    classifications.append(
+        classify_github_security_fixes(security_fixes_payload, security_fixes_reason)
     )
-    _audit_alert_presence(
-        repo_api_url=repo_api_url,
-        token=resolved_token,
-        path="secret-scanning/alerts",
-        label="secret scanning alerts",
-        findings=findings,
-        warnings=warnings,
-        json_getter=json_getter,
+
+    dependabot_alert_payload, dependabot_alert_reason = json_getter(
+        _github_url_with_query(
+            f"{repo_api_url}/dependabot/alerts",
+            state="open",
+            per_page="1",
+        ),
+        resolved_token,
+    )
+    classifications.append(
+        classify_github_alert_presence(
+            dependabot_alert_payload,
+            dependabot_alert_reason,
+            label="Dependabot alerts",
+        )
+    )
+
+    secret_scanning_alert_payload, secret_scanning_alert_reason = json_getter(
+        _github_url_with_query(
+            f"{repo_api_url}/secret-scanning/alerts",
+            state="open",
+            per_page="1",
+        ),
+        resolved_token,
+    )
+    classifications.append(
+        classify_github_alert_presence(
+            secret_scanning_alert_payload,
+            secret_scanning_alert_reason,
+            label="secret scanning alerts",
+        )
     )
 
     immutable_payload, immutable_reason = json_getter(
         f"{repo_api_url}/immutable-releases",
         resolved_token,
     )
-    if isinstance(immutable_payload, dict):
-        if immutable_payload.get("enabled") is not True:
-            findings.append("GitHub releases: immutable releases are not enabled.")
-    elif immutable_reason == "http_404":
-        findings.append("GitHub releases: immutable releases are not enabled.")
-    else:
-        warnings.append(
-            f"GitHub immutable releases could not be audited ({immutable_reason})."
-        )
+    classifications.append(classify_github_immutable_releases(immutable_payload, immutable_reason))
 
-    if text_normalizer is None:
-        return findings, warnings
-    if accepted_risks is not None:
-        accepted_risks[:] = text_normalizer(accepted_risks)
-    return text_normalizer(findings), text_normalizer(warnings)
+    return finish()

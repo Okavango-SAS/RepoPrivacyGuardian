@@ -153,6 +153,31 @@ def test_strict_profile_release_promotes_expected_policy() -> None:
     assert report.github_hardening_fix_guide
 
 
+def test_strict_profile_release_keeps_accepted_github_hardening_risks_non_blocking() -> None:
+    parser = rpg.make_parser()
+    args = parser.parse_args(
+        [
+            "--strict-profile",
+            "release",
+            "--audit-github-hardening",
+            "--accept-github-admin-bypass",
+        ]
+    )
+    config = rpg.build_cli_guard_run_config(args)
+
+    report = _make_report("repo-a")
+    report.github_hardening_checked = True
+    report.github_hardening_accepted_risks = [
+        "GitHub default branch protection: administrators can bypass branch protection. "
+        "Accepted by --accept-github-admin-bypass for solo-maintainer operations."
+    ]
+    rpg.apply_report_policy_post_processing(report, config=config, suppression_rules=[])
+
+    assert report.status == "PASS"
+    assert report.failures == []
+    assert report.github_hardening_fix_guide == []
+
+
 def test_strict_profile_audit_only_rejects_writes() -> None:
     errors = rpg.strict_profiles.validate_strict_profile_runtime(
         profile="audit-only",
@@ -2319,6 +2344,135 @@ def test_audit_github_release_hardening_reports_missing_controls(tmp_path: Path,
     assert any("immutable releases are not enabled" in item for item in findings)
     assert not any("raw-secret-value" in item for item in findings)
     assert not any("private-package-name" in item for item in findings)
+
+
+def test_github_hardening_metadata_classifier_is_pure_and_reports_findings() -> None:
+    classification = rpg_github.classify_github_repository_metadata(
+        _github_ok_repo_payload(
+            visibility="private",
+            private=True,
+            archived=True,
+            disabled=True,
+            has_issues=False,
+            has_wiki=True,
+            has_projects=True,
+            allow_auto_merge=True,
+            security_and_analysis={
+                "secret_scanning": {"status": "disabled"},
+                "secret_scanning_push_protection": {"status": "disabled"},
+                "dependabot_security_updates": {"status": "disabled"},
+                "dependency_graph": {"status": "disabled"},
+            },
+        ),
+        "http_200",
+        resolved_token="gh-admin-token",
+    )
+
+    assert classification.warnings == ()
+    assert any("repository is private" in item for item in classification.findings)
+    assert any("repository is archived" in item for item in classification.findings)
+    assert any("repository is disabled" in item for item in classification.findings)
+    assert any("issues are disabled" in item for item in classification.findings)
+    assert any("wiki is enabled" in item for item in classification.findings)
+    assert any("projects are enabled" in item for item in classification.findings)
+    assert any("auto-merge is enabled" in item for item in classification.findings)
+    assert any("secret scanning status is disabled" in item for item in classification.findings)
+    assert any("secret scanning push protection status is disabled" in item for item in classification.findings)
+    assert any("Dependabot security updates status is disabled" in item for item in classification.findings)
+    assert any("dependency graph status is disabled" in item for item in classification.findings)
+
+
+def test_github_hardening_branch_protection_classifier_splits_accepted_risks() -> None:
+    payload = {
+        "required_pull_request_reviews": {
+            "required_approving_review_count": 1,
+            "require_code_owner_reviews": True,
+            "dismiss_stale_reviews": True,
+            "bypass_pull_request_allowances": {
+                "users": [],
+                "teams": [],
+                "apps": [],
+            },
+        },
+        "required_conversation_resolution": {"enabled": True},
+        "required_status_checks": {
+            "strict": True,
+            "contexts": [
+                "CLI smoke + release contract (automatic, ubuntu-latest, py3.13)",
+                "stale required context",
+            ],
+        },
+        "allow_force_pushes": {"enabled": False},
+        "allow_deletions": {"enabled": False},
+        "enforce_admins": {"enabled": False},
+    }
+
+    strict_classification = rpg_github.classify_github_default_branch_protection(
+        payload,
+        "http_200",
+        accept_admin_bypass=False,
+        local_workflows_present=True,
+        automatic_workflow_check_names=[
+            "CLI smoke + release contract (automatic, ubuntu-latest, py3.13)"
+        ],
+    )
+    accepted_classification = rpg_github.classify_github_default_branch_protection(
+        payload,
+        "http_200",
+        accept_admin_bypass=True,
+        local_workflows_present=True,
+        automatic_workflow_check_names=[
+            "CLI smoke + release contract (automatic, ubuntu-latest, py3.13)"
+        ],
+    )
+
+    assert any(
+        "administrators can bypass branch protection" in item
+        for item in strict_classification.findings
+    )
+    assert strict_classification.accepted_risks == ()
+    assert not any(
+        "administrators can bypass branch protection" in item
+        for item in accepted_classification.findings
+    )
+    assert any(
+        "administrators can bypass branch protection" in item
+        for item in accepted_classification.accepted_risks
+    )
+    assert any(
+        "contexts not produced by local automatic workflows" in item
+        for item in accepted_classification.findings
+    )
+    assert any("stale required context" in item for item in accepted_classification.findings)
+
+
+def test_github_hardening_classification_merge_and_normalization_redacts_values() -> None:
+    private_path = "C:" + "\\Users\\operator\\repo"
+    redacted_path = "C:" + "\\Users\\<redacted>"
+    raw = rpg_github.merge_github_hardening_classifications(
+        rpg_github.GitHubHardeningClassification(
+            findings=(
+                f"  GitHub finding leaked {private_path} and ghp_" + ("A" * 36),
+                "",
+            ),
+            warnings=("GitHub warning for dev@example.com",),
+        ),
+        rpg_github.GitHubHardeningClassification(
+            findings=(f"GitHub finding leaked {private_path} and ghp_" + ("A" * 36),),
+            accepted_risks=("Accepted risk for dev@example.com",),
+        ),
+    )
+
+    normalized = rpg_github.normalize_github_hardening_classification(
+        raw,
+        lambda items: rpg.normalize_text_values([rpg.redact_sensitive_text(item) for item in items]),
+    )
+
+    assert len(normalized.findings) == 1
+    assert rpg.REDACTED_SECRET in normalized.findings[0]
+    assert redacted_path in normalized.findings[0]
+    assert normalized.warnings == ("GitHub warning for <redacted-email>",)
+    assert normalized.accepted_risks == ("Accepted risk for <redacted-email>",)
 
 
 def test_audit_github_release_hardening_accepts_admin_bypass_for_solo_maintainer(
