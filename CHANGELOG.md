@@ -20,6 +20,8 @@ All notable user-facing changes to this project are documented here.
 - Extracted scanner Git/subprocess execution into a dedicated adapter with contract coverage for cwd, stdin, checked failures, streaming `git log` process lifecycle, `git-filter-repo` probing, and dry-run rewrite behavior.
 - Extracted pure scanner history patch parsing and finding formatting into a dedicated helper module with edge-case coverage for diff targets, patch line filtering, email findings, and active secret-file detection.
 - Extracted tracked/history secret taxonomy bucket aggregation into a dedicated helper module with parity coverage for high-confidence, low-confidence, fixture, and documentation findings.
+- Extracted pure GUI Audit/Repair flow state helpers for button labels, gate notes, and repair summaries while preserving the existing widget behavior.
+- Extracted pure GUI collapsible-section state helpers for Settings, Repair options, and advanced identity visibility while preserving widget layout behavior.
 - Run the automatic CI smoke workflow for protected-branch pull requests as well as `main` pushes so required status checks can satisfy branch protection before merge.
 - Removed the `pull_request` path filter from automatic CI so protected-branch required checks always report on PRs.
 

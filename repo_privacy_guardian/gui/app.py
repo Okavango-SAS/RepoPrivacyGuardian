@@ -11,6 +11,8 @@ import webbrowser
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
 
+from repo_privacy_guardian.gui import state as gui_state_helpers
+
 if TYPE_CHECKING:
     from repo_privacy_guardian.core import (
         DEFAULT_NOREPLY,
@@ -3282,19 +3284,20 @@ class GuiApp:  # pragma: no cover
         self._refresh_reports_tab()
 
     def _set_repair_options_visibility(self, visible: bool) -> None:
-        self._repair_options_visible = visible
+        visibility_state = gui_state_helpers.repair_options_visibility_state(visible=visible)
+        self._repair_options_visible = visibility_state.visible
         card = getattr(self, "_repair_options_card", None)
         if card is not None:
-            if visible:
+            if visibility_state.visible:
                 card.grid()
             else:
                 card.grid_remove()
         button = getattr(self, "_repair_options_toggle_button", None)
         if button is not None:
-            button.configure(text=self._t("repair_advanced_toggle_hide" if visible else "repair_advanced_toggle_show"))
+            button.configure(text=self._t(visibility_state.toggle_text_key))
         hint = getattr(self, "_repair_options_hint_label", None)
         if hint is not None:
-            hint.configure(text=self._t("repair_advanced_hint_visible" if visible else "repair_advanced_hint_hidden"))
+            hint.configure(text=self._t(visibility_state.hint_text_key, **visibility_state.hint_kwargs))
 
     def _toggle_repair_options(self) -> None:
         self._set_repair_options_visibility(not getattr(self, "_repair_options_visible", False))
@@ -3904,30 +3907,31 @@ class GuiApp:  # pragma: no cover
         self._set_setup_settings_visibility(not self._setup_settings_visible)
 
     def _setup_settings_hint_text(self, visible: bool) -> str:
-        if visible:
-            return self._t("setup_hint_open")
+        visibility_state = self._setup_settings_visibility_state(visible)
+        return self._t(visibility_state.hint_text_key, **visibility_state.hint_kwargs)
+
+    def _setup_settings_visibility_state(self, visible: bool) -> gui_state_helpers.CollapsibleSectionState:
         try:
             github_owner = self._github_owner_value()
         except Exception:
             github_owner = None
-        if github_owner:
-            return self._t("setup_hint_remote", github_owner=github_owner)
-        return self._t("setup_hint_hidden")
+        return gui_state_helpers.setup_settings_visibility_state(visible=visible, github_owner=github_owner)
 
     def _set_setup_settings_visibility(self, visible: bool) -> None:
-        self._setup_settings_visible = visible
+        visibility_state = self._setup_settings_visibility_state(visible)
+        self._setup_settings_visible = visibility_state.visible
 
         toggle_button = getattr(self, "_setup_settings_toggle_button", None)
         if toggle_button is not None:
-            toggle_button.configure(text=self._t("hide_settings" if visible else "open_settings"))
+            toggle_button.configure(text=self._t(visibility_state.toggle_text_key))
 
         hint_label = getattr(self, "_setup_settings_hint_label", None)
         if hint_label is not None:
-            hint_label.configure(text=self._setup_settings_hint_text(visible))
+            hint_label.configure(text=self._t(visibility_state.hint_text_key, **visibility_state.hint_kwargs))
 
         frame = getattr(self, "_setup_settings_frame", None)
         if frame is not None:
-            if visible:
+            if visibility_state.visible:
                 frame.grid()
             else:
                 frame.grid_remove()
@@ -3936,19 +3940,20 @@ class GuiApp:  # pragma: no cover
         self._set_advanced_identity_visibility(not self._advanced_identity_visible)
 
     def _set_advanced_identity_visibility(self, visible: bool) -> None:
-        self._advanced_identity_visible = visible
+        visibility_state = gui_state_helpers.advanced_identity_visibility_state(visible=visible)
+        self._advanced_identity_visible = visibility_state.visible
 
         toggle_button = getattr(self, "_advanced_identity_toggle_button", None)
         if toggle_button is not None:
-            toggle_button.configure(text=self._t("hide_advanced_identity" if visible else "show_advanced_identity"))
+            toggle_button.configure(text=self._t(visibility_state.toggle_text_key))
 
         hint_label = getattr(self, "_advanced_identity_hint_label", None)
         if hint_label is not None:
-            hint_label.configure(text=self._t("advanced_identity_visible" if visible else "advanced_identity_hidden"))
+            hint_label.configure(text=self._t(visibility_state.hint_text_key, **visibility_state.hint_kwargs))
 
         identity_card = getattr(self, "_identity_card", None)
         if identity_card is not None:
-            if visible:
+            if visibility_state.visible:
                 identity_card.grid(row=1, column=0, sticky="we", padx=10, pady=(10, 8))
             else:
                 identity_card.grid_remove()
@@ -4410,94 +4415,16 @@ class GuiApp:  # pragma: no cover
         )
 
     def _report_item_count(self, payload: dict[str, object], *keys: str) -> int:
-        return sum(len(self._report_list(payload, key)) for key in keys)
+        return gui_state_helpers.report_item_count(payload, *keys)
 
     def _manual_review_signal_count(self, payload: dict[str, object]) -> int:
-        return self._report_item_count(
-            payload,
-            "tracked_secret_low_confidence",
-            "history_secret_low_confidence",
-            "git_metadata_secret_low_confidence",
-            "tracked_email_low_confidence",
-            "history_email_low_confidence",
-            "exfil_code_indicators",
-            "github_hardening_findings",
-            "github_hardening_warnings",
-            "secret_file_manual_review_candidates",
-        )
+        return gui_state_helpers.manual_review_signal_count(payload)
 
     def _safe_context_count(self, payload: dict[str, object]) -> int:
-        return self._report_item_count(
-            payload,
-            "tracked_secret_fixture_matches",
-            "history_secret_fixture_matches",
-            "tracked_secret_documentation_matches",
-            "history_secret_documentation_matches",
-            "tracked_email_fixture_matches",
-            "history_email_fixture_matches",
-            "reviewed_network_indicators",
-        )
+        return gui_state_helpers.safe_context_count(payload)
 
     def _build_repair_status_summary(self, reports_payload: list[dict[str, object]]) -> str:
-        total = len(reports_payload)
-        if total == 0:
-            return self._t("no_audit_results")
-
-        passed = sum(1 for item in reports_payload if item.get("status") == "PASS")
-        failed = sum(1 for item in reports_payload if item.get("status") == "FAIL")
-        blocking_categories = sum(self._report_item_count(item, "failures") for item in reports_payload)
-        manual_review_signals = sum(self._manual_review_signal_count(item) for item in reports_payload)
-        safe_context = sum(self._safe_context_count(item) for item in reports_payload)
-        names = [str(item.get("name")) for item in reports_payload[:3] if item.get("name")]
-        label = ", ".join(names)
-        if total > len(names):
-            label += f", +{total - len(names)} more"
-
-        detail_parts: list[str] = []
-        if blocking_categories:
-            detail_parts.append(
-                self._t(
-                    "blocking_category_singular" if blocking_categories == 1 else "blocking_category_plural",
-                    count=blocking_categories,
-                )
-            )
-        if manual_review_signals:
-            detail_parts.append(
-                self._t(
-                    "manual_signal_singular" if manual_review_signals == 1 else "manual_signal_plural",
-                    count=manual_review_signals,
-                )
-            )
-        if safe_context:
-            detail_parts.append(
-                self._t(
-                    "fixture_match_singular" if safe_context == 1 else "fixture_match_plural",
-                    count=safe_context,
-                )
-            )
-        detail_text = (" " + "; ".join(detail_parts) + ".") if detail_parts else ""
-
-        if failed:
-            return self._t(
-                "last_audit_failed",
-                label=label,
-                failed=failed,
-                passed=passed,
-                detail_text=detail_text,
-            )
-
-        if manual_review_signals:
-            return self._t(
-                "last_audit_passed_manual",
-                label=label,
-                detail_text=detail_text,
-            )
-
-        return self._t(
-            "last_audit_passed",
-            label=label,
-            detail_text=detail_text,
-        )
+        return gui_state_helpers.build_repair_status_summary(reports_payload, self._t)
 
     def _set_repair_tab_visual_lock(self, locked: bool, reason: str | None = None) -> None:
         if self._repair_tab_block_overlay is None:
@@ -4726,32 +4653,36 @@ class GuiApp:  # pragma: no cover
         if note_label is None:
             return
         self._ensure_gui_theme_palette()
-        if getattr(self, "_repair_ready", False):
-            text_key = "repair_ready_note"
-            text_color = self._pass_badge_text
-        elif getattr(self, "_last_audit_reports_payload", []):
-            text_key = "repair_review_pending_note"
-            text_color = self._warning_text
-        else:
-            text_key = "repair_stays_disabled"
-            text_color = self._text_muted
-        note_label.configure(text=self._t(text_key), text_color=text_color)
+        note_state = gui_state_helpers.repair_gate_note_state(
+            repair_ready=bool(getattr(self, "_repair_ready", False)),
+            has_audit_reports=bool(getattr(self, "_last_audit_reports_payload", [])),
+        )
+        text_color = {
+            "ready": self._pass_badge_text,
+            "review": self._warning_text,
+            "locked": self._text_muted,
+        }[note_state.tone]
+        note_label.configure(text=self._t(note_state.text_key), text_color=text_color)
 
     def _update_run_buttons_state(self) -> None:
         audit_button = getattr(self, "_audit_button", None)
         if audit_button is not None:
             has_targets = bool(getattr(self, "_repo_items", []))
             has_remote_target = self._github_owner_value() is not None
-            audit_disabled = self._run_in_progress or not (has_targets or has_remote_target)
+            audit_state = gui_state_helpers.audit_button_state(
+                run_in_progress=bool(self._run_in_progress),
+                has_targets=has_targets,
+                has_remote_target=has_remote_target,
+            )
             primary_fg = getattr(self, "_primary_button_fg", "#0F766E")
             primary_hover = getattr(self, "_primary_button_hover", "#0B5F59")
             disabled_fg = getattr(self, "_disabled_button_fg", "#B8C6D5")
             disabled_text = getattr(self, "_disabled_button_text", "#64748B")
             audit_button.configure(
-                text=self._t("run_audit" if (has_targets or has_remote_target) else "audit_unavailable"),
-                state="disabled" if audit_disabled else "normal",
-                fg_color=disabled_fg if audit_disabled else primary_fg,
-                hover_color=disabled_fg if audit_disabled else primary_hover,
+                text=self._t(audit_state.text_key),
+                state=audit_state.widget_state,
+                fg_color=disabled_fg if audit_state.disabled else primary_fg,
+                hover_color=disabled_fg if audit_state.disabled else primary_hover,
                 text_color_disabled=disabled_text,
             )
 
@@ -4760,9 +4691,13 @@ class GuiApp:  # pragma: no cover
             cancel_requested = bool(
                 self._active_cancel_token and self._active_cancel_token.is_cancelled()
             )
+            cancel_state = gui_state_helpers.cancel_button_state(
+                run_in_progress=bool(self._run_in_progress),
+                cancel_requested=cancel_requested,
+            )
             cancel_button.configure(
-                text=self._t("stopping_after_current_step" if cancel_requested else "stop_after_current_step"),
-                state="normal" if (self._run_in_progress and not cancel_requested) else "disabled",
+                text=self._t(cancel_state.text_key),
+                state=cancel_state.widget_state,
             )
 
         self._update_repo_selection_controls()
@@ -4771,8 +4706,13 @@ class GuiApp:  # pragma: no cover
         if repair_button is None:
             return
 
-        state = "normal" if (self._repair_ready and not self._run_in_progress) else "disabled"
-        repair_button.configure(state=state, text=self._repair_button_text)
+        repair_button.configure(
+            state=gui_state_helpers.repair_button_state(
+                repair_ready=bool(self._repair_ready),
+                run_in_progress=bool(self._run_in_progress),
+            ),
+            text=self._repair_button_text,
+        )
         self._update_repair_gate_note()
 
     def _update_repo_selection_controls(self) -> None:

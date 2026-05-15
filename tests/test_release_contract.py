@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_prompts as prompt_helpers
+from repo_privacy_guardian.gui import state as gui_state_helpers
 from repo_privacy_guardian_artifacts import RunArtifacts
 
 
@@ -1551,6 +1552,13 @@ def test_gui_advanced_identity_settings_are_collapsible() -> None:
 
 
 def test_gui_setup_settings_are_collapsible() -> None:
+    class DummyVar:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
     class DummyWidget:
         def __init__(self) -> None:
             self.actions: list[str] = []
@@ -1581,6 +1589,11 @@ def test_gui_setup_settings_are_collapsible() -> None:
     assert toggle_button.kwargs["text"] == "Open Settings"
     assert "saved and hidden" in str(hint_label.kwargs["text"])
     assert frame.actions == ["grid_remove"]
+
+    app.github_owner_var = DummyVar("Acme")
+    app._set_setup_settings_visibility(False)
+
+    assert "Acme" in str(hint_label.kwargs["text"])
 
     app._toggle_setup_settings()
 
@@ -2318,6 +2331,46 @@ def test_gui_repair_gate_note_tracks_repair_state() -> None:
     assert label.config["text"] == rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]["repair_ready_note"]
 
 
+def test_gui_state_helpers_cover_audit_stop_and_repair_labels() -> None:
+    assert gui_state_helpers.audit_button_state(
+        run_in_progress=False,
+        has_targets=True,
+        has_remote_target=False,
+    ) == gui_state_helpers.ButtonState("run_audit", "normal")
+    assert gui_state_helpers.audit_button_state(
+        run_in_progress=False,
+        has_targets=False,
+        has_remote_target=False,
+    ) == gui_state_helpers.ButtonState("audit_unavailable", "disabled")
+    assert gui_state_helpers.audit_button_state(
+        run_in_progress=True,
+        has_targets=False,
+        has_remote_target=True,
+    ) == gui_state_helpers.ButtonState("run_audit", "disabled")
+    assert gui_state_helpers.cancel_button_state(
+        run_in_progress=True,
+        cancel_requested=False,
+    ) == gui_state_helpers.ButtonState("stop_after_current_step", "normal")
+    assert gui_state_helpers.cancel_button_state(
+        run_in_progress=True,
+        cancel_requested=True,
+    ) == gui_state_helpers.ButtonState("stopping_after_current_step", "disabled")
+    assert gui_state_helpers.repair_button_state(repair_ready=True, run_in_progress=False) == "normal"
+    assert gui_state_helpers.repair_button_state(repair_ready=True, run_in_progress=True) == "disabled"
+    assert gui_state_helpers.repair_gate_note_state(
+        repair_ready=False,
+        has_audit_reports=False,
+    ) == gui_state_helpers.RepairGateNoteState("repair_stays_disabled", "locked")
+    assert gui_state_helpers.repair_gate_note_state(
+        repair_ready=False,
+        has_audit_reports=True,
+    ) == gui_state_helpers.RepairGateNoteState("repair_review_pending_note", "review")
+    assert gui_state_helpers.repair_gate_note_state(
+        repair_ready=True,
+        has_audit_reports=True,
+    ) == gui_state_helpers.RepairGateNoteState("repair_ready_note", "ready")
+
+
 def test_gui_lock_default_text_is_english() -> None:
     app = object.__new__(rpg.GuiApp)
     app._repair_cooldown_after_id = None
@@ -2623,6 +2676,72 @@ def test_build_repair_status_summary_mentions_pass_fail_counts() -> None:
     assert "1 blocking category" in summary
     assert "1 manual-review signal" in summary
     assert "1 fixture/documentation match kept non-blocking" in summary
+
+
+def test_gui_state_repair_status_summary_uses_translation_callback() -> None:
+    translations = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT]
+
+    def translate(key: str, **kwargs: object) -> str:
+        return translations[key].format(**kwargs)
+
+    summary = gui_state_helpers.build_repair_status_summary(
+        [
+            {
+                "name": "repo-a",
+                "status": "PASS",
+                "history_secret_low_confidence": ["L1:src/settings.py:<redacted-secret>"],
+            },
+            {
+                "name": "repo-b",
+                "status": "PASS",
+                "reviewed_network_indicators": ["repo_privacy_guardian/github.py:1:urlopen(request)"],
+            },
+            {"name": "repo-c", "status": "PASS"},
+            {"name": "repo-d", "status": "PASS"},
+        ],
+        translate,
+    )
+
+    assert "repo-a, repo-b, repo-c, +1 more" in summary
+    assert "All selected repositories passed" in summary
+    assert "1 manual-review signal" in summary
+    assert "1 fixture/documentation match kept non-blocking" in summary
+
+
+def test_gui_state_collapsible_visibility_helpers_preserve_text_keys() -> None:
+    setup_open = gui_state_helpers.setup_settings_visibility_state(visible=True, github_owner="Acme")
+    assert setup_open.visible is True
+    assert setup_open.toggle_text_key == "hide_settings"
+    assert setup_open.hint_text_key == "setup_hint_open"
+    assert setup_open.hint_kwargs == {}
+
+    setup_remote = gui_state_helpers.setup_settings_visibility_state(visible=False, github_owner="Acme")
+    assert setup_remote.visible is False
+    assert setup_remote.toggle_text_key == "open_settings"
+    assert setup_remote.hint_text_key == "setup_hint_remote"
+    assert setup_remote.hint_kwargs == {"github_owner": "Acme"}
+
+    setup_hidden = gui_state_helpers.setup_settings_visibility_state(visible=False, github_owner=None)
+    assert setup_hidden.hint_text_key == "setup_hint_hidden"
+    assert setup_hidden.hint_kwargs == {}
+
+    repair_open = gui_state_helpers.repair_options_visibility_state(visible=True)
+    assert repair_open.visible is True
+    assert repair_open.toggle_text_key == "repair_advanced_toggle_hide"
+    assert repair_open.hint_text_key == "repair_advanced_hint_visible"
+
+    repair_hidden = gui_state_helpers.repair_options_visibility_state(visible=False)
+    assert repair_hidden.visible is False
+    assert repair_hidden.toggle_text_key == "repair_advanced_toggle_show"
+    assert repair_hidden.hint_text_key == "repair_advanced_hint_hidden"
+
+    identity_open = gui_state_helpers.advanced_identity_visibility_state(visible=True)
+    assert identity_open.toggle_text_key == "hide_advanced_identity"
+    assert identity_open.hint_text_key == "advanced_identity_visible"
+
+    identity_hidden = gui_state_helpers.advanced_identity_visibility_state(visible=False)
+    assert identity_hidden.toggle_text_key == "show_advanced_identity"
+    assert identity_hidden.hint_text_key == "advanced_identity_hidden"
 
 
 def test_gui_browse_helpers_update_variables(tmp_path: Path) -> None:

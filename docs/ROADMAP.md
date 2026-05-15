@@ -23,11 +23,11 @@ The repository is already stable in these areas:
 
 These are the next improvements that still fit the current product scope:
 
-- expand synthetic integration coverage for redaction edge cases and GUI support helpers
+- expand synthetic integration coverage for redaction edge cases and GUI widget construction/layout helpers
 - expand target-resolution and preflight regression coverage further as local and GitHub owner/org repo-selection modes evolve
 - keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract
 - keep docs, help text, packaged policy, and smoke fixtures aligned as defaults evolve
-- continue extracting `repo_privacy_guardian/core.py` by GUI support helpers without breaking compatibility shims; config, redaction, tooling, evidence taxonomy, execution, history parsing, reporting, policy, remediation, scanner, GUI app, and GUI locale already use explicit dependencies or local constants, remediation owns pure `git-filter-repo` command planning, execution owns the side-effecting Git/subprocess adapters, history parsing owns pure `git log -p` parsing/formatting helpers, and evidence taxonomy owns tracked/history secret bucket aggregation
+- continue extracting `repo_privacy_guardian/core.py` by GUI widget construction/layout helpers without breaking compatibility shims; config, redaction, tooling, evidence taxonomy, execution, history parsing, reporting, policy, remediation, scanner, GUI app, GUI locale, and GUI state already use explicit dependencies or local constants, remediation owns pure `git-filter-repo` command planning, execution owns the side-effecting Git/subprocess adapters, history parsing owns pure `git log -p` parsing/formatting helpers, evidence taxonomy owns tracked/history secret bucket aggregation, and GUI state owns pure Audit/Repair flow state plus collapsible-section visibility decisions
 
 ## Deprioritized for this repository phase
 
