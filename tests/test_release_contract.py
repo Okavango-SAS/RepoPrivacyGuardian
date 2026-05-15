@@ -2381,6 +2381,55 @@ def test_gui_state_helpers_cover_audit_stop_and_repair_labels() -> None:
     ) == gui_state_helpers.RepairGateNoteState("repair_ready_note", "ready")
 
 
+def test_gui_option_checkbox_specs_cover_settings_and_repair_rows() -> None:
+    github_specs = gui_state_helpers.github_remote_option_checkbox_specs()
+    assert [
+        (spec.text_key, spec.variable_attr, spec.tooltip_key, spec.grid.row, spec.grid.column)
+        for spec in github_specs
+    ] == [
+        ("include_forks", "github_include_forks_var", "github_include_forks", 1, 2),
+        ("fast_shallow_clone", "github_fast_var", "github_fast", 1, 3),
+    ]
+    assert all(not spec.info_badge for spec in github_specs)
+
+    review_specs = gui_state_helpers.repair_review_option_checkbox_specs()
+    assert [spec.grid.row for spec in review_specs] == list(range(1, 10))
+    assert [spec.text_key for spec in review_specs] == [
+        "only_audit_public_remotes",
+        "redact_third_party_emails",
+        "low_confidence_blocking",
+        "dry_run_preview",
+        "audit_github_hardening",
+        "accept_github_admin_bypass",
+        "audit_litellm_incident",
+        "open_html_report",
+        "confirm_each_repo_fix",
+    ]
+    assert all(spec.info_badge for spec in review_specs)
+    assert all(spec.grid.column == 0 and spec.grid.sticky == "w" for spec in review_specs)
+
+    write_specs = {
+        spec.text_key: spec
+        for spec in gui_state_helpers.repair_write_option_checkbox_specs()
+    }
+    assert write_specs["rewrite_personal_paths"].widget_attr == "_rewrite_paths_checkbox"
+    assert write_specs["rewrite_personal_paths"].command_attr is None
+    assert write_specs["force_push"].widget_attr == "_push_checkbox"
+    assert write_specs["bypass_remote_owner_guardrail"].command_attr == "_on_allow_non_owner_push_toggled"
+    assert write_specs["purge_safe_secret_files"].command_attr == "_on_purge_safe_toggled"
+    assert write_specs["purge_risky_secret_files"].command_attr == "_on_purge_risky_toggled"
+    assert [write_specs[key].grid.row for key in write_specs] == [2, 7, 8, 12, 13]
+    assert all(spec.info_badge for spec in write_specs.values())
+
+    english = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT]
+    spanish = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]
+    tooltip_catalog = rpg.GUI_TOOLTIP_TEXT
+    for spec in (*github_specs, *review_specs, *write_specs.values()):
+        assert spec.text_key in english
+        assert spec.text_key in spanish
+        assert spec.tooltip_key in tooltip_catalog
+
+
 def test_gui_lock_default_text_is_english() -> None:
     app = object.__new__(rpg.GuiApp)
     app._repair_cooldown_after_id = None

@@ -816,26 +816,8 @@ class GuiApp:  # pragma: no cover
         )
         self._bind_tooltip_key(github_jobs_entry, "github_clone_workers")
         github_jobs_entry.grid(row=1, column=1, sticky="w", padx=(0, 12), pady=(4, 10))
-        github_include_forks_checkbox = ctk.CTkCheckBox(
-            github_remote_card,
-            text=self._t("include_forks"),
-            variable=self.github_include_forks_var,
-            font=self._font(12),
-            text_color=self._text_body,
-        )
-        self._localize_widget(github_include_forks_checkbox, "text", "include_forks")
-        self._bind_tooltip_key(github_include_forks_checkbox, "github_include_forks")
-        github_include_forks_checkbox.grid(row=1, column=2, sticky="w", padx=(0, 12), pady=(4, 10))
-        github_fast_checkbox = ctk.CTkCheckBox(
-            github_remote_card,
-            text=self._t("fast_shallow_clone"),
-            variable=self.github_fast_var,
-            font=self._font(12),
-            text_color=self._text_body,
-        )
-        self._localize_widget(github_fast_checkbox, "text", "fast_shallow_clone")
-        self._bind_tooltip_key(github_fast_checkbox, "github_fast")
-        github_fast_checkbox.grid(row=1, column=3, sticky="w", padx=(0, 12), pady=(4, 10))
+        for option_spec in gui_state_helpers.github_remote_option_checkbox_specs():
+            self._make_option_checkbox(github_remote_card, option_spec)
 
         settings_row += 1
         self._make_field_label(
@@ -1214,29 +1196,8 @@ class GuiApp:  # pragma: no cover
             lambda: self._t("review_output_info"),
         ).grid(row=0, column=1, sticky="e", padx=(0, 12), pady=(10, 2))
 
-        safe_items = [
-            ("only_audit_public_remotes", self.public_only_var, "public_only"),
-            ("redact_third_party_emails", self.redact_var, "redact_third_party_emails"),
-            ("low_confidence_blocking", self.low_confidence_blocking_var, "low_confidence_blocking"),
-            ("dry_run_preview", self.dry_run_var, "dry_run_preview"),
-            ("audit_github_hardening", self.audit_github_hardening_var, "audit_github_hardening"),
-            ("accept_github_admin_bypass", self.accept_github_admin_bypass_var, "accept_github_admin_bypass"),
-            ("audit_litellm_incident", self.audit_litellm_incident_var, "audit_litellm_incident"),
-            ("open_html_report", self.open_report_var, "open_html_report"),
-            ("confirm_each_repo_fix", self.confirm_each_repo_fix_var, "confirm_each_repo_fix"),
-        ]
-        for idx, (label_key, var, tooltip_key) in enumerate(safe_items, start=1):
-            checkbox = ctk.CTkCheckBox(
-                safe_options,
-                text=self._t(label_key),
-                variable=var,
-                font=self._font(12),
-                text_color=self._text_body,
-            )
-            self._localize_widget(checkbox, "text", label_key)
-            self._bind_tooltip_key(checkbox, tooltip_key)
-            checkbox.grid(row=idx, column=0, sticky="w", padx=12, pady=4)
-            self._make_info_badge_for(safe_options, tooltip_key).grid(row=idx, column=1, sticky="e", padx=(0, 12))
+        for option_spec in gui_state_helpers.repair_review_option_checkbox_specs():
+            self._make_option_checkbox(safe_options, option_spec)
 
         destructive_options = ctk.CTkFrame(
             options_card,
@@ -1267,22 +1228,11 @@ class GuiApp:  # pragma: no cover
             text_color=self._warning_strong_text,
         ), "text", "repair_write_body").grid(row=1, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 8))
 
-        self._rewrite_paths_checkbox = ctk.CTkCheckBox(
-            destructive_options,
-            text=self._t("rewrite_personal_paths"),
-            variable=self.rewrite_personal_paths_var,
-            font=self._font(12),
-            text_color=self._text_body,
-        )
-        self._localize_widget(self._rewrite_paths_checkbox, "text", "rewrite_personal_paths")
-        self._bind_tooltip_key(self._rewrite_paths_checkbox, "rewrite_personal_paths")
-        self._rewrite_paths_checkbox.grid(row=2, column=0, sticky="w", padx=12, pady=(0, 4))
-        self._make_info_badge_for(destructive_options, "rewrite_personal_paths").grid(
-            row=2,
-            column=1,
-            sticky="e",
-            padx=(0, 12),
-        )
+        repair_write_specs = {
+            spec.text_key: spec
+            for spec in gui_state_helpers.repair_write_option_checkbox_specs()
+        }
+        self._make_option_checkbox(destructive_options, repair_write_specs["rewrite_personal_paths"])
         self._localize_widget(ctk.CTkLabel(
             destructive_options,
             text=self._t("rewrite_personal_paths_body"),
@@ -1329,34 +1279,10 @@ class GuiApp:  # pragma: no cover
             text_color=self._warning_strong_text,
         ), "text", "replace_text_rules_body").grid(row=6, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
 
-        self._push_checkbox = ctk.CTkCheckBox(
+        self._make_option_checkbox(destructive_options, repair_write_specs["force_push"])
+        self._make_option_checkbox(
             destructive_options,
-            text=self._t("force_push"),
-            variable=self.push_var,
-            font=self._font(12),
-            text_color=self._text_body,
-        )
-        self._localize_widget(self._push_checkbox, "text", "force_push")
-        self._bind_tooltip_key(self._push_checkbox, "force_push")
-        self._push_checkbox.grid(row=7, column=0, sticky="w", padx=12, pady=(0, 4))
-        self._make_info_badge_for(destructive_options, "force_push").grid(row=7, column=1, sticky="e", padx=(0, 12))
-
-        self._allow_non_owner_push_checkbox = ctk.CTkCheckBox(
-            destructive_options,
-            text=self._t("bypass_remote_owner_guardrail"),
-            variable=self.allow_non_owner_push_var,
-            command=self._on_allow_non_owner_push_toggled,
-            font=self._font(12),
-            text_color=self._text_body,
-        )
-        self._localize_widget(self._allow_non_owner_push_checkbox, "text", "bypass_remote_owner_guardrail")
-        self._bind_tooltip_key(self._allow_non_owner_push_checkbox, "bypass_remote_owner_guardrail")
-        self._allow_non_owner_push_checkbox.grid(row=8, column=0, sticky="w", padx=12, pady=4)
-        self._make_info_badge_for(destructive_options, "bypass_remote_owner_guardrail").grid(
-            row=8,
-            column=1,
-            sticky="e",
-            padx=(0, 12),
+            repair_write_specs["bypass_remote_owner_guardrail"],
         )
 
         self._make_field_label(
@@ -1386,41 +1312,8 @@ class GuiApp:  # pragma: no cover
             text_color=self._warning_strong_text,
         ), "text", "allowed_remote_owners_body").grid(row=11, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
 
-        self._purge_safe_checkbox = ctk.CTkCheckBox(
-            destructive_options,
-            text=self._t("purge_safe_secret_files"),
-            variable=self.purge_detected_secret_files_var,
-            command=self._on_purge_safe_toggled,
-            font=self._font(12),
-            text_color=self._text_body,
-        )
-        self._localize_widget(self._purge_safe_checkbox, "text", "purge_safe_secret_files")
-        self._bind_tooltip_key(self._purge_safe_checkbox, "purge_safe_secret_files")
-        self._purge_safe_checkbox.grid(row=12, column=0, sticky="w", padx=12, pady=(0, 4))
-        self._make_info_badge_for(destructive_options, "purge_safe_secret_files").grid(
-            row=12,
-            column=1,
-            sticky="e",
-            padx=(0, 12),
-        )
-
-        self._purge_risky_checkbox = ctk.CTkCheckBox(
-            destructive_options,
-            text=self._t("purge_risky_secret_files"),
-            variable=self.purge_all_detected_secret_files_var,
-            command=self._on_purge_risky_toggled,
-            font=self._font(12),
-            text_color=self._text_body,
-        )
-        self._localize_widget(self._purge_risky_checkbox, "text", "purge_risky_secret_files")
-        self._bind_tooltip_key(self._purge_risky_checkbox, "purge_risky_secret_files")
-        self._purge_risky_checkbox.grid(row=13, column=0, sticky="w", padx=12, pady=4)
-        self._make_info_badge_for(destructive_options, "purge_risky_secret_files").grid(
-            row=13,
-            column=1,
-            sticky="e",
-            padx=(0, 12),
-        )
+        self._make_option_checkbox(destructive_options, repair_write_specs["purge_safe_secret_files"])
+        self._make_option_checkbox(destructive_options, repair_write_specs["purge_risky_secret_files"])
         self._localize_widget(ctk.CTkLabel(
             destructive_options,
             text=self._t("purge_body"),
@@ -3521,6 +3414,36 @@ class GuiApp:  # pragma: no cover
             self._bind_tooltip_key(label, tooltip_key)
             self._make_info_badge_for(shell, tooltip_key).pack(side="left", padx=(6, 0))
         return shell
+
+    def _make_option_checkbox(
+        self,
+        parent,
+        spec: gui_state_helpers.OptionCheckboxSpec,
+    ):
+        options: dict[str, object] = {}
+        if spec.command_attr:
+            options["command"] = getattr(self, spec.command_attr)
+        checkbox = self.ctk.CTkCheckBox(
+            parent,
+            text=self._t(spec.text_key),
+            variable=getattr(self, spec.variable_attr),
+            font=self._font(12),
+            text_color=self._text_body,
+            **options,
+        )
+        self._localize_widget(checkbox, "text", spec.text_key)
+        self._bind_tooltip_key(checkbox, spec.tooltip_key)
+        checkbox.grid(**spec.grid.kwargs)
+        if spec.widget_attr:
+            setattr(self, spec.widget_attr, checkbox)
+        if spec.info_badge:
+            self._make_info_badge_for(parent, spec.tooltip_key).grid(
+                row=spec.grid.row,
+                column=1,
+                sticky="e",
+                padx=(0, 12),
+            )
+        return checkbox
 
     def _dialog_initial_dir(self, current_value: str) -> str:
         raw_value = current_value.strip()

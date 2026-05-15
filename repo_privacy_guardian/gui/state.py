@@ -94,6 +94,17 @@ class WidgetGridConfig:
 
 
 @dataclass(frozen=True)
+class OptionCheckboxSpec:
+    text_key: str
+    variable_attr: str
+    tooltip_key: str
+    grid: WidgetGridConfig
+    widget_attr: str | None = None
+    command_attr: str | None = None
+    info_badge: bool = False
+
+
+@dataclass(frozen=True)
 class ReportsDecisionLayoutState:
     compact: bool
     column_configs: tuple[GridColumnConfig, ...]
@@ -284,6 +295,107 @@ def repair_options_visibility_state(*, visible: bool) -> CollapsibleSectionState
         visible=visible,
         toggle_text_key="repair_advanced_toggle_hide" if visible else "repair_advanced_toggle_show",
         hint_text_key="repair_advanced_hint_visible" if visible else "repair_advanced_hint_hidden",
+    )
+
+
+def github_remote_option_checkbox_specs() -> tuple[OptionCheckboxSpec, ...]:
+    return (
+        OptionCheckboxSpec(
+            text_key="include_forks",
+            variable_attr="github_include_forks_var",
+            tooltip_key="github_include_forks",
+            grid=WidgetGridConfig(
+                row=1,
+                column=2,
+                sticky="w",
+                padx=(0, 12),
+                pady=(4, 10),
+            ),
+        ),
+        OptionCheckboxSpec(
+            text_key="fast_shallow_clone",
+            variable_attr="github_fast_var",
+            tooltip_key="github_fast",
+            grid=WidgetGridConfig(
+                row=1,
+                column=3,
+                sticky="w",
+                padx=(0, 12),
+                pady=(4, 10),
+            ),
+        ),
+    )
+
+
+def repair_review_option_checkbox_specs() -> tuple[OptionCheckboxSpec, ...]:
+    items = (
+        ("only_audit_public_remotes", "public_only_var", "public_only"),
+        ("redact_third_party_emails", "redact_var", "redact_third_party_emails"),
+        ("low_confidence_blocking", "low_confidence_blocking_var", "low_confidence_blocking"),
+        ("dry_run_preview", "dry_run_var", "dry_run_preview"),
+        ("audit_github_hardening", "audit_github_hardening_var", "audit_github_hardening"),
+        ("accept_github_admin_bypass", "accept_github_admin_bypass_var", "accept_github_admin_bypass"),
+        ("audit_litellm_incident", "audit_litellm_incident_var", "audit_litellm_incident"),
+        ("open_html_report", "open_report_var", "open_html_report"),
+        ("confirm_each_repo_fix", "confirm_each_repo_fix_var", "confirm_each_repo_fix"),
+    )
+    return tuple(
+        OptionCheckboxSpec(
+            text_key=text_key,
+            variable_attr=variable_attr,
+            tooltip_key=tooltip_key,
+            grid=WidgetGridConfig(row=row, column=0, sticky="w", padx=12, pady=4),
+            info_badge=True,
+        )
+        for row, (text_key, variable_attr, tooltip_key) in enumerate(items, start=1)
+    )
+
+
+def repair_write_option_checkbox_specs() -> tuple[OptionCheckboxSpec, ...]:
+    return (
+        OptionCheckboxSpec(
+            text_key="rewrite_personal_paths",
+            variable_attr="rewrite_personal_paths_var",
+            tooltip_key="rewrite_personal_paths",
+            grid=WidgetGridConfig(row=2, column=0, sticky="w", padx=12, pady=(0, 4)),
+            widget_attr="_rewrite_paths_checkbox",
+            info_badge=True,
+        ),
+        OptionCheckboxSpec(
+            text_key="force_push",
+            variable_attr="push_var",
+            tooltip_key="force_push",
+            grid=WidgetGridConfig(row=7, column=0, sticky="w", padx=12, pady=(0, 4)),
+            widget_attr="_push_checkbox",
+            info_badge=True,
+        ),
+        OptionCheckboxSpec(
+            text_key="bypass_remote_owner_guardrail",
+            variable_attr="allow_non_owner_push_var",
+            tooltip_key="bypass_remote_owner_guardrail",
+            grid=WidgetGridConfig(row=8, column=0, sticky="w", padx=12, pady=4),
+            widget_attr="_allow_non_owner_push_checkbox",
+            command_attr="_on_allow_non_owner_push_toggled",
+            info_badge=True,
+        ),
+        OptionCheckboxSpec(
+            text_key="purge_safe_secret_files",
+            variable_attr="purge_detected_secret_files_var",
+            tooltip_key="purge_safe_secret_files",
+            grid=WidgetGridConfig(row=12, column=0, sticky="w", padx=12, pady=(0, 4)),
+            widget_attr="_purge_safe_checkbox",
+            command_attr="_on_purge_safe_toggled",
+            info_badge=True,
+        ),
+        OptionCheckboxSpec(
+            text_key="purge_risky_secret_files",
+            variable_attr="purge_all_detected_secret_files_var",
+            tooltip_key="purge_risky_secret_files",
+            grid=WidgetGridConfig(row=13, column=0, sticky="w", padx=12, pady=4),
+            widget_attr="_purge_risky_checkbox",
+            command_attr="_on_purge_risky_toggled",
+            info_badge=True,
+        ),
     )
 
 
