@@ -9,6 +9,8 @@ from typing import Literal
 
 WidgetState = Literal["normal", "disabled"]
 RepairGateTone = Literal["locked", "review", "ready"]
+GridColumnTarget = int | tuple[int, ...]
+GridPadding = int | tuple[int, int]
 
 
 MANUAL_REVIEW_SIGNAL_KEYS = (
@@ -60,6 +62,64 @@ class CollapsibleSectionState:
     @property
     def hint_kwargs(self) -> dict[str, object]:
         return dict(self.hint_text_kwargs)
+
+
+@dataclass(frozen=True)
+class GridColumnConfig:
+    column: GridColumnTarget
+    weight: int
+
+
+@dataclass(frozen=True)
+class WidgetGridConfig:
+    row: int
+    column: int
+    sticky: str
+    padx: GridPadding = 0
+    pady: GridPadding = 0
+    columnspan: int | None = None
+
+    @property
+    def kwargs(self) -> dict[str, object]:
+        values: dict[str, object] = {
+            "row": self.row,
+            "column": self.column,
+            "sticky": self.sticky,
+            "padx": self.padx,
+            "pady": self.pady,
+        }
+        if self.columnspan is not None:
+            values["columnspan"] = self.columnspan
+        return values
+
+
+@dataclass(frozen=True)
+class ReportsDecisionLayoutState:
+    compact: bool
+    column_configs: tuple[GridColumnConfig, ...]
+    step_label_grids: tuple[WidgetGridConfig, WidgetGridConfig, WidgetGridConfig]
+    prompts_button_sticky: str
+
+
+@dataclass(frozen=True)
+class PromptsWorkflowLayoutState:
+    compact: bool
+    column_configs: tuple[GridColumnConfig, GridColumnConfig, GridColumnConfig]
+    title_grid: WidgetGridConfig
+    info_badge_grid: WidgetGridConfig
+    body_grid: WidgetGridConfig
+    body_wraplength: int
+    visual_visible: bool
+
+
+@dataclass(frozen=True)
+class ReportsActionVisibilityState:
+    show_decision_steps: bool
+    show_prompts_button: bool
+    show_go_audit_button: bool
+    show_agent_handoff_button: bool
+    show_artifact_buttons: bool
+    artifact_button_state: WidgetState
 
 
 Translate = Callable[..., str]
@@ -232,4 +292,77 @@ def advanced_identity_visibility_state(*, visible: bool) -> CollapsibleSectionSt
         visible=visible,
         toggle_text_key="hide_advanced_identity" if visible else "show_advanced_identity",
         hint_text_key="advanced_identity_visible" if visible else "advanced_identity_hidden",
+    )
+
+
+def reports_decision_layout_state(*, compact: bool) -> ReportsDecisionLayoutState:
+    if compact:
+        return ReportsDecisionLayoutState(
+            compact=True,
+            column_configs=(
+                GridColumnConfig(column=0, weight=1),
+                GridColumnConfig(column=(1, 2), weight=0),
+            ),
+            step_label_grids=(
+                WidgetGridConfig(row=0, column=0, sticky="we", padx=0, pady=(0, 3)),
+                WidgetGridConfig(row=1, column=0, sticky="we", padx=0, pady=(0, 3)),
+                WidgetGridConfig(row=2, column=0, sticky="we", padx=0, pady=(0, 3)),
+            ),
+            prompts_button_sticky="w",
+        )
+    return ReportsDecisionLayoutState(
+        compact=False,
+        column_configs=(GridColumnConfig(column=(0, 1, 2), weight=1),),
+        step_label_grids=(
+            WidgetGridConfig(row=0, column=0, sticky="we", padx=(0, 8), pady=0),
+            WidgetGridConfig(row=0, column=1, sticky="we", padx=(0, 8), pady=0),
+            WidgetGridConfig(row=0, column=2, sticky="we", padx=(0, 0), pady=0),
+        ),
+        prompts_button_sticky="e",
+    )
+
+
+def prompts_workflow_layout_state(*, compact: bool) -> PromptsWorkflowLayoutState:
+    return PromptsWorkflowLayoutState(
+        compact=compact,
+        column_configs=(
+            GridColumnConfig(column=0, weight=1 if compact else 0),
+            GridColumnConfig(column=1, weight=0 if compact else 1),
+            GridColumnConfig(column=2, weight=0),
+        ),
+        title_grid=WidgetGridConfig(
+            row=0,
+            column=0,
+            sticky="w",
+            padx=10,
+            pady=(10, 4) if compact else 10,
+        ),
+        info_badge_grid=WidgetGridConfig(
+            row=0,
+            column=1 if compact else 2,
+            sticky="e",
+            padx=(0, 10),
+            pady=(10, 4) if compact else 10,
+        ),
+        body_grid=WidgetGridConfig(
+            row=1 if compact else 0,
+            column=0 if compact else 1,
+            columnspan=2 if compact else 1,
+            sticky="we",
+            padx=10 if compact else (0, 10),
+            pady=(0, 10) if compact else 10,
+        ),
+        body_wraplength=760 if compact else 1040,
+        visual_visible=not compact,
+    )
+
+
+def reports_action_visibility_state(*, has_artifacts: bool) -> ReportsActionVisibilityState:
+    return ReportsActionVisibilityState(
+        show_decision_steps=has_artifacts,
+        show_prompts_button=has_artifacts,
+        show_go_audit_button=not has_artifacts,
+        show_agent_handoff_button=has_artifacts,
+        show_artifact_buttons=has_artifacts,
+        artifact_button_state="normal" if has_artifacts else "disabled",
     )

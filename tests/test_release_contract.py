@@ -2744,6 +2744,94 @@ def test_gui_state_collapsible_visibility_helpers_preserve_text_keys() -> None:
     assert identity_hidden.hint_text_key == "advanced_identity_hidden"
 
 
+def test_gui_state_reports_decision_layout_helper_preserves_grid_contract() -> None:
+    compact = gui_state_helpers.reports_decision_layout_state(compact=True)
+    assert compact.compact is True
+    assert compact.column_configs == (
+        gui_state_helpers.GridColumnConfig(column=0, weight=1),
+        gui_state_helpers.GridColumnConfig(column=(1, 2), weight=0),
+    )
+    assert [grid.kwargs for grid in compact.step_label_grids] == [
+        {"row": 0, "column": 0, "sticky": "we", "padx": 0, "pady": (0, 3)},
+        {"row": 1, "column": 0, "sticky": "we", "padx": 0, "pady": (0, 3)},
+        {"row": 2, "column": 0, "sticky": "we", "padx": 0, "pady": (0, 3)},
+    ]
+    assert compact.prompts_button_sticky == "w"
+
+    wide = gui_state_helpers.reports_decision_layout_state(compact=False)
+    assert wide.compact is False
+    assert wide.column_configs == (gui_state_helpers.GridColumnConfig(column=(0, 1, 2), weight=1),)
+    assert [grid.kwargs for grid in wide.step_label_grids] == [
+        {"row": 0, "column": 0, "sticky": "we", "padx": (0, 8), "pady": 0},
+        {"row": 0, "column": 1, "sticky": "we", "padx": (0, 8), "pady": 0},
+        {"row": 0, "column": 2, "sticky": "we", "padx": (0, 0), "pady": 0},
+    ]
+    assert wide.prompts_button_sticky == "e"
+
+
+def test_gui_state_prompts_workflow_layout_helper_preserves_grid_contract() -> None:
+    compact = gui_state_helpers.prompts_workflow_layout_state(compact=True)
+    assert compact.column_configs == (
+        gui_state_helpers.GridColumnConfig(column=0, weight=1),
+        gui_state_helpers.GridColumnConfig(column=1, weight=0),
+        gui_state_helpers.GridColumnConfig(column=2, weight=0),
+    )
+    assert compact.title_grid.kwargs == {"row": 0, "column": 0, "sticky": "w", "padx": 10, "pady": (10, 4)}
+    assert compact.info_badge_grid.kwargs == {
+        "row": 0,
+        "column": 1,
+        "sticky": "e",
+        "padx": (0, 10),
+        "pady": (10, 4),
+    }
+    assert compact.body_grid.kwargs == {
+        "row": 1,
+        "column": 0,
+        "sticky": "we",
+        "padx": 10,
+        "pady": (0, 10),
+        "columnspan": 2,
+    }
+    assert compact.body_wraplength == 760
+    assert compact.visual_visible is False
+
+    wide = gui_state_helpers.prompts_workflow_layout_state(compact=False)
+    assert wide.column_configs == (
+        gui_state_helpers.GridColumnConfig(column=0, weight=0),
+        gui_state_helpers.GridColumnConfig(column=1, weight=1),
+        gui_state_helpers.GridColumnConfig(column=2, weight=0),
+    )
+    assert wide.info_badge_grid.kwargs["column"] == 2
+    assert wide.body_grid.kwargs == {
+        "row": 0,
+        "column": 1,
+        "sticky": "we",
+        "padx": (0, 10),
+        "pady": 10,
+        "columnspan": 1,
+    }
+    assert wide.body_wraplength == 1040
+    assert wide.visual_visible is True
+
+
+def test_gui_state_reports_action_visibility_helper_tracks_artifact_state() -> None:
+    empty = gui_state_helpers.reports_action_visibility_state(has_artifacts=False)
+    assert empty.show_go_audit_button is True
+    assert empty.show_agent_handoff_button is False
+    assert empty.show_artifact_buttons is False
+    assert empty.show_decision_steps is False
+    assert empty.show_prompts_button is False
+    assert empty.artifact_button_state == "disabled"
+
+    ready = gui_state_helpers.reports_action_visibility_state(has_artifacts=True)
+    assert ready.show_go_audit_button is False
+    assert ready.show_agent_handoff_button is True
+    assert ready.show_artifact_buttons is True
+    assert ready.show_decision_steps is True
+    assert ready.show_prompts_button is True
+    assert ready.artifact_button_state == "normal"
+
+
 def test_gui_browse_helpers_update_variables(tmp_path: Path) -> None:
     class DummyVar:
         def __init__(self, value: str):

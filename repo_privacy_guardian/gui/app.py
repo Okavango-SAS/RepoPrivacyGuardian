@@ -3144,21 +3144,24 @@ class GuiApp:  # pragma: no cover
         artifacts = getattr(self, "_last_run_artifacts", None)
         counts = self._reports_summary_counts()
         exit_code = getattr(self, "_last_run_exit_code", None)
+        visibility_state = gui_state_helpers.reports_action_visibility_state(has_artifacts=artifacts is not None)
         next_action_label.configure(
             text=self._t(self._reports_next_action_key(counts, exit_code, artifacts is not None))
         )
         steps_frame = getattr(self, "_reports_agent_steps_frame", None)
         prompts_button = getattr(self, "_reports_open_prompts_button", None)
-        if artifacts is None:
-            if steps_frame is not None:
-                steps_frame.grid_remove()
-            if prompts_button is not None:
-                prompts_button.grid_remove()
-            return
         if steps_frame is not None:
-            steps_frame.grid()
+            if visibility_state.show_decision_steps:
+                steps_frame.grid()
+            else:
+                steps_frame.grid_remove()
         if prompts_button is not None:
-            prompts_button.grid()
+            if visibility_state.show_prompts_button:
+                prompts_button.grid()
+            else:
+                prompts_button.grid_remove()
+        if artifacts is None:
+            return
         self._reports_decision_layout_signature = None
         self._apply_reports_decision_layout(compact=bool(getattr(self, "_compact_reports_decision_layout", False)))
 
@@ -3203,24 +3206,25 @@ class GuiApp:  # pragma: no cover
             return
         go_audit_button = getattr(self, "_reports_go_audit_button", None)
         agent_handoff_button = getattr(self, "_reports_agent_handoff_button", None)
+        visibility_state = gui_state_helpers.reports_action_visibility_state(has_artifacts=artifacts is not None)
         self._refresh_reports_decision_panel()
         if artifacts is None:
             badge.configure(text=self._t("last_run"), fg_color=self._success_badge_fg, text_color=self._success_text)
             summary_label.configure(text=self._t("last_run_none"))
             paths_label.configure(text=self._t("latest_artifacts_none"))
-            if go_audit_button is not None:
+            if go_audit_button is not None and visibility_state.show_go_audit_button:
                 go_audit_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
             if agent_handoff_button is not None:
                 agent_handoff_button.grid_remove()
             for button in getattr(self, "_reports_action_buttons", []):
                 button.grid_remove()
-                button.configure(state="disabled")
+                button.configure(state=visibility_state.artifact_button_state)
             return
 
-        if go_audit_button is not None:
+        if go_audit_button is not None and not visibility_state.show_go_audit_button:
             go_audit_button.grid_remove()
         compact_actions = bool(getattr(self, "_compact_reports_actions_layout", False))
-        if agent_handoff_button is not None:
+        if agent_handoff_button is not None and visibility_state.show_agent_handoff_button:
             agent_handoff_button.grid(
                 row=0,
                 column=0,
@@ -3266,7 +3270,7 @@ class GuiApp:  # pragma: no cover
             )
         )
         for button in getattr(self, "_reports_action_buttons", []):
-            button.configure(state="normal")
+            button.configure(state=visibility_state.artifact_button_state)
 
     def _remember_last_run_artifacts(
         self,
@@ -3805,42 +3809,23 @@ class GuiApp:  # pragma: no cover
         body_label = getattr(self, "_prompts_workflow_body_label", None)
         info_badge = getattr(self, "_prompts_workflow_info_badge", None)
         visual_label = getattr(self, "_prompts_visual_label", None)
+        layout_state = gui_state_helpers.prompts_workflow_layout_state(compact=compact)
         try:
             if guide is not None:
-                guide.grid_columnconfigure(0, weight=1 if compact else 0)
-                guide.grid_columnconfigure(1, weight=0 if compact else 1)
-                guide.grid_columnconfigure(2, weight=0)
+                for column_config in layout_state.column_configs:
+                    guide.grid_columnconfigure(column_config.column, weight=column_config.weight)
             if title_label is not None:
-                title_label.grid(
-                    row=0,
-                    column=0,
-                    sticky="w",
-                    padx=10,
-                    pady=(10, 4) if compact else 10,
-                )
+                title_label.grid(**layout_state.title_grid.kwargs)
             if info_badge is not None:
-                info_badge.grid(
-                    row=0,
-                    column=1 if compact else 2,
-                    sticky="e",
-                    padx=(0, 10),
-                    pady=(10, 4) if compact else 10,
-                )
+                info_badge.grid(**layout_state.info_badge_grid.kwargs)
             if body_label is not None:
-                body_label.grid(
-                    row=1 if compact else 0,
-                    column=0 if compact else 1,
-                    columnspan=2 if compact else 1,
-                    sticky="we",
-                    padx=10 if compact else (0, 10),
-                    pady=(0, 10) if compact else 10,
-                )
-                body_label.configure(wraplength=760 if compact else 1040)
+                body_label.grid(**layout_state.body_grid.kwargs)
+                body_label.configure(wraplength=layout_state.body_wraplength)
             if visual_label is not None:
-                if compact:
-                    visual_label.grid_remove()
-                else:
+                if layout_state.visual_visible:
                     visual_label.grid()
+                else:
+                    visual_label.grid_remove()
         except Exception as exc:
             self._record_gui_warning("prompts workflow layout update failed", exc)
             return
@@ -4116,23 +4101,15 @@ class GuiApp:  # pragma: no cover
         if layout_signature == getattr(self, "_reports_decision_layout_signature", None):
             return
 
+        layout_state = gui_state_helpers.reports_decision_layout_state(compact=compact)
         try:
-            self._compact_reports_decision_layout = compact
-            if compact:
-                steps_frame.grid_columnconfigure(0, weight=1)
-                steps_frame.grid_columnconfigure((1, 2), weight=0)
-                for idx, label in enumerate(step_labels):
-                    label.grid_configure(row=idx, column=0, sticky="we", padx=0, pady=(0, 3))
-                if prompts_button is not None and self._widget_is_grid_managed(prompts_button):
-                    prompts_button.grid_configure(sticky="w")
-                self._reports_decision_layout_signature = layout_signature
-                return
-
-            steps_frame.grid_columnconfigure((0, 1, 2), weight=1)
-            for idx, label in enumerate(step_labels):
-                label.grid_configure(row=0, column=idx, sticky="we", padx=(0, 8 if idx < 2 else 0), pady=0)
+            self._compact_reports_decision_layout = layout_state.compact
+            for column_config in layout_state.column_configs:
+                steps_frame.grid_columnconfigure(column_config.column, weight=column_config.weight)
+            for label, label_grid in zip(step_labels, layout_state.step_label_grids, strict=True):
+                label.grid_configure(**label_grid.kwargs)
             if prompts_button is not None and self._widget_is_grid_managed(prompts_button):
-                prompts_button.grid_configure(sticky="e")
+                prompts_button.grid_configure(sticky=layout_state.prompts_button_sticky)
             self._reports_decision_layout_signature = layout_signature
         except Exception as exc:
             self._reports_decision_layout_signature = None
