@@ -2430,6 +2430,117 @@ def test_gui_option_checkbox_specs_cover_settings_and_repair_rows() -> None:
         assert spec.tooltip_key in tooltip_catalog
 
 
+def test_gui_path_field_specs_cover_settings_and_repair_rows() -> None:
+    root_spec = gui_state_helpers.repositories_root_path_field_spec(row=2)
+    assert root_spec.kind == "directory"
+    assert root_spec.variable_attr == "root_var"
+    assert root_spec.title_key == "choose_repositories_root"
+    assert root_spec.on_select_attr == "_on_root_directory_selected"
+    assert root_spec.button_text_key == "browse"
+    assert root_spec.button_icon == "icon-folder.png"
+    assert root_spec.label_grid.kwargs == {
+        "row": 2,
+        "column": 0,
+        "sticky": "w",
+        "padx": (14, 8),
+        "pady": 4,
+    }
+    assert root_spec.entry_grid.kwargs == {
+        "row": 2,
+        "column": 1,
+        "sticky": "we",
+        "padx": (0, 8),
+        "pady": 4,
+    }
+    assert root_spec.button_grid.kwargs == {
+        "row": 2,
+        "column": 2,
+        "sticky": "",
+        "padx": (0, 14),
+        "pady": 4,
+    }
+
+    setup_specs = {
+        spec.label_key: spec
+        for spec in gui_state_helpers.setup_path_field_specs(
+            policy_row=4,
+            results_row=5,
+            json_row=6,
+            suppression_row=8,
+        )
+    }
+    assert [
+        (
+            spec.label_key,
+            spec.variable_attr,
+            spec.kind,
+            spec.title_key,
+            spec.tooltip_key,
+            spec.button_text_key,
+            spec.button_icon,
+            spec.default_extension,
+            spec.label_grid.row,
+        )
+        for spec in setup_specs.values()
+    ] == [
+        ("policy_file", "policy_var", "existing_file", "choose_policy_file", "policy_file", "browse", "icon-open.png", None, 4),
+        ("audit_results_folder", "report_dir_var", "directory", "choose_results_folder", "audit_results_folder", "browse", "icon-folder.png", None, 5),
+        ("optional_json_copy", "report_json_var", "save_file", "choose_json_copy", "optional_json_copy", "save_as", "icon-folder.png", ".json", 6),
+        ("suppression_file", "suppressions_file_var", "existing_file", "choose_suppression_file", "suppression_file", "browse", "icon-open.png", None, 8),
+    ]
+    assert setup_specs["policy_file"].filetypes == (("Markdown files", "*.md"), ("All files", "*.*"))
+    assert setup_specs["optional_json_copy"].filetypes == (("JSON files", "*.json"), ("All files", "*.*"))
+
+    replace_spec = gui_state_helpers.repair_replace_text_path_field_spec()
+    assert replace_spec.kind == "existing_file"
+    assert replace_spec.variable_attr == "replace_text_file_var"
+    assert replace_spec.filetypes == (("Text files", "*.txt"), ("All files", "*.*"))
+    assert replace_spec.button_icon is None
+    assert replace_spec.label_grid.kwargs == {
+        "row": 4,
+        "column": 0,
+        "sticky": "w",
+        "padx": 12,
+        "pady": (4, 0),
+    }
+    assert replace_spec.row_frame_grid is not None
+    assert replace_spec.row_frame_grid.kwargs == {
+        "row": 5,
+        "column": 0,
+        "sticky": "we",
+        "padx": 12,
+        "pady": (2, 4),
+        "columnspan": 2,
+    }
+    assert replace_spec.row_frame_weight_column == 0
+    assert replace_spec.entry_grid.kwargs == {
+        "row": 0,
+        "column": 0,
+        "sticky": "we",
+        "padx": (0, 8),
+        "pady": 0,
+    }
+    assert replace_spec.button_grid.kwargs == {
+        "row": 0,
+        "column": 1,
+        "sticky": "",
+        "padx": 0,
+        "pady": 0,
+    }
+
+    english = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT]
+    spanish = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]
+    tooltip_catalog = rpg.GUI_TOOLTIP_TEXT
+    for spec in (root_spec, *setup_specs.values(), replace_spec):
+        assert spec.label_key in english
+        assert spec.label_key in spanish
+        assert spec.title_key in english
+        assert spec.title_key in spanish
+        assert spec.button_text_key in english
+        assert spec.button_text_key in spanish
+        assert spec.tooltip_key in tooltip_catalog
+
+
 def test_gui_lock_default_text_is_english() -> None:
     app = object.__new__(rpg.GuiApp)
     app._repair_cooldown_after_id = None
@@ -2938,6 +3049,74 @@ def test_gui_browse_helpers_update_variables(tmp_path: Path) -> None:
     assert root_var.get() == str(tmp_path)
     assert policy_var.get() == str(tmp_path / "POLICY.md")
     assert report_var.get() == str(tmp_path / "report.json")
+
+
+def test_gui_path_field_dialog_dispatch_uses_spec_contract(tmp_path: Path) -> None:
+    class DummyVar:
+        def __init__(self, value: str):
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
+        def set(self, value: str) -> None:
+            self.value = value
+
+    class DummyDialog:
+        def askdirectory(self, **kwargs):  # type: ignore[no-untyped-def]
+            assert kwargs["title"] == "Choose the repositories root directory"
+            return str(tmp_path / "repos")
+
+        def askopenfilename(self, **kwargs):  # type: ignore[no-untyped-def]
+            assert kwargs["title"] in {
+                "Choose a policy file",
+                "Choose an explicit replace-text file",
+            }
+            assert kwargs["filetypes"] in [
+                [("Markdown files", "*.md"), ("All files", "*.*")],
+                [("Text files", "*.txt"), ("All files", "*.*")],
+            ]
+            return str(tmp_path / "input.txt")
+
+        def asksaveasfilename(self, **kwargs):  # type: ignore[no-untyped-def]
+            assert kwargs["title"] == "Choose the extra JSON export path"
+            assert kwargs["defaultextension"] == ".json"
+            assert kwargs["filetypes"] == [("JSON files", "*.json"), ("All files", "*.*")]
+            return str(tmp_path / "report.json")
+
+    app = object.__new__(rpg.GuiApp)
+    app.filedialog = DummyDialog()
+    app._t = lambda key, **_kwargs: rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT][key]
+    on_select_calls: list[str] = []
+    app._on_root_directory_selected = lambda: on_select_calls.append("root")
+
+    root_var = DummyVar("")
+    policy_var = DummyVar("")
+    report_var = DummyVar("")
+    replace_var = DummyVar("")
+
+    app._run_path_field_dialog(gui_state_helpers.repositories_root_path_field_spec(row=2), root_var)
+    policy_spec = gui_state_helpers.setup_path_field_specs(
+        policy_row=4,
+        results_row=5,
+        json_row=6,
+        suppression_row=8,
+    )[0]
+    app._run_path_field_dialog(policy_spec, policy_var)
+    json_spec = gui_state_helpers.setup_path_field_specs(
+        policy_row=4,
+        results_row=5,
+        json_row=6,
+        suppression_row=8,
+    )[2]
+    app._run_path_field_dialog(json_spec, report_var)
+    app._run_path_field_dialog(gui_state_helpers.repair_replace_text_path_field_spec(), replace_var)
+
+    assert root_var.get() == str(tmp_path / "repos")
+    assert policy_var.get() == str(tmp_path / "input.txt")
+    assert report_var.get() == str(tmp_path / "report.json")
+    assert replace_var.get() == str(tmp_path / "input.txt")
+    assert on_select_calls == ["root"]
 
 
 def test_gui_repair_confirmation_text_uses_english_labels() -> None:

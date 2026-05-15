@@ -9,6 +9,7 @@ from typing import Literal
 
 WidgetState = Literal["normal", "disabled"]
 RepairGateTone = Literal["locked", "review", "ready"]
+PathFieldKind = Literal["directory", "existing_file", "save_file"]
 GridColumnTarget = int | tuple[int, ...]
 GridPadding = int | tuple[int, int]
 
@@ -102,6 +103,25 @@ class OptionCheckboxSpec:
     widget_attr: str | None = None
     command_attr: str | None = None
     info_badge: bool = False
+
+
+@dataclass(frozen=True)
+class PathFieldSpec:
+    kind: PathFieldKind
+    label_key: str
+    variable_attr: str
+    title_key: str
+    tooltip_key: str
+    label_grid: WidgetGridConfig
+    entry_grid: WidgetGridConfig
+    button_grid: WidgetGridConfig
+    button_text_key: str
+    button_icon: str | None
+    filetypes: tuple[tuple[str, str], ...] = ()
+    default_extension: str | None = None
+    on_select_attr: str | None = None
+    row_frame_grid: WidgetGridConfig | None = None
+    row_frame_weight_column: int | None = None
 
 
 @dataclass(frozen=True)
@@ -295,6 +315,112 @@ def repair_options_visibility_state(*, visible: bool) -> CollapsibleSectionState
         visible=visible,
         toggle_text_key="repair_advanced_toggle_hide" if visible else "repair_advanced_toggle_show",
         hint_text_key="repair_advanced_hint_visible" if visible else "repair_advanced_hint_hidden",
+    )
+
+
+def standard_path_field_spec(
+    *,
+    kind: PathFieldKind,
+    row: int,
+    label_key: str,
+    variable_attr: str,
+    title_key: str,
+    tooltip_key: str,
+    filetypes: tuple[tuple[str, str], ...] = (),
+    default_extension: str | None = None,
+    on_select_attr: str | None = None,
+) -> PathFieldSpec:
+    return PathFieldSpec(
+        kind=kind,
+        label_key=label_key,
+        variable_attr=variable_attr,
+        title_key=title_key,
+        tooltip_key=tooltip_key,
+        label_grid=WidgetGridConfig(row=row, column=0, sticky="w", padx=(14, 8), pady=4),
+        entry_grid=WidgetGridConfig(row=row, column=1, sticky="we", padx=(0, 8), pady=4),
+        button_grid=WidgetGridConfig(row=row, column=2, sticky="", padx=(0, 14), pady=4),
+        button_text_key="save_as" if kind == "save_file" else "browse",
+        button_icon="icon-open.png" if kind == "existing_file" else "icon-folder.png",
+        filetypes=filetypes,
+        default_extension=default_extension,
+        on_select_attr=on_select_attr,
+    )
+
+
+def repositories_root_path_field_spec(*, row: int) -> PathFieldSpec:
+    return standard_path_field_spec(
+        kind="directory",
+        row=row,
+        label_key="repositories_root",
+        variable_attr="root_var",
+        title_key="choose_repositories_root",
+        tooltip_key="repositories_root",
+        on_select_attr="_on_root_directory_selected",
+    )
+
+
+def setup_path_field_specs(
+    *,
+    policy_row: int,
+    results_row: int,
+    json_row: int,
+    suppression_row: int,
+) -> tuple[PathFieldSpec, ...]:
+    return (
+        standard_path_field_spec(
+            kind="existing_file",
+            row=policy_row,
+            label_key="policy_file",
+            variable_attr="policy_var",
+            title_key="choose_policy_file",
+            tooltip_key="policy_file",
+            filetypes=(("Markdown files", "*.md"), ("All files", "*.*")),
+        ),
+        standard_path_field_spec(
+            kind="directory",
+            row=results_row,
+            label_key="audit_results_folder",
+            variable_attr="report_dir_var",
+            title_key="choose_results_folder",
+            tooltip_key="audit_results_folder",
+        ),
+        standard_path_field_spec(
+            kind="save_file",
+            row=json_row,
+            label_key="optional_json_copy",
+            variable_attr="report_json_var",
+            title_key="choose_json_copy",
+            tooltip_key="optional_json_copy",
+            filetypes=(("JSON files", "*.json"), ("All files", "*.*")),
+            default_extension=".json",
+        ),
+        standard_path_field_spec(
+            kind="existing_file",
+            row=suppression_row,
+            label_key="suppression_file",
+            variable_attr="suppressions_file_var",
+            title_key="choose_suppression_file",
+            tooltip_key="suppression_file",
+            filetypes=(("JSON files", "*.json"), ("All files", "*.*")),
+        ),
+    )
+
+
+def repair_replace_text_path_field_spec() -> PathFieldSpec:
+    return PathFieldSpec(
+        kind="existing_file",
+        label_key="replace_text_rules",
+        variable_attr="replace_text_file_var",
+        title_key="choose_replace_text_file",
+        tooltip_key="replace_text_rules",
+        label_grid=WidgetGridConfig(row=4, column=0, sticky="w", padx=12, pady=(4, 0)),
+        entry_grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=(0, 8), pady=0),
+        button_grid=WidgetGridConfig(row=0, column=1, sticky="", padx=0, pady=0),
+        button_text_key="browse",
+        button_icon=None,
+        filetypes=(("Text files", "*.txt"), ("All files", "*.*")),
+        row_frame_grid=WidgetGridConfig(row=5, column=0, sticky="we", padx=12, pady=(2, 4), columnspan=2),
+        row_frame_weight_column=0,
     )
 
 

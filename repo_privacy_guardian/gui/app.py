@@ -452,14 +452,9 @@ class GuiApp:  # pragma: no cover
             font=self._font(12),
             text_color=self._text_muted,
         ), "text", "audit_target_body").grid(row=1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 8))
-        self._add_directory_field(
+        self._add_path_field(
             audit_target_card,
-            row=2,
-            label_key="repositories_root",
-            variable=self.root_var,
-            title_key="choose_repositories_root",
-            tooltip_key="repositories_root",
-            on_select=self._on_root_directory_selected,
+            gui_state_helpers.repositories_root_path_field_spec(row=2),
         )
         audit_settings_row = ctk.CTkFrame(audit_target_card, fg_color="transparent")
         audit_settings_row.grid(row=3, column=0, columnspan=3, sticky="we", padx=14, pady=(6, 12))
@@ -575,14 +570,9 @@ class GuiApp:  # pragma: no cover
         ), "text", "settings_status").grid(row=0, column=1, sticky="we", padx=(0, 10), pady=10)
 
         row = 2
-        self._add_directory_field(
+        self._add_path_field(
             settings_card,
-            row=row,
-            label_key="repositories_root",
-            variable=self.root_var,
-            title_key="choose_repositories_root",
-            tooltip_key="repositories_root",
-            on_select=self._on_root_directory_selected,
+            gui_state_helpers.repositories_root_path_field_spec(row=row),
         )
 
         row += 1
@@ -691,37 +681,26 @@ class GuiApp:  # pragma: no cover
         self._appearance_menu.grid(row=settings_row, column=1, sticky="w", pady=4)
 
         settings_row += 1
-        self._add_file_field(
-            setup_settings_frame,
-            row=settings_row,
-            label_key="policy_file",
-            variable=self.policy_var,
-            title_key="choose_policy_file",
-            filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
-            tooltip_key="policy_file",
-        )
+        policy_row = settings_row
 
         settings_row += 1
-        self._add_directory_field(
-            setup_settings_frame,
-            row=settings_row,
-            label_key="audit_results_folder",
-            variable=self.report_dir_var,
-            title_key="choose_results_folder",
-            tooltip_key="audit_results_folder",
-        )
+        results_row = settings_row
 
         settings_row += 1
-        self._add_save_file_field(
-            setup_settings_frame,
-            row=settings_row,
-            label_key="optional_json_copy",
-            variable=self.report_json_var,
-            title_key="choose_json_copy",
-            default_extension=".json",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            tooltip_key="optional_json_copy",
-        )
+        json_row = settings_row
+
+        setup_path_specs = {
+            spec.label_key: spec
+            for spec in gui_state_helpers.setup_path_field_specs(
+                policy_row=policy_row,
+                results_row=results_row,
+                json_row=json_row,
+                suppression_row=json_row + 2,
+            )
+        }
+        self._add_path_field(setup_settings_frame, setup_path_specs["policy_file"])
+        self._add_path_field(setup_settings_frame, setup_path_specs["audit_results_folder"])
+        self._add_path_field(setup_settings_frame, setup_path_specs["optional_json_copy"])
 
         settings_row += 1
         self._make_field_label(
@@ -751,15 +730,7 @@ class GuiApp:  # pragma: no cover
         )
 
         settings_row += 1
-        self._add_file_field(
-            setup_settings_frame,
-            row=settings_row,
-            label_key="suppression_file",
-            variable=self.suppressions_file_var,
-            title_key="choose_suppression_file",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            tooltip_key="suppression_file",
-        )
+        self._add_path_field(setup_settings_frame, setup_path_specs["suppression_file"])
 
         settings_row += 1
         github_remote_card = ctk.CTkFrame(
@@ -1240,38 +1211,10 @@ class GuiApp:  # pragma: no cover
             text_color=self._warning_strong_text,
         ), "text", "rewrite_personal_paths_body").grid(row=3, column=0, columnspan=2, sticky="w", padx=36, pady=(0, 6))
 
-        self._make_field_label(
+        self._add_path_field(
             destructive_options,
-            text_key="replace_text_rules",
-            tooltip_key="replace_text_rules",
-        ).grid(row=4, column=0, sticky="w", padx=12, pady=(4, 0))
-        replace_text_row = ctk.CTkFrame(destructive_options, fg_color="transparent")
-        replace_text_row.grid(row=5, column=0, columnspan=2, sticky="we", padx=12, pady=(2, 4))
-        replace_text_row.grid_columnconfigure(0, weight=1)
-        replace_text_entry = ctk.CTkEntry(
-            replace_text_row,
-            textvariable=self.replace_text_file_var,
-            height=32,
-            corner_radius=8,
+            gui_state_helpers.repair_replace_text_path_field_spec(),
         )
-        self._bind_tooltip_key(replace_text_entry, "replace_text_rules")
-        replace_text_entry.grid(row=0, column=0, sticky="we", padx=(0, 8))
-        replace_text_button = ctk.CTkButton(
-            replace_text_row,
-            text=self._t("browse"),
-            width=92,
-            height=32,
-            corner_radius=8,
-            **self._secondary_button_options(),
-            command=lambda: self._browse_existing_file(
-                self.replace_text_file_var,
-                title=self._t("choose_replace_text_file"),
-                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
-            ),
-        )
-        self._localize_widget(replace_text_button, "text", "browse")
-        self._bind_tooltip_key(replace_text_button, "replace_text_rules")
-        replace_text_button.grid(row=0, column=1)
         self._localize_widget(ctk.CTkLabel(
             destructive_options,
             text=self._t("replace_text_rules_body"),
@@ -3508,54 +3451,64 @@ class GuiApp:  # pragma: no cover
         if selected:
             target_var.set(selected)
 
-    def _add_directory_field(
+    def _add_path_field(
         self,
         parent,
-        *,
-        row: int,
-        label: str | None = None,
-        label_key: str | None = None,
-        variable,
-        title: str | None = None,
-        title_key: str | None = None,
-        tooltip_key: str | None = None,
-        on_select: Callable[[], None] | None = None,
+        spec: gui_state_helpers.PathFieldSpec,
     ) -> None:
-        self._make_field_label(parent, text=label, text_key=label_key, tooltip_key=tooltip_key).grid(
-            row=row,
-            column=0,
-            sticky="w",
-            padx=(14, 8),
-            pady=4,
-        )
-        entry = self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8)
-        if tooltip_key:
-            self._bind_tooltip_key(entry, tooltip_key)
-        entry.grid(
-            row=row,
-            column=1,
-            sticky="we",
-            padx=(0, 8),
-            pady=4,
-        )
-        button = self.ctk.CTkButton(
+        variable = getattr(self, spec.variable_attr)
+        self._make_field_label(
             parent,
-            text=self._t("browse"),
+            text_key=spec.label_key,
+            tooltip_key=spec.tooltip_key,
+        ).grid(**spec.label_grid.kwargs)
+
+        field_parent = parent
+        if spec.row_frame_grid is not None:
+            row_frame = self.ctk.CTkFrame(parent, fg_color="transparent")
+            row_frame.grid(**spec.row_frame_grid.kwargs)
+            if spec.row_frame_weight_column is not None:
+                row_frame.grid_columnconfigure(spec.row_frame_weight_column, weight=1)
+            field_parent = row_frame
+
+        entry = self.ctk.CTkEntry(field_parent, textvariable=variable, height=32, corner_radius=8)
+        self._bind_tooltip_key(entry, spec.tooltip_key)
+        entry.grid(**spec.entry_grid.kwargs)
+
+        button_options: dict[str, object] = {}
+        if spec.button_icon:
+            button_options.update(self._button_asset_options(spec.button_icon))
+        button_options.update(self._secondary_button_options())
+        button = self.ctk.CTkButton(
+            field_parent,
+            text=self._t(spec.button_text_key),
             width=92,
             height=32,
             corner_radius=8,
-            **self._button_asset_options("icon-folder.png"),
-            **self._secondary_button_options(),
-            command=lambda: self._handle_directory_browse(
-                variable,
-                title=self._t(title_key) if title_key else (title or ""),
-                on_select=on_select,
-            ),
+            **button_options,
+            command=lambda: self._run_path_field_dialog(spec, variable),
         )
-        self._localize_widget(button, "text", "browse")
-        if tooltip_key:
-            self._bind_tooltip_key(button, tooltip_key)
-        button.grid(row=row, column=2, padx=(0, 14), pady=4)
+        self._localize_widget(button, "text", spec.button_text_key)
+        self._bind_tooltip_key(button, spec.tooltip_key)
+        button.grid(**spec.button_grid.kwargs)
+
+    def _run_path_field_dialog(self, spec: gui_state_helpers.PathFieldSpec, variable) -> None:
+        title = self._t(spec.title_key)
+        if spec.kind == "directory":
+            on_select = getattr(self, spec.on_select_attr) if spec.on_select_attr else None
+            self._handle_directory_browse(variable, title=title, on_select=on_select)
+            return
+        if spec.kind == "existing_file":
+            self._browse_existing_file(variable, title=title, filetypes=list(spec.filetypes))
+            return
+        if spec.default_extension is None:
+            raise ValueError(f"Path field {spec.label_key} is missing default_extension")
+        self._browse_save_file(
+            variable,
+            title=title,
+            default_extension=spec.default_extension,
+            filetypes=list(spec.filetypes),
+        )
 
     def _handle_directory_browse(
         self,
@@ -3566,106 +3519,6 @@ class GuiApp:  # pragma: no cover
     ) -> None:
         if self._browse_directory(target_var, title=title) and on_select is not None:
             on_select()
-
-    def _add_file_field(
-        self,
-        parent,
-        *,
-        row: int,
-        label: str | None = None,
-        label_key: str | None = None,
-        variable,
-        title: str | None = None,
-        title_key: str | None = None,
-        filetypes,
-        tooltip_key: str | None = None,
-    ) -> None:
-        self._make_field_label(parent, text=label, text_key=label_key, tooltip_key=tooltip_key).grid(
-            row=row,
-            column=0,
-            sticky="w",
-            padx=(14, 8),
-            pady=4,
-        )
-        entry = self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8)
-        if tooltip_key:
-            self._bind_tooltip_key(entry, tooltip_key)
-        entry.grid(
-            row=row,
-            column=1,
-            sticky="we",
-            padx=(0, 8),
-            pady=4,
-        )
-        button = self.ctk.CTkButton(
-            parent,
-            text=self._t("browse"),
-            width=92,
-            height=32,
-            corner_radius=8,
-            **self._button_asset_options("icon-open.png"),
-            **self._secondary_button_options(),
-            command=lambda: self._browse_existing_file(
-                variable,
-                title=self._t(title_key) if title_key else (title or ""),
-                filetypes=filetypes,
-            ),
-        )
-        self._localize_widget(button, "text", "browse")
-        if tooltip_key:
-            self._bind_tooltip_key(button, tooltip_key)
-        button.grid(row=row, column=2, padx=(0, 14), pady=4)
-
-    def _add_save_file_field(
-        self,
-        parent,
-        *,
-        row: int,
-        label: str | None = None,
-        label_key: str | None = None,
-        variable,
-        title: str | None = None,
-        title_key: str | None = None,
-        default_extension: str,
-        filetypes,
-        tooltip_key: str | None = None,
-    ) -> None:
-        self._make_field_label(parent, text=label, text_key=label_key, tooltip_key=tooltip_key).grid(
-            row=row,
-            column=0,
-            sticky="w",
-            padx=(14, 8),
-            pady=4,
-        )
-        entry = self.ctk.CTkEntry(parent, textvariable=variable, height=32, corner_radius=8)
-        if tooltip_key:
-            self._bind_tooltip_key(entry, tooltip_key)
-        entry.grid(
-            row=row,
-            column=1,
-            sticky="we",
-            padx=(0, 8),
-            pady=4,
-        )
-        button = self.ctk.CTkButton(
-            parent,
-            text=self._t("save_as"),
-            width=92,
-            height=32,
-            corner_radius=8,
-            **self._button_asset_options("icon-folder.png"),
-            **self._secondary_button_options(),
-            command=lambda: self._browse_save_file(
-                variable,
-                title=self._t(title_key) if title_key else (title or ""),
-                default_extension=default_extension,
-                filetypes=filetypes,
-            ),
-        )
-        self._localize_widget(button, "text", "save_as")
-        if tooltip_key:
-            self._bind_tooltip_key(button, tooltip_key)
-        button.grid(row=row, column=2, padx=(0, 14), pady=4)
 
     def _get_logical_window_width(self) -> int:
         geometry = self.root.wm_geometry().split("+", maxsplit=1)[0]
