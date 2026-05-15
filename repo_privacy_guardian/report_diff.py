@@ -14,6 +14,7 @@ REPORT_DIFF_CATEGORY_GROUPS: dict[str, tuple[str, ...]] = {
     "blocking": agent_summary.BLOCKING_CATEGORY_KEYS,
     "manual_review": agent_summary.MANUAL_REVIEW_CATEGORY_KEYS,
     "fixture_documentation": agent_summary.FIXTURE_DOCUMENTATION_CATEGORY_KEYS,
+    "accepted_risk": agent_summary.ACCEPTED_RISK_CATEGORY_KEYS,
 }
 
 
@@ -323,7 +324,7 @@ def format_report_diff_summary(diff: dict[str, object]) -> str:
             f"unchanged {repo_counts.get('unchanged', 0)}, status changed {repo_counts.get('status_changed', 0)})"
         ),
     ]
-    for group in ("blocking", "manual_review", "fixture_documentation"):
+    for group in ("blocking", "manual_review", "fixture_documentation", "accepted_risk"):
         delta = _int_delta(totals.get(group))
         lines.append(f"{group}: {_format_delta(delta)}")
 

@@ -146,6 +146,7 @@ Action:
 Recommended baseline:
 
 - Protect the default branch with admin enforcement.
+- For reviewed solo-maintainer repositories, an explicit admin-bypass exception is acceptable when documented with `--accept-github-admin-bypass`.
 - Require at least one pull request review.
 - Require code owner review when `CODEOWNERS` is present.
 - Require conversation resolution before merge.
@@ -160,6 +161,7 @@ Optional Repo Privacy Guardian command:
 
 ```sh
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening --accept-github-admin-bypass
 ```
 
 GitHub hardening is audit-only. Repo Privacy Guardian does not change remote repository settings.

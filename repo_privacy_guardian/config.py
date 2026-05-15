@@ -153,6 +153,14 @@ def make_parser(
         ),
     )
     parser.add_argument(
+        "--accept-github-admin-bypass",
+        action="store_true",
+        help=(
+            "When GitHub hardening audit is enabled, treat administrator branch-protection bypass "
+            "as an explicit accepted risk for solo-maintainer repositories instead of a hardening finding."
+        ),
+    )
+    parser.add_argument(
         "--github-owner",
         help=(
             "Opt-in remote audit: discover repositories for this GitHub user/org, "
@@ -293,6 +301,7 @@ def build_guard_run_config(
     github_jobs: int = 4,
     audit_litellm_incident: bool = False,
     audit_github_hardening: bool = False,
+    accept_github_admin_bypass: bool = False,
     agent_summary: bool = False,
     strict_profile: str | None = None,
     suppressions: str | None = None,
@@ -329,6 +338,7 @@ def build_guard_run_config(
         max_matches=max_matches,
         audit_litellm_incident=audit_litellm_incident,
         audit_github_hardening=audit_github_hardening,
+        accept_github_admin_bypass=accept_github_admin_bypass,
         open_report=open_report,
         confirm_each_repo_fix=confirm_each_repo_fix,
         allow_non_owner_push=allow_non_owner_push,
@@ -383,6 +393,7 @@ def build_cli_guard_run_config(
         github_jobs=args.github_jobs,
         audit_litellm_incident=args.audit_litellm_incident,
         audit_github_hardening=args.audit_github_hardening,
+        accept_github_admin_bypass=args.accept_github_admin_bypass,
         agent_summary=args.agent_summary,
         strict_profile=args.strict_profile,
         suppressions=args.suppressions,

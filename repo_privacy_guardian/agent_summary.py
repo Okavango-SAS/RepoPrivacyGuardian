@@ -48,6 +48,10 @@ FIXTURE_DOCUMENTATION_CATEGORY_KEYS = (
     "reviewed_network_indicators",
 )
 
+ACCEPTED_RISK_CATEGORY_KEYS = (
+    "github_hardening_accepted_risks",
+)
+
 
 def _safe_list(value: object) -> list[object]:
     return value if isinstance(value, list) else []
@@ -102,16 +106,19 @@ def build_agent_summary(
     total_blocking = 0
     total_manual_review = 0
     total_fixture_documentation = 0
+    total_accepted_risk = 0
     total_suppressed = 0
 
     for report in reports_payload:
         blocking_count = _count_keys(report, BLOCKING_CATEGORY_KEYS)
         manual_review_count = _count_keys(report, MANUAL_REVIEW_CATEGORY_KEYS)
         fixture_documentation_count = _count_keys(report, FIXTURE_DOCUMENTATION_CATEGORY_KEYS)
+        accepted_risk_count = _count_keys(report, ACCEPTED_RISK_CATEGORY_KEYS)
         suppressed_count = len(_safe_list(report.get("suppressed_findings")))
         total_blocking += blocking_count
         total_manual_review += manual_review_count
         total_fixture_documentation += fixture_documentation_count
+        total_accepted_risk += accepted_risk_count
         total_suppressed += suppressed_count
         decision = _decision_from_counts(blocking_count, manual_review_count)
         repositories.append(
@@ -122,12 +129,17 @@ def build_agent_summary(
                 "blocking_count": blocking_count,
                 "manual_review_count": manual_review_count,
                 "fixture_documentation_count": fixture_documentation_count,
+                "accepted_risk_count": accepted_risk_count,
                 "suppressed_count": suppressed_count,
                 "blocking_categories": _category_counts(report, BLOCKING_CATEGORY_KEYS),
                 "manual_review_categories": _category_counts(report, MANUAL_REVIEW_CATEGORY_KEYS),
                 "fixture_documentation_categories": _category_counts(
                     report,
                     FIXTURE_DOCUMENTATION_CATEGORY_KEYS,
+                ),
+                "accepted_risk_categories": _category_counts(
+                    report,
+                    ACCEPTED_RISK_CATEGORY_KEYS,
                 ),
                 "failure_reasons": _safe_list(report.get("failures")),
                 "next_action": _next_action(decision),
@@ -151,6 +163,7 @@ def build_agent_summary(
             "blocking_findings": total_blocking,
             "manual_review_findings": total_manual_review,
             "fixture_documentation_findings": total_fixture_documentation,
+            "accepted_risks": total_accepted_risk,
             "suppressed_findings": total_suppressed,
         },
         "artifacts": {
@@ -187,6 +200,7 @@ def format_agent_summary_handoff(summary: dict[str, object]) -> str:
             f"repositories: {counts.get('repositories', 0)}",
             f"blocking_findings: {counts.get('blocking_findings', 0)}",
             f"manual_review_findings: {counts.get('manual_review_findings', 0)}",
+            f"accepted_risks: {counts.get('accepted_risks', 0)}",
             f"suppressed_findings: {counts.get('suppressed_findings', 0)}",
             f"next_action: {summary.get('next_action', '')}",
             "artifacts: "

@@ -105,6 +105,7 @@ class RepoPublicationGuard:  # pragma: no cover
         allowed_remote_owners: list[str],
         replace_text_file: str | None,
         logger: Callable[[str], None],
+        accept_github_admin_bypass: bool = False,
     ) -> None:
         _sync_scanner_public_overrides()
         self.root = root
@@ -126,6 +127,7 @@ class RepoPublicationGuard:  # pragma: no cover
         self.max_matches = max_matches
         self.audit_litellm_incident = audit_litellm_incident
         self.audit_github_hardening = audit_github_hardening
+        self.accept_github_admin_bypass = accept_github_admin_bypass
         self.allow_non_owner_push = allow_non_owner_push
         self.allowed_remote_owners = {
             owner.strip().lower()
@@ -655,13 +657,17 @@ class RepoPublicationGuard:  # pragma: no cover
         report.git_metadata_secret_low_confidence = low_confidence
 
     def _scan_github_hardening(self, repo: Path, report: RepoReport) -> None:
+        accepted_risks: list[str] = []
         findings, warnings = audit_github_release_hardening(
             repo=repo,
             remote_url=report.origin_url or report.upstream_url or "",
+            accept_admin_bypass=self.accept_github_admin_bypass,
+            accepted_risks=accepted_risks,
         )
         report.github_hardening_checked = True
         report.github_hardening_findings = findings[: self.max_matches]
         report.github_hardening_warnings = warnings[: self.max_matches]
+        report.github_hardening_accepted_risks = accepted_risks[: self.max_matches]
         report.github_hardening_fix_guide = github_fix_guide.build_github_hardening_fix_guide(
             report.github_hardening_findings,
             report.github_hardening_warnings,

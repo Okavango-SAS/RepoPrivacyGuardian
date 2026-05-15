@@ -378,6 +378,14 @@ repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --aud
 
 This mode is audit-only: it reports advisory `github_hardening_findings` and `github_hardening_warnings`, but it does not change repository settings.
 
+Solo-maintainer repositories can explicitly accept administrator branch-protection bypass as an operating model while keeping the rest of the GitHub hardening audit active:
+
+```sh
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening --accept-github-admin-bypass
+```
+
+With that flag, only the admin-bypass branch-protection signal moves to `github_hardening_accepted_risks`; other GitHub hardening gaps still remain advisory findings or strict-profile blockers.
+
 Strict local release preset:
 
 ```sh
@@ -418,7 +426,7 @@ Token-gated coverage:
 - secret scanning configuration, push protection, and open secret-scanning alert presence
 - immutable releases
 
-The generated fix guide expects protected default branches to require one approving review, CODEOWNERS review when present, stale-review dismissal, conversation resolution, strict automatic CI status checks, admin enforcement, and disabled force-push/deletion.
+The generated fix guide expects protected default branches to require one approving review, CODEOWNERS review when present, stale-review dismissal, conversation resolution, strict automatic CI status checks, admin enforcement, and disabled force-push/deletion. For solo-maintainer repositories, `--accept-github-admin-bypass` documents the intentional admin-bypass exception without suppressing any other hardening gap.
 
 Use `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, or an authenticated `gh auth login` session for token-gated checks. GitHub still decides completion from the token permissions: branch protection, Actions, Dependabot security updates, and immutable releases typically require repository `Administration` read access; Dependabot and secret-scanning alert listing require security-alert permissions such as `security_events`, `Dependabot alerts` read, or an equivalent admin/security-manager role. Reports only state that open alerts exist; they do not copy secret values or dependency names from GitHub alert payloads.
 

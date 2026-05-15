@@ -968,6 +968,7 @@ class GuardRunConfig:
     max_matches: int
     audit_litellm_incident: bool = False
     audit_github_hardening: bool = False
+    accept_github_admin_bypass: bool = False
     rewrite_personal_paths: bool = False
     open_report: bool = False
     confirm_each_repo_fix: bool = True
@@ -1102,6 +1103,7 @@ class RepoReport:
     github_hardening_checked: bool = False
     github_hardening_findings: list[str] = field(default_factory=list)
     github_hardening_warnings: list[str] = field(default_factory=list)
+    github_hardening_accepted_risks: list[str] = field(default_factory=list)
     github_hardening_fix_guide: list[str] = field(default_factory=list)
     github_hardening_findings_blocking: bool = False
     strict_profile: str | None = None
@@ -1261,6 +1263,7 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     logger(f"github_hardening_checked: {report.github_hardening_checked}")
     logger(f"github_hardening_findings: {len(report.github_hardening_findings)}")
     logger(f"github_hardening_warnings: {len(report.github_hardening_warnings)}")
+    logger(f"github_hardening_accepted_risks: {len(report.github_hardening_accepted_risks)}")
     logger(f"github_hardening_fix_guide: {len(report.github_hardening_fix_guide)}")
     logger(f"suppressed_findings: {len(report.suppressed_findings)}")
     logger(f"github_hardening_mode: {GITHUB_HARDENING_MODE}")
@@ -1294,6 +1297,10 @@ def print_report(report: RepoReport, logger: Callable[[str], None]) -> None:  # 
     if report.github_hardening_warnings:
         logger("github_hardening_warnings_samples:")
         for item in report.github_hardening_warnings[:8]:
+            logger(f"  - {item}")
+    if report.github_hardening_accepted_risks:
+        logger("github_hardening_accepted_risks_samples:")
+        for item in report.github_hardening_accepted_risks[:8]:
             logger(f"  - {item}")
 
     detected_preview = build_detected_findings_preview(report)
@@ -1463,10 +1470,14 @@ build_github_tooling_check = globals()["build_github_tooling_check"]
 build_cli_tooling_checks = globals()["build_cli_tooling_checks"]
 build_gui_tooling_checks = globals()["build_gui_tooling_checks"]
 
+
 def audit_github_release_hardening(
     repo: Path,
     remote_url: str,
     token: str | None = None,
+    *,
+    accept_admin_bypass: bool = False,
+    accepted_risks: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
     return github_helpers.audit_github_release_hardening(
         repo=repo,
@@ -1476,6 +1487,8 @@ def audit_github_release_hardening(
         json_getter=github_api_get_json,
         probe_enabled=github_api_probe_enabled,
         text_normalizer=normalize_text_values,
+        accept_admin_bypass=accept_admin_bypass,
+        accepted_risks=accepted_risks,
     )
 
 
@@ -1688,6 +1701,7 @@ def build_run_settings(config: GuardRunConfig, results_dir: Path) -> dict[str, s
         "purge_all_detected_secret_files": str(config.purge_all_detected_secret_files),
         "audit_litellm_incident": str(config.audit_litellm_incident),
         "audit_github_hardening": str(config.audit_github_hardening),
+        "accept_github_admin_bypass": str(config.accept_github_admin_bypass),
         "rewrite_personal_paths": str(config.rewrite_personal_paths),
         "open_report": str(config.open_report),
         "low_confidence_email_mode": config.low_confidence_email_mode,
@@ -1777,6 +1791,7 @@ def execute_guard_pipeline(
         "max_matches": config.max_matches,
         "audit_litellm_incident": config.audit_litellm_incident,
         "audit_github_hardening": config.audit_github_hardening,
+        "accept_github_admin_bypass": config.accept_github_admin_bypass,
         "allow_non_owner_push": config.allow_non_owner_push,
         "allowed_remote_owners": config.allowed_remote_owners,
         "replace_text_file": config.replace_text_file,
@@ -1874,6 +1889,10 @@ def execute_guard_pipeline(
                 else:
                     logger(
                         "[INFO] GitHub hardening audit enabled: advisory/manual-review only by default."
+                    )
+                if config.accept_github_admin_bypass:
+                    logger(
+                        "[INFO] GitHub hardening: administrator branch-protection bypass is accepted for solo-maintainer operations."
                     )
             if config.github_owner:
                 logger(
@@ -2594,6 +2613,7 @@ def build_guard_run_config(
     github_jobs: int = 4,
     audit_litellm_incident: bool = False,
     audit_github_hardening: bool = False,
+    accept_github_admin_bypass: bool = False,
     agent_summary: bool = False,
     strict_profile: str | None = None,
     suppressions: str | None = None,
@@ -2620,6 +2640,7 @@ def build_guard_run_config(
         max_matches=max_matches,
         audit_litellm_incident=audit_litellm_incident,
         audit_github_hardening=audit_github_hardening,
+        accept_github_admin_bypass=accept_github_admin_bypass,
         open_report=open_report,
         confirm_each_repo_fix=confirm_each_repo_fix,
         allow_non_owner_push=allow_non_owner_push,

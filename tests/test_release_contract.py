@@ -359,12 +359,14 @@ def test_run_cli_passes_audit_github_hardening_flag_to_config(tmp_path: Path, mo
             "--repos",
             "repo-a",
             "--audit-github-hardening",
+            "--accept-github-admin-bypass",
         ]
     )
     exit_code = rpg.run_cli(args)
 
     assert exit_code == 0
     assert captured["config"].audit_github_hardening is True
+    assert captured["config"].accept_github_admin_bypass is True
 
 
 def test_run_cli_check_tooling_returns_blocking_exit_without_running_pipeline(tmp_path: Path, monkeypatch) -> None:
@@ -795,6 +797,7 @@ def test_gui_run_worker_passes_replace_text_file_for_repair(tmp_path: Path, monk
     app.low_confidence_blocking_var = DummyVar(False)
     app.audit_litellm_incident_var = DummyVar(False)
     app.audit_github_hardening_var = DummyVar(True)
+    app.accept_github_admin_bypass_var = DummyVar(True)
     app.open_report_var = DummyVar(True)
     app.confirm_each_repo_fix_var = DummyVar(True)
     app.allow_non_owner_push_var = DummyVar(False)
@@ -811,6 +814,7 @@ def test_gui_run_worker_passes_replace_text_file_for_repair(tmp_path: Path, monk
 
     assert captured["config"].replace_text_file == "ops/replace-text.txt"
     assert captured["config"].audit_github_hardening is True
+    assert captured["config"].accept_github_admin_bypass is True
     assert captured["config"].github_owner is None
     assert captured["cancel_requested"] is True
 
@@ -863,6 +867,7 @@ def test_gui_run_worker_passes_github_owner_remote_audit_options(tmp_path: Path,
     app.low_confidence_blocking_var = DummyVar(False)
     app.audit_litellm_incident_var = DummyVar(False)
     app.audit_github_hardening_var = DummyVar(False)
+    app.accept_github_admin_bypass_var = DummyVar(False)
     app.open_report_var = DummyVar(False)
     app.confirm_each_repo_fix_var = DummyVar(True)
     app.allow_non_owner_push_var = DummyVar(True)
@@ -941,6 +946,7 @@ def test_gui_local_repair_config_matches_cli_config_for_same_options(
     app.low_confidence_blocking_var = DummyVar(True)
     app.audit_litellm_incident_var = DummyVar(True)
     app.audit_github_hardening_var = DummyVar(True)
+    app.accept_github_admin_bypass_var = DummyVar(True)
     app.open_report_var = DummyVar(True)
     app.confirm_each_repo_fix_var = DummyVar(False)
     app.allow_non_owner_push_var = DummyVar(False)
@@ -974,6 +980,7 @@ def test_gui_local_repair_config_matches_cli_config_for_same_options(
             "blocking",
             "--audit-litellm-incident",
             "--audit-github-hardening",
+            "--accept-github-admin-bypass",
             "--owner-name",
             "Alice",
             "--owner-email",
@@ -1666,6 +1673,7 @@ def test_gui_settings_payload_excludes_identity_secrets() -> None:
     app.low_confidence_blocking_var = DummyVar(False)
     app.audit_litellm_incident_var = DummyVar(False)
     app.audit_github_hardening_var = DummyVar(True)
+    app.accept_github_admin_bypass_var = DummyVar(True)
     app.open_report_var = DummyVar(False)
     app._gui_appearance = rpg.GUI_APPEARANCE_DARK
 
@@ -1675,6 +1683,7 @@ def test_gui_settings_payload_excludes_identity_secrets() -> None:
     assert payload["gui_locale"] == rpg.GUI_LOCALE_DEFAULT
     assert payload["gui_appearance"] == rpg.GUI_APPEARANCE_DARK
     assert payload["github_owner"] == "Acme"
+    assert payload["accept_github_admin_bypass"] is True
     assert "owner_emails" not in payload
     assert "noreply_email" not in payload
     assert "placeholder_email" not in payload
@@ -2068,6 +2077,7 @@ def test_gui_tooltip_catalog_covers_non_obvious_controls() -> None:
         "low_confidence_blocking",
         "dry_run_preview",
         "audit_github_hardening",
+        "accept_github_admin_bypass",
         "audit_litellm_incident",
         "open_html_report",
         "confirm_each_repo_fix",
@@ -2994,6 +3004,7 @@ def test_gui_locale_does_not_change_run_config_payload_mapping() -> None:
         app.low_confidence_blocking_var = DummyVar(False)
         app.audit_litellm_incident_var = DummyVar(False)
         app.audit_github_hardening_var = DummyVar(True)
+        app.accept_github_admin_bypass_var = DummyVar(True)
         app.open_report_var = DummyVar(False)
         return app
 
@@ -3055,6 +3066,7 @@ def test_public_docs_describe_cli_first_release_contract() -> None:
         "`exfil_code_indicators` is intentionally manual-review only by default",
         "--check-tooling",
         "--install-missing-tools",
+        "--accept-github-admin-bypass",
         "GitHub MCP is not a prerequisite",
         "winget",
         "--replace-text-file",

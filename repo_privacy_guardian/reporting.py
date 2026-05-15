@@ -125,6 +125,9 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload["reviewed_network_indicators"] = _redact_text_list(report.reviewed_network_indicators)
     payload["github_hardening_findings"] = _redact_text_list(report.github_hardening_findings)
     payload["github_hardening_warnings"] = _redact_text_list(report.github_hardening_warnings)
+    payload["github_hardening_accepted_risks"] = _redact_text_list(
+        report.github_hardening_accepted_risks
+    )
     payload["github_hardening_fix_guide"] = _redact_text_list(report.github_hardening_fix_guide)
     payload["suppressed_findings"] = [
         {
@@ -151,6 +154,7 @@ def build_fix_preflight_summary(config: GuardRunConfig, repos: list[Path]) -> li
         f"[PREVIEW] dry_run={config.dry_run} push={config.push}",
         f"[PREVIEW] audit_litellm_incident={config.audit_litellm_incident}",
         f"[PREVIEW] audit_github_hardening={config.audit_github_hardening}",
+        f"[PREVIEW] accept_github_admin_bypass={config.accept_github_admin_bypass}",
         f"[PREVIEW] rewrite_personal_paths={config.rewrite_personal_paths}",
         f"[PREVIEW] explicit replace-text file={bool(config.replace_text_file)}",
         f"[PREVIEW] low-confidence email mode: {config.low_confidence_email_mode}",
@@ -202,6 +206,7 @@ def build_detected_findings_preview(report: RepoReport) -> list[str]:
     add("reviewed network context", report.reviewed_network_indicators)
     add("github advisory", report.github_hardening_findings)
     add("github audit warning", report.github_hardening_warnings)
+    add("github accepted risk", report.github_hardening_accepted_risks)
     add("github fix guide", report.github_hardening_fix_guide)
     add(
         "suppressed finding",
@@ -566,6 +571,7 @@ def render_html_report(
             f"<tr><td>github_hardening_checked</td><td>{esc(str(rep.github_hardening_checked))}</td></tr>"
             f"<tr><td>github_hardening_findings</td><td class=\"num\">{len(rep.github_hardening_findings)}</td></tr>"
             f"<tr><td>github_hardening_warnings</td><td class=\"num\">{len(rep.github_hardening_warnings)}</td></tr>"
+            f"<tr><td>github_hardening_accepted_risks</td><td class=\"num\">{len(rep.github_hardening_accepted_risks)}</td></tr>"
             f"<tr><td>github_hardening_fix_guide</td><td class=\"num\">{len(rep.github_hardening_fix_guide)}</td></tr>"
             f"<tr><td>suppressed_findings</td><td class=\"num\">{len(rep.suppressed_findings)}</td></tr>"
             f"<tr><td>litellm_incident_severity</td><td>{esc(classify_litellm_incident_severity(rep))}</td></tr>"
@@ -692,9 +698,14 @@ def render_html_report(
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
+            "<section><h5>GitHub hardening accepted risks</h5>"
+            f"{render_lines(rep.github_hardening_accepted_risks)}"
+            "</section>"
             "<section><h5>GitHub hardening fix guide</h5>"
             f"{render_lines(rep.github_hardening_fix_guide)}"
             "</section>"
+            "</div>"
+            "<div class=\"detail-grid\">"
             "<section><h5>Suppressed findings</h5>"
             f"{render_lines(suppressed_preview)}"
             "</section>"

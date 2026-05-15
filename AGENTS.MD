@@ -105,6 +105,7 @@ Optional GitHub release-hardening audit:
 
 ```sh
 repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening
+repo-privacy-guardian --root /path/to/repos --repos MyRepo --dry-run --yes --audit-github-hardening --accept-github-admin-bypass
 ```
 
 Optional GitHub owner/org remote audit:
@@ -118,6 +119,7 @@ repo-privacy-guardian --github-owner MyOrg --github-include-forks --public-only 
 Notes:
 
 - Admin-only GitHub checks require `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN`.
+- Use `--accept-github-admin-bypass` only for reviewed solo-maintainer repositories where admin branch-protection bypass is an intentional operating model; it moves only that signal to `github_hardening_accepted_risks`.
 - GitHub owner/org audit reuses `REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, or an authenticated `gh` session when private repository clones are needed.
 - Remote discovery and clone work are bounded: auth probes are non-interactive with a timeout, repository pagination fails closed at the page limit, and clone workers are capped.
 - The GitHub hardening audit inspects repository settings only; it does not push configuration changes.

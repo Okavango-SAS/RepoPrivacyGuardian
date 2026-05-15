@@ -227,6 +227,10 @@ def test_persist_run_outputs_writes_agent_summary_and_decision_first_html(tmp_pa
     config = _make_run_config(agent_summary=True)
     report = _make_report("repo-a")
     report.exfil_code_indicators = ["src/client.py:4:requests.post(url)"]
+    report.github_hardening_accepted_risks = [
+        "GitHub default branch protection: administrators can bypass branch protection. "
+        "Accepted by --accept-github-admin-bypass for solo-maintainer operations."
+    ]
     report.finalize()
 
     rpg.persist_run_outputs(
@@ -243,6 +247,10 @@ def test_persist_run_outputs_writes_agent_summary_and_decision_first_html(tmp_pa
     summary = json.loads(artifacts.agent_summary_path.read_text(encoding="utf-8"))
     assert summary["schema_version"] == 1
     assert summary["status"] == "REVIEW"
+    assert summary["counts"]["accepted_risks"] == 1
+    assert summary["repositories"][0]["accepted_risk_categories"] == {
+        "github_hardening_accepted_risks": 1
+    }
     assert summary["artifacts"]["report_json"] == "report.json"
     assert "Decision first" in artifacts.html_path.read_text(encoding="utf-8")
 
@@ -2313,6 +2321,50 @@ def test_audit_github_release_hardening_reports_missing_controls(tmp_path: Path,
     assert not any("private-package-name" in item for item in findings)
 
 
+def test_audit_github_release_hardening_accepts_admin_bypass_for_solo_maintainer(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    codeowners = tmp_path / ".github" / "CODEOWNERS"
+    codeowners.parent.mkdir(parents=True)
+    codeowners.write_text("* @owner\n", encoding="utf-8")
+
+    def fake_get_json(url: str, token: str | None = None):  # type: ignore[no-untyped-def]
+        assert token == "gh-admin-token"
+        response = _github_ok_hardening_response(url)
+        if response is not None:
+            payload, reason = response
+            if isinstance(payload, dict) and url.endswith("/branches/main/protection"):
+                payload = dict(payload)
+                payload["enforce_admins"] = {"enabled": False}
+            return payload, reason
+        return _github_ok_repo_payload(), "http_200"
+
+    monkeypatch.setattr(rpg, "github_api_get_json", fake_get_json)
+    monkeypatch.setattr(rpg, "github_api_probe_enabled", lambda url, token=None: (True, "http_204"))
+
+    strict_findings, strict_warnings = rpg.audit_github_release_hardening(
+        repo=tmp_path,
+        remote_url="https://github.com/example/repo.git",
+        token="gh-admin-token",
+    )
+    accepted_risks: list[str] = []
+    accepted_findings, accepted_warnings = rpg.audit_github_release_hardening(
+        repo=tmp_path,
+        remote_url="https://github.com/example/repo.git",
+        token="gh-admin-token",
+        accept_admin_bypass=True,
+        accepted_risks=accepted_risks,
+    )
+
+    assert strict_warnings == []
+    assert any("administrators can bypass branch protection" in item for item in strict_findings)
+    assert accepted_findings == []
+    assert accepted_warnings == []
+    assert any("administrators can bypass branch protection" in item for item in accepted_risks)
+    assert any("--accept-github-admin-bypass" in item for item in accepted_risks)
+
+
 def test_github_hardening_fix_guide_names_protected_branch_baseline() -> None:
     guide = build_github_hardening_fix_guide(
         findings=[
@@ -2660,6 +2712,9 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     ]
     report.github_hardening_findings = ["GitHub repository hardening: .github/CODEOWNERS is missing."]
     report.github_hardening_warnings = ["GitHub default branch protection could not be audited (http_403)."]
+    report.github_hardening_accepted_risks = [
+        "GitHub default branch protection: administrators can bypass branch protection. Accepted by --accept-github-admin-bypass for solo-maintainer operations."
+    ]
     report.fix_actions = ["replace dev@example.com"]
     payload = rpg.sanitize_report_for_export(report)
 
@@ -2699,6 +2754,7 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     assert payload["github_hardening_warnings"] == [
         "GitHub default branch protection could not be audited (http_403)."
     ]
+    assert payload["github_hardening_accepted_risks"] == report.github_hardening_accepted_risks
     assert rpg.REDACTED_EMAIL in payload["fix_actions"][0]
 
 
@@ -3208,6 +3264,14 @@ def test_repo_user_guidance_variants() -> None:
     assert "review/security controls" in consequence.lower()
     assert "--audit-github-hardening" in suggestion
 
+    github_accepted = _make_report("github-accepted")
+    github_accepted.github_hardening_accepted_risks = [
+        "GitHub default branch protection: administrators can bypass branch protection. Accepted by --accept-github-admin-bypass for solo-maintainer operations."
+    ]
+    level, risk, consequence, suggestion = rpg.repo_user_guidance(github_accepted)
+    assert level == "SKIP"
+    assert "no relevant privacy risk" in risk.lower()
+
     skip = _make_report("skip")
     level, risk, consequence, suggestion = rpg.repo_user_guidance(skip)
     assert level == "SKIP"
@@ -3319,6 +3383,7 @@ def test_make_parser_defaults_and_flags() -> None:
     assert args.github_include_forks is False
     assert args.github_fast is False
     assert args.github_jobs == 4
+    assert args.accept_github_admin_bypass is False
 
     args = parser.parse_args(["--fix", "--purge-all-detected-secret-files"])
     assert args.fix is True
@@ -3338,6 +3403,10 @@ def test_make_parser_defaults_and_flags() -> None:
     assert args.github_include_forks is True
     assert args.github_fast is True
     assert args.github_jobs == 2
+
+    args = parser.parse_args(["--audit-github-hardening", "--accept-github-admin-bypass"])
+    assert args.audit_github_hardening is True
+    assert args.accept_github_admin_bypass is True
 
 
 def test_config_parser_matches_public_parser_help_and_defaults() -> None:
@@ -3527,6 +3596,7 @@ def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
         placeholder_email=rpg.DEFAULT_PLACEHOLDER,
         max_matches=50,
         audit_github_hardening=True,
+        accept_github_admin_bypass=True,
         open_report=False,
         confirm_each_repo_fix=False,
         allow_non_owner_push=False,
@@ -3543,6 +3613,7 @@ def test_build_guard_run_config_normalizes_and_infers_owner() -> None:
     assert config.allowed_remote_owners == ["axeljackal", "octocat"]
     assert config.replace_text_file == "ops/replace-text.txt"
     assert config.audit_github_hardening is True
+    assert config.accept_github_admin_bypass is True
     assert config.open_report is False
     assert config.confirm_each_repo_fix is False
     assert config.github_owner == "acme"
@@ -3573,6 +3644,7 @@ def test_config_module_builds_normalized_guard_config_kwargs() -> None:
         placeholder_email=rpg.DEFAULT_PLACEHOLDER,
         max_matches=50,
         audit_github_hardening=True,
+        accept_github_admin_bypass=True,
         open_report=False,
         confirm_each_repo_fix=False,
         allow_non_owner_push=False,
@@ -3589,6 +3661,7 @@ def test_config_module_builds_normalized_guard_config_kwargs() -> None:
     assert config["owner_emails"] == ["dev@example.com"]
     assert config["allowed_remote_owners"] == ["axeljackal", "octocat"]
     assert config["github_owner"] == "acme"
+    assert config["accept_github_admin_bypass"] is True
     assert config["github_jobs"] == 1
     assert config["suppressions"] == "suppressions.json"
 
@@ -3617,6 +3690,7 @@ def test_config_module_builds_cli_guard_config_kwargs() -> None:
             "--github-jobs",
             "2",
             "--audit-github-hardening",
+            "--accept-github-admin-bypass",
             "--agent-summary",
             "--strict-profile",
             "release",
@@ -3640,6 +3714,7 @@ def test_config_module_builds_cli_guard_config_kwargs() -> None:
     assert config["github_owner"] == "acme"
     assert config["github_jobs"] == 2
     assert config["agent_summary"] is True
+    assert config["accept_github_admin_bypass"] is True
     assert config["confirm_each_repo_fix"] is False
     assert config["strict_profile"] == "release"
     assert config["low_confidence_email_mode"] == "blocking"
@@ -3668,6 +3743,7 @@ def test_build_guard_run_config_parity_cli_gui_same_inputs() -> None:
         max_matches=75,
         audit_litellm_incident=True,
         audit_github_hardening=True,
+        accept_github_admin_bypass=True,
         open_report=True,
         confirm_each_repo_fix=True,
         allow_non_owner_push=False,

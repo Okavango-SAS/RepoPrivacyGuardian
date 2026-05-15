@@ -39,6 +39,7 @@ def _sample_after_report() -> list[dict[str, object]]:
             "status": "PASS",
             "exfil_code_indicators": ["network review", "new outbound review"],
             "tracked_email_fixture_matches": ["fixture@example.test", "second-fixture@example.test"],
+            "github_hardening_accepted_risks": ["accepted admin bypass"],
         },
         {
             "name": "NewRepo",
@@ -70,10 +71,12 @@ def test_compare_report_payloads_counts_regressions_without_raw_evidence() -> No
     assert totals["blocking"] == {"before": 3, "after": 1, "resolved": 3, "added": 1, "unchanged": 0}
     assert totals["manual_review"] == {"before": 1, "after": 2, "resolved": 0, "added": 1, "unchanged": 1}
     assert totals["fixture_documentation"] == {"before": 1, "after": 2, "resolved": 0, "added": 1, "unchanged": 1}
+    assert totals["accepted_risk"] == {"before": 0, "after": 1, "resolved": 0, "added": 1, "unchanged": 0}
 
     summary = rpg.format_report_diff_summary(diff)
     assert "Report diff: old/report.json -> new/report.json" in summary
     assert "blocking: 3 -> 1 (resolved 3, added 1, unchanged 0)" in summary
+    assert "accepted_risk: 0 -> 1 (resolved 0, added 1, unchanged 0)" in summary
     assert "blocking.tracked_secret_matches" in summary
     assert "tracked secret finding" not in summary
     assert "<redacted-secret>" not in summary

@@ -112,6 +112,7 @@ Manual GitHub hardening fix guide:
 - enable secret scanning and secret scanning push protection
 - protect `main` with a branch protection rule or ruleset
 - require one approving pull request review, code-owner review when `CODEOWNERS` exists, stale-review dismissal, conversation resolution, strict current automatic CI checks, admin enforcement, and disabled force-push/deletion
+- for solo-maintainer repositories, use `--accept-github-admin-bypass` to record the intentional admin-bypass exception as `github_hardening_accepted_risks`
 - keep GitHub Actions workflow permissions least-privilege
 - re-run `--audit-github-hardening` after changes
 

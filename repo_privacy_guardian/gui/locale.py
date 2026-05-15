@@ -109,6 +109,9 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
     "audit_github_hardening": (
         "Adds read-only GitHub settings checks such as branch protection, Actions permissions, secret scanning, and Dependabot."
     ),
+    "accept_github_admin_bypass": (
+        "Treats administrator branch-protection bypass as an accepted solo-maintainer risk during GitHub hardening audits."
+    ),
     "audit_litellm_incident": "Adds targeted checks for LiteLLM March 2026 supply-chain incident indicators.",
     "open_html_report": "Opens the generated HTML report automatically after a GUI run finishes.",
     "confirm_each_repo_fix": (
@@ -285,6 +288,9 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
     "dry_run_preview": "Ejecuta Reparar en modo vista previa para reportar cambios planeados sin escribir en repositorios.",
     "audit_github_hardening": (
         "Agrega verificaciones de solo lectura de configuración GitHub como branch protection, permisos de Actions, secret scanning y Dependabot."
+    ),
+    "accept_github_admin_bypass": (
+        "Trata la omisión de branch protection por administradores como riesgo aceptado para repositorios con maintainer único."
     ),
     "audit_litellm_incident": "Agrega verificaciones focalizadas para indicadores del incidente de cadena de suministro de LiteLLM de marzo de 2026.",
     "open_html_report": "Abre automáticamente el reporte HTML generado cuando termina una corrida desde GUI.",
@@ -542,6 +548,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "low_confidence_blocking": "Treat low-confidence emails as blocking",
         "dry_run_preview": "Dry run / preview repair",
         "audit_github_hardening": "Audit GitHub release hardening",
+        "accept_github_admin_bypass": "Accept admin bypass for solo maintainer",
         "audit_litellm_incident": "Audit LiteLLM incident (Mar-2026)",
         "open_html_report": "Open HTML report automatically",
         "confirm_each_repo_fix": "Confirm each repository during repair",
@@ -882,6 +889,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "low_confidence_blocking": "Tratar emails de baja confianza como bloqueantes",
         "dry_run_preview": "Simulación / vista previa de reparación",
         "audit_github_hardening": "Auditar endurecimiento de publicación en GitHub",
+        "accept_github_admin_bypass": "Aceptar omisión admin para mantenedor único",
         "audit_litellm_incident": "Auditar incidente LiteLLM (mar-2026)",
         "open_html_report": "Abrir reporte HTML automáticamente",
         "confirm_each_repo_fix": "Confirmar cada repositorio al reparar",

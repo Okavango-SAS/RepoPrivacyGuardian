@@ -212,6 +212,9 @@ class GuiApp:  # pragma: no cover
         self.audit_github_hardening_var = tk.BooleanVar(
             value=gui_setting_bool(self._gui_settings, "audit_github_hardening", False)
         )
+        self.accept_github_admin_bypass_var = tk.BooleanVar(
+            value=gui_setting_bool(self._gui_settings, "accept_github_admin_bypass", False)
+        )
         self.open_report_var = tk.BooleanVar(value=gui_setting_bool(self._gui_settings, "open_report", False))
         self.confirm_each_repo_fix_var = tk.BooleanVar(value=True)
         self.allow_non_owner_push_var = tk.BooleanVar(value=False)
@@ -1217,6 +1220,7 @@ class GuiApp:  # pragma: no cover
             ("low_confidence_blocking", self.low_confidence_blocking_var, "low_confidence_blocking"),
             ("dry_run_preview", self.dry_run_var, "dry_run_preview"),
             ("audit_github_hardening", self.audit_github_hardening_var, "audit_github_hardening"),
+            ("accept_github_admin_bypass", self.accept_github_admin_bypass_var, "accept_github_admin_bypass"),
             ("audit_litellm_incident", self.audit_litellm_incident_var, "audit_litellm_incident"),
             ("open_html_report", self.open_report_var, "open_html_report"),
             ("confirm_each_repo_fix", self.confirm_each_repo_fix_var, "confirm_each_repo_fix"),
@@ -3862,6 +3866,7 @@ class GuiApp:  # pragma: no cover
             "low_confidence_blocking": bool(self.low_confidence_blocking_var.get()),
             "audit_litellm_incident": bool(self.audit_litellm_incident_var.get()),
             "audit_github_hardening": bool(self.audit_github_hardening_var.get()),
+            "accept_github_admin_bypass": bool(self.accept_github_admin_bypass_var.get()),
             "open_report": bool(self.open_report_var.get()),
         }
 
@@ -5381,6 +5386,7 @@ class GuiApp:  # pragma: no cover
                 github_jobs=github_jobs,
                 audit_litellm_incident=self.audit_litellm_incident_var.get(),
                 audit_github_hardening=self.audit_github_hardening_var.get(),
+                accept_github_admin_bypass=self.accept_github_admin_bypass_var.get(),
                 agent_summary=False,
                 strict_profile=strict_profile,
                 suppressions=suppressions_file,

@@ -642,6 +642,8 @@ def audit_github_release_hardening(
     json_getter: Callable[[str, str | None], tuple[object | None, str]] = github_api_get_json,
     probe_enabled: Callable[[str, str | None], tuple[bool | None, str]] = github_api_probe_enabled,
     text_normalizer: Callable[[list[str]], list[str]] | None = None,
+    accept_admin_bypass: bool = False,
+    accepted_risks: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
     findings: list[str] = []
     warnings: list[str] = []
@@ -831,9 +833,15 @@ def audit_github_release_hardening(
 
         enforce_admins = protection_payload.get("enforce_admins") or {}
         if isinstance(enforce_admins, dict) and enforce_admins.get("enabled") is not True:
-            findings.append(
-                "GitHub default branch protection: administrators can bypass branch protection."
-            )
+            finding = "GitHub default branch protection: administrators can bypass branch protection."
+            if accept_admin_bypass:
+                if accepted_risks is not None:
+                    accepted_risks.append(
+                        finding
+                        + " Accepted by --accept-github-admin-bypass for solo-maintainer operations."
+                    )
+            else:
+                findings.append(finding)
     elif protection_reason == "http_404":
         findings.append("GitHub default branch protection is not enabled.")
     else:
@@ -935,4 +943,6 @@ def audit_github_release_hardening(
 
     if text_normalizer is None:
         return findings, warnings
+    if accepted_risks is not None:
+        accepted_risks[:] = text_normalizer(accepted_risks)
     return text_normalizer(findings), text_normalizer(warnings)

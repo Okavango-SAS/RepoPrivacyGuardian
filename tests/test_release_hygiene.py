@@ -398,6 +398,7 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
     release_checklist = (_repo_root() / "docs" / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
 
     assert "--audit-github-hardening" in readme
+    assert "--accept-github-admin-bypass" in readme
     assert "--check-tooling" in readme
     assert "--install-missing-tools" in readme
     assert "winget" in readme
@@ -408,6 +409,7 @@ def test_docs_cover_optional_github_hardening_audit() -> None:
     assert "immutable releases" in readme
     assert ".env.example" in readme
     assert "--audit-github-hardening" in agents
+    assert "--accept-github-admin-bypass" in agents
     assert "--check-tooling" in agents
     assert "winget" in agents
     assert "branch protection" in policy.lower()

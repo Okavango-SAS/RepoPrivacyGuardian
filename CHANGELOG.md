@@ -10,6 +10,7 @@ All notable user-facing changes to this project are documented here.
 - Added a count-only report comparison workflow for re-audits: CLI `--compare-reports` and a GUI Reports action compare the latest `report.json` with an earlier run without exposing raw finding evidence.
 - Added dark-mode GUI screenshots to the README desktop preview with neutral visible paths.
 - Added safe email fixture buckets for tracked and historical test/fixture email examples so strict release profiles keep traceability without blocking on intentional test data.
+- Added `--accept-github-admin-bypass` and matching GUI control so solo-maintainer repositories can record administrator branch-protection bypass as an accepted GitHub hardening risk.
 - Clarified the GitHub hardening fix guide and release docs around the exact protected-branch baseline, including admin enforcement and the current automatic CI smoke check.
 
 ### Changed

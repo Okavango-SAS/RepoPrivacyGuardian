@@ -73,13 +73,13 @@ GUI flow uses the same backend pipeline, but keeps the companion-style staged co
 
 Each run writes:
 
-- `agent_summary.json`: privacy-safe summary for coding agents with status, counts, relative artifact names, blocking/advisory/fixture/suppression counts, and next action
+- `agent_summary.json`: privacy-safe summary for coding agents with status, counts, relative artifact names, blocking/advisory/fixture/accepted-risk/suppression counts, and next action
 - `report.json`: redacted structured report with full traceability, including `suppressed_findings` and GitHub hardening fix guide data when present
 - `report.html`: human review report that starts with `Decision first`
 - `run.log`: redacted execution log
 - `run_state.json`: status manifest with phase and performance diagnostics
 
-Re-audit comparison is derived from existing `report.json` artifacts. The public CLI/GUI summary contains repository counts, category deltas, status-change counts, and next action only; raw finding values are not printed or copied.
+Re-audit comparison is derived from existing `report.json` artifacts. The public CLI/GUI summary contains repository counts, category deltas, status-change counts, accepted-risk deltas, and next action only; raw finding values are not printed or copied.
 
 ## Policy Surfaces
 
@@ -114,7 +114,7 @@ The script captures Audit, Reports, Prompts, and Repair tabs in System, Light, a
 
 ## GitHub Hardening Governance
 
-Repo Privacy Guardian does not mutate GitHub repository settings. Hardening findings include a non-mutating checklist in JSON, HTML, and agent summary context. Branch protection and rulesets must be configured manually in GitHub, then re-audited. The protected-branch baseline is explicit: pull request review, CODEOWNERS review when present, stale-review dismissal, conversation resolution, strict automatic CI status checks, admin enforcement, and disabled force-push/deletion.
+Repo Privacy Guardian does not mutate GitHub repository settings. Hardening findings include a non-mutating checklist in JSON, HTML, and agent summary context. Branch protection and rulesets must be configured manually in GitHub, then re-audited. The protected-branch baseline is explicit: pull request review, CODEOWNERS review when present, stale-review dismissal, conversation resolution, strict automatic CI status checks, admin enforcement, and disabled force-push/deletion. Solo-maintainer repositories can explicitly document admin bypass with `--accept-github-admin-bypass`, which records that single branch-protection exception as an accepted risk instead of a hardening finding.
 
 ## Current Technical Debt
 
