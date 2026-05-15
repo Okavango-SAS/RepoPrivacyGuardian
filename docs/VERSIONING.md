@@ -74,7 +74,7 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 ## Validation tiers
 
-- automatic CI smoke: cheapest pull-request and push-time signal for help paths, release-contract drift, and CLI smoke
+- automatic CI smoke: cheapest pull-request and push-time signal for executable, packaging, resource, test, and validation-tooling surfaces; docs-only changes stay local-first unless a manual `workflow_dispatch` smoke is needed for branch protection
 - manual extended CI: `workflow_dispatch` suite for `ruff`, `pyright`, tracked `pytest`, package smoke, and Windows GUI smoke
 - local maintainer release gate: `python scripts/release_readiness.py` before tagging
 

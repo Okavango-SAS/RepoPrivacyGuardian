@@ -24,8 +24,8 @@ All notable user-facing changes to this project are documented here.
 - Extracted pure GUI Audit/Repair flow state helpers for button labels, gate notes, and repair summaries while preserving the existing widget behavior.
 - Extracted pure GUI collapsible-section state helpers for Settings, Repair options, and advanced identity visibility while preserving widget layout behavior.
 - Extracted pure GUI responsive layout helpers for Reports decision steps, Reports artifact-action visibility, and the Prompts workflow guide while preserving widget behavior.
-- Run the automatic CI smoke workflow for protected-branch pull requests as well as `main` pushes so required status checks can satisfy branch protection before merge.
-- Removed the `pull_request` path filter from automatic CI so protected-branch required checks always report on PRs.
+- Run the automatic CI smoke workflow for protected-branch pull requests as well as `main` pushes when executable, packaging, resource, test, or validation-tooling surfaces change.
+- Kept docs-only changes out of automatic CI; they now rely on local release-contract validation plus manual `workflow_dispatch` smoke only when branch protection needs the check.
 
 ## [1.5.0] - 2026-05-04
 

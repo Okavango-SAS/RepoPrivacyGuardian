@@ -1086,15 +1086,32 @@ def test_ci_workflow_matches_cost_first_validation_contract() -> None:
     assert "pull_request:" in workflow
     assert workflow.count("branches:\n      - main") >= 2
     assert "paths:" in push_block
-    assert "paths:" not in pull_request_block
+    assert "paths:" in pull_request_block
     assert "manual extended validation suite" in workflow
+    assert "Docs-only changes stay local-first" in workflow
     assert 'python-version: "3.13"' in workflow
     assert 'python-version: "3.11"' in workflow
     assert "python scripts/check_release_contract.py" in workflow
     for path in (
         '".github/CODEOWNERS"',
+        '".github/workflows/ci.yml"',
+        '"config/requirements/**"',
+        '"pyproject.toml"',
+        '"Repo_Privacy_Guardian.py"',
+        '"repo_privacy_guardian/**"',
+        '"repo_privacy_guardian*.py"',
+        '"repo_privacy_guardian_assets/**"',
+        '"repo_privacy_guardian_resources/**"',
+        '"scripts/check_release_contract.py"',
+        '"scripts/release_readiness.py"',
+        '"scripts/visual_qa_gui.py"',
+        '"tests/**"',
+    ):
+        assert path in workflow
+    for docs_only_path in (
         '"CHANGELOG.md"',
         '"README.MD"',
+        '"AGENTS.MD"',
         '"DESIGN.md"',
         '"docs/**"',
         '"docs/KNOWN_ISSUES.md"',
@@ -1102,12 +1119,10 @@ def test_ci_workflow_matches_cost_first_validation_contract() -> None:
         '"docs/RELEASE_CHECKLIST.md"',
         '"docs/TROUBLESHOOTING.md"',
         '"docs/VERSIONING.md"',
-        '"config/requirements/**"',
-        '"scripts/check_release_contract.py"',
-        '"scripts/release_readiness.py"',
-        '"tests/**"',
+        '"docs/prompts/**"',
     ):
-        assert path in workflow
+        assert docs_only_path not in push_block
+        assert docs_only_path not in pull_request_block
     assert "dist/*.whl" in workflow
     assert "dist/*.tar.gz" in workflow
     assert workflow.count("python tests/release_smoke_cli.py") >= 3
