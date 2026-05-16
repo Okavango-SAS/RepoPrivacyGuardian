@@ -1018,57 +1018,9 @@ class GuiApp:  # pragma: no cover
         identity_actions.grid(row=3, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 4))
         identity_actions.grid_columnconfigure((0, 1, 2, 3), weight=1)
         self._identity_actions = identity_actions
-        identity_primary_global = ctk.CTkButton(
-            identity_actions,
-            text=self._t("apply_global_git_config"),
-            command=self.apply_git_identity_global_clicked,
-            height=32,
-            corner_radius=8,
-            fg_color=self._support_button_fg,
-            hover_color=self._support_button_hover,
-        )
-        self._localize_widget(identity_primary_global, "text", "apply_global_git_config")
-        self._bind_tooltip_key(identity_primary_global, "apply_global_git_config")
-        identity_primary_global.grid(row=0, column=0, sticky="we", padx=(0, 6), pady=3)
-        identity_primary_local = ctk.CTkButton(
-            identity_actions,
-            text=self._t("apply_local_git_config"),
-            command=self.apply_git_identity_local_clicked,
-            height=32,
-            corner_radius=8,
-            fg_color=self._support_button_fg,
-            hover_color=self._support_button_hover,
-        )
-        self._localize_widget(identity_primary_local, "text", "apply_local_git_config")
-        self._bind_tooltip_key(identity_primary_local, "apply_local_git_config")
-        identity_primary_local.grid(row=0, column=1, sticky="we", padx=(6, 6), pady=3)
-        identity_secondary_read = ctk.CTkButton(
-            identity_actions,
-            text=self._t("read_current_git_identity"),
-            command=self.read_git_identity_clicked,
-            height=32,
-            corner_radius=8,
-            **self._secondary_button_options(),
-        )
-        self._localize_widget(identity_secondary_read, "text", "read_current_git_identity")
-        self._bind_tooltip_key(identity_secondary_read, "read_current_git_identity")
-        identity_secondary_read.grid(row=0, column=2, sticky="we", padx=(6, 6), pady=3)
-        identity_secondary_settings = ctk.CTkButton(
-            identity_actions,
-            text=self._t("open_github_email_settings"),
-            command=self.open_github_email_settings_clicked,
-            height=32,
-            corner_radius=8,
-            **self._secondary_button_options(),
-        )
-        self._localize_widget(identity_secondary_settings, "text", "open_github_email_settings")
-        self._bind_tooltip_key(identity_secondary_settings, "open_github_email_settings")
-        identity_secondary_settings.grid(row=0, column=3, sticky="we", padx=(6, 0), pady=3)
         self._identity_action_buttons = [
-            identity_primary_global,
-            identity_primary_local,
-            identity_secondary_read,
-            identity_secondary_settings,
+            self._make_action_button(identity_actions, spec)
+            for spec in gui_state_helpers.identity_action_button_specs()
         ]
 
         self._localize_widget(ctk.CTkLabel(
@@ -2571,74 +2523,20 @@ class GuiApp:  # pragma: no cover
             ), "text", text_key)
             step_label.grid(row=0, column=idx, sticky="we", padx=(0, 8 if idx < 2 else 0))
             self._reports_agent_step_labels.append(step_label)
-        self._reports_open_prompts_button = ctk.CTkButton(
+        self._reports_open_prompts_button = self._make_action_button(
             decision_row,
-            text=self._t("open_agent_prompts_from_reports"),
-            command=lambda: self._set_active_flow_tab(self._prompts_tab_name),
-            height=32,
-            corner_radius=8,
-            **self._button_asset_options("icon-open.png"),
-            **self._secondary_button_options(),
+            gui_state_helpers.reports_decision_action_button_spec(),
         )
-        self._localize_widget(self._reports_open_prompts_button, "text", "open_agent_prompts_from_reports")
-        self._bind_tooltip_key(self._reports_open_prompts_button, "open_agent_prompts_tab")
-        self._reports_open_prompts_button.grid(row=2, column=0, columnspan=3, sticky="e", padx=12, pady=(0, 12))
 
         actions = ctk.CTkFrame(reports_card, fg_color="transparent")
         actions.grid(row=4, column=0, columnspan=2, sticky="w", padx=14, pady=(0, 12))
-        self._reports_go_audit_button = ctk.CTkButton(
-            actions,
-            text=self._t("go_to_audit"),
-            command=lambda: self._set_active_flow_tab(self._audit_tab_name),
-            height=32,
-            corner_radius=8,
-            fg_color=self._primary_button_fg,
-            hover_color=self._primary_button_hover,
-            **self._button_asset_options("icon-audit.png"),
-        )
-        self._localize_widget(self._reports_go_audit_button, "text", "go_to_audit")
-        self._bind_tooltip_key(self._reports_go_audit_button, "run_audit")
-        self._reports_go_audit_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
-        self._reports_agent_handoff_button = ctk.CTkButton(
-            actions,
-            text=self._t("copy_agent_handoff"),
-            command=self._copy_agent_handoff_to_clipboard,
-            height=32,
-            corner_radius=8,
-            fg_color=self._primary_button_fg,
-            hover_color=self._primary_button_hover,
-            **self._button_asset_options("icon-copy.png"),
-        )
-        self._localize_widget(self._reports_agent_handoff_button, "text", "copy_agent_handoff")
-        self._bind_tooltip_key(self._reports_agent_handoff_button, "copy_agent_handoff")
-        self._reports_agent_handoff_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
-        report_actions = [
-            ("open_html_report_action", "icon-report.png", lambda: self._open_last_artifact("html"), "reports_tab"),
-            ("open_json_report_action", "icon-report.png", lambda: self._open_last_artifact("json"), "reports_tab"),
-            (
-                "compare_previous_report_action",
-                "icon-report.png",
-                self._compare_previous_report_to_latest,
-                "compare_previous_report",
-            ),
-            ("open_run_log_action", "icon-open.png", lambda: self._open_last_artifact("log"), "reports_tab"),
-            ("open_artifacts_folder_action", "icon-folder.png", lambda: self._open_last_artifact("folder"), "reports_tab"),
+        primary_report_specs = gui_state_helpers.reports_primary_action_button_specs()
+        self._reports_go_audit_button = self._make_action_button(actions, primary_report_specs[0])
+        self._reports_agent_handoff_button = self._make_action_button(actions, primary_report_specs[1])
+        self._reports_action_buttons = [
+            self._make_action_button(actions, spec)
+            for spec in gui_state_helpers.report_artifact_action_button_specs()
         ]
-        self._reports_action_buttons = []
-        for idx, (text_key, icon_filename, command, tooltip_key) in enumerate(report_actions):
-            button = ctk.CTkButton(
-                actions,
-                text=self._t(text_key),
-                command=command,
-                height=32,
-                corner_radius=8,
-                **self._button_asset_options(icon_filename),
-                **self._secondary_button_options(),
-            )
-            self._localize_widget(button, "text", text_key)
-            self._bind_tooltip_key(button, tooltip_key)
-            button.grid(row=0, column=idx + 1, sticky="w", padx=(0, 8))
-            self._reports_action_buttons.append(button)
         self._refresh_reports_tab()
 
     def _build_prompts_tab(self, prompts_tab) -> None:
@@ -2806,40 +2704,8 @@ class GuiApp:  # pragma: no cover
 
             actions = self.ctk.CTkFrame(card, fg_color="transparent")
             actions.grid(row=5, column=0, sticky="w", padx=12, pady=(0, 12))
-            copy_prompt_button = self.ctk.CTkButton(
-                actions,
-                text=self._t("copy_prompt"),
-                command=lambda item=prompt: self._copy_prompt_to_clipboard(item),
-                height=30,
-                corner_radius=8,
-                fg_color=self._primary_button_fg,
-                hover_color=self._primary_button_hover,
-                **self._button_asset_options("icon-copy.png"),
-            )
-            self._bind_tooltip_key(copy_prompt_button, "copy_prompt")
-            copy_prompt_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
-            copy_command_button = self.ctk.CTkButton(
-                actions,
-                text=self._t("copy_command"),
-                command=lambda item=prompt: self._copy_text_to_clipboard(item.command, self._t("prompt_command_copied")),
-                height=30,
-                corner_radius=8,
-                **self._button_asset_options("icon-copy.png"),
-                **self._secondary_button_options(),
-            )
-            self._bind_tooltip_key(copy_command_button, "copy_prompt_command")
-            copy_command_button.grid(row=0, column=1, sticky="w", padx=(0, 8))
-            open_prompt_button = self.ctk.CTkButton(
-                actions,
-                text=self._t("open_prompt"),
-                command=lambda item=prompt: self._open_prompt_file(item, repo_root),
-                height=30,
-                corner_radius=8,
-                **self._button_asset_options("icon-open.png"),
-                **self._secondary_button_options(),
-            )
-            self._bind_tooltip_key(open_prompt_button, "open_prompt_file")
-            open_prompt_button.grid(row=0, column=2, sticky="w")
+            for action_spec in gui_state_helpers.prompt_card_action_button_specs():
+                self._make_action_button(actions, action_spec, prompt=prompt, repo_root=repo_root)
         self._apply_prompt_cards_layout(columns)
 
     def _apply_prompt_cards_layout(self, columns: int) -> None:
@@ -3053,7 +2919,7 @@ class GuiApp:  # pragma: no cover
             summary_label.configure(text=self._t("last_run_none"))
             paths_label.configure(text=self._t("latest_artifacts_none"))
             if go_audit_button is not None and visibility_state.show_go_audit_button:
-                go_audit_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
+                go_audit_button.grid(**gui_state_helpers.reports_primary_action_button_specs()[0].grid.kwargs)
             if agent_handoff_button is not None:
                 agent_handoff_button.grid_remove()
             for button in getattr(self, "_reports_action_buttons", []):
@@ -3064,19 +2930,15 @@ class GuiApp:  # pragma: no cover
         if go_audit_button is not None and not visibility_state.show_go_audit_button:
             go_audit_button.grid_remove()
         compact_actions = bool(getattr(self, "_compact_reports_actions_layout", False))
+        artifact_buttons = list(getattr(self, "_reports_action_buttons", []))
+        action_layout_state = gui_state_helpers.reports_action_layout_state(
+            compact=compact_actions,
+            artifact_button_count=len(artifact_buttons),
+        )
         if agent_handoff_button is not None and visibility_state.show_agent_handoff_button:
-            agent_handoff_button.grid(
-                row=0,
-                column=0,
-                sticky="w",
-                padx=(0, 8),
-                pady=(0, 6) if compact_actions else 0,
-            )
-        for idx, button in enumerate(getattr(self, "_reports_action_buttons", [])):
-            if compact_actions:
-                button.grid_configure(row=1, column=idx, sticky="w", padx=(0, 8), pady=(2, 0))
-            else:
-                button.grid_configure(row=0, column=idx + 1, sticky="w", padx=(0, 8), pady=0)
+            agent_handoff_button.grid(**action_layout_state.agent_handoff_grid.kwargs)
+        for button, button_grid in zip(artifact_buttons, action_layout_state.artifact_button_grids, strict=True):
+            button.grid_configure(**button_grid.kwargs)
 
         counts = self._reports_summary_counts()
         exit_code = getattr(self, "_last_run_exit_code", None)
@@ -3387,6 +3249,80 @@ class GuiApp:  # pragma: no cover
                 padx=(0, 12),
             )
         return checkbox
+
+    def _action_button_style_options(self, style: gui_state_helpers.ActionButtonStyle) -> dict[str, object]:
+        if style == "primary":
+            return {
+                "fg_color": self._primary_button_fg,
+                "hover_color": self._primary_button_hover,
+            }
+        if style == "support":
+            return {
+                "fg_color": self._support_button_fg,
+                "hover_color": self._support_button_hover,
+            }
+        return self._secondary_button_options()
+
+    def _action_button_command(
+        self,
+        spec: gui_state_helpers.ActionButtonSpec,
+        *,
+        prompt: prompt_helpers.AgenticPrompt | None = None,
+        repo_root: Path | None = None,
+    ) -> Callable[[], None]:
+        if spec.command_kind == "method":
+            if spec.command_attr is None:
+                raise ValueError(f"Action button {spec.text_key} is missing command_attr")
+            return cast(Callable[[], None], getattr(self, spec.command_attr))
+        if spec.command_kind == "flow_tab":
+            command_arg = spec.command_arg
+            if command_arg is None:
+                raise ValueError(f"Action button {spec.text_key} is missing command_arg")
+            return lambda: self._set_active_flow_tab(getattr(self, command_arg))
+        if spec.command_kind == "artifact":
+            command_arg = spec.command_arg
+            if command_arg is None:
+                raise ValueError(f"Action button {spec.text_key} is missing command_arg")
+            return lambda: self._open_last_artifact(command_arg)
+        if spec.command_kind == "prompt_copy":
+            if prompt is None:
+                raise ValueError(f"Action button {spec.text_key} is missing prompt")
+            return lambda: self._copy_prompt_to_clipboard(prompt)
+        if spec.command_kind == "prompt_command_copy":
+            if prompt is None:
+                raise ValueError(f"Action button {spec.text_key} is missing prompt")
+            return lambda: self._copy_text_to_clipboard(prompt.command, self._t("prompt_command_copied"))
+        if prompt is None or repo_root is None:
+            raise ValueError(f"Action button {spec.text_key} is missing prompt or repo_root")
+        return lambda: self._open_prompt_file(prompt, repo_root)
+
+    def _make_action_button(
+        self,
+        parent,
+        spec: gui_state_helpers.ActionButtonSpec,
+        *,
+        prompt: prompt_helpers.AgenticPrompt | None = None,
+        repo_root: Path | None = None,
+    ):
+        button_options: dict[str, object] = {}
+        if spec.icon:
+            button_options.update(self._button_asset_options(spec.icon))
+        button_options.update(self._action_button_style_options(spec.style))
+        button = self.ctk.CTkButton(
+            parent,
+            text=self._t(spec.text_key),
+            command=self._action_button_command(spec, prompt=prompt, repo_root=repo_root),
+            height=spec.height,
+            corner_radius=8,
+            **button_options,
+        )
+        if spec.localize:
+            self._localize_widget(button, "text", spec.text_key)
+        self._bind_tooltip_key(button, spec.tooltip_key)
+        button.grid(**spec.grid.kwargs)
+        if spec.widget_attr:
+            setattr(self, spec.widget_attr, button)
+        return button
 
     def _dialog_initial_dir(self, current_value: str) -> str:
         raw_value = current_value.strip()
@@ -3798,21 +3734,12 @@ class GuiApp:  # pragma: no cover
 
         self._compact_identity_actions_layout = compact
         buttons = [cast(Any, button) for button in self._identity_action_buttons]
+        layout_state = gui_state_helpers.identity_actions_layout_state(compact=compact)
 
-        if compact:
-            self._identity_actions.grid_columnconfigure((0, 1), weight=1)
-            self._identity_actions.grid_columnconfigure((2, 3), weight=0)
-            buttons[0].grid_configure(row=0, column=0, padx=(0, 6), pady=3)
-            buttons[1].grid_configure(row=0, column=1, padx=(6, 0), pady=3)
-            buttons[2].grid_configure(row=1, column=0, padx=(0, 6), pady=3)
-            buttons[3].grid_configure(row=1, column=1, padx=(6, 0), pady=3)
-            return
-
-        self._identity_actions.grid_columnconfigure((0, 1, 2, 3), weight=1)
-        buttons[0].grid_configure(row=0, column=0, padx=(0, 6), pady=3)
-        buttons[1].grid_configure(row=0, column=1, padx=(6, 6), pady=3)
-        buttons[2].grid_configure(row=0, column=2, padx=(6, 6), pady=3)
-        buttons[3].grid_configure(row=0, column=3, padx=(6, 0), pady=3)
+        for column_config in layout_state.column_configs:
+            self._identity_actions.grid_columnconfigure(column_config.column, weight=column_config.weight)
+        for button, button_grid in zip(buttons, layout_state.button_grids, strict=True):
+            button.grid_configure(**button_grid.kwargs)
 
     def _apply_options_layout(self, compact: bool) -> None:
         if compact == self._compact_options_layout:

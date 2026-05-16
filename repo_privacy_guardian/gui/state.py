@@ -10,6 +10,15 @@ from typing import Literal
 WidgetState = Literal["normal", "disabled"]
 RepairGateTone = Literal["locked", "review", "ready"]
 PathFieldKind = Literal["directory", "existing_file", "save_file"]
+ActionButtonStyle = Literal["primary", "secondary", "support"]
+ActionCommandKind = Literal[
+    "method",
+    "flow_tab",
+    "artifact",
+    "prompt_copy",
+    "prompt_command_copy",
+    "prompt_open",
+]
 GridColumnTarget = int | tuple[int, ...]
 GridPadding = int | tuple[int, int]
 
@@ -125,6 +134,21 @@ class PathFieldSpec:
 
 
 @dataclass(frozen=True)
+class ActionButtonSpec:
+    text_key: str
+    tooltip_key: str
+    command_kind: ActionCommandKind
+    grid: WidgetGridConfig
+    style: ActionButtonStyle = "secondary"
+    icon: str | None = None
+    command_attr: str | None = None
+    command_arg: str | None = None
+    widget_attr: str | None = None
+    height: int = 32
+    localize: bool = True
+
+
+@dataclass(frozen=True)
 class ReportsDecisionLayoutState:
     compact: bool
     column_configs: tuple[GridColumnConfig, ...]
@@ -151,6 +175,20 @@ class ReportsActionVisibilityState:
     show_agent_handoff_button: bool
     show_artifact_buttons: bool
     artifact_button_state: WidgetState
+
+
+@dataclass(frozen=True)
+class IdentityActionsLayoutState:
+    compact: bool
+    column_configs: tuple[GridColumnConfig, ...]
+    button_grids: tuple[WidgetGridConfig, WidgetGridConfig, WidgetGridConfig, WidgetGridConfig]
+
+
+@dataclass(frozen=True)
+class ReportsActionLayoutState:
+    compact: bool
+    agent_handoff_grid: WidgetGridConfig
+    artifact_button_grids: tuple[WidgetGridConfig, ...]
 
 
 Translate = Callable[..., str]
@@ -421,6 +459,204 @@ def repair_replace_text_path_field_spec() -> PathFieldSpec:
         filetypes=(("Text files", "*.txt"), ("All files", "*.*")),
         row_frame_grid=WidgetGridConfig(row=5, column=0, sticky="we", padx=12, pady=(2, 4), columnspan=2),
         row_frame_weight_column=0,
+    )
+
+
+def identity_action_button_specs() -> tuple[ActionButtonSpec, ...]:
+    return (
+        ActionButtonSpec(
+            text_key="apply_global_git_config",
+            tooltip_key="apply_global_git_config",
+            command_kind="method",
+            command_attr="apply_git_identity_global_clicked",
+            style="support",
+            grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=(0, 6), pady=3),
+        ),
+        ActionButtonSpec(
+            text_key="apply_local_git_config",
+            tooltip_key="apply_local_git_config",
+            command_kind="method",
+            command_attr="apply_git_identity_local_clicked",
+            style="support",
+            grid=WidgetGridConfig(row=0, column=1, sticky="we", padx=(6, 6), pady=3),
+        ),
+        ActionButtonSpec(
+            text_key="read_current_git_identity",
+            tooltip_key="read_current_git_identity",
+            command_kind="method",
+            command_attr="read_git_identity_clicked",
+            style="secondary",
+            grid=WidgetGridConfig(row=0, column=2, sticky="we", padx=(6, 6), pady=3),
+        ),
+        ActionButtonSpec(
+            text_key="open_github_email_settings",
+            tooltip_key="open_github_email_settings",
+            command_kind="method",
+            command_attr="open_github_email_settings_clicked",
+            style="secondary",
+            grid=WidgetGridConfig(row=0, column=3, sticky="we", padx=(6, 0), pady=3),
+        ),
+    )
+
+
+def identity_actions_layout_state(*, compact: bool) -> IdentityActionsLayoutState:
+    if compact:
+        return IdentityActionsLayoutState(
+            compact=True,
+            column_configs=(
+                GridColumnConfig(column=(0, 1), weight=1),
+                GridColumnConfig(column=(2, 3), weight=0),
+            ),
+            button_grids=(
+                WidgetGridConfig(row=0, column=0, sticky="we", padx=(0, 6), pady=3),
+                WidgetGridConfig(row=0, column=1, sticky="we", padx=(6, 0), pady=3),
+                WidgetGridConfig(row=1, column=0, sticky="we", padx=(0, 6), pady=3),
+                WidgetGridConfig(row=1, column=1, sticky="we", padx=(6, 0), pady=3),
+            ),
+        )
+    wide_specs = identity_action_button_specs()
+    return IdentityActionsLayoutState(
+        compact=False,
+        column_configs=(GridColumnConfig(column=(0, 1, 2, 3), weight=1),),
+        button_grids=(wide_specs[0].grid, wide_specs[1].grid, wide_specs[2].grid, wide_specs[3].grid),
+    )
+
+
+def reports_decision_action_button_spec() -> ActionButtonSpec:
+    return ActionButtonSpec(
+        text_key="open_agent_prompts_from_reports",
+        tooltip_key="open_agent_prompts_tab",
+        command_kind="flow_tab",
+        command_arg="_prompts_tab_name",
+        grid=WidgetGridConfig(row=2, column=0, sticky="e", padx=12, pady=(0, 12), columnspan=3),
+        style="secondary",
+        icon="icon-open.png",
+        widget_attr="_reports_open_prompts_button",
+    )
+
+
+def reports_primary_action_button_specs() -> tuple[ActionButtonSpec, ActionButtonSpec]:
+    return (
+        ActionButtonSpec(
+            text_key="go_to_audit",
+            tooltip_key="run_audit",
+            command_kind="flow_tab",
+            command_arg="_audit_tab_name",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=(0, 8), pady=0),
+            style="primary",
+            icon="icon-audit.png",
+            widget_attr="_reports_go_audit_button",
+        ),
+        ActionButtonSpec(
+            text_key="copy_agent_handoff",
+            tooltip_key="copy_agent_handoff",
+            command_kind="method",
+            command_attr="_copy_agent_handoff_to_clipboard",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=(0, 8), pady=0),
+            style="primary",
+            icon="icon-copy.png",
+            widget_attr="_reports_agent_handoff_button",
+        ),
+    )
+
+
+def report_artifact_action_button_specs() -> tuple[ActionButtonSpec, ...]:
+    return (
+        ActionButtonSpec(
+            text_key="open_html_report_action",
+            tooltip_key="reports_tab",
+            command_kind="artifact",
+            command_arg="html",
+            grid=WidgetGridConfig(row=0, column=1, sticky="w", padx=(0, 8), pady=0),
+            icon="icon-report.png",
+        ),
+        ActionButtonSpec(
+            text_key="open_json_report_action",
+            tooltip_key="reports_tab",
+            command_kind="artifact",
+            command_arg="json",
+            grid=WidgetGridConfig(row=0, column=2, sticky="w", padx=(0, 8), pady=0),
+            icon="icon-report.png",
+        ),
+        ActionButtonSpec(
+            text_key="compare_previous_report_action",
+            tooltip_key="compare_previous_report",
+            command_kind="method",
+            command_attr="_compare_previous_report_to_latest",
+            grid=WidgetGridConfig(row=0, column=3, sticky="w", padx=(0, 8), pady=0),
+            icon="icon-report.png",
+        ),
+        ActionButtonSpec(
+            text_key="open_run_log_action",
+            tooltip_key="reports_tab",
+            command_kind="artifact",
+            command_arg="log",
+            grid=WidgetGridConfig(row=0, column=4, sticky="w", padx=(0, 8), pady=0),
+            icon="icon-open.png",
+        ),
+        ActionButtonSpec(
+            text_key="open_artifacts_folder_action",
+            tooltip_key="reports_tab",
+            command_kind="artifact",
+            command_arg="folder",
+            grid=WidgetGridConfig(row=0, column=5, sticky="w", padx=(0, 8), pady=0),
+            icon="icon-folder.png",
+        ),
+    )
+
+
+def reports_action_layout_state(*, compact: bool, artifact_button_count: int) -> ReportsActionLayoutState:
+    if compact:
+        return ReportsActionLayoutState(
+            compact=True,
+            agent_handoff_grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 6)),
+            artifact_button_grids=tuple(
+                WidgetGridConfig(row=1, column=idx, sticky="w", padx=(0, 8), pady=(2, 0))
+                for idx in range(artifact_button_count)
+            ),
+        )
+    return ReportsActionLayoutState(
+        compact=False,
+        agent_handoff_grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=(0, 8), pady=0),
+        artifact_button_grids=tuple(
+            WidgetGridConfig(row=0, column=idx + 1, sticky="w", padx=(0, 8), pady=0)
+            for idx in range(artifact_button_count)
+        ),
+    )
+
+
+def prompt_card_action_button_specs() -> tuple[ActionButtonSpec, ...]:
+    return (
+        ActionButtonSpec(
+            text_key="copy_prompt",
+            tooltip_key="copy_prompt",
+            command_kind="prompt_copy",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=(0, 8), pady=0),
+            style="primary",
+            icon="icon-copy.png",
+            height=30,
+            localize=False,
+        ),
+        ActionButtonSpec(
+            text_key="copy_command",
+            tooltip_key="copy_prompt_command",
+            command_kind="prompt_command_copy",
+            grid=WidgetGridConfig(row=0, column=1, sticky="w", padx=(0, 8), pady=0),
+            style="secondary",
+            icon="icon-copy.png",
+            height=30,
+            localize=False,
+        ),
+        ActionButtonSpec(
+            text_key="open_prompt",
+            tooltip_key="open_prompt_file",
+            command_kind="prompt_open",
+            grid=WidgetGridConfig(row=0, column=2, sticky="w", padx=0, pady=0),
+            style="secondary",
+            icon="icon-open.png",
+            height=30,
+            localize=False,
+        ),
     )
 
 

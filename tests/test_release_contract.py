@@ -2541,6 +2541,119 @@ def test_gui_path_field_specs_cover_settings_and_repair_rows() -> None:
         assert spec.tooltip_key in tooltip_catalog
 
 
+def test_gui_action_button_specs_cover_identity_reports_and_prompts() -> None:
+    identity_specs = gui_state_helpers.identity_action_button_specs()
+    assert [
+        (
+            spec.text_key,
+            spec.tooltip_key,
+            spec.command_kind,
+            spec.command_attr,
+            spec.style,
+            spec.grid.column,
+            spec.grid.padx,
+        )
+        for spec in identity_specs
+    ] == [
+        ("apply_global_git_config", "apply_global_git_config", "method", "apply_git_identity_global_clicked", "support", 0, (0, 6)),
+        ("apply_local_git_config", "apply_local_git_config", "method", "apply_git_identity_local_clicked", "support", 1, (6, 6)),
+        ("read_current_git_identity", "read_current_git_identity", "method", "read_git_identity_clicked", "secondary", 2, (6, 6)),
+        (
+            "open_github_email_settings",
+            "open_github_email_settings",
+            "method",
+            "open_github_email_settings_clicked",
+            "secondary",
+            3,
+            (6, 0),
+        ),
+    ]
+
+    decision_spec = gui_state_helpers.reports_decision_action_button_spec()
+    assert decision_spec.text_key == "open_agent_prompts_from_reports"
+    assert decision_spec.tooltip_key == "open_agent_prompts_tab"
+    assert decision_spec.command_kind == "flow_tab"
+    assert decision_spec.command_arg == "_prompts_tab_name"
+    assert decision_spec.icon == "icon-open.png"
+    assert decision_spec.widget_attr == "_reports_open_prompts_button"
+    assert decision_spec.grid.kwargs == {
+        "row": 2,
+        "column": 0,
+        "sticky": "e",
+        "padx": 12,
+        "pady": (0, 12),
+        "columnspan": 3,
+    }
+
+    primary_report_specs = gui_state_helpers.reports_primary_action_button_specs()
+    assert [
+        (spec.text_key, spec.tooltip_key, spec.command_kind, spec.command_arg, spec.command_attr, spec.icon, spec.style)
+        for spec in primary_report_specs
+    ] == [
+        ("go_to_audit", "run_audit", "flow_tab", "_audit_tab_name", None, "icon-audit.png", "primary"),
+        (
+            "copy_agent_handoff",
+            "copy_agent_handoff",
+            "method",
+            None,
+            "_copy_agent_handoff_to_clipboard",
+            "icon-copy.png",
+            "primary",
+        ),
+    ]
+    assert [spec.widget_attr for spec in primary_report_specs] == [
+        "_reports_go_audit_button",
+        "_reports_agent_handoff_button",
+    ]
+
+    artifact_specs = gui_state_helpers.report_artifact_action_button_specs()
+    assert [
+        (spec.text_key, spec.tooltip_key, spec.command_kind, spec.command_arg, spec.command_attr, spec.icon, spec.grid.column)
+        for spec in artifact_specs
+    ] == [
+        ("open_html_report_action", "reports_tab", "artifact", "html", None, "icon-report.png", 1),
+        ("open_json_report_action", "reports_tab", "artifact", "json", None, "icon-report.png", 2),
+        (
+            "compare_previous_report_action",
+            "compare_previous_report",
+            "method",
+            None,
+            "_compare_previous_report_to_latest",
+            "icon-report.png",
+            3,
+        ),
+        ("open_run_log_action", "reports_tab", "artifact", "log", None, "icon-open.png", 4),
+        ("open_artifacts_folder_action", "reports_tab", "artifact", "folder", None, "icon-folder.png", 5),
+    ]
+
+    prompt_specs = gui_state_helpers.prompt_card_action_button_specs()
+    assert [
+        (spec.text_key, spec.tooltip_key, spec.command_kind, spec.icon, spec.height, spec.localize, spec.grid.column)
+        for spec in prompt_specs
+    ] == [
+        ("copy_prompt", "copy_prompt", "prompt_copy", "icon-copy.png", 30, False, 0),
+        ("copy_command", "copy_prompt_command", "prompt_command_copy", "icon-copy.png", 30, False, 1),
+        ("open_prompt", "open_prompt_file", "prompt_open", "icon-open.png", 30, False, 2),
+    ]
+
+    english = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT]
+    spanish = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]
+    tooltip_catalog = rpg.GUI_TOOLTIP_TEXT
+    asset_filenames = set(rpg.GUI_ASSET_FILENAMES)
+    for spec in (
+        *identity_specs,
+        decision_spec,
+        *primary_report_specs,
+        *artifact_specs,
+        *prompt_specs,
+    ):
+        assert spec.text_key in english
+        assert spec.text_key in spanish
+        assert spec.tooltip_key in tooltip_catalog
+        if spec.icon:
+            assert spec.icon in asset_filenames
+
+
 def test_gui_lock_default_text_is_english() -> None:
     app = object.__new__(rpg.GuiApp)
     app._repair_cooldown_after_id = None
@@ -3002,6 +3115,63 @@ def test_gui_state_reports_action_visibility_helper_tracks_artifact_state() -> N
     assert ready.artifact_button_state == "normal"
 
 
+def test_gui_state_action_layout_helpers_preserve_grid_contract() -> None:
+    compact_identity = gui_state_helpers.identity_actions_layout_state(compact=True)
+    assert compact_identity.column_configs == (
+        gui_state_helpers.GridColumnConfig(column=(0, 1), weight=1),
+        gui_state_helpers.GridColumnConfig(column=(2, 3), weight=0),
+    )
+    assert [grid.kwargs for grid in compact_identity.button_grids] == [
+        {"row": 0, "column": 0, "sticky": "we", "padx": (0, 6), "pady": 3},
+        {"row": 0, "column": 1, "sticky": "we", "padx": (6, 0), "pady": 3},
+        {"row": 1, "column": 0, "sticky": "we", "padx": (0, 6), "pady": 3},
+        {"row": 1, "column": 1, "sticky": "we", "padx": (6, 0), "pady": 3},
+    ]
+
+    wide_identity = gui_state_helpers.identity_actions_layout_state(compact=False)
+    assert wide_identity.column_configs == (gui_state_helpers.GridColumnConfig(column=(0, 1, 2, 3), weight=1),)
+    assert [grid.kwargs for grid in wide_identity.button_grids] == [
+        {"row": 0, "column": 0, "sticky": "we", "padx": (0, 6), "pady": 3},
+        {"row": 0, "column": 1, "sticky": "we", "padx": (6, 6), "pady": 3},
+        {"row": 0, "column": 2, "sticky": "we", "padx": (6, 6), "pady": 3},
+        {"row": 0, "column": 3, "sticky": "we", "padx": (6, 0), "pady": 3},
+    ]
+
+    compact_reports = gui_state_helpers.reports_action_layout_state(
+        compact=True,
+        artifact_button_count=3,
+    )
+    assert compact_reports.agent_handoff_grid.kwargs == {
+        "row": 0,
+        "column": 0,
+        "sticky": "w",
+        "padx": (0, 8),
+        "pady": (0, 6),
+    }
+    assert [grid.kwargs for grid in compact_reports.artifact_button_grids] == [
+        {"row": 1, "column": 0, "sticky": "w", "padx": (0, 8), "pady": (2, 0)},
+        {"row": 1, "column": 1, "sticky": "w", "padx": (0, 8), "pady": (2, 0)},
+        {"row": 1, "column": 2, "sticky": "w", "padx": (0, 8), "pady": (2, 0)},
+    ]
+
+    wide_reports = gui_state_helpers.reports_action_layout_state(
+        compact=False,
+        artifact_button_count=3,
+    )
+    assert wide_reports.agent_handoff_grid.kwargs == {
+        "row": 0,
+        "column": 0,
+        "sticky": "w",
+        "padx": (0, 8),
+        "pady": 0,
+    }
+    assert [grid.kwargs for grid in wide_reports.artifact_button_grids] == [
+        {"row": 0, "column": 1, "sticky": "w", "padx": (0, 8), "pady": 0},
+        {"row": 0, "column": 2, "sticky": "w", "padx": (0, 8), "pady": 0},
+        {"row": 0, "column": 3, "sticky": "w", "padx": (0, 8), "pady": 0},
+    ]
+
+
 def test_gui_browse_helpers_update_variables(tmp_path: Path) -> None:
     class DummyVar:
         def __init__(self, value: str):
@@ -3117,6 +3287,48 @@ def test_gui_path_field_dialog_dispatch_uses_spec_contract(tmp_path: Path) -> No
     assert report_var.get() == str(tmp_path / "report.json")
     assert replace_var.get() == str(tmp_path / "input.txt")
     assert on_select_calls == ["root"]
+
+
+def test_gui_action_button_command_dispatch_uses_spec_contract(tmp_path: Path) -> None:
+    class DummyPrompt:
+        command = "repo-privacy-guardian --dry-run"
+
+    app = object.__new__(rpg.GuiApp)
+    calls: list[tuple[str, object]] = []
+    app._prompts_tab_name = "Prompts"
+    app._audit_tab_name = "Audit"
+    app._set_active_flow_tab = lambda tab_name: calls.append(("tab", tab_name))
+    app._open_last_artifact = lambda kind: calls.append(("artifact", kind))
+    app._compare_previous_report_to_latest = lambda: calls.append(("compare", "reports"))
+    app._copy_agent_handoff_to_clipboard = lambda: calls.append(("handoff", "copy"))
+    app.apply_git_identity_global_clicked = lambda: calls.append(("identity", "global"))
+    app._copy_prompt_to_clipboard = lambda prompt: calls.append(("prompt", prompt))
+    app._copy_text_to_clipboard = lambda text, message: calls.append(("text", (text, message)))
+    app._open_prompt_file = lambda prompt, repo_root: calls.append(("open_prompt", (prompt, repo_root)))
+    app._t = lambda key, **_kwargs: rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT][key]
+
+    app._action_button_command(gui_state_helpers.identity_action_button_specs()[0])()
+    app._action_button_command(gui_state_helpers.reports_decision_action_button_spec())()
+    app._action_button_command(gui_state_helpers.report_artifact_action_button_specs()[0])()
+    app._action_button_command(gui_state_helpers.report_artifact_action_button_specs()[2])()
+    app._action_button_command(gui_state_helpers.reports_primary_action_button_specs()[1])()
+
+    prompt = DummyPrompt()
+    prompt_specs = gui_state_helpers.prompt_card_action_button_specs()
+    app._action_button_command(prompt_specs[0], prompt=prompt)()
+    app._action_button_command(prompt_specs[1], prompt=prompt)()
+    app._action_button_command(prompt_specs[2], prompt=prompt, repo_root=tmp_path)()
+
+    assert calls == [
+        ("identity", "global"),
+        ("tab", "Prompts"),
+        ("artifact", "html"),
+        ("compare", "reports"),
+        ("handoff", "copy"),
+        ("prompt", prompt),
+        ("text", ("repo-privacy-guardian --dry-run", "Command copied to clipboard.")),
+        ("open_prompt", (prompt, tmp_path)),
+    ]
 
 
 def test_gui_repair_confirmation_text_uses_english_labels() -> None:
