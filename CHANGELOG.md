@@ -27,6 +27,7 @@ All notable user-facing changes to this project are documented here.
 - Extracted pure GUI option checkbox specs for GitHub remote settings and Repair option rows while preserving labels, tooltips, bindings, and layout.
 - Extracted pure GUI path-field specs for repository roots, setup files, report exports, suppression files, and Repair replace-text browsing while preserving dialog behavior and layout.
 - Extracted pure GUI action-button specs and responsive action layouts for Identity, Reports, and Prompts action rows while preserving commands, labels, tooltips, icons, and grid behavior.
+- Extracted pure GUI entry-field specs for GitHub remote settings, owner profile, Git identity, max findings, and Repair allowed-owner controls while preserving placeholders, widths, tooltips, and layout.
 - Extracted pure GitHub hardening payload classifiers for findings, warnings, accepted risks, and redacted normalization while preserving the read-only audit behavior.
 - Ignored Windows coverage shard files such as `.coverage.<host>.<pid>.*` so local pytest/coverage runs do not leave publishable root clutter.
 - Run the automatic CI smoke workflow for protected-branch pull requests as well as `main` pushes when executable, packaging, resource, test, or validation-tooling surfaces change.

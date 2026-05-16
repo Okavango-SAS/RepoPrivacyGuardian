@@ -743,68 +743,16 @@ class GuiApp:  # pragma: no cover
         github_remote_card.grid(row=settings_row, column=0, columnspan=3, sticky="we", padx=14, pady=(4, 10))
         github_remote_card.grid_columnconfigure(1, weight=1)
         github_remote_card.grid_columnconfigure(3, weight=1)
-        self._make_field_label(
-            github_remote_card,
-            text_key="github_owner",
-            tooltip_key="github_owner",
-        ).grid(row=0, column=0, sticky="w", padx=(12, 8), pady=(10, 4))
-        github_owner_entry = ctk.CTkEntry(
-            github_remote_card,
-            textvariable=self.github_owner_var,
-            height=32,
-            corner_radius=8,
-            placeholder_text=self._t("github_owner_placeholder"),
-        )
-        self._localize_widget(github_owner_entry, "placeholder_text", "github_owner_placeholder")
-        self._bind_tooltip_key(github_owner_entry, "github_owner")
-        github_owner_entry.grid(row=0, column=1, sticky="we", padx=(0, 12), pady=(10, 4))
-        self._make_field_label(
-            github_remote_card,
-            text_key="remote_repo_filters",
-            tooltip_key="github_repo_filters",
-        ).grid(row=0, column=2, sticky="w", padx=(0, 8), pady=(10, 4))
-        github_filter_entry = ctk.CTkEntry(
-            github_remote_card,
-            textvariable=self.github_repo_filters_var,
-            height=32,
-            corner_radius=8,
-            placeholder_text=self._t("remote_repo_filters_placeholder"),
-        )
-        self._localize_widget(github_filter_entry, "placeholder_text", "remote_repo_filters_placeholder")
-        self._bind_tooltip_key(github_filter_entry, "github_repo_filters")
-        github_filter_entry.grid(row=0, column=3, sticky="we", padx=(0, 12), pady=(10, 4))
-        self._make_field_label(
-            github_remote_card,
-            text_key="clone_workers",
-            tooltip_key="github_clone_workers",
-        ).grid(row=1, column=0, sticky="w", padx=(12, 8), pady=(4, 10))
-        github_jobs_entry = ctk.CTkEntry(
-            github_remote_card,
-            textvariable=self.github_jobs_var,
-            width=90,
-            height=32,
-            corner_radius=8,
-        )
-        self._bind_tooltip_key(github_jobs_entry, "github_clone_workers")
-        github_jobs_entry.grid(row=1, column=1, sticky="w", padx=(0, 12), pady=(4, 10))
+        for entry_spec in gui_state_helpers.github_remote_entry_field_specs():
+            self._add_entry_field(github_remote_card, entry_spec)
         for option_spec in gui_state_helpers.github_remote_option_checkbox_specs():
             self._make_option_checkbox(github_remote_card, option_spec)
 
         settings_row += 1
-        self._make_field_label(
+        self._add_entry_field(
             setup_settings_frame,
-            text_key="max_findings",
-            tooltip_key="max_findings",
-        ).grid(row=settings_row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
-        max_matches_entry = ctk.CTkEntry(
-            setup_settings_frame,
-            textvariable=self.max_matches_var,
-            width=100,
-            height=32,
-            corner_radius=8,
+            gui_state_helpers.max_findings_entry_field_spec(row=settings_row),
         )
-        self._bind_tooltip_key(max_matches_entry, "max_findings")
-        max_matches_entry.grid(row=settings_row, column=1, sticky="w", pady=(4, 12))
         self._localize_widget(ctk.CTkLabel(
             setup_settings_frame,
             text=self._t("settings_persist_note"),
@@ -891,75 +839,8 @@ class GuiApp:  # pragma: no cover
             text_color=self._text_muted,
         ), "text", "owner_profile_body").grid(row=1, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 6))
 
-        row = 2
-        self._make_field_label(profile_card, text_key="noreply_email", tooltip_key="noreply_email").grid(
-            row=row,
-            column=0,
-            sticky="w",
-            padx=(14, 8),
-            pady=4,
-        )
-        noreply_entry = ctk.CTkEntry(profile_card, textvariable=self.noreply_var, height=32, corner_radius=8)
-        self._bind_tooltip_key(noreply_entry, "noreply_email")
-        noreply_entry.grid(
-            row=row,
-            column=1,
-            sticky="we",
-            padx=(0, 14),
-            pady=4,
-        )
-
-        row += 1
-        self._make_field_label(profile_card, text_key="placeholder_email", tooltip_key="placeholder_email").grid(
-            row=row,
-            column=0,
-            sticky="w",
-            padx=(14, 8),
-            pady=4,
-        )
-        placeholder_entry = ctk.CTkEntry(profile_card, textvariable=self.placeholder_var, height=32, corner_radius=8)
-        self._bind_tooltip_key(placeholder_entry, "placeholder_email")
-        placeholder_entry.grid(
-            row=row,
-            column=1,
-            sticky="we",
-            padx=(0, 14),
-            pady=4,
-        )
-
-        row += 1
-        self._make_field_label(profile_card, text_key="owner_name", tooltip_key="owner_name").grid(
-            row=row,
-            column=0,
-            sticky="w",
-            padx=(14, 8),
-            pady=4,
-        )
-        owner_name_entry = ctk.CTkEntry(profile_card, textvariable=self.owner_name_var, height=32, corner_radius=8)
-        self._bind_tooltip_key(owner_name_entry, "owner_name")
-        owner_name_entry.grid(
-            row=row,
-            column=1,
-            sticky="we",
-            padx=(0, 14),
-            pady=4,
-        )
-
-        row += 1
-        self._make_field_label(
-            profile_card,
-            text_key="private_emails_to_replace",
-            tooltip_key="owner_emails",
-        ).grid(row=row, column=0, sticky="w", padx=(14, 8), pady=(4, 12))
-        owner_emails_entry = ctk.CTkEntry(profile_card, textvariable=self.owner_emails_var, height=32, corner_radius=8)
-        self._bind_tooltip_key(owner_emails_entry, "owner_emails")
-        owner_emails_entry.grid(
-            row=row,
-            column=1,
-            sticky="we",
-            padx=(0, 14),
-            pady=(4, 12),
-        )
+        for entry_spec in gui_state_helpers.owner_profile_entry_field_specs(start_row=2):
+            self._add_entry_field(profile_card, entry_spec)
 
         identity_card = ctk.CTkFrame(
             audit_tab,
@@ -977,42 +858,8 @@ class GuiApp:  # pragma: no cover
             text_color=self._text_heading,
         ), "text", "optional_git_identity").grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
 
-        self._make_field_label(identity_card, text_key="git_user_name", tooltip_key="git_user_name").grid(
-            row=1,
-            column=0,
-            sticky="w",
-            padx=(14, 8),
-            pady=4,
-        )
-        git_user_name_entry = ctk.CTkEntry(identity_card, textvariable=self.git_user_name_var, height=32, corner_radius=8)
-        self._bind_tooltip_key(git_user_name_entry, "git_user_name")
-        git_user_name_entry.grid(
-            row=1,
-            column=1,
-            sticky="we",
-            padx=(0, 14),
-            pady=4,
-        )
-
-        self._make_field_label(
-            identity_card,
-            text_key="git_user_email",
-            tooltip_key="git_user_email",
-        ).grid(row=2, column=0, sticky="w", padx=(14, 8), pady=4)
-        git_user_email_entry = ctk.CTkEntry(
-            identity_card,
-            textvariable=self.git_user_email_var,
-            height=32,
-            corner_radius=8,
-        )
-        self._bind_tooltip_key(git_user_email_entry, "git_user_email")
-        git_user_email_entry.grid(
-            row=2,
-            column=1,
-            sticky="we",
-            padx=(0, 14),
-            pady=4,
-        )
+        for entry_spec in gui_state_helpers.git_identity_entry_field_specs():
+            self._add_entry_field(identity_card, entry_spec)
 
         identity_actions = ctk.CTkFrame(identity_card, fg_color="transparent")
         identity_actions.grid(row=3, column=0, columnspan=2, sticky="we", padx=14, pady=(8, 4))
@@ -1180,25 +1027,9 @@ class GuiApp:  # pragma: no cover
             repair_write_specs["bypass_remote_owner_guardrail"],
         )
 
-        self._make_field_label(
+        self._add_entry_field(
             destructive_options,
-            text_key="allowed_remote_owners",
-            tooltip_key="allowed_remote_owners",
-        ).grid(row=9, column=0, sticky="w", padx=12, pady=(4, 0))
-        self._allowed_remote_owner_entry = ctk.CTkEntry(
-            destructive_options,
-            textvariable=self.allowed_remote_owners_var,
-            height=32,
-            corner_radius=8,
-        )
-        self._bind_tooltip_key(self._allowed_remote_owner_entry, "allowed_remote_owners")
-        self._allowed_remote_owner_entry.grid(
-            row=10,
-            column=0,
-            columnspan=2,
-            sticky="we",
-            padx=12,
-            pady=(2, 4),
+            gui_state_helpers.repair_allowed_remote_owner_entry_field_spec(),
         )
         self._localize_widget(ctk.CTkLabel(
             destructive_options,
@@ -3386,6 +3217,38 @@ class GuiApp:  # pragma: no cover
         )
         if selected:
             target_var.set(selected)
+
+    def _add_entry_field(
+        self,
+        parent,
+        spec: gui_state_helpers.EntryFieldSpec,
+    ):
+        variable = getattr(self, spec.variable_attr)
+        self._make_field_label(
+            parent,
+            text_key=spec.text_key,
+            tooltip_key=spec.tooltip_key,
+        ).grid(**spec.label_grid.kwargs)
+
+        entry_options: dict[str, object] = {}
+        if spec.width is not None:
+            entry_options["width"] = spec.width
+        if spec.placeholder_key is not None:
+            entry_options["placeholder_text"] = self._t(spec.placeholder_key)
+        entry = self.ctk.CTkEntry(
+            parent,
+            textvariable=variable,
+            height=32,
+            corner_radius=8,
+            **entry_options,
+        )
+        if spec.placeholder_key is not None:
+            self._localize_widget(entry, "placeholder_text", spec.placeholder_key)
+        self._bind_tooltip_key(entry, spec.tooltip_key)
+        entry.grid(**spec.entry_grid.kwargs)
+        if spec.widget_attr:
+            setattr(self, spec.widget_attr, entry)
+        return entry
 
     def _add_path_field(
         self,

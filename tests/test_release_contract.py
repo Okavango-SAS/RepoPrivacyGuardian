@@ -2541,6 +2541,131 @@ def test_gui_path_field_specs_cover_settings_and_repair_rows() -> None:
         assert spec.tooltip_key in tooltip_catalog
 
 
+def test_gui_entry_field_specs_cover_settings_identity_and_repair_rows() -> None:
+    github_specs = gui_state_helpers.github_remote_entry_field_specs()
+    assert [
+        (
+            spec.text_key,
+            spec.variable_attr,
+            spec.tooltip_key,
+            spec.placeholder_key,
+            spec.width,
+            spec.label_grid.row,
+            spec.label_grid.column,
+            spec.entry_grid.column,
+        )
+        for spec in github_specs
+    ] == [
+        ("github_owner", "github_owner_var", "github_owner", "github_owner_placeholder", None, 0, 0, 1),
+        (
+            "remote_repo_filters",
+            "github_repo_filters_var",
+            "github_repo_filters",
+            "remote_repo_filters_placeholder",
+            None,
+            0,
+            2,
+            3,
+        ),
+        ("clone_workers", "github_jobs_var", "github_clone_workers", None, 90, 1, 0, 1),
+    ]
+    assert github_specs[0].label_grid.kwargs == {
+        "row": 0,
+        "column": 0,
+        "sticky": "w",
+        "padx": (12, 8),
+        "pady": (10, 4),
+    }
+    assert github_specs[1].entry_grid.kwargs == {
+        "row": 0,
+        "column": 3,
+        "sticky": "we",
+        "padx": (0, 12),
+        "pady": (10, 4),
+    }
+    assert github_specs[2].entry_grid.kwargs == {
+        "row": 1,
+        "column": 1,
+        "sticky": "w",
+        "padx": (0, 12),
+        "pady": (4, 10),
+    }
+
+    max_spec = gui_state_helpers.max_findings_entry_field_spec(row=11)
+    assert max_spec.text_key == "max_findings"
+    assert max_spec.variable_attr == "max_matches_var"
+    assert max_spec.width == 100
+    assert max_spec.label_grid.kwargs == {
+        "row": 11,
+        "column": 0,
+        "sticky": "w",
+        "padx": (14, 8),
+        "pady": (4, 12),
+    }
+    assert max_spec.entry_grid.kwargs == {
+        "row": 11,
+        "column": 1,
+        "sticky": "we",
+        "padx": (0, 14),
+        "pady": (4, 12),
+    }
+
+    owner_specs = gui_state_helpers.owner_profile_entry_field_specs(start_row=2)
+    assert [
+        (spec.text_key, spec.variable_attr, spec.tooltip_key, spec.label_grid.row, spec.entry_grid.pady)
+        for spec in owner_specs
+    ] == [
+        ("noreply_email", "noreply_var", "noreply_email", 2, 4),
+        ("placeholder_email", "placeholder_var", "placeholder_email", 3, 4),
+        ("owner_name", "owner_name_var", "owner_name", 4, 4),
+        ("private_emails_to_replace", "owner_emails_var", "owner_emails", 5, (4, 12)),
+    ]
+    assert all(spec.entry_grid.kwargs["padx"] == (0, 14) for spec in owner_specs)
+
+    identity_specs = gui_state_helpers.git_identity_entry_field_specs()
+    assert [(spec.text_key, spec.variable_attr, spec.tooltip_key, spec.label_grid.row) for spec in identity_specs] == [
+        ("git_user_name", "git_user_name_var", "git_user_name", 1),
+        ("git_user_email", "git_user_email_var", "git_user_email", 2),
+    ]
+
+    allowed_spec = gui_state_helpers.repair_allowed_remote_owner_entry_field_spec()
+    assert allowed_spec.text_key == "allowed_remote_owners"
+    assert allowed_spec.variable_attr == "allowed_remote_owners_var"
+    assert allowed_spec.widget_attr == "_allowed_remote_owner_entry"
+    assert allowed_spec.label_grid.kwargs == {
+        "row": 9,
+        "column": 0,
+        "sticky": "w",
+        "padx": 12,
+        "pady": (4, 0),
+    }
+    assert allowed_spec.entry_grid.kwargs == {
+        "row": 10,
+        "column": 0,
+        "sticky": "we",
+        "padx": 12,
+        "pady": (2, 4),
+        "columnspan": 2,
+    }
+
+    english = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT]
+    spanish = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]
+    tooltip_catalog = rpg.GUI_TOOLTIP_TEXT
+    for spec in (
+        *github_specs,
+        max_spec,
+        *owner_specs,
+        *identity_specs,
+        allowed_spec,
+    ):
+        assert spec.text_key in english
+        assert spec.text_key in spanish
+        assert spec.tooltip_key in tooltip_catalog
+        if spec.placeholder_key:
+            assert spec.placeholder_key in english
+            assert spec.placeholder_key in spanish
+
+
 def test_gui_action_button_specs_cover_identity_reports_and_prompts() -> None:
     identity_specs = gui_state_helpers.identity_action_button_specs()
     assert [

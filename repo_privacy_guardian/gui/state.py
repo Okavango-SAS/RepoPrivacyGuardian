@@ -134,6 +134,18 @@ class PathFieldSpec:
 
 
 @dataclass(frozen=True)
+class EntryFieldSpec:
+    text_key: str
+    variable_attr: str
+    tooltip_key: str
+    label_grid: WidgetGridConfig
+    entry_grid: WidgetGridConfig
+    width: int | None = None
+    placeholder_key: str | None = None
+    widget_attr: str | None = None
+
+
+@dataclass(frozen=True)
 class ActionButtonSpec:
     text_key: str
     tooltip_key: str
@@ -459,6 +471,117 @@ def repair_replace_text_path_field_spec() -> PathFieldSpec:
         filetypes=(("Text files", "*.txt"), ("All files", "*.*")),
         row_frame_grid=WidgetGridConfig(row=5, column=0, sticky="we", padx=12, pady=(2, 4), columnspan=2),
         row_frame_weight_column=0,
+    )
+
+
+def standard_entry_field_spec(
+    *,
+    row: int,
+    text_key: str,
+    variable_attr: str,
+    tooltip_key: str,
+    width: int | None = None,
+    label_pady: GridPadding = 4,
+    entry_pady: GridPadding = 4,
+    placeholder_key: str | None = None,
+) -> EntryFieldSpec:
+    return EntryFieldSpec(
+        text_key=text_key,
+        variable_attr=variable_attr,
+        tooltip_key=tooltip_key,
+        label_grid=WidgetGridConfig(row=row, column=0, sticky="w", padx=(14, 8), pady=label_pady),
+        entry_grid=WidgetGridConfig(row=row, column=1, sticky="we", padx=(0, 14), pady=entry_pady),
+        width=width,
+        placeholder_key=placeholder_key,
+    )
+
+
+def github_remote_entry_field_specs() -> tuple[EntryFieldSpec, EntryFieldSpec, EntryFieldSpec]:
+    return (
+        EntryFieldSpec(
+            text_key="github_owner",
+            variable_attr="github_owner_var",
+            tooltip_key="github_owner",
+            label_grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=(12, 8), pady=(10, 4)),
+            entry_grid=WidgetGridConfig(row=0, column=1, sticky="we", padx=(0, 12), pady=(10, 4)),
+            placeholder_key="github_owner_placeholder",
+        ),
+        EntryFieldSpec(
+            text_key="remote_repo_filters",
+            variable_attr="github_repo_filters_var",
+            tooltip_key="github_repo_filters",
+            label_grid=WidgetGridConfig(row=0, column=2, sticky="w", padx=(0, 8), pady=(10, 4)),
+            entry_grid=WidgetGridConfig(row=0, column=3, sticky="we", padx=(0, 12), pady=(10, 4)),
+            placeholder_key="remote_repo_filters_placeholder",
+        ),
+        EntryFieldSpec(
+            text_key="clone_workers",
+            variable_attr="github_jobs_var",
+            tooltip_key="github_clone_workers",
+            label_grid=WidgetGridConfig(row=1, column=0, sticky="w", padx=(12, 8), pady=(4, 10)),
+            entry_grid=WidgetGridConfig(row=1, column=1, sticky="w", padx=(0, 12), pady=(4, 10)),
+            width=90,
+        ),
+    )
+
+
+def max_findings_entry_field_spec(*, row: int) -> EntryFieldSpec:
+    return standard_entry_field_spec(
+        row=row,
+        text_key="max_findings",
+        variable_attr="max_matches_var",
+        tooltip_key="max_findings",
+        width=100,
+        label_pady=(4, 12),
+        entry_pady=(4, 12),
+    )
+
+
+def owner_profile_entry_field_specs(*, start_row: int) -> tuple[EntryFieldSpec, ...]:
+    items: tuple[tuple[str, str, str, GridPadding], ...] = (
+        ("noreply_email", "noreply_var", "noreply_email", 4),
+        ("placeholder_email", "placeholder_var", "placeholder_email", 4),
+        ("owner_name", "owner_name_var", "owner_name", 4),
+        ("private_emails_to_replace", "owner_emails_var", "owner_emails", (4, 12)),
+    )
+    return tuple(
+        standard_entry_field_spec(
+            row=start_row + index,
+            text_key=text_key,
+            variable_attr=variable_attr,
+            tooltip_key=tooltip_key,
+            label_pady=pady,
+            entry_pady=pady,
+        )
+        for index, (text_key, variable_attr, tooltip_key, pady) in enumerate(items)
+    )
+
+
+def git_identity_entry_field_specs() -> tuple[EntryFieldSpec, EntryFieldSpec]:
+    return (
+        standard_entry_field_spec(
+            row=1,
+            text_key="git_user_name",
+            variable_attr="git_user_name_var",
+            tooltip_key="git_user_name",
+        ),
+        standard_entry_field_spec(
+            row=2,
+            text_key="git_user_email",
+            variable_attr="git_user_email_var",
+            tooltip_key="git_user_email",
+        ),
+    )
+
+
+def repair_allowed_remote_owner_entry_field_spec() -> EntryFieldSpec:
+    return EntryFieldSpec(
+        text_key="allowed_remote_owners",
+        variable_attr="allowed_remote_owners_var",
+        tooltip_key="allowed_remote_owners",
+        label_grid=WidgetGridConfig(row=9, column=0, sticky="w", padx=12, pady=(4, 0)),
+        entry_grid=WidgetGridConfig(row=10, column=0, sticky="we", padx=12, pady=(2, 4), columnspan=2),
+        widget_attr="_allowed_remote_owner_entry",
     )
 
 
