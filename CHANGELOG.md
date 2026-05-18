@@ -31,6 +31,7 @@ All notable user-facing changes to this project are documented here.
 - Extracted pure GUI heading, explanatory-label, and status-panel specs while preserving i18n keys, help badges, wraplengths, theme color roles, and staged Audit/Repair/Reports/Prompts layout behavior.
 - Extracted pure GUI dynamic presentation state for repository empty states, prompt cards, and Reports artifact summaries while preserving relocalization, responsive layout, artifact actions, and themed status colors.
 - Extracted pure GUI theme update helpers for palette snapshots, token translation, widget option updates, and special-widget theme maps while preserving runtime theme switching.
+- Extracted GUI asset/icon loading, theming, label refresh, and window-icon updates into a dedicated adapter while preserving runtime fallbacks and visual refresh behavior.
 - Extracted pure GitHub hardening payload classifiers for findings, warnings, accepted risks, and redacted normalization while preserving the read-only audit behavior.
 - Ignored Windows coverage shard files such as `.coverage.<host>.<pid>.*` so local pytest/coverage runs do not leave publishable root clutter.
 - Run the automatic CI smoke workflow for protected-branch pull requests as well as `main` pushes when executable, packaging, resource, test, or validation-tooling surfaces change.

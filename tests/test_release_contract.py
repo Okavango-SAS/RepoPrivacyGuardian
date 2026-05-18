@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_prompts as prompt_helpers
+from repo_privacy_guardian.gui import assets as gui_asset_helpers
 from repo_privacy_guardian.gui import state as gui_state_helpers
 from repo_privacy_guardian.gui import theme as gui_theme_helpers
 from repo_privacy_guardian_artifacts import RunArtifacts
@@ -554,6 +555,273 @@ def test_themeable_gui_asset_background_blends_near_white_pixels() -> None:
     assert blended.getpixel((2, 0)) == (250, 220, 190, 255)
     assert rpg.parse_hex_rgb("#15272D") == (21, 39, 45)
     assert rpg.parse_hex_rgb("not-a-color") is None
+
+
+def test_gui_asset_manager_loads_assets_and_button_options(tmp_path) -> None:
+    class FakeTk:
+        def __init__(self) -> None:
+            self.photo_files: list[str] = []
+
+        def PhotoImage(self, *, file: str) -> str:
+            self.photo_files.append(file)
+            if file.endswith("bad.png"):
+                raise RuntimeError("bad image")
+            return f"photo:{Path(file).name}"
+
+    class FakeRoot:
+        def iconphoto(self, *_args: object) -> None:
+            raise AssertionError("not expected")
+
+    def parse_hex_rgb(color: str) -> tuple[int, int, int] | None:
+        return (1, 2, 3) if color.startswith("#") else None
+
+    for filename in ("app-icon.png", "bad.png", "icon-open.png"):
+        (tmp_path / filename).write_text("not real image bytes", encoding="utf-8")
+
+    manager = gui_asset_helpers.GuiAssetManager(
+        tk=FakeTk(),
+        ctk=object(),
+        root=FakeRoot(),
+        asset_filenames=lambda: ("app-icon.png", "missing.png", "bad.png", "icon-open.png"),
+        themeable_asset_filenames=lambda: frozenset(),
+        asset_path=lambda filename: tmp_path / filename if (tmp_path / filename).exists() else None,
+        parse_hex_rgb=parse_hex_rgb,
+        blend_themeable_asset_background=lambda image, _rgb: image,
+        effective_appearance=lambda: "Light",
+        dark_appearance=lambda: "Dark",
+        theme_attrs=lambda: {},
+        record_warning=lambda _context, _exc: None,
+    )
+
+    assert manager.load_asset_images() == {
+        "app-icon.png": "photo:app-icon.png",
+        "icon-open.png": "photo:icon-open.png",
+    }
+    assert manager.load_button_asset_images() == {}
+    manager.button_asset_images["icon-open.png"] = "button-image"
+
+    assert manager.button_options("icon-open.png") == {"image": "button-image", "compound": "left"}
+    assert manager.button_options("missing.png") == {}
+
+
+def test_gui_asset_manager_loads_button_icons_with_dark_variant(tmp_path, monkeypatch) -> None:
+    class FakeImage:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def convert(self, mode: str) -> FakeImage:
+            assert mode == "RGBA"
+            return self
+
+        def copy(self) -> FakeImage:
+            return FakeImage(f"{self.name}:copy")
+
+    class FakeSource:
+        def __enter__(self) -> FakeImage:
+            return FakeImage("source")
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    class FakeImageModule:
+        open_calls: list[Path] = []
+
+        @classmethod
+        def open(cls, path: Path) -> FakeSource:
+            cls.open_calls.append(path)
+            return FakeSource()
+
+    class FakeImageColorModule:
+        @staticmethod
+        def getrgb(color: str) -> tuple[int, int, int, int]:
+            assert color == gui_asset_helpers.DARK_ICON_COLOR
+            return (231, 244, 240, 255)
+
+    class FakeCtk:
+        def __init__(self) -> None:
+            self.ctk_images: list[dict[str, object]] = []
+
+        def CTkImage(self, **kwargs: object) -> tuple[str, dict[str, object]]:
+            self.ctk_images.append(kwargs)
+            return ("ctk-image", kwargs)
+
+    monkeypatch.setattr(
+        gui_asset_helpers,
+        "load_pillow_icon_modules",
+        lambda: (FakeImageModule, FakeImageColorModule),
+    )
+    monkeypatch.setattr(gui_asset_helpers, "tint_gui_icon", lambda image, rgb: (image, rgb))
+    icon_path = tmp_path / "icon-open.png"
+    panel_path = tmp_path / "panel.png"
+    icon_path.write_text("not real image bytes", encoding="utf-8")
+    panel_path.write_text("not real image bytes", encoding="utf-8")
+    ctk = FakeCtk()
+
+    manager = gui_asset_helpers.GuiAssetManager(
+        tk=object(),
+        ctk=ctk,
+        root=object(),
+        asset_filenames=lambda: ("icon-open.png", "panel.png"),
+        themeable_asset_filenames=lambda: frozenset(),
+        asset_path=lambda filename: {"icon-open.png": icon_path, "panel.png": panel_path}.get(filename),
+        parse_hex_rgb=lambda _color: None,
+        blend_themeable_asset_background=lambda image, _rgb: image,
+        effective_appearance=lambda: "Light",
+        dark_appearance=lambda: "Dark",
+        theme_attrs=lambda: {},
+        record_warning=lambda _context, _exc: None,
+    )
+
+    images = manager.load_button_asset_images()
+
+    assert list(images) == ["icon-open.png"]
+    assert FakeImageModule.open_calls == [icon_path]
+    assert ctk.ctk_images == [
+        {
+            "light_image": ctk.ctk_images[0]["light_image"],
+            "dark_image": (ctk.ctk_images[0]["light_image"], (231, 244, 240)),
+            "size": gui_asset_helpers.ICON_SIZE,
+        }
+    ]
+    assert manager.button_options("icon-open.png") == {
+        "image": images["icon-open.png"],
+        "compound": "left",
+    }
+
+
+def test_gui_asset_manager_caches_dark_themeable_images(tmp_path, monkeypatch) -> None:
+    class FakeSource:
+        def __enter__(self) -> str:
+            return "source-image"
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    class FakeImageModule:
+        open_calls: list[Path] = []
+
+        @classmethod
+        def open(cls, path: Path) -> FakeSource:
+            cls.open_calls.append(path)
+            return FakeSource()
+
+    class FakeImageTkModule:
+        photo_calls: list[object] = []
+
+        @classmethod
+        def PhotoImage(cls, image: object) -> str:
+            cls.photo_calls.append(image)
+            return f"photo:{image}"
+
+    monkeypatch.setattr(
+        gui_asset_helpers,
+        "load_pillow_theme_modules",
+        lambda: (FakeImageModule, FakeImageTkModule),
+    )
+    asset_path = tmp_path / "themeable.png"
+    asset_path.write_text("not real image bytes", encoding="utf-8")
+    blend_calls: list[tuple[object, tuple[int, int, int]]] = []
+
+    manager = gui_asset_helpers.GuiAssetManager(
+        tk=object(),
+        ctk=object(),
+        root=object(),
+        asset_filenames=lambda: ("themeable.png",),
+        themeable_asset_filenames=lambda: {"themeable.png"},
+        asset_path=lambda filename: asset_path if filename == "themeable.png" else None,
+        parse_hex_rgb=lambda color: (1, 2, 3) if color == "#010203" else None,
+        blend_themeable_asset_background=lambda image, rgb: blend_calls.append((image, rgb)) or f"blended:{rgb}",
+        effective_appearance=lambda: "Dark",
+        dark_appearance=lambda: "Dark",
+        theme_attrs=lambda: {},
+        record_warning=lambda _context, _exc: None,
+        asset_images={"themeable.png": "base-image"},
+    )
+
+    first = manager.image("themeable.png", background="#010203")
+    second = manager.image("themeable.png", background="#010203")
+
+    assert first == "photo:blended:(1, 2, 3)"
+    assert second == first
+    assert FakeImageModule.open_calls == [asset_path]
+    assert FakeImageTkModule.photo_calls == ["blended:(1, 2, 3)"]
+    assert blend_calls == [("source-image", (1, 2, 3))]
+    assert manager.image("themeable.png", background="not-a-color") == "base-image"
+
+
+def test_gui_asset_manager_registers_refreshes_and_warns_for_labels() -> None:
+    class FakeLabel:
+        def __init__(self, *, image: object, background: str, fail_configure: bool = False) -> None:
+            self.image = image
+            self.background = background
+            self.fail_configure = fail_configure
+            self.configure_calls: list[dict[str, object]] = []
+
+        def cget(self, option: str) -> object:
+            if option != "background":
+                raise KeyError(option)
+            return self.background
+
+        def configure(self, **kwargs: object) -> None:
+            if self.fail_configure:
+                raise RuntimeError("label rejected image")
+            self.configure_calls.append(kwargs)
+            self.image = kwargs.get("image", self.image)
+            self.background = str(kwargs.get("background", self.background))
+
+    class FakeTk:
+        def Label(self, _parent: object, **kwargs: object) -> FakeLabel:
+            return FakeLabel(image=kwargs["image"], background=str(kwargs["background"]))
+
+    class FakeRoot:
+        def __init__(self) -> None:
+            self.icon_calls: list[tuple[object, ...]] = []
+
+        def iconphoto(self, *args: object) -> None:
+            self.icon_calls.append(args)
+
+    attrs: dict[str, object] = {
+        "_surface_fg": "#111111",
+        "_header_fg": "#111111",
+    }
+    warnings: list[tuple[str, str]] = []
+    root = FakeRoot()
+    manager = gui_asset_helpers.GuiAssetManager(
+        tk=FakeTk(),
+        ctk=object(),
+        root=root,
+        asset_filenames=lambda: ("panel.png", "app-icon.png"),
+        themeable_asset_filenames=lambda: frozenset(),
+        asset_path=lambda _filename: None,
+        parse_hex_rgb=lambda color: (1, 2, 3) if color.startswith("#") else None,
+        blend_themeable_asset_background=lambda image, _rgb: image,
+        effective_appearance=lambda: "Light",
+        dark_appearance=lambda: "Dark",
+        theme_attrs=lambda: attrs,
+        record_warning=lambda context, exc: warnings.append((context, str(exc))),
+        asset_images={"panel.png": "panel-light", "app-icon.png": "icon-light"},
+    )
+
+    assert manager.theme_token_name_for_color("#111111") == "_header_fg"
+    label = manager.make_label(object(), "panel.png", background="#111111")
+    assert isinstance(label, FakeLabel)
+    assert manager.asset_labels == [
+        {"label": label, "filename": "panel.png", "background_token": "_header_fg"}
+    ]
+
+    manager.themed_asset_images[("panel.png", "Dark", "#111111")] = "stale"
+    manager.asset_images["panel.png"] = "panel-dark"
+    manager.asset_images["app-icon.png"] = "icon-dark"
+    attrs["_header_fg"] = "#222222"
+    manager.refresh_labels()
+
+    assert manager.themed_asset_images == {}
+    assert label.configure_calls == [{"image": "panel-dark", "background": "#222222"}]
+    assert root.icon_calls == [(True, "icon-dark")]
+
+    bad_label = FakeLabel(image="old", background="#222222", fail_configure=True)
+    manager.configure_label_image(bad_label, "panel.png", "#222222")
+    assert warnings == [("asset label image update failed", "label rejected image")]
 
 
 def test_module_import_does_not_require_gui_dependencies() -> None:

@@ -76,6 +76,7 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian/execution.py",
     "repo_privacy_guardian/gui/__init__.py",
     "repo_privacy_guardian/gui/app.py",
+    "repo_privacy_guardian/gui/assets.py",
     "repo_privacy_guardian/gui/locale.py",
     "repo_privacy_guardian/gui/state.py",
     "repo_privacy_guardian/gui/theme.py",
@@ -436,6 +437,7 @@ def test_low_risk_extracted_modules_use_explicit_core_imports() -> None:
         "repo_privacy_guardian/reporting.py",
         "repo_privacy_guardian/scanner.py",
         "repo_privacy_guardian/gui/app.py",
+        "repo_privacy_guardian/gui/assets.py",
         "repo_privacy_guardian/gui/state.py",
         "repo_privacy_guardian/gui/theme.py",
         "repo_privacy_guardian/policy.py",
@@ -510,6 +512,30 @@ def test_gui_app_module_imports_without_core_circularity() -> None:
 
     assert proc.returncode == 0, proc.stderr or proc.stdout
     assert "GuiApp" in proc.stdout
+
+
+def test_gui_assets_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.gui.assets as gui_assets; "
+                "print(gui_assets.ICON_SIZE); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["(24, 24)", "False"]
 
 
 def test_gui_locale_module_imports_without_core_dependency() -> None:

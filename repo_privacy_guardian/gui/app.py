@@ -11,6 +11,7 @@ import webbrowser
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
 
+from repo_privacy_guardian.gui import assets as gui_asset_helpers
 from repo_privacy_guardian.gui import state as gui_state_helpers
 from repo_privacy_guardian.gui import theme as gui_theme_helpers
 
@@ -116,11 +117,12 @@ class GuiApp:  # pragma: no cover
                 "Otherwise, use the CLI."
             ) from exc
         self._sync_ctk_system_appearance_probe()
+        self._gui_asset_manager = self._create_gui_asset_manager()
         self._gui_asset_images = self._load_gui_assets()
-        self._gui_themed_asset_images: dict[tuple[str, str, str], object] = {}
+        self._gui_themed_asset_images = self._gui_asset_manager.themed_asset_images
         self._gui_button_asset_images = self._load_gui_button_assets()
         self._gui_info_badges: list[object] = []
-        self._gui_asset_labels: list[dict[str, object]] = []
+        self._gui_asset_labels = self._gui_asset_manager.asset_labels
         self._fixed_theme_options: list[dict[str, object]] = []
         self._effective_gui_appearance = GUI_APPEARANCE_LIGHT
         self._appearance_mode_callback_registered = False
@@ -1233,116 +1235,57 @@ class GuiApp:  # pragma: no cover
         family = self._mono_font_family if mono else self._ui_font_family
         return (family, size, "bold") if bold else (family, size)
 
+    def _create_gui_asset_manager(self) -> gui_asset_helpers.GuiAssetManager:
+        return gui_asset_helpers.GuiAssetManager(
+            tk=self.tk,
+            ctk=self.ctk,
+            root=self.root,
+            asset_filenames=lambda: GUI_ASSET_FILENAMES,
+            themeable_asset_filenames=lambda: GUI_THEMEABLE_ASSET_FILENAMES,
+            asset_path=lambda filename: gui_asset_path(filename),
+            parse_hex_rgb=lambda color: parse_hex_rgb(color),
+            blend_themeable_asset_background=lambda image, background_rgb: blend_near_white_gui_asset_background(
+                image,
+                background_rgb,
+            ),
+            effective_appearance=self._effective_appearance,
+            dark_appearance=lambda: GUI_APPEARANCE_DARK,
+            theme_attrs=lambda: vars(self),
+            record_warning=self._record_gui_warning,
+        )
+
+    def _gui_asset_manager_for_use(self) -> gui_asset_helpers.GuiAssetManager:
+        manager = getattr(self, "_gui_asset_manager", None)
+        if not isinstance(manager, gui_asset_helpers.GuiAssetManager):
+            manager = self._create_gui_asset_manager()
+            self._gui_asset_manager = manager
+        if hasattr(self, "_gui_asset_images"):
+            manager.asset_images = self._gui_asset_images
+        if hasattr(self, "_gui_themed_asset_images"):
+            manager.themed_asset_images = self._gui_themed_asset_images
+        if hasattr(self, "_gui_button_asset_images"):
+            manager.button_asset_images = self._gui_button_asset_images
+        if hasattr(self, "_gui_asset_labels"):
+            manager.asset_labels = self._gui_asset_labels
+        return manager
+
     def _load_gui_assets(self) -> dict[str, object]:
-        images: dict[str, object] = {}
-        for filename in GUI_ASSET_FILENAMES:
-            asset_path = gui_asset_path(filename)
-            if asset_path is None:
-                continue
-            try:
-                images[filename] = self.tk.PhotoImage(file=str(asset_path))
-            except Exception:
-                continue
-        return images
+        return self._gui_asset_manager_for_use().load_asset_images()
 
     def _load_gui_button_assets(self) -> dict[str, object]:
-        ctk_image = getattr(self.ctk, "CTkImage", None)
-        if ctk_image is None:
-            return {}
-
-        try:
-            from PIL import Image, ImageColor
-        except Exception:
-            return {}
-
-        images: dict[str, object] = {}
-        dark_icon_color = "#E7F4F0"
-        for filename in GUI_ASSET_FILENAMES:
-            if not filename.startswith("icon-"):
-                continue
-            asset_path = gui_asset_path(filename)
-            if asset_path is None:
-                continue
-            try:
-                with Image.open(asset_path) as source:
-                    image = source.convert("RGBA").copy()
-                dark_icon_rgb = ImageColor.getrgb(dark_icon_color)[:3]
-                dark_image = self._tint_gui_icon(image, dark_icon_rgb)
-                images[filename] = ctk_image(light_image=image, dark_image=dark_image, size=(24, 24))
-            except Exception:
-                continue
-        return images
+        return self._gui_asset_manager_for_use().load_button_asset_images()
 
     def _tint_gui_icon(self, image, color: tuple[int, int, int]):
-        try:
-            from PIL import Image, ImageChops
-        except Exception:
-            return image
-
-        source = image.convert("RGBA")
-        luminance = source.convert("L")
-        darkness_mask = Image.eval(luminance, lambda pixel: 255 - pixel)
-        alpha_mask = ImageChops.multiply(darkness_mask, source.getchannel("A"))
-        tinted = Image.new("RGBA", image.size, color + (0,))
-        tinted.putalpha(alpha_mask)
-        return tinted
+        return gui_asset_helpers.tint_gui_icon(image, color)
 
     def _asset_image(self, filename: str, *, background: str | None = None):
-        if (
-            background
-            and self._effective_appearance() == GUI_APPEARANCE_DARK
-            and filename in GUI_THEMEABLE_ASSET_FILENAMES
-        ):
-            cache_key = (filename, self._effective_appearance(), background)
-            cached_image = self._gui_themed_asset_images.get(cache_key)
-            if cached_image is not None:
-                return cached_image
-            background_rgb = parse_hex_rgb(background)
-            asset_path = gui_asset_path(filename)
-            if background_rgb is not None and asset_path is not None:
-                try:
-                    from PIL import Image, ImageTk
-
-                    with Image.open(asset_path) as source:
-                        themed_source = blend_near_white_gui_asset_background(source, background_rgb)
-                    themed_image = ImageTk.PhotoImage(themed_source)
-                    self._gui_themed_asset_images[cache_key] = themed_image
-                    return themed_image
-                except Exception:
-                    pass
-        return self._gui_asset_images.get(filename)
+        return self._gui_asset_manager_for_use().image(filename, background=background)
 
     def _set_window_icon(self) -> None:
-        icon = self._asset_image("app-icon.png")
-        if icon is None:
-            return
-        try:
-            self.root.iconphoto(True, icon)
-        except Exception:
-            pass
+        self._gui_asset_manager_for_use().set_window_icon()
 
     def _theme_token_name_for_color(self, color: str) -> str | None:
-        matches = [
-            name
-            for name, value in vars(self).items()
-            if name.startswith("_") and isinstance(value, str) and value == color and parse_hex_rgb(value) is not None
-        ]
-        if len(matches) == 1:
-            return matches[0]
-        preferred = (
-            "_header_fg",
-            "_surface_fg",
-            "_surface_alt",
-            "_white_panel_fg",
-            "_info_panel_fg",
-            "_success_panel_fg",
-            "_warning_panel_fg",
-            "_page_bg",
-        )
-        for name in preferred:
-            if name in matches:
-                return name
-        return matches[0] if matches else None
+        return self._gui_asset_manager_for_use().theme_token_name_for_color(color)
 
     def _make_asset_label(
         self,
@@ -1350,33 +1293,11 @@ class GuiApp:  # pragma: no cover
         filename: str,
         *,
         background: str,
-    ):
-        image = self._asset_image(filename, background=background)
-        if image is None:
-            return None
-        label = self.tk.Label(
-            parent,
-            image=image,
-            background=background,
-            borderwidth=0,
-            highlightthickness=0,
-            padx=0,
-            pady=0,
-        )
-        self._gui_asset_labels.append(
-            {
-                "label": label,
-                "filename": filename,
-                "background_token": self._theme_token_name_for_color(background),
-            }
-        )
-        return label
+    ) -> Any:
+        return self._gui_asset_manager_for_use().make_label(parent, filename, background=background)
 
     def _button_asset_options(self, filename: str) -> dict[str, object]:
-        image = self._gui_button_asset_images.get(filename)
-        if image is None:
-            return {}
-        return {"image": image, "compound": "left"}
+        return self._gui_asset_manager_for_use().button_options(filename)
 
     def _secondary_button_options(self) -> dict[str, object]:
         return {
@@ -1509,33 +1430,10 @@ class GuiApp:  # pragma: no cover
                     self._record_gui_warning(f"theme option update failed ({option})", item_exc)
 
     def _configure_asset_label_image(self, label: object, filename: str, background: str) -> None:
-        image = self._asset_image(filename, background=background)
-        if image is None:
-            return
-        try:
-            cast(Any, label).configure(image=image, background=background)
-        except Exception as exc:
-            self._record_gui_warning("asset label image update failed", exc)
+        self._gui_asset_manager_for_use().configure_label_image(label, filename, background)
 
     def _refresh_gui_asset_labels(self) -> None:
-        self._gui_themed_asset_images.clear()
-        for item in list(getattr(self, "_gui_asset_labels", [])):
-            label = item.get("label")
-            filename = item.get("filename")
-            background_token = item.get("background_token")
-            if label is None or not isinstance(filename, str):
-                continue
-            background = None
-            if isinstance(background_token, str):
-                background = getattr(self, background_token, None)
-            if not isinstance(background, str):
-                try:
-                    background = label.cget("background")
-                except Exception:
-                    background = None
-            if isinstance(background, str):
-                self._configure_asset_label_image(label, filename, background)
-        self._set_window_icon()
+        self._gui_asset_manager_for_use().refresh_labels()
 
     def _register_fixed_theme_option(self, widget: object, option: str, value: object) -> None:
         self._fixed_theme_options.append({"widget": widget, "option": option, "value": value})

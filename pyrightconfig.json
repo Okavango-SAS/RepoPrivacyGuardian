@@ -9,6 +9,7 @@
     "repo_privacy_guardian/evidence_taxonomy.py",
     "repo_privacy_guardian/execution.py",
     "repo_privacy_guardian/gui/app.py",
+    "repo_privacy_guardian/gui/assets.py",
     "repo_privacy_guardian/gui/locale.py",
     "repo_privacy_guardian/gui/state.py",
     "repo_privacy_guardian/gui/theme.py",
