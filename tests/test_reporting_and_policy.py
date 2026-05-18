@@ -1305,7 +1305,7 @@ def test_process_exists_windows_error_code_paths(monkeypatch) -> None:
             return 0
 
     monkeypatch.setattr(rpg.os, "name", "nt", raising=False)
-    monkeypatch.setattr(ctypes, "WinDLL", lambda *_args, **_kwargs: DummyKernel())
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *_args, **_kwargs: DummyKernel(), raising=False)
     monkeypatch.setattr(ctypes, "get_last_error", lambda: 87)
     assert rpg.process_exists(1234) is False
 

@@ -22,6 +22,10 @@ from repo_privacy_guardian_artifacts import RunArtifacts
 SUBPROCESS_TEST_TIMEOUT_SECONDS = 60
 
 
+def _ready_gui_tooling_checks() -> list[rpg.ToolingCheck]:
+    return [rpg.ToolingCheck(name="gui-test-preflight", state="ready", blocking=True, detail="ready")]
+
+
 def _load_support_module(module_name: str, relative_path: str):
     module_path = Path(__file__).resolve().parents[1] / relative_path
     spec = importlib.util.spec_from_file_location(module_name, module_path)
@@ -85,6 +89,8 @@ def test_render_ignore_baseline_keeps_env_example_exception_after_env_wildcard()
 
 
 def test_main_gui_runtime_error_reports_clean_message(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(rpg, "build_gui_tooling_checks", _ready_gui_tooling_checks)
+    monkeypatch.setattr(rpg, "prompt_gui_tooling_install", lambda checks, logger: False)
     monkeypatch.setattr(rpg, "GuiApp", lambda: (_ for _ in ()).throw(RuntimeError("GUI mode requires a desktop session")))
 
     exit_code = rpg.launch_gui()
@@ -101,6 +107,8 @@ def test_launch_gui_success_runs_app(monkeypatch) -> None:
         def run(self) -> None:
             calls.append("run")
 
+    monkeypatch.setattr(rpg, "build_gui_tooling_checks", _ready_gui_tooling_checks)
+    monkeypatch.setattr(rpg, "prompt_gui_tooling_install", lambda checks, logger: False)
     monkeypatch.setattr(rpg, "GuiApp", DummyApp)
 
     assert rpg.launch_gui() == 0
