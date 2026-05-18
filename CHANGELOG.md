@@ -29,6 +29,7 @@ All notable user-facing changes to this project are documented here.
 - Extracted pure GUI action-button specs and responsive action layouts for Identity, Reports, and Prompts action rows while preserving commands, labels, tooltips, icons, and grid behavior.
 - Extracted pure GUI entry-field specs for GitHub remote settings, owner profile, Git identity, max findings, and Repair allowed-owner controls while preserving placeholders, widths, tooltips, and layout.
 - Extracted pure GUI heading, explanatory-label, and status-panel specs while preserving i18n keys, help badges, wraplengths, theme color roles, and staged Audit/Repair/Reports/Prompts layout behavior.
+- Extracted pure GUI dynamic presentation state for repository empty states, prompt cards, and Reports artifact summaries while preserving relocalization, responsive layout, artifact actions, and themed status colors.
 - Extracted pure GitHub hardening payload classifiers for findings, warnings, accepted risks, and redacted normalization while preserving the read-only audit behavior.
 - Ignored Windows coverage shard files such as `.coverage.<host>.<pid>.*` so local pytest/coverage runs do not leave publishable root clutter.
 - Run the automatic CI smoke workflow for protected-branch pull requests as well as `main` pushes when executable, packaging, resource, test, or validation-tooling surfaces change.

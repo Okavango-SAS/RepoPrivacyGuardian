@@ -23,6 +23,7 @@ GridColumnTarget = int | tuple[int, ...]
 GridPadding = int | tuple[int, int]
 TextColorRole = str
 FillColorRole = str
+RepoEmptyReason = Literal["invalid_root", "no_repos", "github_remote"]
 
 
 MANUAL_REVIEW_SIGNAL_KEYS = (
@@ -106,6 +107,23 @@ class WidgetGridConfig:
 
 
 @dataclass(frozen=True)
+class WidgetPlaceConfig:
+    relx: float
+    rely: float
+    relwidth: float
+    anchor: str
+
+    @property
+    def kwargs(self) -> dict[str, object]:
+        return {
+            "relx": self.relx,
+            "rely": self.rely,
+            "relwidth": self.relwidth,
+            "anchor": self.anchor,
+        }
+
+
+@dataclass(frozen=True)
 class OptionCheckboxSpec:
     text_key: str
     variable_attr: str
@@ -179,6 +197,23 @@ class TextLabelSpec:
 
 
 @dataclass(frozen=True)
+class LiteralTextLabelSpec:
+    text: str
+    grid: WidgetGridConfig
+    font_size: int = 12
+    bold: bool = False
+    mono: bool = False
+    text_color_role: TextColorRole = "body"
+    fg_color_role: FillColorRole | None = None
+    justify: str | None = "left"
+    anchor: str | None = "w"
+    wraplength: int | None = None
+    height: int | None = None
+    corner_radius: int | None = None
+    padx: int | None = None
+
+
+@dataclass(frozen=True)
 class PanelSpec:
     grid: WidgetGridConfig
     fg_color_role: FillColorRole
@@ -246,6 +281,49 @@ class ReportsActionLayoutState:
     compact: bool
     agent_handoff_grid: WidgetGridConfig
     artifact_button_grids: tuple[WidgetGridConfig, ...]
+
+
+@dataclass(frozen=True)
+class RepoEmptyPresentationState:
+    reason: RepoEmptyReason
+    title_key: str
+    body_text: str
+    hint_key: str
+    fg_color_role: FillColorRole
+    border_color_role: FillColorRole
+    title_color_role: TextColorRole
+    body_color_role: TextColorRole
+    hint_color_role: TextColorRole
+    show_action_button: bool
+    action_text_key: str
+    action_state: WidgetState
+    place: WidgetPlaceConfig
+
+
+@dataclass(frozen=True)
+class ReportsRunPresentationState:
+    visibility: ReportsActionVisibilityState
+    badge_text: str
+    badge_fg_color_role: FillColorRole
+    badge_text_color_role: TextColorRole
+    summary_text: str
+    paths_text: str
+    next_action_key: str
+
+
+@dataclass(frozen=True)
+class PromptCardPresentationSpec:
+    fg_color_role: FillColorRole
+    border_color_role: FillColorRole
+    corner_radius: int
+    border_width: int
+    column_configs: tuple[GridColumnConfig, ...]
+    stage_label: LiteralTextLabelSpec
+    title_label: LiteralTextLabelSpec
+    description_label: LiteralTextLabelSpec
+    best_for_label: LiteralTextLabelSpec
+    command_label: LiteralTextLabelSpec
+    actions_grid: WidgetGridConfig
 
 
 Translate = Callable[..., str]
@@ -411,6 +489,69 @@ def repair_options_visibility_state(*, visible: bool) -> CollapsibleSectionState
         toggle_text_key="repair_advanced_toggle_hide" if visible else "repair_advanced_toggle_show",
         hint_text_key="repair_advanced_hint_visible" if visible else "repair_advanced_hint_hidden",
     )
+
+
+def repo_empty_presentation_state(
+    *,
+    reason: str | None,
+    body_text: str,
+) -> RepoEmptyPresentationState:
+    normalized_reason: RepoEmptyReason
+    if reason == "invalid_root":
+        normalized_reason = "invalid_root"
+    elif reason == "github_remote":
+        normalized_reason = "github_remote"
+    else:
+        normalized_reason = "no_repos"
+
+    states = {
+        "invalid_root": RepoEmptyPresentationState(
+            reason="invalid_root",
+            title_key="repo_empty_invalid_root_title",
+            body_text=body_text,
+            hint_key="repo_empty_invalid_root_hint",
+            fg_color_role="warning_panel",
+            border_color_role="warning_panel_border",
+            title_color_role="warning",
+            body_color_role="warning_strong",
+            hint_color_role="muted",
+            show_action_button=True,
+            action_text_key="repo_empty_choose_root_action",
+            action_state="normal",
+            place=WidgetPlaceConfig(relx=0.5, rely=0.5, relwidth=0.82, anchor="center"),
+        ),
+        "no_repos": RepoEmptyPresentationState(
+            reason="no_repos",
+            title_key="repo_empty_no_repos_title",
+            body_text=body_text,
+            hint_key="repo_empty_no_repos_hint",
+            fg_color_role="info_panel",
+            border_color_role="info_panel_border",
+            title_color_role="info",
+            body_color_role="muted",
+            hint_color_role="muted",
+            show_action_button=True,
+            action_text_key="repo_empty_choose_root_action",
+            action_state="normal",
+            place=WidgetPlaceConfig(relx=0.5, rely=0.5, relwidth=0.82, anchor="center"),
+        ),
+        "github_remote": RepoEmptyPresentationState(
+            reason="github_remote",
+            title_key="repo_empty_github_remote_title",
+            body_text=body_text,
+            hint_key="repo_empty_github_remote_hint",
+            fg_color_role="success_panel",
+            border_color_role="success_panel_border",
+            title_color_role="success",
+            body_color_role="muted",
+            hint_color_role="muted",
+            show_action_button=False,
+            action_text_key="repo_empty_choose_root_action",
+            action_state="disabled",
+            place=WidgetPlaceConfig(relx=0.5, rely=0.5, relwidth=0.82, anchor="center"),
+        ),
+    }
+    return states[normalized_reason]
 
 
 def gui_section_heading_specs() -> dict[str, SectionHeadingSpec]:
@@ -1458,6 +1599,140 @@ def reports_action_layout_state(*, compact: bool, artifact_button_count: int) ->
     )
 
 
+def reports_status_label(
+    counts: dict[str, int],
+    exit_code: int | None,
+    *,
+    exit_policy_failed: int,
+    exit_runtime_error: int,
+    exit_aborted: int,
+) -> str:
+    if counts["failed"] or counts["blocking"] or exit_code == exit_policy_failed:
+        return "FAIL"
+    if exit_code == exit_runtime_error:
+        return "ERROR"
+    if exit_code == exit_aborted:
+        return "ABORTED"
+    if counts["manual"] or counts["total"] == 0:
+        return "PASS/REVIEW"
+    return "PASS"
+
+
+def reports_next_action_key(
+    counts: dict[str, int],
+    exit_code: int | None,
+    *,
+    has_artifacts: bool,
+    exit_ok: int,
+    exit_policy_failed: int,
+    exit_runtime_error: int,
+    exit_aborted: int,
+) -> str:
+    if not has_artifacts:
+        return "next_action_run_audit"
+    if exit_code in {exit_runtime_error, exit_aborted}:
+        return "next_action_error"
+    if exit_code not in {None, exit_ok, exit_policy_failed}:
+        return "next_action_error"
+    if counts["failed"] or counts["blocking"] or exit_code == exit_policy_failed:
+        return "next_action_failed"
+    if counts["manual"]:
+        return "next_action_manual"
+    if counts["total"] == 0:
+        return "next_action_review_artifacts"
+    return "next_action_pass"
+
+
+def reports_badge_color_roles(status_label: str) -> tuple[FillColorRole, TextColorRole]:
+    if status_label in {"FAIL", "ERROR"}:
+        return "failure_badge", "failure_badge_text"
+    if status_label == "ABORTED":
+        return "warning_badge", "warning_badge_text"
+    return "pass_badge", "pass_badge_text"
+
+
+def report_artifact_paths_text(
+    *,
+    run_dir: str,
+    json_path: str,
+    agent_summary_path: str,
+    html_path: str,
+    log_path: str,
+    state_path: str,
+) -> str:
+    return (
+        f"run_dir: {run_dir}\n"
+        f"report.json: {json_path}\n"
+        f"agent_summary.json: {agent_summary_path}\n"
+        f"report.html: {html_path}\n"
+        f"run.log: {log_path}\n"
+        f"run_state.json: {state_path}"
+    )
+
+
+def reports_run_presentation_state(
+    *,
+    has_artifacts: bool,
+    counts: dict[str, int],
+    exit_code: int | None,
+    run_action: str,
+    artifact_paths_text: str,
+    repair_summary_text: str,
+    empty_badge_text: str,
+    empty_summary_text: str,
+    empty_paths_text: str,
+    exit_ok: int,
+    exit_policy_failed: int,
+    exit_runtime_error: int,
+    exit_aborted: int,
+) -> ReportsRunPresentationState:
+    visibility = reports_action_visibility_state(has_artifacts=has_artifacts)
+    next_action = reports_next_action_key(
+        counts,
+        exit_code,
+        has_artifacts=has_artifacts,
+        exit_ok=exit_ok,
+        exit_policy_failed=exit_policy_failed,
+        exit_runtime_error=exit_runtime_error,
+        exit_aborted=exit_aborted,
+    )
+    if not has_artifacts:
+        return ReportsRunPresentationState(
+            visibility=visibility,
+            badge_text=empty_badge_text,
+            badge_fg_color_role="success_badge",
+            badge_text_color_role="success",
+            summary_text=empty_summary_text,
+            paths_text=empty_paths_text,
+            next_action_key=next_action,
+        )
+
+    status_label = reports_status_label(
+        counts,
+        exit_code,
+        exit_policy_failed=exit_policy_failed,
+        exit_runtime_error=exit_runtime_error,
+        exit_aborted=exit_aborted,
+    )
+    badge_fg_role, badge_text_role = reports_badge_color_roles(status_label)
+    summary_text = repair_summary_text
+    if counts["total"] == 0:
+        summary_text = (
+            empty_summary_text
+            if exit_code is None
+            else f"{run_action or 'run'} finished with exit code {exit_code}."
+        )
+    return ReportsRunPresentationState(
+        visibility=visibility,
+        badge_text=status_label,
+        badge_fg_color_role=badge_fg_role,
+        badge_text_color_role=badge_text_role,
+        summary_text=summary_text,
+        paths_text=artifact_paths_text,
+        next_action_key=next_action,
+    )
+
+
 def prompt_card_action_button_specs() -> tuple[ActionButtonSpec, ...]:
     return (
         ActionButtonSpec(
@@ -1490,6 +1765,71 @@ def prompt_card_action_button_specs() -> tuple[ActionButtonSpec, ...]:
             height=30,
             localize=False,
         ),
+    )
+
+
+def prompt_card_presentation_spec(
+    *,
+    index: int,
+    stage_text: str,
+    title: str,
+    description: str,
+    best_for_text: str,
+    command_label: str,
+    command: str,
+    body_wraplength: int,
+    command_wraplength: int,
+) -> PromptCardPresentationSpec:
+    return PromptCardPresentationSpec(
+        fg_color_role="surface_alt",
+        border_color_role="card_border",
+        corner_radius=10,
+        border_width=1,
+        column_configs=(GridColumnConfig(column=0, weight=1),),
+        stage_label=LiteralTextLabelSpec(
+            text=f"{index + 1} / {stage_text}",
+            font_size=10,
+            bold=True,
+            height=24,
+            corner_radius=12,
+            fg_color_role="success_badge",
+            text_color_role="success",
+            anchor="w",
+            justify=None,
+            padx=10,
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=12, pady=(10, 4)),
+        ),
+        title_label=LiteralTextLabelSpec(
+            text=title,
+            font_size=14,
+            bold=True,
+            text_color_role="heading",
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=12, pady=(0, 2)),
+        ),
+        description_label=LiteralTextLabelSpec(
+            text=description,
+            font_size=11,
+            text_color_role="muted",
+            wraplength=body_wraplength,
+            grid=WidgetGridConfig(row=2, column=0, sticky="we", padx=12, pady=(0, 6)),
+        ),
+        best_for_label=LiteralTextLabelSpec(
+            text=best_for_text,
+            font_size=11,
+            bold=True,
+            text_color_role="body",
+            wraplength=body_wraplength,
+            grid=WidgetGridConfig(row=3, column=0, sticky="we", padx=12, pady=(0, 8)),
+        ),
+        command_label=LiteralTextLabelSpec(
+            text=f"{command_label}: {command}",
+            font_size=10,
+            mono=True,
+            text_color_role="body",
+            wraplength=command_wraplength,
+            grid=WidgetGridConfig(row=4, column=0, sticky="we", padx=12, pady=(0, 8)),
+        ),
+        actions_grid=WidgetGridConfig(row=5, column=0, sticky="w", padx=12, pady=(0, 12)),
     )
 
 

@@ -1940,66 +1940,35 @@ class GuiApp:  # pragma: no cover
 
         repo_root = source_tree_root()
         for idx, prompt in enumerate(prompt_helpers.agentic_prompt_cards(self._current_locale())):
+            card_spec = gui_state_helpers.prompt_card_presentation_spec(
+                index=idx,
+                stage_text=self._prompt_metadata_text(prompt.prompt_id, "prompt_stage"),
+                title=prompt.title,
+                description=prompt.description,
+                best_for_text=self._prompt_metadata_text(prompt.prompt_id, "prompt_best_for"),
+                command_label=self._t("prompt_command"),
+                command=prompt.command,
+                body_wraplength=body_wraplength,
+                command_wraplength=command_wraplength,
+            )
             card = self.ctk.CTkFrame(
                 cards_frame,
-                fg_color=self._surface_alt,
-                corner_radius=10,
-                border_width=1,
-                border_color=self._card_border,
+                fg_color=self._theme_color_role(card_spec.fg_color_role),
+                corner_radius=card_spec.corner_radius,
+                border_width=card_spec.border_width,
+                border_color=self._theme_color_role(card_spec.border_color_role),
             )
             self._prompt_card_widgets.append(card)
-            card.grid_columnconfigure(0, weight=1)
-            stage_label = self.ctk.CTkLabel(
-                card,
-                text=f"{idx + 1} / {self._prompt_metadata_text(prompt.prompt_id, 'prompt_stage')}",
-                height=24,
-                corner_radius=12,
-                fg_color=self._success_badge_fg,
-                text_color=self._success_text,
-                font=self._font(10, bold=True),
-                anchor="w",
-                padx=10,
-            )
-            stage_label.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 4))
-            self._prompt_card_stage_labels.append(stage_label)
-            self.ctk.CTkLabel(
-                card,
-                text=prompt.title,
-                font=self._font(14, bold=True),
-                text_color=self._text_heading,
-                anchor="w",
-                justify="left",
-            ).grid(row=1, column=0, sticky="we", padx=12, pady=(0, 2))
-            self.ctk.CTkLabel(
-                card,
-                text=prompt.description,
-                font=self._font(11),
-                text_color=self._text_muted,
-                anchor="w",
-                justify="left",
-                wraplength=body_wraplength,
-            ).grid(row=2, column=0, sticky="we", padx=12, pady=(0, 6))
-            self.ctk.CTkLabel(
-                card,
-                text=self._prompt_metadata_text(prompt.prompt_id, "prompt_best_for"),
-                font=self._font(11, bold=True),
-                text_color=self._text_body,
-                anchor="w",
-                justify="left",
-                wraplength=body_wraplength,
-            ).grid(row=3, column=0, sticky="we", padx=12, pady=(0, 8))
-            self.ctk.CTkLabel(
-                card,
-                text=f"{self._t('prompt_command')}: {prompt.command}",
-                font=self._font(10, mono=True),
-                text_color=self._text_body,
-                anchor="w",
-                justify="left",
-                wraplength=command_wraplength,
-            ).grid(row=4, column=0, sticky="we", padx=12, pady=(0, 8))
+            for column_config in card_spec.column_configs:
+                card.grid_columnconfigure(column_config.column, weight=column_config.weight)
+            self._prompt_card_stage_labels.append(self._add_literal_text_label(card, card_spec.stage_label))
+            self._add_literal_text_label(card, card_spec.title_label)
+            self._add_literal_text_label(card, card_spec.description_label)
+            self._add_literal_text_label(card, card_spec.best_for_label)
+            self._add_literal_text_label(card, card_spec.command_label)
 
             actions = self.ctk.CTkFrame(card, fg_color="transparent")
-            actions.grid(row=5, column=0, sticky="w", padx=12, pady=(0, 12))
+            actions.grid(**card_spec.actions_grid.kwargs)
             for action_spec in gui_state_helpers.prompt_card_action_button_specs():
                 self._make_action_button(actions, action_spec, prompt=prompt, repo_root=repo_root)
         self._apply_prompt_cards_layout(columns)
@@ -2114,30 +2083,24 @@ class GuiApp:  # pragma: no cover
         }
 
     def _reports_status_label(self, counts: dict[str, int], exit_code: int | None) -> str:
-        if counts["failed"] or counts["blocking"] or exit_code == EXIT_POLICY_FAILED:
-            return "FAIL"
-        if exit_code == EXIT_RUNTIME_ERROR:
-            return "ERROR"
-        if exit_code == EXIT_ABORTED:
-            return "ABORTED"
-        if counts["manual"] or counts["total"] == 0:
-            return "PASS/REVIEW"
-        return "PASS"
+        return gui_state_helpers.reports_status_label(
+            counts,
+            exit_code,
+            exit_policy_failed=EXIT_POLICY_FAILED,
+            exit_runtime_error=EXIT_RUNTIME_ERROR,
+            exit_aborted=EXIT_ABORTED,
+        )
 
     def _reports_next_action_key(self, counts: dict[str, int], exit_code: int | None, has_artifacts: bool) -> str:
-        if not has_artifacts:
-            return "next_action_run_audit"
-        if exit_code in {EXIT_RUNTIME_ERROR, EXIT_ABORTED}:
-            return "next_action_error"
-        if exit_code not in {None, EXIT_OK, EXIT_POLICY_FAILED}:
-            return "next_action_error"
-        if counts["failed"] or counts["blocking"] or exit_code == EXIT_POLICY_FAILED:
-            return "next_action_failed"
-        if counts["manual"]:
-            return "next_action_manual"
-        if counts["total"] == 0:
-            return "next_action_review_artifacts"
-        return "next_action_pass"
+        return gui_state_helpers.reports_next_action_key(
+            counts,
+            exit_code,
+            has_artifacts=has_artifacts,
+            exit_ok=EXIT_OK,
+            exit_policy_failed=EXIT_POLICY_FAILED,
+            exit_runtime_error=EXIT_RUNTIME_ERROR,
+            exit_aborted=EXIT_ABORTED,
+        )
 
     def _refresh_reports_decision_panel(self) -> None:
         next_action_label = getattr(self, "_reports_next_action_label", None)
@@ -2208,12 +2171,45 @@ class GuiApp:  # pragma: no cover
             return
         go_audit_button = getattr(self, "_reports_go_audit_button", None)
         agent_handoff_button = getattr(self, "_reports_agent_handoff_button", None)
-        visibility_state = gui_state_helpers.reports_action_visibility_state(has_artifacts=artifacts is not None)
+        counts = self._reports_summary_counts()
+        exit_code = getattr(self, "_last_run_exit_code", None)
+        artifact_paths_text = ""
+        if artifacts is not None:
+            artifact_paths_text = gui_state_helpers.report_artifact_paths_text(
+                run_dir=self._artifact_handoff_path(artifacts.run_dir),
+                json_path=self._artifact_handoff_path(artifacts.json_path),
+                agent_summary_path=self._artifact_handoff_path(
+                    artifacts.agent_summary_path or artifacts.run_dir / "agent_summary.json"
+                ),
+                html_path=self._artifact_handoff_path(artifacts.html_path),
+                log_path=self._artifact_handoff_path(artifacts.log_path),
+                state_path=self._artifact_handoff_path(artifacts.state_path),
+            )
+        presentation_state = gui_state_helpers.reports_run_presentation_state(
+            has_artifacts=artifacts is not None,
+            counts=counts,
+            exit_code=exit_code,
+            run_action=self._last_run_action,
+            artifact_paths_text=artifact_paths_text,
+            repair_summary_text=self._build_repair_status_summary(self._last_audit_reports_payload),
+            empty_badge_text=self._t("last_run"),
+            empty_summary_text=self._t("last_run_none"),
+            empty_paths_text=self._t("latest_artifacts_none"),
+            exit_ok=EXIT_OK,
+            exit_policy_failed=EXIT_POLICY_FAILED,
+            exit_runtime_error=EXIT_RUNTIME_ERROR,
+            exit_aborted=EXIT_ABORTED,
+        )
+        visibility_state = presentation_state.visibility
         self._refresh_reports_decision_panel()
+        badge.configure(
+            text=presentation_state.badge_text,
+            fg_color=self._theme_color_role(presentation_state.badge_fg_color_role),
+            text_color=self._theme_color_role(presentation_state.badge_text_color_role),
+        )
+        summary_label.configure(text=presentation_state.summary_text)
+        paths_label.configure(text=presentation_state.paths_text)
         if artifacts is None:
-            badge.configure(text=self._t("last_run"), fg_color=self._success_badge_fg, text_color=self._success_text)
-            summary_label.configure(text=self._t("last_run_none"))
-            paths_label.configure(text=self._t("latest_artifacts_none"))
             if go_audit_button is not None and visibility_state.show_go_audit_button:
                 go_audit_button.grid(**gui_state_helpers.reports_primary_action_button_specs()[0].grid.kwargs)
             if agent_handoff_button is not None:
@@ -2236,37 +2232,6 @@ class GuiApp:  # pragma: no cover
         for button, button_grid in zip(artifact_buttons, action_layout_state.artifact_button_grids, strict=True):
             button.grid_configure(**button_grid.kwargs)
 
-        counts = self._reports_summary_counts()
-        exit_code = getattr(self, "_last_run_exit_code", None)
-        badge_text = self._reports_status_label(counts, exit_code)
-        if badge_text == "FAIL":
-            badge_fg = self._failure_badge_fg
-            badge_text_color = self._failure_badge_text
-        elif badge_text == "ERROR":
-            badge_fg = self._failure_badge_fg
-            badge_text_color = self._failure_badge_text
-        elif badge_text == "ABORTED":
-            badge_fg = self._warning_badge_fg
-            badge_text_color = self._warning_badge_text
-        else:
-            badge_fg = self._pass_badge_fg
-            badge_text_color = self._pass_badge_text
-
-        summary = self._build_repair_status_summary(self._last_audit_reports_payload)
-        if not self._last_audit_reports_payload:
-            summary = self._t("last_run_none") if exit_code is None else f"{self._last_run_action or 'run'} finished with exit code {exit_code}."
-        badge.configure(text=badge_text, fg_color=badge_fg, text_color=badge_text_color)
-        summary_label.configure(text=summary)
-        paths_label.configure(
-            text=(
-                f"run_dir: {self._artifact_handoff_path(artifacts.run_dir)}\n"
-                f"report.json: {self._artifact_handoff_path(artifacts.json_path)}\n"
-                f"agent_summary.json: {self._artifact_handoff_path(artifacts.agent_summary_path or artifacts.run_dir / 'agent_summary.json')}\n"
-                f"report.html: {self._artifact_handoff_path(artifacts.html_path)}\n"
-                f"run.log: {self._artifact_handoff_path(artifacts.log_path)}\n"
-                f"run_state.json: {self._artifact_handoff_path(artifacts.state_path)}"
-            )
-        )
         for button in getattr(self, "_reports_action_buttons", []):
             button.configure(state=visibility_state.artifact_button_state)
 
@@ -2477,6 +2442,8 @@ class GuiApp:  # pragma: no cover
         colors = {
             "body": self._text_body,
             "card_border": self._card_border,
+            "failure_badge": self._failure_badge_fg,
+            "failure_badge_text": self._failure_badge_text,
             "fixed_header_light": "#F8FAFC",
             "fixed_header_subtitle": "#D8FFF3",
             "header_chip": self._header_chip_fg,
@@ -2488,6 +2455,8 @@ class GuiApp:  # pragma: no cover
             "muted": self._text_muted,
             "output": self._output_fg,
             "output_empty": self._output_empty_text,
+            "pass_badge": self._pass_badge_fg,
+            "pass_badge_text": self._pass_badge_text,
             "primary_button": self._primary_button_fg,
             "success": self._success_text,
             "success_badge": self._success_badge_fg,
@@ -2497,6 +2466,8 @@ class GuiApp:  # pragma: no cover
             "surface_alt": self._surface_alt,
             "transparent": "transparent",
             "warning": self._warning_text,
+            "warning_badge": self._warning_badge_fg,
+            "warning_badge_text": self._warning_badge_text,
             "warning_panel": self._warning_panel_fg,
             "warning_panel_border": self._warning_panel_border,
             "warning_strong": self._warning_strong_text,
@@ -2554,6 +2525,30 @@ class GuiApp:  # pragma: no cover
             label.grid(**spec.grid.kwargs)
         if spec.widget_attr:
             setattr(self, spec.widget_attr, label)
+        return label
+
+    def _add_literal_text_label(self, parent, spec: gui_state_helpers.LiteralTextLabelSpec):
+        label_options: dict[str, object] = {
+            "text": spec.text,
+            "font": self._font(spec.font_size, bold=spec.bold, mono=spec.mono),
+            "text_color": self._theme_color_role(spec.text_color_role),
+        }
+        if spec.justify is not None:
+            label_options["justify"] = spec.justify
+        if spec.anchor is not None:
+            label_options["anchor"] = spec.anchor
+        if spec.wraplength is not None:
+            label_options["wraplength"] = spec.wraplength
+        if spec.height is not None:
+            label_options["height"] = spec.height
+        if spec.corner_radius is not None:
+            label_options["corner_radius"] = spec.corner_radius
+        if spec.fg_color_role is not None:
+            label_options["fg_color"] = self._theme_color_role(spec.fg_color_role)
+        if spec.padx is not None:
+            label_options["padx"] = spec.padx
+        label = self.ctk.CTkLabel(parent, **label_options)
+        label.grid(**spec.grid.kwargs)
         return label
 
     def _add_section_heading(self, parent, spec: gui_state_helpers.SectionHeadingSpec):
@@ -3356,52 +3351,45 @@ class GuiApp:  # pragma: no cover
                 pass
             repo_empty_state.place_forget()
             return
-        self._repo_empty_reason = reason or "no_repos"
+        presentation_state = gui_state_helpers.repo_empty_presentation_state(
+            reason=reason,
+            body_text=message or "",
+        )
+        self._repo_empty_reason = presentation_state.reason
         title_label = getattr(self, "_repo_empty_state_title_label", None)
         body_label = getattr(self, "_repo_empty_state_body_label", None)
         hint_label = getattr(self, "_repo_empty_state_hint_label", None)
         action_button = getattr(self, "_repo_empty_state_action_button", None)
 
-        palette = {
-            "invalid_root": {
-                "title": self._t("repo_empty_invalid_root_title"),
-                "fg": self._warning_panel_fg,
-                "border": self._warning_panel_border,
-                "title_color": self._warning_text,
-                "body_color": self._warning_strong_text,
-                "hint": self._t("repo_empty_invalid_root_hint"),
-            },
-            "no_repos": {
-                "title": self._t("repo_empty_no_repos_title"),
-                "fg": self._info_panel_fg,
-                "border": self._info_panel_border,
-                "title_color": self._info_text,
-                "body_color": self._text_muted,
-                "hint": self._t("repo_empty_no_repos_hint"),
-            },
-            "github_remote": {
-                "title": self._t("repo_empty_github_remote_title"),
-                "fg": self._success_panel_fg,
-                "border": self._success_panel_border,
-                "title_color": self._success_text,
-                "body_color": self._text_muted,
-                "hint": self._t("repo_empty_github_remote_hint"),
-            },
-        }
-        theme = palette.get(self._repo_empty_reason, palette["no_repos"])
-        repo_empty_state.configure(fg_color=theme["fg"], border_color=theme["border"])
+        panel_fg = self._theme_color_role(presentation_state.fg_color_role)
+        repo_empty_state.configure(
+            fg_color=panel_fg,
+            border_color=self._theme_color_role(presentation_state.border_color_role),
+        )
         visual_label = getattr(self, "_repo_empty_state_visual_label", None)
         if visual_label is not None:
-            self._configure_asset_label_image(visual_label, "repo-dropzone.png", theme["fg"])
+            self._configure_asset_label_image(visual_label, "repo-dropzone.png", panel_fg)
         if title_label is not None:
-            title_label.configure(text=theme["title"], text_color=theme["title_color"])
-        if body_label is not None and message:
-            body_label.configure(text=message, text_color=theme["body_color"])
+            title_label.configure(
+                text=self._t(presentation_state.title_key),
+                text_color=self._theme_color_role(presentation_state.title_color_role),
+            )
+        if body_label is not None and presentation_state.body_text:
+            body_label.configure(
+                text=presentation_state.body_text,
+                text_color=self._theme_color_role(presentation_state.body_color_role),
+            )
         if hint_label is not None:
-            hint_label.configure(text=theme["hint"], text_color=self._text_muted)
+            hint_label.configure(
+                text=self._t(presentation_state.hint_key),
+                text_color=self._theme_color_role(presentation_state.hint_color_role),
+            )
         if action_button is not None:
-            if self._repo_empty_reason in {"invalid_root", "no_repos"}:
-                action_button.configure(text=self._t("repo_empty_choose_root_action"), state="normal")
+            if presentation_state.show_action_button:
+                action_button.configure(
+                    text=self._t(presentation_state.action_text_key),
+                    state=presentation_state.action_state,
+                )
                 action_button.grid()
             else:
                 action_button.grid_remove()
@@ -3409,7 +3397,7 @@ class GuiApp:  # pragma: no cover
             self.repo_list.configure(state="disabled")
         except Exception:
             pass
-        repo_empty_state.place(relx=0.5, rely=0.5, relwidth=0.82, anchor="center")
+        repo_empty_state.place(**presentation_state.place.kwargs)
         try:
             repo_empty_state.lift()
         except Exception:

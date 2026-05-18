@@ -3351,6 +3351,191 @@ def test_gui_state_reports_action_visibility_helper_tracks_artifact_state() -> N
     assert ready.artifact_button_state == "normal"
 
 
+def test_gui_state_repo_empty_presentation_tracks_reason_theme_and_action() -> None:
+    invalid = gui_state_helpers.repo_empty_presentation_state(
+        reason="invalid_root",
+        body_text="Choose a valid root.",
+    )
+    assert invalid.reason == "invalid_root"
+    assert invalid.title_key == "repo_empty_invalid_root_title"
+    assert invalid.hint_key == "repo_empty_invalid_root_hint"
+    assert invalid.fg_color_role == "warning_panel"
+    assert invalid.border_color_role == "warning_panel_border"
+    assert invalid.title_color_role == "warning"
+    assert invalid.body_color_role == "warning_strong"
+    assert invalid.show_action_button is True
+    assert invalid.action_text_key == "repo_empty_choose_root_action"
+    assert invalid.action_state == "normal"
+    assert invalid.place.kwargs == {
+        "relx": 0.5,
+        "rely": 0.5,
+        "relwidth": 0.82,
+        "anchor": "center",
+    }
+
+    no_repos = gui_state_helpers.repo_empty_presentation_state(reason="unknown", body_text="No repos.")
+    assert no_repos.reason == "no_repos"
+    assert no_repos.title_key == "repo_empty_no_repos_title"
+    assert no_repos.fg_color_role == "info_panel"
+    assert no_repos.show_action_button is True
+
+    remote = gui_state_helpers.repo_empty_presentation_state(
+        reason="github_remote",
+        body_text="Remote audit active.",
+    )
+    assert remote.reason == "github_remote"
+    assert remote.title_key == "repo_empty_github_remote_title"
+    assert remote.fg_color_role == "success_panel"
+    assert remote.body_color_role == "muted"
+    assert remote.show_action_button is False
+    assert remote.action_state == "disabled"
+
+    english = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT]
+    spanish = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]
+    for state in (invalid, no_repos, remote):
+        assert state.title_key in english
+        assert state.title_key in spanish
+        assert state.hint_key in english
+        assert state.hint_key in spanish
+        assert state.action_text_key in english
+        assert state.action_text_key in spanish
+
+
+def test_gui_state_prompt_card_presentation_specs_preserve_dynamic_card_layout() -> None:
+    spec = gui_state_helpers.prompt_card_presentation_spec(
+        index=1,
+        stage_text="Review",
+        title="Audit and classify",
+        description="Run an audit before writes.",
+        best_for_text="Best for release checks.",
+        command_label="Command",
+        command="repo-privacy-guardian --dry-run",
+        body_wraplength=760,
+        command_wraplength=640,
+    )
+
+    assert spec.fg_color_role == "surface_alt"
+    assert spec.border_color_role == "card_border"
+    assert spec.column_configs == (gui_state_helpers.GridColumnConfig(column=0, weight=1),)
+    assert spec.stage_label.text == "2 / Review"
+    assert spec.stage_label.height == 24
+    assert spec.stage_label.corner_radius == 12
+    assert spec.stage_label.fg_color_role == "success_badge"
+    assert spec.stage_label.grid.kwargs == {
+        "row": 0,
+        "column": 0,
+        "sticky": "w",
+        "padx": 12,
+        "pady": (10, 4),
+    }
+    assert spec.title_label.text == "Audit and classify"
+    assert spec.title_label.bold is True
+    assert spec.description_label.wraplength == 760
+    assert spec.best_for_label.wraplength == 760
+    assert spec.command_label.text == "Command: repo-privacy-guardian --dry-run"
+    assert spec.command_label.mono is True
+    assert spec.command_label.wraplength == 640
+    assert spec.actions_grid.kwargs == {
+        "row": 5,
+        "column": 0,
+        "sticky": "w",
+        "padx": 12,
+        "pady": (0, 12),
+    }
+
+
+def test_gui_state_reports_run_presentation_tracks_artifacts_and_status() -> None:
+    empty_counts = {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "blocking": 0,
+        "manual": 0,
+        "fixture": 0,
+    }
+    no_artifacts = gui_state_helpers.reports_run_presentation_state(
+        has_artifacts=False,
+        counts=empty_counts,
+        exit_code=None,
+        run_action="Audit",
+        artifact_paths_text="",
+        repair_summary_text="unused",
+        empty_badge_text="Last run",
+        empty_summary_text="No run yet.",
+        empty_paths_text="No artifacts.",
+        exit_ok=rpg.EXIT_OK,
+        exit_policy_failed=rpg.EXIT_POLICY_FAILED,
+        exit_runtime_error=rpg.EXIT_RUNTIME_ERROR,
+        exit_aborted=rpg.EXIT_ABORTED,
+    )
+    assert no_artifacts.badge_text == "Last run"
+    assert no_artifacts.badge_fg_color_role == "success_badge"
+    assert no_artifacts.summary_text == "No run yet."
+    assert no_artifacts.paths_text == "No artifacts."
+    assert no_artifacts.next_action_key == "next_action_run_audit"
+    assert no_artifacts.visibility.show_go_audit_button is True
+
+    failed_counts = {
+        "total": 1,
+        "passed": 0,
+        "failed": 1,
+        "blocking": 1,
+        "manual": 0,
+        "fixture": 0,
+    }
+    paths_text = gui_state_helpers.report_artifact_paths_text(
+        run_dir="Audit_Results/run-1",
+        json_path="Audit_Results/run-1/report.json",
+        agent_summary_path="Audit_Results/run-1/agent_summary.json",
+        html_path="Audit_Results/run-1/report.html",
+        log_path="Audit_Results/run-1/run.log",
+        state_path="Audit_Results/run-1/run_state.json",
+    )
+    failed = gui_state_helpers.reports_run_presentation_state(
+        has_artifacts=True,
+        counts=failed_counts,
+        exit_code=rpg.EXIT_POLICY_FAILED,
+        run_action="Audit",
+        artifact_paths_text=paths_text,
+        repair_summary_text="1 failed repository.",
+        empty_badge_text="Last run",
+        empty_summary_text="No run yet.",
+        empty_paths_text="No artifacts.",
+        exit_ok=rpg.EXIT_OK,
+        exit_policy_failed=rpg.EXIT_POLICY_FAILED,
+        exit_runtime_error=rpg.EXIT_RUNTIME_ERROR,
+        exit_aborted=rpg.EXIT_ABORTED,
+    )
+    assert failed.badge_text == "FAIL"
+    assert failed.badge_fg_color_role == "failure_badge"
+    assert failed.badge_text_color_role == "failure_badge_text"
+    assert failed.summary_text == "1 failed repository."
+    assert failed.paths_text == paths_text
+    assert "agent_summary.json: Audit_Results/run-1/agent_summary.json" in paths_text
+    assert failed.next_action_key == "next_action_failed"
+    assert failed.visibility.show_artifact_buttons is True
+
+    aborted = gui_state_helpers.reports_run_presentation_state(
+        has_artifacts=True,
+        counts=empty_counts,
+        exit_code=rpg.EXIT_ABORTED,
+        run_action="Audit",
+        artifact_paths_text=paths_text,
+        repair_summary_text="unused",
+        empty_badge_text="Last run",
+        empty_summary_text="No run yet.",
+        empty_paths_text="No artifacts.",
+        exit_ok=rpg.EXIT_OK,
+        exit_policy_failed=rpg.EXIT_POLICY_FAILED,
+        exit_runtime_error=rpg.EXIT_RUNTIME_ERROR,
+        exit_aborted=rpg.EXIT_ABORTED,
+    )
+    assert aborted.badge_text == "ABORTED"
+    assert aborted.badge_fg_color_role == "warning_badge"
+    assert aborted.next_action_key == "next_action_error"
+    assert aborted.summary_text == f"Audit finished with exit code {rpg.EXIT_ABORTED}."
+
+
 def test_gui_state_action_layout_helpers_preserve_grid_contract() -> None:
     compact_identity = gui_state_helpers.identity_actions_layout_state(compact=True)
     assert compact_identity.column_configs == (
