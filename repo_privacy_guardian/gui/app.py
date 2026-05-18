@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
 
 from repo_privacy_guardian.gui import state as gui_state_helpers
+from repo_privacy_guardian.gui import theme as gui_theme_helpers
 
 if TYPE_CHECKING:
     from repo_privacy_guardian.core import (
@@ -1430,11 +1431,7 @@ class GuiApp:  # pragma: no cover
         self._apply_effective_gui_theme()
 
     def _theme_palette_snapshot(self) -> dict[str, str]:
-        return {
-            name: value
-            for name, value in vars(self).items()
-            if name.startswith("_") and isinstance(value, str) and parse_hex_rgb(value) is not None
-        }
+        return gui_theme_helpers.theme_palette_snapshot_from_attrs(vars(self))
 
     def _preferred_theme_token_for_option(
         self,
@@ -1444,82 +1441,12 @@ class GuiApp:  # pragma: no cover
         sibling_values: dict[str, object],
         old_palette: dict[str, str],
     ) -> str | None:
-        if option == "border_color" and "_white_panel_border" in token_names:
-            sibling_fg = sibling_values.get("fg_color")
-            if sibling_fg == old_palette.get("_white_panel_fg"):
-                return "_white_panel_border"
-
-        preferences = {
-            "fg_color": [
-                "_page_bg",
-                "_surface_fg",
-                "_surface_alt",
-                "_white_panel_fg",
-                "_secondary_button_fg",
-                "_primary_button_fg",
-                "_success_panel_fg",
-                "_success_badge_fg",
-                "_pass_badge_fg",
-                "_info_panel_fg",
-                "_warning_panel_fg",
-                "_warning_badge_fg",
-                "_failure_badge_fg",
-                "_output_fg",
-            ],
-            "bg_color": ["_page_bg", "_surface_fg", "_surface_alt", "_white_panel_fg"],
-            "text_color": [
-                "_text_heading",
-                "_text_body",
-                "_text_muted",
-                "_secondary_button_text",
-                "_success_text",
-                "_pass_badge_text",
-                "_info_text",
-                "_warning_text",
-                "_warning_strong_text",
-                "_warning_badge_text",
-                "_danger_text",
-                "_failure_badge_text",
-                "_output_text",
-                "_output_empty_text",
-                "_list_select_text",
-            ],
-            "hover_color": [
-                "_primary_button_hover",
-                "_secondary_button_hover",
-                "_support_button_hover",
-                "_tab_selected_hover",
-                "_tab_unselected_hover",
-                "_scrollbar_hover",
-            ],
-            "border_color": [
-                "_card_border",
-                "_white_panel_border",
-                "_success_panel_border",
-                "_info_panel_border",
-                "_warning_panel_border",
-                "_secondary_button_border",
-            ],
-            "button_color": ["_support_button_fg", "_scrollbar_thumb"],
-            "button_hover_color": ["_support_button_hover", "_scrollbar_hover"],
-            "scrollbar_fg_color": ["_scrollbar_track"],
-            "scrollbar_button_color": ["_scrollbar_thumb"],
-            "scrollbar_button_hover_color": ["_scrollbar_hover"],
-            "segmented_button_fg_color": ["_tab_segment_fg"],
-            "segmented_button_selected_color": ["_tab_selected_fg"],
-            "segmented_button_selected_hover_color": ["_tab_selected_hover"],
-            "segmented_button_unselected_color": ["_tab_unselected_fg"],
-            "segmented_button_unselected_hover_color": ["_tab_unselected_hover"],
-            "background": ["_white_panel_fg", "_surface_fg", "_surface_alt", "_header_fg", "_page_bg", "_output_fg"],
-            "foreground": ["_list_text", "_output_text", "_text_body"],
-            "selectbackground": ["_primary_button_fg"],
-            "selectforeground": ["_list_select_text"],
-            "insertbackground": ["_text_body", "_output_text"],
-        }
-        for preferred in preferences.get(option, []):
-            if preferred in token_names:
-                return preferred
-        return token_names[0] if token_names else None
+        return gui_theme_helpers.preferred_theme_token_for_option(
+            option,
+            token_names,
+            sibling_values=sibling_values,
+            old_palette=old_palette,
+        )
 
     def _translate_theme_color(
         self,
@@ -1530,45 +1457,13 @@ class GuiApp:  # pragma: no cover
         new_palette: dict[str, str],
         sibling_values: dict[str, object],
     ) -> object | None:
-        if isinstance(value, (tuple, list)):
-            translated_items = [
-                self._translate_theme_color(
-                    item,
-                    option,
-                    old_palette=old_palette,
-                    new_palette=new_palette,
-                    sibling_values=sibling_values,
-                )
-                for item in value
-            ]
-            if all(item is None for item in translated_items):
-                return None
-            merged = [
-                original if translated is None else translated
-                for original, translated in zip(value, translated_items, strict=False)
-            ]
-            return tuple(merged) if isinstance(value, tuple) else merged
-
-        if not isinstance(value, str) or parse_hex_rgb(value) is None:
-            return None
-        token_names = [name for name, old_value in old_palette.items() if old_value == value]
-        if not token_names:
-            return None
-        if len(token_names) == 1:
-            token_name = token_names[0]
-        else:
-            token_name = self._preferred_theme_token_for_option(
-                option,
-                token_names,
-                sibling_values=sibling_values,
-                old_palette=old_palette,
-            )
-        if token_name is None:
-            return None
-        new_value = new_palette.get(token_name)
-        if not new_value or new_value == value:
-            return None
-        return new_value
+        return gui_theme_helpers.translate_theme_color(
+            value,
+            option,
+            old_palette=old_palette,
+            new_palette=new_palette,
+            sibling_values=sibling_values,
+        )
 
     def _iter_theme_widgets(self):
         seen: set[int] = set()
@@ -1589,51 +1484,18 @@ class GuiApp:  # pragma: no cover
         yield from walk(self.root)
 
     def _apply_theme_to_widget(self, widget: object, old_palette: dict[str, str], new_palette: dict[str, str]) -> None:
-        options = (
-            "fg_color",
-            "bg_color",
-            "text_color",
-            "hover_color",
-            "border_color",
-            "button_color",
-            "button_hover_color",
-            "scrollbar_fg_color",
-            "scrollbar_button_color",
-            "scrollbar_button_hover_color",
-            "segmented_button_fg_color",
-            "segmented_button_selected_color",
-            "segmented_button_selected_hover_color",
-            "segmented_button_unselected_color",
-            "segmented_button_unselected_hover_color",
-            "dropdown_fg_color",
-            "dropdown_hover_color",
-            "dropdown_text_color",
-            "placeholder_text_color",
-            "background",
-            "foreground",
-            "selectbackground",
-            "selectforeground",
-            "highlightbackground",
-            "insertbackground",
-        )
         sibling_values: dict[str, object] = {}
         dynamic_widget = cast(Any, widget)
-        for option in options:
+        for option in gui_theme_helpers.THEME_TRANSLATABLE_OPTIONS:
             try:
                 sibling_values[option] = dynamic_widget.cget(option)
             except Exception:
                 continue
-        updates: dict[str, object] = {}
-        for option, value in sibling_values.items():
-            translated = self._translate_theme_color(
-                value,
-                option,
-                old_palette=old_palette,
-                new_palette=new_palette,
-                sibling_values=sibling_values,
-            )
-            if translated is not None:
-                updates[option] = translated
+        updates = gui_theme_helpers.theme_option_updates(
+            sibling_values,
+            old_palette=old_palette,
+            new_palette=new_palette,
+        )
         if not updates:
             return
         try:
@@ -1690,85 +1552,66 @@ class GuiApp:  # pragma: no cover
             except Exception as exc:
                 self._record_gui_warning(f"fixed theme option update failed ({option})", exc)
 
-    def _apply_theme_to_special_widgets(self) -> None:
+    def _configure_theme_widget(
+        self,
+        widget: object | None,
+        updates: dict[str, str],
+        warning_context: str | None,
+    ) -> None:
+        if widget is None:
+            return
         try:
-            self.root.configure(fg_color=self._page_bg)
+            cast(Any, widget).configure(**updates)
         except Exception as exc:
-            self._record_gui_warning("root theme update failed", exc)
+            if warning_context is not None:
+                self._record_gui_warning(warning_context, exc)
+
+    def _apply_theme_to_special_widgets(self) -> None:
+        special_updates = gui_theme_helpers.special_widget_theme_updates(self._theme_palette_snapshot())
+        self._configure_theme_widget(
+            self.root,
+            special_updates["root"],
+            "root theme update failed",
+        )
         app_frame = getattr(self, "_app_frame", None)
-        if app_frame is not None:
-            try:
-                app_frame.configure(
-                    fg_color=self._page_bg,
-                    scrollbar_fg_color=self._scrollbar_track,
-                    scrollbar_button_color=self._scrollbar_thumb,
-                    scrollbar_button_hover_color=self._scrollbar_hover,
-                )
-            except Exception as exc:
-                self._record_gui_warning("scrollable frame theme update failed", exc)
+        self._configure_theme_widget(
+            app_frame,
+            special_updates["app_frame"],
+            "scrollable frame theme update failed",
+        )
         flow_tabs = getattr(self, "_flow_tabs", None)
         if flow_tabs is not None:
-            try:
-                flow_tabs.configure(
-                    fg_color=self._tabview_fg,
-                    segmented_button_fg_color=self._tab_segment_fg,
-                    segmented_button_selected_color=self._tab_selected_fg,
-                    segmented_button_selected_hover_color=self._tab_selected_hover,
-                    segmented_button_unselected_color=self._tab_unselected_fg,
-                    segmented_button_unselected_hover_color=self._tab_unselected_hover,
-                    text_color=self._text_heading,
-                )
-            except Exception:
-                pass
+            self._configure_theme_widget(flow_tabs, special_updates["flow_tabs"], None)
             segmented_button = getattr(flow_tabs, "_segmented_button", None)
-            if segmented_button is not None:
-                try:
-                    segmented_button.configure(
-                        fg_color=self._tab_segment_fg,
-                        selected_color=self._tab_selected_fg,
-                        selected_hover_color=self._tab_selected_hover,
-                        unselected_color=self._tab_unselected_fg,
-                        unselected_hover_color=self._tab_unselected_hover,
-                        text_color=self._text_heading,
-                    )
-                except Exception as exc:
-                    self._record_gui_warning("tab segmented button theme update failed", exc)
+            self._configure_theme_widget(
+                segmented_button,
+                special_updates["flow_segmented_button"],
+                "tab segmented button theme update failed",
+            )
         repo_scrollbar = getattr(self, "_repo_scrollbar", None)
-        if repo_scrollbar is not None:
-            try:
-                repo_scrollbar.configure(
-                    fg_color=self._scrollbar_track,
-                    button_color=self._scrollbar_thumb,
-                    button_hover_color=self._scrollbar_hover,
-                )
-            except Exception as exc:
-                self._record_gui_warning("repository scrollbar theme update failed", exc)
+        self._configure_theme_widget(
+            repo_scrollbar,
+            special_updates["repo_scrollbar"],
+            "repository scrollbar theme update failed",
+        )
         repo_list = getattr(self, "repo_list", None)
-        if repo_list is not None:
-            try:
-                repo_list.configure(
-                    background=self._list_fg,
-                    foreground=self._list_text,
-                    selectbackground=self._primary_button_fg,
-                    selectforeground=self._list_select_text,
-                )
-            except Exception as exc:
-                self._record_gui_warning("repository list theme update failed", exc)
+        self._configure_theme_widget(
+            repo_list,
+            special_updates["repo_list"],
+            "repository list theme update failed",
+        )
         output = getattr(self, "output", None)
-        if output is not None:
-            try:
-                output.configure(fg_color=self._output_fg, text_color=self._output_text)
-            except Exception as exc:
-                self._record_gui_warning("output theme update failed", exc)
+        self._configure_theme_widget(
+            output,
+            special_updates["output"],
+            "output theme update failed",
+        )
         output_empty_state_label = getattr(self, "_output_empty_state_label", None)
-        if output_empty_state_label is not None:
-            try:
-                output_empty_state_label.configure(
-                    fg_color=self._output_fg,
-                    text_color=self._output_empty_text,
-                )
-            except Exception as exc:
-                self._record_gui_warning("output empty-state theme update failed", exc)
+        self._configure_theme_widget(
+            output_empty_state_label,
+            special_updates["output_empty_state_label"],
+            "output empty-state theme update failed",
+        )
         self._refresh_fixed_theme_options()
 
     def _refresh_theme_dependent_state(self) -> None:

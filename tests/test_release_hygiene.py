@@ -78,6 +78,7 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian/gui/app.py",
     "repo_privacy_guardian/gui/locale.py",
     "repo_privacy_guardian/gui/state.py",
+    "repo_privacy_guardian/gui/theme.py",
     "repo_privacy_guardian/history_parsing.py",
     "repo_privacy_guardian/github_fix_guide.py",
     "repo_privacy_guardian/github.py",
@@ -436,6 +437,7 @@ def test_low_risk_extracted_modules_use_explicit_core_imports() -> None:
         "repo_privacy_guardian/scanner.py",
         "repo_privacy_guardian/gui/app.py",
         "repo_privacy_guardian/gui/state.py",
+        "repo_privacy_guardian/gui/theme.py",
         "repo_privacy_guardian/policy.py",
         "repo_privacy_guardian/remediation.py",
     ):
@@ -557,6 +559,30 @@ def test_gui_state_module_imports_without_core_dependency() -> None:
 
     assert proc.returncode == 0, proc.stderr or proc.stdout
     assert proc.stdout.splitlines() == ["audit_unavailable", "False"]
+
+
+def test_gui_theme_module_imports_without_core_dependency() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import repo_privacy_guardian.gui.theme as gui_theme; "
+                "print(gui_theme.parse_hex_rgb('#FFFFFF')); "
+                "print('repo_privacy_guardian.core' in sys.modules)"
+            ),
+        ],
+        cwd=str(_repo_root()),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert proc.stdout.splitlines() == ["(255, 255, 255)", "False"]
 
 
 def test_policy_module_imports_without_core_dependency() -> None:

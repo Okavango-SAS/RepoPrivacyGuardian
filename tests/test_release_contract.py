@@ -13,6 +13,7 @@ import pytest
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_prompts as prompt_helpers
 from repo_privacy_guardian.gui import state as gui_state_helpers
+from repo_privacy_guardian.gui import theme as gui_theme_helpers
 from repo_privacy_guardian_artifacts import RunArtifacts
 
 
@@ -1842,6 +1843,147 @@ def test_gui_theme_translation_handles_ambiguous_section_colors() -> None:
         new_palette=dark_palette,
         sibling_values={"fg_color": light_palette["_white_panel_fg"]},
     ) == dark_palette["_white_panel_border"]
+
+
+def test_gui_theme_helpers_translate_palette_attrs_and_widget_options() -> None:
+    attrs = {
+        "_surface_fg": "#FFFFFF",
+        "_text_body": "#111111",
+        "_scrollbar_thumb": "#999999",
+        "_invalid_hex": "#GGGGGG",
+        "_not_color": "white",
+        "_numeric": 42,
+        "public_color": "#123456",
+    }
+
+    assert gui_theme_helpers.theme_palette_snapshot_from_attrs(attrs) == {
+        "_surface_fg": "#FFFFFF",
+        "_text_body": "#111111",
+        "_scrollbar_thumb": "#999999",
+    }
+
+    old_palette = {
+        "_surface_fg": "#FFFFFF",
+        "_text_body": "#111111",
+        "_scrollbar_thumb": "#999999",
+    }
+    new_palette = {
+        "_surface_fg": "#000000",
+        "_text_body": "#DDDDDD",
+        "_scrollbar_thumb": "#444444",
+    }
+
+    assert gui_theme_helpers.theme_option_updates(
+        {
+            "fg_color": "#FFFFFF",
+            "text_color": "#111111",
+            "button_color": "#999999",
+            "background": ("#FFFFFF", "transparent"),
+            "hover_color": "#ABCDEF",
+            "placeholder_text_color": "not-a-color",
+        },
+        old_palette=old_palette,
+        new_palette=new_palette,
+    ) == {
+        "fg_color": "#000000",
+        "text_color": "#DDDDDD",
+        "button_color": "#444444",
+        "background": ("#000000", "transparent"),
+    }
+
+
+def test_gui_theme_helpers_prefer_white_panel_border_with_matching_fg() -> None:
+    old_palette = {
+        "_card_border": "#CCCCCC",
+        "_white_panel_border": "#CCCCCC",
+        "_white_panel_fg": "#FAFAFA",
+    }
+    new_palette = {
+        "_card_border": "#222222",
+        "_white_panel_border": "#333333",
+        "_white_panel_fg": "#111111",
+    }
+    token_names = ["_card_border", "_white_panel_border"]
+
+    assert (
+        gui_theme_helpers.preferred_theme_token_for_option(
+            "border_color",
+            token_names,
+            sibling_values={},
+            old_palette=old_palette,
+        )
+        == "_card_border"
+    )
+    assert (
+        gui_theme_helpers.preferred_theme_token_for_option(
+            "border_color",
+            token_names,
+            sibling_values={"fg_color": old_palette["_white_panel_fg"]},
+            old_palette=old_palette,
+        )
+        == "_white_panel_border"
+    )
+    assert (
+        gui_theme_helpers.translate_theme_color(
+            "#CCCCCC",
+            "border_color",
+            old_palette=old_palette,
+            new_palette=new_palette,
+            sibling_values={"fg_color": old_palette["_white_panel_fg"]},
+        )
+        == "#333333"
+    )
+
+
+def test_gui_theme_helpers_special_widget_updates_cover_runtime_widgets() -> None:
+    palette = {
+        "_page_bg": "#101010",
+        "_scrollbar_track": "#202020",
+        "_scrollbar_thumb": "#303030",
+        "_scrollbar_hover": "#404040",
+        "_tabview_fg": "#505050",
+        "_tab_segment_fg": "#606060",
+        "_tab_selected_fg": "#707070",
+        "_tab_selected_hover": "#808080",
+        "_tab_unselected_fg": "#909090",
+        "_tab_unselected_hover": "#A0A0A0",
+        "_text_heading": "#B0B0B0",
+        "_list_fg": "#C0C0C0",
+        "_list_text": "#D0D0D0",
+        "_primary_button_fg": "#E0E0E0",
+        "_list_select_text": "#F0F0F0",
+        "_output_fg": "#111111",
+        "_output_text": "#222222",
+        "_output_empty_text": "#333333",
+    }
+
+    updates = gui_theme_helpers.special_widget_theme_updates(palette)
+
+    assert updates["root"] == {"fg_color": "#101010"}
+    assert updates["app_frame"] == {
+        "fg_color": "#101010",
+        "scrollbar_fg_color": "#202020",
+        "scrollbar_button_color": "#303030",
+        "scrollbar_button_hover_color": "#404040",
+    }
+    assert updates["flow_segmented_button"] == {
+        "fg_color": "#606060",
+        "selected_color": "#707070",
+        "selected_hover_color": "#808080",
+        "unselected_color": "#909090",
+        "unselected_hover_color": "#A0A0A0",
+        "text_color": "#B0B0B0",
+    }
+    assert updates["repo_list"] == {
+        "background": "#C0C0C0",
+        "foreground": "#D0D0D0",
+        "selectbackground": "#E0E0E0",
+        "selectforeground": "#F0F0F0",
+    }
+    assert updates["output_empty_state_label"] == {
+        "fg_color": "#111111",
+        "text_color": "#333333",
+    }
 
 
 def test_gui_fixed_theme_options_restore_non_palette_text_colors() -> None:
