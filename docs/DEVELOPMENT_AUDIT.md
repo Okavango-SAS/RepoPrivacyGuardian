@@ -141,8 +141,7 @@ UX limitations:
 Recommended next actions:
 
 - Keep README screenshots refreshed only when the user-visible GUI changes.
-- Continue extracting GUI dialogs, navigation helpers, and background-worker
-  orchestration behind tests.
+- Continue extracting remaining GUI widget construction helpers behind tests.
 - Consider a small artifact-retention and cleanup affordance for users who run
   frequent local audits.
 
@@ -210,8 +209,7 @@ Recommended next actions:
 Highest-value debt to pay down next:
 
 - `repo_privacy_guardian/gui/app.py` is still about 4,000 lines and should keep
-  losing dialog, navigation, background-worker, and widget-construction logic to
-  narrower modules.
+  losing remaining widget-construction logic to narrower modules.
 - `repo_privacy_guardian/core.py` is still about 2,700 lines and remains the
   main compatibility aggregation surface.
 - CI pinned action revisions now target Node.js 24-compatible action releases,
@@ -226,10 +224,10 @@ Highest-value debt to pay down next:
 
 Suggested priority order:
 
-1. Extract GUI dialog/navigation and background-worker adapters with focused
+1. Add a local artifact-retention cleanup path or stronger operator guidance.
+2. Add benchmark coverage for large-history scanning and track timing deltas.
+3. Continue extracting remaining GUI widget-construction helpers behind focused
    tests.
-2. Add a local artifact-retention cleanup path or stronger operator guidance.
-3. Add benchmark coverage for large-history scanning and track timing deltas.
 4. Continue shrinking `core.py` while preserving stable `1.x` compatibility
    facades.
 5. Defer provider-specific secret rotation and hosted backend features unless

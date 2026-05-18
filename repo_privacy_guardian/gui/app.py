@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
 
 from repo_privacy_guardian.gui import assets as gui_asset_helpers
+from repo_privacy_guardian.gui import background as gui_background_helpers
+from repo_privacy_guardian.gui import dialogs as gui_dialog_helpers
+from repo_privacy_guardian.gui import navigation as gui_navigation_helpers
 from repo_privacy_guardian.gui import state as gui_state_helpers
 from repo_privacy_guardian.gui import theme as gui_theme_helpers
 from repo_privacy_guardian.gui import window as gui_window_helpers
@@ -2045,62 +2048,46 @@ class GuiApp:  # pragma: no cover
         flow_tabs = getattr(self, "_flow_tabs", None)
         if flow_tabs is None:
             return
-        desired_audit_name = self._t("tab_audit")
-        desired_reports_name = self._t("tab_reports")
-        desired_prompts_name = self._t("tab_prompts")
-        desired_settings_name = self._t("tab_settings")
-        desired_repair_name = self._t("tab_repair")
-        current_audit_name = getattr(self, "_audit_tab_name", desired_audit_name)
-        current_reports_name = getattr(self, "_reports_tab_name", desired_reports_name)
-        current_prompts_name = getattr(self, "_prompts_tab_name", desired_prompts_name)
-        current_settings_name = getattr(self, "_settings_tab_name", desired_settings_name)
-        current_repair_name = getattr(self, "_repair_tab_name", desired_repair_name)
+        desired_names = gui_navigation_helpers.FlowTabNames(
+            audit=self._t("tab_audit"),
+            reports=self._t("tab_reports"),
+            prompts=self._t("tab_prompts"),
+            settings=self._t("tab_settings"),
+            repair=self._t("tab_repair"),
+        )
+        current_names = gui_navigation_helpers.FlowTabNames(
+            audit=getattr(self, "_audit_tab_name", desired_names.audit),
+            reports=getattr(self, "_reports_tab_name", desired_names.reports),
+            prompts=getattr(self, "_prompts_tab_name", desired_names.prompts),
+            settings=getattr(self, "_settings_tab_name", desired_names.settings),
+            repair=getattr(self, "_repair_tab_name", desired_names.repair),
+        )
         active_tab = None
         try:
             active_tab = flow_tabs.get()
         except Exception:
             active_tab = None
         try:
-            if current_audit_name != desired_audit_name:
-                flow_tabs.rename(current_audit_name, desired_audit_name)
-                self._audit_tab_name = desired_audit_name
-            if current_reports_name != desired_reports_name:
-                flow_tabs.rename(current_reports_name, desired_reports_name)
-                self._reports_tab_name = desired_reports_name
-            if current_prompts_name != desired_prompts_name:
-                flow_tabs.rename(current_prompts_name, desired_prompts_name)
-                self._prompts_tab_name = desired_prompts_name
-            if current_settings_name != desired_settings_name:
-                flow_tabs.rename(current_settings_name, desired_settings_name)
-                self._settings_tab_name = desired_settings_name
-            if current_repair_name != desired_repair_name:
-                flow_tabs.rename(current_repair_name, desired_repair_name)
-                self._repair_tab_name = desired_repair_name
-            if hasattr(flow_tabs, "_name_list"):
-                flow_tabs._name_list = [  # noqa: SLF001 - CustomTkinter rename preserves visual order but appends internally.
-                    desired_audit_name,
-                    desired_reports_name,
-                    desired_prompts_name,
-                    desired_settings_name,
-                    desired_repair_name,
-                ]
+            gui_navigation_helpers.rename_flow_tabs(flow_tabs, current=current_names, desired=desired_names)
+            self._audit_tab_name = desired_names.audit
+            self._reports_tab_name = desired_names.reports
+            self._prompts_tab_name = desired_names.prompts
+            self._settings_tab_name = desired_names.settings
+            self._repair_tab_name = desired_names.repair
         except Exception:
-            self._audit_tab_name = desired_audit_name
-            self._reports_tab_name = desired_reports_name
-            self._prompts_tab_name = desired_prompts_name
-            self._settings_tab_name = desired_settings_name
-            self._repair_tab_name = desired_repair_name
+            self._audit_tab_name = desired_names.audit
+            self._reports_tab_name = desired_names.reports
+            self._prompts_tab_name = desired_names.prompts
+            self._settings_tab_name = desired_names.settings
+            self._repair_tab_name = desired_names.repair
             return
-        if active_tab == current_repair_name:
-            self._set_active_flow_tab(desired_repair_name)
-        elif active_tab == current_audit_name:
-            self._set_active_flow_tab(desired_audit_name)
-        elif active_tab == current_reports_name:
-            self._set_active_flow_tab(desired_reports_name)
-        elif active_tab == current_prompts_name:
-            self._set_active_flow_tab(desired_prompts_name)
-        elif active_tab == current_settings_name:
-            self._set_active_flow_tab(desired_settings_name)
+        active_after_rename = gui_navigation_helpers.active_flow_tab_after_rename(
+            active_tab,
+            current=current_names,
+            desired=desired_names,
+        )
+        if active_after_rename is not None:
+            self._set_active_flow_tab(active_after_rename)
 
     def _apply_gui_locale(self) -> None:
         self._refresh_locale_menu()
@@ -2426,29 +2413,16 @@ class GuiApp:  # pragma: no cover
         return button
 
     def _dialog_initial_dir(self, current_value: str) -> str:
-        raw_value = current_value.strip()
-        if not raw_value:
-            return str(default_root_dir())
-
-        candidate = Path(raw_value).expanduser()
-        if candidate.exists():
-            return str(candidate if candidate.is_dir() else candidate.parent)
-
-        if candidate.suffix:
-            return str(candidate.parent if candidate.parent.exists() else default_root_dir())
-
-        return str(candidate if candidate.parent.exists() else default_root_dir())
+        return gui_dialog_helpers.dialog_initial_dir(current_value, default_dir=default_root_dir())
 
     def _browse_directory(self, target_var, *, title: str, mustexist: bool = False) -> bool:
-        selected = self.filedialog.askdirectory(
+        return gui_dialog_helpers.browse_directory(
+            self.filedialog,
+            target_var,
             title=title,
-            initialdir=self._dialog_initial_dir(target_var.get()),
+            initial_dir=self._dialog_initial_dir(target_var.get()),
             mustexist=mustexist,
         )
-        if selected:
-            target_var.set(selected)
-            return True
-        return False
 
     def _on_root_directory_selected(self) -> None:
         self.refresh_repos()
@@ -2463,13 +2437,13 @@ class GuiApp:  # pragma: no cover
             self._on_root_directory_selected()
 
     def _browse_existing_file(self, target_var, *, title: str, filetypes) -> None:
-        selected = self.filedialog.askopenfilename(
+        gui_dialog_helpers.browse_existing_file(
+            self.filedialog,
+            target_var,
             title=title,
-            initialdir=self._dialog_initial_dir(target_var.get()),
+            initial_dir=self._dialog_initial_dir(target_var.get()),
             filetypes=filetypes,
         )
-        if selected:
-            target_var.set(selected)
 
     def _browse_save_file(
         self,
@@ -2479,14 +2453,14 @@ class GuiApp:  # pragma: no cover
         default_extension: str,
         filetypes,
     ) -> None:
-        selected = self.filedialog.asksaveasfilename(
+        gui_dialog_helpers.browse_save_file(
+            self.filedialog,
+            target_var,
             title=title,
-            initialdir=self._dialog_initial_dir(target_var.get()),
-            defaultextension=default_extension,
+            initial_dir=self._dialog_initial_dir(target_var.get()),
+            default_extension=default_extension,
             filetypes=filetypes,
         )
-        if selected:
-            target_var.set(selected)
 
     def _add_entry_field(
         self,
@@ -2988,18 +2962,7 @@ class GuiApp:  # pragma: no cover
         if flow_tabs is None:
             return
         try:
-            tab_dict = getattr(flow_tabs, "_tab_dict", {})
-            if tab_name not in tab_dict:
-                return
-            current_name = getattr(flow_tabs, "_current_name", "")
-            if current_name in tab_dict and current_name != tab_name:
-                tab_dict[current_name].grid_forget()
-            flow_tabs._current_name = tab_name  # noqa: SLF001 - avoids CTkTabview.set() delayed grid cleanup.
-            segmented_button = getattr(flow_tabs, "_segmented_button", None)
-            if segmented_button is not None:
-                segmented_button.set(tab_name)
-            flow_tabs._set_grid_current_tab()  # noqa: SLF001
-            flow_tabs._grid_forget_all_tabs(exclude_name=tab_name)  # noqa: SLF001
+            gui_navigation_helpers.select_flow_tab_without_delayed_cleanup(flow_tabs, tab_name)
         except Exception as exc:
             self._record_gui_warning("tab view direct selection failed", exc)
             return
@@ -4141,12 +4104,11 @@ class GuiApp:  # pragma: no cover
         self._active_cancel_token = CancellationToken()
         self._update_run_buttons_state()
 
-        thread = threading.Thread(
+        gui_background_helpers.start_daemon_worker(
             target=self._run_worker,
             args=(repos_to_run, max_matches, run_fix, selection_signature),
-            daemon=True,
+            thread_factory=threading.Thread,
         )
-        thread.start()
 
     def _run_worker(
         self,
@@ -4174,7 +4136,7 @@ class GuiApp:  # pragma: no cover
                 def _emit() -> None:
                     self.log(message)
 
-                self.root.after(0, _emit)
+                gui_background_helpers.schedule_on_ui(self.root, _emit)
 
             artifacts = create_run_artifacts(enforced_results_dir)
             gui_logger = RunLogger(
@@ -4229,28 +4191,18 @@ class GuiApp:  # pragma: no cover
             )
 
             def _confirm_repo_fix(repo: Path, index: int, total: int) -> bool:
-                result: dict[str, bool] = {"value": False}
-                done = threading.Event()
-
-                def _ask() -> None:
-                    try:
-                        result["value"] = bool(
-                            self.messagebox.askyesno(
-                                self._t("confirm_repo_repair_title"),
-                                self._t(
-                                    "confirm_repo_repair_message",
-                                    index=index,
-                                    total=total,
-                                    repo_name=repo_display_name(repo),
-                                ),
-                            )
-                        )
-                    finally:
-                        done.set()
-
-                self.root.after(0, _ask)
-                done.wait()
-                return bool(result["value"])
+                return gui_background_helpers.ask_bool_on_ui(
+                    self.root,
+                    lambda: self.messagebox.askyesno(
+                        self._t("confirm_repo_repair_title"),
+                        self._t(
+                            "confirm_repo_repair_message",
+                            index=index,
+                            total=total,
+                            repo_name=repo_display_name(repo),
+                        ),
+                    ),
+                )
 
             exit_code = execute_guard_pipeline(
                 config=config,
@@ -4287,7 +4239,7 @@ class GuiApp:  # pragma: no cover
                 if exit_code != 0:
                     self.log(f"[INFO] Run finished with exit code: {exit_code}")
 
-            self.root.after(0, _finish_ui)
+            gui_background_helpers.schedule_on_ui(self.root, _finish_ui)
         except Exception:
             error_trace = traceback.format_exc().strip()
 
@@ -4296,7 +4248,7 @@ class GuiApp:  # pragma: no cover
                 self.log(error_trace)
                 self._on_gui_run_finished(run_fix, selection_signature, [], EXIT_RUNTIME_ERROR)
 
-            self.root.after(0, _finish_ui_error)
+            gui_background_helpers.schedule_on_ui(self.root, _finish_ui_error)
 
     def run(self) -> None:
         gui_window_helpers.run_mainloop(self.root)

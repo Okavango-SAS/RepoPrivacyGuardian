@@ -19,19 +19,19 @@ The repository is already stable in these areas:
 - local release harness and operator runbooks
 - documented versioning, release checklist, and public changelog
 - pinned GitHub Actions updated to Node.js 24-compatible revisions while preserving SHA pins
+- GUI dialog, navigation, and background-worker adapters extracted behind focused tests
 
 ## Near-term improvements with real value
 
 These are the next improvements that still fit the current product scope:
 
-- extract GUI dialog/navigation helpers and background-worker orchestration behind focused tests
 - add clearer local artifact-retention and cleanup guidance for frequent audit users
 - add repeatable benchmark coverage for large-history scanning and compare `run_state.json` phase timings across changes
 - expand synthetic integration coverage for redaction edge cases and remaining GUI widget construction helpers
 - expand target-resolution and preflight regression coverage further as local and GitHub owner/org repo-selection modes evolve
 - keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract
 - keep docs, help text, packaged policy, and smoke fixtures aligned as defaults evolve
-- continue extracting `repo_privacy_guardian/core.py` by remaining GUI widget construction helpers without breaking compatibility shims; config, redaction, tooling, evidence taxonomy, execution, history parsing, reporting, policy, remediation, scanner, GUI app, GUI locale, and GUI state already use explicit dependencies or local constants, remediation owns pure `git-filter-repo` command planning, execution owns the side-effecting Git/subprocess adapters, history parsing owns pure `git log -p` parsing/formatting helpers, evidence taxonomy owns tracked/history secret bucket aggregation, and GUI state owns pure Audit/Repair flow state, collapsible-section visibility, and Reports/Prompts responsive layout decisions
+- continue extracting `repo_privacy_guardian/core.py` and remaining GUI widget construction helpers without breaking compatibility shims; config, redaction, tooling, evidence taxonomy, execution, history parsing, reporting, policy, remediation, scanner, GUI app, GUI background, GUI dialogs, GUI locale, GUI navigation, and GUI state already use explicit dependencies or local constants, remediation owns pure `git-filter-repo` command planning, execution owns the side-effecting Git/subprocess adapters, history parsing owns pure `git log -p` parsing/formatting helpers, evidence taxonomy owns tracked/history secret bucket aggregation, GUI background owns worker/UI-thread scheduling, GUI dialogs owns browse-dialog targeting, GUI navigation owns flow-tab selection/rename behavior, and GUI state owns pure Audit/Repair flow state, collapsible-section visibility, and Reports/Prompts responsive layout decisions
 
 ## Deprioritized for this repository phase
 

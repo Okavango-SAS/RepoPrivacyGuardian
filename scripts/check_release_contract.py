@@ -131,6 +131,9 @@ ARCHITECTURE_REQUIREMENTS = [
     "agent_summary.json",
     "CLI/GUI parity is a repository rule",
     "repo_privacy_guardian/core.py",
+    "repo_privacy_guardian/gui/background.py",
+    "repo_privacy_guardian/gui/dialogs.py",
+    "repo_privacy_guardian/gui/navigation.py",
 ]
 
 ENGINEERING_DECISIONS_REQUIREMENTS = [
