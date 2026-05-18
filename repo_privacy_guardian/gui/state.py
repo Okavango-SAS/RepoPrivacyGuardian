@@ -21,6 +21,8 @@ ActionCommandKind = Literal[
 ]
 GridColumnTarget = int | tuple[int, ...]
 GridPadding = int | tuple[int, int]
+TextColorRole = str
+FillColorRole = str
 
 
 MANUAL_REVIEW_SIGNAL_KEYS = (
@@ -142,6 +144,49 @@ class EntryFieldSpec:
     entry_grid: WidgetGridConfig
     width: int | None = None
     placeholder_key: str | None = None
+    widget_attr: str | None = None
+
+
+@dataclass(frozen=True)
+class SectionHeadingSpec:
+    text_key: str
+    tooltip_key: str
+    grid: WidgetGridConfig
+    font_size: int = 16
+    text_color_role: TextColorRole = "heading"
+    fixed_text_color: bool = False
+
+
+@dataclass(frozen=True)
+class TextLabelSpec:
+    text_key: str
+    grid: WidgetGridConfig | None
+    font_size: int = 12
+    bold: bool = False
+    mono: bool = False
+    text_color_role: TextColorRole = "body"
+    fg_color_role: FillColorRole | None = None
+    fixed_text_color: bool = False
+    justify: str = "left"
+    anchor: str | None = "w"
+    wraplength: int | None = None
+    height: int | None = None
+    corner_radius: int | None = None
+    padx: int | None = None
+    tooltip_key: str | None = None
+    widget_attr: str | None = None
+    localize: bool = True
+
+
+@dataclass(frozen=True)
+class PanelSpec:
+    grid: WidgetGridConfig
+    fg_color_role: FillColorRole
+    border_color_role: FillColorRole
+    corner_radius: int = 10
+    border_width: int = 1
+    column_configs: tuple[GridColumnConfig, ...] = ()
+    row_configs: tuple[GridColumnConfig, ...] = ()
     widget_attr: str | None = None
 
 
@@ -365,6 +410,671 @@ def repair_options_visibility_state(*, visible: bool) -> CollapsibleSectionState
         visible=visible,
         toggle_text_key="repair_advanced_toggle_hide" if visible else "repair_advanced_toggle_show",
         hint_text_key="repair_advanced_hint_visible" if visible else "repair_advanced_hint_hidden",
+    )
+
+
+def gui_section_heading_specs() -> dict[str, SectionHeadingSpec]:
+    return {
+        "header": SectionHeadingSpec(
+            text_key="header_title",
+            tooltip_key="workflow_overview",
+            font_size=24,
+            text_color_role="fixed_header_light",
+            fixed_text_color=True,
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=18, pady=(12, 0)),
+        ),
+        "audit_target": SectionHeadingSpec(
+            text_key="audit_target",
+            tooltip_key="audit_target_section",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=14, pady=(12, 4), columnspan=3),
+        ),
+        "settings_companion": SectionHeadingSpec(
+            text_key="settings_companion_title",
+            tooltip_key="settings_section",
+            font_size=18,
+            grid=WidgetGridConfig(row=0, column=0, sticky="w"),
+        ),
+        "setup_settings_card": SectionHeadingSpec(
+            text_key="setup_settings",
+            tooltip_key="settings_section",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=14, pady=(12, 8), columnspan=3),
+        ),
+        "setup_settings_inner": SectionHeadingSpec(
+            text_key="setup_settings",
+            tooltip_key="settings_section",
+            font_size=14,
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=14, pady=(12, 4), columnspan=3),
+        ),
+        "owner_profile": SectionHeadingSpec(
+            text_key="owner_profile",
+            tooltip_key="owner_profile_section",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=14, pady=(12, 8), columnspan=2),
+        ),
+        "repair_options": SectionHeadingSpec(
+            text_key="repair_plan_options",
+            tooltip_key="repair_options_section",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=14, pady=(12, 8), columnspan=2),
+        ),
+        "repair_flow": SectionHeadingSpec(
+            text_key="repair_flow",
+            tooltip_key="repair_flow_section",
+            font_size=14,
+            text_color_role="warning",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=14, pady=(10, 4)),
+        ),
+        "repositories": SectionHeadingSpec(
+            text_key="repositories",
+            tooltip_key="repositories_section",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w"),
+        ),
+        "execution_log": SectionHeadingSpec(
+            text_key="execution_log",
+            tooltip_key="execution_log_section",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=14, pady=(12, 8)),
+        ),
+        "reports_dashboard": SectionHeadingSpec(
+            text_key="reports_dashboard",
+            tooltip_key="reports_section",
+            font_size=18,
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=14, pady=(12, 4)),
+        ),
+        "prompts_library": SectionHeadingSpec(
+            text_key="prompts_library",
+            tooltip_key="prompts_section",
+            font_size=18,
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=14, pady=(12, 4)),
+        ),
+    }
+
+
+def gui_panel_specs(
+    *,
+    setup_toggle_row: int = 0,
+    setup_settings_row: int = 0,
+    github_remote_row: int = 0,
+    advanced_identity_row: int = 0,
+) -> dict[str, PanelSpec]:
+    return {
+        "setup_quick_start": PanelSpec(
+            fg_color_role="success_panel",
+            border_color_role="success_panel_border",
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=14, pady=(0, 10), columnspan=3),
+            column_configs=(GridColumnConfig(column=1, weight=1),),
+        ),
+        "setup_toggle": PanelSpec(
+            fg_color_role="surface_alt",
+            border_color_role="card_border",
+            grid=WidgetGridConfig(
+                row=setup_toggle_row,
+                column=0,
+                sticky="we",
+                padx=14,
+                pady=(6, 12),
+                columnspan=3,
+            ),
+            column_configs=(GridColumnConfig(column=0, weight=1),),
+        ),
+        "setup_settings_frame": PanelSpec(
+            fg_color_role="surface",
+            border_color_role="card_border",
+            grid=WidgetGridConfig(
+                row=setup_settings_row,
+                column=0,
+                sticky="we",
+                padx=14,
+                pady=(0, 12),
+                columnspan=3,
+            ),
+            column_configs=(GridColumnConfig(column=1, weight=1),),
+            widget_attr="_setup_settings_frame",
+        ),
+        "github_remote": PanelSpec(
+            fg_color_role="info_panel",
+            border_color_role="info_panel_border",
+            grid=WidgetGridConfig(
+                row=github_remote_row,
+                column=0,
+                sticky="we",
+                padx=14,
+                pady=(4, 10),
+                columnspan=3,
+            ),
+            column_configs=(
+                GridColumnConfig(column=1, weight=1),
+                GridColumnConfig(column=3, weight=1),
+            ),
+        ),
+        "advanced_identity_toggle": PanelSpec(
+            fg_color_role="surface_alt",
+            border_color_role="card_border",
+            grid=WidgetGridConfig(
+                row=advanced_identity_row,
+                column=0,
+                sticky="we",
+                padx=14,
+                pady=(0, 12),
+                columnspan=3,
+            ),
+            column_configs=(GridColumnConfig(column=0, weight=1),),
+        ),
+        "repair_options_toggle": PanelSpec(
+            fg_color_role="warning_panel",
+            border_color_role="warning_panel_border",
+            grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=10, pady=(8, 8)),
+            column_configs=(GridColumnConfig(column=0, weight=1),),
+        ),
+        "repair_review_options": PanelSpec(
+            fg_color_role="success_panel",
+            border_color_role="success_panel_border",
+            grid=WidgetGridConfig(row=1, column=0, sticky="nsew", padx=(14, 7), pady=(0, 12)),
+            column_configs=(
+                GridColumnConfig(column=0, weight=1),
+                GridColumnConfig(column=1, weight=0),
+            ),
+            widget_attr="_safe_options_card",
+        ),
+        "repair_write_options": PanelSpec(
+            fg_color_role="warning_panel",
+            border_color_role="warning_panel_border",
+            grid=WidgetGridConfig(row=1, column=1, sticky="nsew", padx=(7, 14), pady=(0, 12)),
+            column_configs=(
+                GridColumnConfig(column=0, weight=1),
+                GridColumnConfig(column=1, weight=0),
+            ),
+            widget_attr="_destructive_options_card",
+        ),
+        "repair_status": PanelSpec(
+            fg_color_role="success_panel",
+            border_color_role="success_panel_border",
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=14, pady=(0, 8)),
+            column_configs=(GridColumnConfig(column=1, weight=1),),
+            widget_attr="_repair_status_panel",
+        ),
+        "reports_status": PanelSpec(
+            fg_color_role="success_panel",
+            border_color_role="success_panel_border",
+            grid=WidgetGridConfig(row=2, column=0, sticky="we", padx=14, pady=(0, 10), columnspan=2),
+            column_configs=(
+                GridColumnConfig(column=1, weight=1),
+                GridColumnConfig(column=2, weight=0),
+            ),
+        ),
+        "reports_decision": PanelSpec(
+            fg_color_role="info_panel",
+            border_color_role="info_panel_border",
+            grid=WidgetGridConfig(row=3, column=0, sticky="we", padx=14, pady=(0, 10), columnspan=2),
+            column_configs=(
+                GridColumnConfig(column=1, weight=1),
+                GridColumnConfig(column=2, weight=0),
+            ),
+        ),
+        "prompts_workflow": PanelSpec(
+            fg_color_role="info_panel",
+            border_color_role="info_panel_border",
+            grid=WidgetGridConfig(row=2, column=0, sticky="we", padx=14, pady=(0, 12), columnspan=2),
+            column_configs=(GridColumnConfig(column=1, weight=1),),
+            widget_attr="_prompts_workflow_guide",
+        ),
+    }
+
+
+def gui_text_label_specs(*, settings_persist_note_row: int = 0) -> dict[str, TextLabelSpec]:
+    return {
+        "header_subtitle": TextLabelSpec(
+            text_key="header_subtitle",
+            font_size=13,
+            text_color_role="fixed_header_subtitle",
+            fixed_text_color=True,
+            grid=WidgetGridConfig(row=1, column=0, sticky="w", padx=18, pady=(2, 8)),
+        ),
+        "audit_target_body": TextLabelSpec(
+            text_key="audit_target_body",
+            font_size=12,
+            text_color_role="muted",
+            wraplength=1100,
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=14, pady=(0, 8), columnspan=3),
+        ),
+        "recommended_path_body": TextLabelSpec(
+            text_key="recommended_path_body",
+            font_size=11,
+            text_color_role="muted",
+            wraplength=860,
+            grid=WidgetGridConfig(row=0, column=0, sticky="we", pady=(0, 8), columnspan=3),
+        ),
+        "settings_companion_body": TextLabelSpec(
+            text_key="settings_companion_body",
+            font_size=12,
+            text_color_role="muted",
+            wraplength=1100,
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", pady=(2, 8)),
+        ),
+        "setup_quick_start_badge": TextLabelSpec(
+            text_key="setup_settings",
+            font_size=11,
+            bold=True,
+            height=28,
+            corner_radius=14,
+            fg_color_role="primary_button",
+            text_color_role="fixed_header_light",
+            fixed_text_color=True,
+            padx=12,
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=10, pady=10),
+        ),
+        "setup_quick_start_status": TextLabelSpec(
+            text_key="settings_status",
+            font_size=12,
+            text_color_role="body",
+            wraplength=820,
+            grid=WidgetGridConfig(row=0, column=1, sticky="we", padx=(0, 10), pady=10),
+        ),
+        "setup_initial_hint": TextLabelSpec(
+            text_key="setup_initial_hint",
+            font_size=11,
+            text_color_role="muted",
+            wraplength=760,
+            widget_attr="_setup_settings_hint_label",
+            grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=12, pady=10),
+        ),
+        "settings_status": TextLabelSpec(
+            text_key="settings_status",
+            font_size=11,
+            text_color_role="muted",
+            wraplength=880,
+            widget_attr="_settings_status_label",
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=14, pady=(0, 8), columnspan=3),
+        ),
+        "settings_persist_note": TextLabelSpec(
+            text_key="settings_persist_note",
+            font_size=11,
+            text_color_role="muted",
+            wraplength=760,
+            grid=WidgetGridConfig(
+                row=settings_persist_note_row,
+                column=0,
+                sticky="we",
+                padx=14,
+                pady=(0, 8),
+                columnspan=3,
+            ),
+        ),
+        "advanced_identity_hint": TextLabelSpec(
+            text_key="advanced_identity_hidden",
+            font_size=11,
+            text_color_role="muted",
+            wraplength=760,
+            widget_attr="_advanced_identity_hint_label",
+            grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=12, pady=10),
+        ),
+        "owner_profile_body": TextLabelSpec(
+            text_key="owner_profile_body",
+            font_size=11,
+            text_color_role="muted",
+            wraplength=440,
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=14, pady=(0, 6), columnspan=2),
+        ),
+        "optional_git_identity": TextLabelSpec(
+            text_key="optional_git_identity",
+            font_size=16,
+            bold=True,
+            text_color_role="heading",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=14, pady=(12, 8), columnspan=2),
+        ),
+        "identity_help": TextLabelSpec(
+            text_key="identity_help",
+            font_size=12,
+            text_color_role="body",
+            wraplength=1200,
+            grid=WidgetGridConfig(row=4, column=0, sticky="we", padx=14, pady=(8, 12), columnspan=2),
+        ),
+        "repair_options_hint": TextLabelSpec(
+            text_key="repair_advanced_hint_hidden",
+            font_size=11,
+            text_color_role="warning",
+            wraplength=860,
+            widget_attr="_repair_options_hint_label",
+            grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=12, pady=10),
+        ),
+        "review_output_options": TextLabelSpec(
+            text_key="review_output_options",
+            font_size=13,
+            bold=True,
+            text_color_role="success",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=12, pady=(10, 2)),
+        ),
+        "repair_write_actions": TextLabelSpec(
+            text_key="repair_write_actions",
+            font_size=13,
+            bold=True,
+            text_color_role="warning",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=12, pady=(10, 2)),
+        ),
+        "repair_write_body": TextLabelSpec(
+            text_key="repair_write_body",
+            font_size=11,
+            text_color_role="warning_strong",
+            grid=WidgetGridConfig(row=1, column=0, sticky="w", padx=12, pady=(0, 8), columnspan=2),
+        ),
+        "rewrite_personal_paths_body": TextLabelSpec(
+            text_key="rewrite_personal_paths_body",
+            font_size=11,
+            text_color_role="warning_strong",
+            grid=WidgetGridConfig(row=3, column=0, sticky="w", padx=36, pady=(0, 6), columnspan=2),
+        ),
+        "replace_text_rules_body": TextLabelSpec(
+            text_key="replace_text_rules_body",
+            font_size=11,
+            text_color_role="warning_strong",
+            grid=WidgetGridConfig(row=6, column=0, sticky="w", padx=12, pady=(0, 6), columnspan=2),
+        ),
+        "allowed_remote_owners_body": TextLabelSpec(
+            text_key="allowed_remote_owners_body",
+            font_size=11,
+            text_color_role="warning_strong",
+            grid=WidgetGridConfig(row=11, column=0, sticky="w", padx=12, pady=(0, 6), columnspan=2),
+        ),
+        "purge_body": TextLabelSpec(
+            text_key="purge_body",
+            font_size=11,
+            text_color_role="warning_strong",
+            grid=WidgetGridConfig(row=14, column=0, sticky="w", padx=12, pady=(0, 10), columnspan=2),
+        ),
+        "repair_status_badge": TextLabelSpec(
+            text_key="audit_required",
+            font_size=11,
+            bold=True,
+            height=28,
+            corner_radius=14,
+            fg_color_role="success_badge",
+            text_color_role="success",
+            padx=12,
+            widget_attr="_repair_status_badge",
+            localize=False,
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=12, pady=(10, 6)),
+        ),
+        "latest_audit_summary": TextLabelSpec(
+            text_key="latest_audit_summary",
+            font_size=12,
+            bold=True,
+            text_color_role="info",
+            grid=WidgetGridConfig(row=0, column=1, sticky="w", padx=(0, 12), pady=(10, 6)),
+        ),
+        "repair_status_body": TextLabelSpec(
+            text_key="no_audit_results",
+            font_size=12,
+            text_color_role="muted",
+            wraplength=1080,
+            widget_attr="_repair_status_label",
+            localize=False,
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=12, pady=(0, 12), columnspan=2),
+        ),
+        "repair_gate_note": TextLabelSpec(
+            text_key="repair_stays_disabled",
+            font_size=11,
+            text_color_role="muted",
+            widget_attr="_repair_gate_note_label",
+            localize=False,
+            grid=WidgetGridConfig(row=0, column=1, sticky="w", padx=(10, 0), pady=6),
+        ),
+        "repair_tab_locked": TextLabelSpec(
+            text_key="repair_tab_locked",
+            font_size=16,
+            bold=True,
+            text_color_role="heading",
+            justify="center",
+            anchor=None,
+            grid=WidgetGridConfig(row=1, column=0, sticky="ew", padx=24, pady=(6, 6)),
+        ),
+        "before_repair": TextLabelSpec(
+            text_key="before_repair",
+            font_size=11,
+            bold=True,
+            text_color_role="muted",
+            justify="center",
+            anchor=None,
+            grid=WidgetGridConfig(row=3, column=0, sticky="ew", padx=24, pady=(0, 4)),
+        ),
+        "repo_summary": TextLabelSpec(
+            text_key="repo_summary_default",
+            font_size=11,
+            text_color_role="muted",
+            widget_attr="_repo_summary_label",
+            localize=False,
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=14, pady=(0, 8), columnspan=2),
+        ),
+        "repo_drop_hint": TextLabelSpec(
+            text_key="repo_drop_hint",
+            font_size=11,
+            text_color_role="muted",
+            tooltip_key="repo_drop_area",
+            widget_attr="_repo_drop_hint_label",
+            grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=10, pady=(8, 0)),
+        ),
+        "repo_empty_title": TextLabelSpec(
+            text_key="repo_targets_unavailable",
+            font_size=14,
+            bold=True,
+            text_color_role="heading",
+            justify="center",
+            anchor="center",
+            widget_attr="_repo_empty_state_title_label",
+            localize=False,
+            grid=WidgetGridConfig(row=1, column=0, sticky="ew", padx=18, pady=(6, 4)),
+        ),
+        "repo_empty_body": TextLabelSpec(
+            text_key="choose_valid_root",
+            font_size=12,
+            text_color_role="muted",
+            justify="center",
+            anchor="center",
+            wraplength=420,
+            widget_attr="_repo_empty_state_body_label",
+            localize=False,
+            grid=WidgetGridConfig(row=2, column=0, sticky="ew", padx=18, pady=(0, 6)),
+        ),
+        "repo_empty_hint": TextLabelSpec(
+            text_key="run_audit_available_hint",
+            font_size=11,
+            text_color_role="muted",
+            justify="center",
+            anchor="center",
+            wraplength=420,
+            widget_attr="_repo_empty_state_hint_label",
+            localize=False,
+            grid=WidgetGridConfig(row=3, column=0, sticky="ew", padx=18, pady=(0, 8)),
+        ),
+        "output_empty": TextLabelSpec(
+            text_key="execution_log_empty",
+            font_size=11,
+            text_color_role="output_empty",
+            fg_color_role="output",
+            justify="center",
+            anchor="center",
+            wraplength=520,
+            widget_attr="_output_empty_state_label",
+            grid=None,
+        ),
+        "reports_dashboard_body": TextLabelSpec(
+            text_key="reports_dashboard_body",
+            font_size=12,
+            text_color_role="muted",
+            wraplength=1120,
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=14, pady=(0, 10)),
+        ),
+        "reports_status_badge": TextLabelSpec(
+            text_key="last_run",
+            font_size=11,
+            bold=True,
+            height=28,
+            corner_radius=14,
+            fg_color_role="success_badge",
+            text_color_role="success",
+            padx=12,
+            widget_attr="_reports_status_badge",
+            localize=False,
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=12, pady=(10, 6)),
+        ),
+        "latest_artifacts": TextLabelSpec(
+            text_key="latest_artifacts",
+            font_size=12,
+            bold=True,
+            text_color_role="heading",
+            tooltip_key="latest_artifacts_section",
+            grid=WidgetGridConfig(row=0, column=1, sticky="w", padx=(0, 8), pady=(10, 6)),
+        ),
+        "reports_summary": TextLabelSpec(
+            text_key="last_run_none",
+            font_size=12,
+            text_color_role="body",
+            wraplength=980,
+            widget_attr="_reports_summary_label",
+            localize=False,
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=12, pady=(0, 8), columnspan=2),
+        ),
+        "reports_paths": TextLabelSpec(
+            text_key="latest_artifacts_none",
+            font_size=11,
+            mono=True,
+            text_color_role="muted",
+            wraplength=980,
+            widget_attr="_reports_paths_label",
+            localize=False,
+            grid=WidgetGridConfig(row=2, column=0, sticky="we", padx=12, pady=(0, 12), columnspan=2),
+        ),
+        "reports_next_action_badge": TextLabelSpec(
+            text_key="next_action",
+            font_size=11,
+            bold=True,
+            height=28,
+            corner_radius=14,
+            fg_color_role="success_badge",
+            text_color_role="success",
+            padx=12,
+            tooltip_key="next_action_section",
+            widget_attr="_reports_next_action_badge",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=12, pady=(10, 8)),
+        ),
+        "reports_next_action": TextLabelSpec(
+            text_key="next_action_run_audit",
+            font_size=12,
+            text_color_role="body",
+            wraplength=900,
+            tooltip_key="next_action_section",
+            widget_attr="_reports_next_action_label",
+            localize=False,
+            grid=WidgetGridConfig(row=0, column=1, sticky="we", padx=(0, 8), pady=(10, 8)),
+        ),
+        "prompts_library_body": TextLabelSpec(
+            text_key="prompts_library_body",
+            font_size=12,
+            text_color_role="muted",
+            wraplength=1120,
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=14, pady=(0, 10)),
+        ),
+        "prompts_workflow_title": TextLabelSpec(
+            text_key="agent_workflow_title",
+            font_size=11,
+            bold=True,
+            height=28,
+            corner_radius=14,
+            fg_color_role="success_badge",
+            text_color_role="success",
+            padx=12,
+            tooltip_key="agent_workflow_section",
+            widget_attr="_prompts_workflow_title_label",
+            grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=10, pady=10),
+        ),
+        "prompts_workflow_body": TextLabelSpec(
+            text_key="agent_workflow_body",
+            font_size=12,
+            text_color_role="body",
+            wraplength=1040,
+            tooltip_key="agent_workflow_section",
+            widget_attr="_prompts_workflow_body_label",
+            grid=WidgetGridConfig(row=0, column=1, sticky="we", padx=(0, 10), pady=10),
+        ),
+    }
+
+
+def header_workflow_chip_label_specs() -> tuple[TextLabelSpec, ...]:
+    return tuple(
+        TextLabelSpec(
+            text_key=text_key,
+            font_size=11,
+            bold=True,
+            height=26,
+            corner_radius=13,
+            fg_color_role="header_chip",
+            text_color_role="header_chip_text",
+            padx=12,
+            grid=WidgetGridConfig(row=0, column=index, sticky="w", padx=(0, 8)),
+        )
+        for index, text_key in enumerate(
+            (
+                "workflow_audit",
+                "workflow_review",
+                "workflow_agent",
+                "workflow_repair",
+                "workflow_parity",
+            )
+        )
+    )
+
+
+def repair_lock_step_label_specs() -> tuple[TextLabelSpec, TextLabelSpec, TextLabelSpec]:
+    return (
+        TextLabelSpec(
+            text_key="repair_lock_step_1",
+            font_size=11,
+            text_color_role="body",
+            wraplength=620,
+            grid=WidgetGridConfig(row=4, column=0, sticky="ew", padx=24, pady=1),
+        ),
+        TextLabelSpec(
+            text_key="repair_lock_step_2",
+            font_size=11,
+            text_color_role="body",
+            wraplength=620,
+            grid=WidgetGridConfig(row=5, column=0, sticky="ew", padx=24, pady=1),
+        ),
+        TextLabelSpec(
+            text_key="repair_lock_step_3",
+            font_size=11,
+            text_color_role="body",
+            wraplength=620,
+            grid=WidgetGridConfig(row=6, column=0, sticky="ew", padx=24, pady=1),
+        ),
+    )
+
+
+def reports_agent_step_label_specs() -> tuple[TextLabelSpec, TextLabelSpec, TextLabelSpec]:
+    return (
+        TextLabelSpec(
+            text_key="agent_step_evidence",
+            font_size=11,
+            bold=True,
+            text_color_role="body",
+            fg_color_role="transparent",
+            padx=10,
+            grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=(0, 8)),
+        ),
+        TextLabelSpec(
+            text_key="agent_step_copy",
+            font_size=11,
+            bold=True,
+            text_color_role="body",
+            fg_color_role="transparent",
+            padx=10,
+            grid=WidgetGridConfig(row=0, column=1, sticky="we", padx=(0, 8)),
+        ),
+        TextLabelSpec(
+            text_key="agent_step_prompt",
+            font_size=11,
+            bold=True,
+            text_color_role="body",
+            fg_color_role="transparent",
+            padx=10,
+            grid=WidgetGridConfig(row=0, column=2, sticky="we", padx=(0, 0)),
+        ),
     )
 
 

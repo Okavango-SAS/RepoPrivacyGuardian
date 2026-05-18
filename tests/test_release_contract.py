@@ -2666,6 +2666,117 @@ def test_gui_entry_field_specs_cover_settings_identity_and_repair_rows() -> None
             assert spec.placeholder_key in spanish
 
 
+def test_gui_heading_label_and_status_panel_specs_cover_static_gui_copy() -> None:
+    heading_specs = gui_state_helpers.gui_section_heading_specs()
+    assert heading_specs["header"].text_key == "header_title"
+    assert heading_specs["header"].font_size == 24
+    assert heading_specs["header"].text_color_role == "fixed_header_light"
+    assert heading_specs["header"].fixed_text_color is True
+    assert heading_specs["header"].grid.kwargs == {
+        "row": 0,
+        "column": 0,
+        "sticky": "w",
+        "padx": 18,
+        "pady": (12, 0),
+    }
+    assert heading_specs["repair_flow"].text_color_role == "warning"
+    assert heading_specs["repair_flow"].grid.kwargs == {
+        "row": 0,
+        "column": 0,
+        "sticky": "w",
+        "padx": 14,
+        "pady": (10, 4),
+    }
+    assert heading_specs["reports_dashboard"].font_size == 18
+    assert heading_specs["prompts_library"].tooltip_key == "prompts_section"
+
+    panel_specs = gui_state_helpers.gui_panel_specs(
+        setup_toggle_row=3,
+        setup_settings_row=4,
+        github_remote_row=10,
+        advanced_identity_row=15,
+    )
+    assert panel_specs["setup_toggle"].grid.kwargs == {
+        "row": 3,
+        "column": 0,
+        "sticky": "we",
+        "padx": 14,
+        "pady": (6, 12),
+        "columnspan": 3,
+    }
+    assert panel_specs["setup_toggle"].fg_color_role == "surface_alt"
+    assert panel_specs["setup_settings_frame"].widget_attr == "_setup_settings_frame"
+    assert panel_specs["github_remote"].column_configs == (
+        gui_state_helpers.GridColumnConfig(column=1, weight=1),
+        gui_state_helpers.GridColumnConfig(column=3, weight=1),
+    )
+    assert panel_specs["repair_status"].fg_color_role == "success_panel"
+    assert panel_specs["repair_status"].border_color_role == "success_panel_border"
+    assert panel_specs["reports_decision"].fg_color_role == "info_panel"
+    assert panel_specs["repair_write_options"].fg_color_role == "warning_panel"
+
+    text_specs = gui_state_helpers.gui_text_label_specs(settings_persist_note_row=12)
+
+    def grid_kwargs(spec: gui_state_helpers.TextLabelSpec) -> dict[str, object]:
+        assert spec.grid is not None
+        return spec.grid.kwargs
+
+    assert text_specs["audit_target_body"].wraplength == 1100
+    assert grid_kwargs(text_specs["audit_target_body"]) == {
+        "row": 1,
+        "column": 0,
+        "sticky": "we",
+        "padx": 14,
+        "pady": (0, 8),
+        "columnspan": 3,
+    }
+    assert text_specs["setup_quick_start_badge"].fg_color_role == "primary_button"
+    assert text_specs["setup_quick_start_badge"].fixed_text_color is True
+    assert text_specs["setup_initial_hint"].widget_attr == "_setup_settings_hint_label"
+    assert grid_kwargs(text_specs["settings_persist_note"])["row"] == 12
+    assert text_specs["repair_write_body"].text_color_role == "warning_strong"
+    assert text_specs["repair_status_body"].localize is False
+    assert text_specs["repair_status_body"].wraplength == 1080
+    assert text_specs["reports_next_action"].tooltip_key == "next_action_section"
+    assert text_specs["reports_next_action"].localize is False
+    assert text_specs["prompts_workflow_body"].wraplength == 1040
+    assert text_specs["output_empty"].grid is None
+    assert text_specs["output_empty"].fg_color_role == "output"
+
+    workflow_specs = gui_state_helpers.header_workflow_chip_label_specs()
+    assert [spec.text_key for spec in workflow_specs] == [
+        "workflow_audit",
+        "workflow_review",
+        "workflow_agent",
+        "workflow_repair",
+        "workflow_parity",
+    ]
+    assert [spec.grid.column for spec in workflow_specs if spec.grid is not None] == [0, 1, 2, 3, 4]
+    assert all(spec.fg_color_role == "header_chip" for spec in workflow_specs)
+
+    repair_step_specs = gui_state_helpers.repair_lock_step_label_specs()
+    assert [(spec.text_key, spec.wraplength, spec.grid.row if spec.grid else None) for spec in repair_step_specs] == [
+        ("repair_lock_step_1", 620, 4),
+        ("repair_lock_step_2", 620, 5),
+        ("repair_lock_step_3", 620, 6),
+    ]
+    report_step_specs = gui_state_helpers.reports_agent_step_label_specs()
+    assert [spec.fg_color_role for spec in report_step_specs] == ["transparent", "transparent", "transparent"]
+
+    english = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT]
+    spanish = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]
+    tooltip_catalog = rpg.GUI_TOOLTIP_TEXT
+    for spec in heading_specs.values():
+        assert spec.text_key in english
+        assert spec.text_key in spanish
+        assert spec.tooltip_key in tooltip_catalog
+    for spec in (*text_specs.values(), *workflow_specs, *repair_step_specs, *report_step_specs):
+        assert spec.text_key in english
+        assert spec.text_key in spanish
+        if spec.tooltip_key:
+            assert spec.tooltip_key in tooltip_catalog
+
+
 def test_gui_action_button_specs_cover_identity_reports_and_prompts() -> None:
     identity_specs = gui_state_helpers.identity_action_button_specs()
     assert [

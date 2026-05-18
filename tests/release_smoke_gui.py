@@ -189,7 +189,7 @@ def main() -> int:
             app.root.update_idletasks()
             app.root.update()
             assert app._reports_go_audit_button.cget("text") == app._t("go_to_audit")
-            assert app._reports_go_audit_button.winfo_viewable()
+            wait_for_viewable(app, app._reports_go_audit_button)
             assert app._reports_agent_handoff_button.cget("text") == app._t("copy_agent_handoff")
             assert not app._reports_agent_handoff_button.winfo_viewable()
             assert app._reports_next_action_label.cget("text") == app._t("next_action_run_audit")

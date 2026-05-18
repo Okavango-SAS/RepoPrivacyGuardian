@@ -39,7 +39,7 @@ The public compatibility contract remains:
 - `repo_privacy_guardian/metrics.py`: phase and per-repository performance timing snapshots
 - `repo_privacy_guardian/gui/app.py`: desktop `GuiApp` coordinator and staged Audit/Reports/Prompts/Settings/Repair workflow
 - `repo_privacy_guardian/gui/locale.py`: GUI text catalogs, tooltips, and font-selection helpers
-- `repo_privacy_guardian/gui/state.py`: pure Audit/Repair flow state helpers for GUI button labels, gate notes, repair summaries, option-row specs, path-field specs, entry-field specs, action-button specs, collapsible-section visibility, and responsive Reports/Prompts/Identity layout decisions
+- `repo_privacy_guardian/gui/state.py`: pure Audit/Repair flow state helpers for GUI button labels, gate notes, repair summaries, option-row specs, path-field specs, entry-field specs, action-button specs, heading/label/status-panel specs, collapsible-section visibility, and responsive Reports/Prompts/Identity layout decisions
 - `repo_privacy_guardian_assets/`: packaged GUI raster assets
 - `repo_privacy_guardian_resources/`: packaged policy resource used by installed builds
 

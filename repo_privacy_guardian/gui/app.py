@@ -327,6 +327,8 @@ class GuiApp:  # pragma: no cover
         self._repair_options_toggle_button = None
         self._repair_options_hint_label = None
         self._repair_options_card = None
+        self._safe_options_card = None
+        self._destructive_options_card = None
 
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -343,46 +345,23 @@ class GuiApp:  # pragma: no cover
         app.grid(row=0, column=0, sticky="nsew")
         app.grid_columnconfigure(0, weight=1)
         self._app_frame = app
+        heading_specs = gui_state_helpers.gui_section_heading_specs()
+        panel_specs = gui_state_helpers.gui_panel_specs()
+        text_specs = gui_state_helpers.gui_text_label_specs()
 
         header = ctk.CTkFrame(app, fg_color=self._header_fg, corner_radius=18)
         header.grid(row=0, column=0, sticky="we", padx=16, pady=(10, 8))
         header.grid_columnconfigure(0, weight=1)
         header.grid_columnconfigure(1, weight=0)
-        self._make_section_heading(
-            header,
-            text_key="header_title",
-            tooltip_key="workflow_overview",
-            font_size=24,
-            text_color="#F8FAFC",
-        ).grid(row=0, column=0, sticky="w", padx=18, pady=(12, 0))
-        self._localize_widget(ctk.CTkLabel(
-            header,
-            text=self._t("header_subtitle"),
-            font=self._font(13),
-            text_color="#D8FFF3",
-        ), "text", "header_subtitle").grid(row=1, column=0, sticky="w", padx=18, pady=(2, 8))
+        self._add_section_heading(header, heading_specs["header"])
+        self._add_text_label(header, text_specs["header_subtitle"])
 
         workflow_strip = ctk.CTkFrame(header, fg_color="transparent")
         workflow_strip.grid(row=2, column=0, sticky="w", padx=18, pady=(0, 14))
         self._workflow_strip = workflow_strip
-        workflow_items = [
-            "workflow_audit",
-            "workflow_review",
-            "workflow_agent",
-            "workflow_repair",
-            "workflow_parity",
-        ]
-        for idx, label_key in enumerate(workflow_items):
-            self._localize_widget(ctk.CTkLabel(
-                workflow_strip,
-                text=self._t(label_key),
-                height=26,
-                corner_radius=13,
-                fg_color=self._header_chip_fg,
-                text_color=self._header_chip_text,
-                font=self._font(11, bold=True),
-                padx=12,
-            ), "text", label_key).grid(row=0, column=idx, sticky="w", padx=(0, 8))
+        workflow_items = gui_state_helpers.header_workflow_chip_label_specs()
+        for label_spec in workflow_items:
+            self._add_text_label(workflow_strip, label_spec)
         self._make_info_badge_for(workflow_strip, "workflow_overview").grid(
             row=0,
             column=len(workflow_items),
@@ -437,21 +416,8 @@ class GuiApp:  # pragma: no cover
         )
         audit_target_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
         audit_target_card.grid_columnconfigure(1, weight=1)
-        self._make_section_heading(
-            audit_target_card,
-            text_key="audit_target",
-            tooltip_key="audit_target_section",
-            font_size=16,
-        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 4))
-        self._localize_widget(ctk.CTkLabel(
-            audit_target_card,
-            text=self._t("audit_target_body"),
-            justify="left",
-            anchor="w",
-            wraplength=1100,
-            font=self._font(12),
-            text_color=self._text_muted,
-        ), "text", "audit_target_body").grid(row=1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 8))
+        self._add_section_heading(audit_target_card, heading_specs["audit_target"])
+        self._add_text_label(audit_target_card, text_specs["audit_target_body"])
         self._add_path_field(
             audit_target_card,
             gui_state_helpers.repositories_root_path_field_spec(row=2),
@@ -459,15 +425,7 @@ class GuiApp:  # pragma: no cover
         audit_settings_row = ctk.CTkFrame(audit_target_card, fg_color="transparent")
         audit_settings_row.grid(row=3, column=0, columnspan=3, sticky="we", padx=14, pady=(6, 12))
         audit_settings_row.grid_columnconfigure(0, weight=1)
-        self._localize_widget(ctk.CTkLabel(
-            audit_settings_row,
-            text=self._t("recommended_path_body"),
-            justify="left",
-            anchor="w",
-            wraplength=860,
-            font=self._font(11),
-            text_color=self._text_muted,
-        ), "text", "recommended_path_body").grid(row=0, column=0, columnspan=3, sticky="we", pady=(0, 8))
+        self._add_text_label(audit_settings_row, text_specs["recommended_path_body"])
         settings_shortcut = ctk.CTkButton(
             audit_settings_row,
             text=self._t("open_settings_tab"),
@@ -499,21 +457,8 @@ class GuiApp:  # pragma: no cover
         settings_intro = ctk.CTkFrame(settings_tab, fg_color="transparent")
         settings_intro.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 0))
         settings_intro.grid_columnconfigure(0, weight=1)
-        self._make_section_heading(
-            settings_intro,
-            text_key="settings_companion_title",
-            tooltip_key="settings_section",
-            font_size=18,
-        ).grid(row=0, column=0, sticky="w")
-        self._localize_widget(ctk.CTkLabel(
-            settings_intro,
-            text=self._t("settings_companion_body"),
-            justify="left",
-            anchor="w",
-            wraplength=1100,
-            font=self._font(12),
-            text_color=self._text_muted,
-        ), "text", "settings_companion_body").grid(row=1, column=0, sticky="we", pady=(2, 8))
+        self._add_section_heading(settings_intro, heading_specs["settings_companion"])
+        self._add_text_label(settings_intro, text_specs["settings_companion_body"])
 
         top_row = ctk.CTkFrame(settings_tab, fg_color="transparent")
         top_row.grid(row=1, column=0, sticky="we", padx=10, pady=(0, 8))
@@ -531,43 +476,11 @@ class GuiApp:  # pragma: no cover
         settings_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         settings_card.grid_columnconfigure(1, weight=1)
         self._settings_card = settings_card
-        self._make_section_heading(
-            settings_card,
-            text_key="setup_settings",
-            tooltip_key="settings_section",
-            font_size=16,
-        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 8))
+        self._add_section_heading(settings_card, heading_specs["setup_settings_card"])
 
-        quick_start = ctk.CTkFrame(
-            settings_card,
-            fg_color=self._success_panel_fg,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._success_panel_border,
-        )
-        quick_start.grid(row=1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 10))
-        quick_start.grid_columnconfigure(1, weight=1)
-        quick_start_badge = self._localize_widget(ctk.CTkLabel(
-            quick_start,
-            text=self._t("setup_settings"),
-            height=28,
-            corner_radius=14,
-            fg_color=self._primary_button_fg,
-            text_color="#F8FAFC",
-            font=self._font(11, bold=True),
-            padx=12,
-        ), "text", "setup_settings")
-        self._register_fixed_theme_option(quick_start_badge, "text_color", "#F8FAFC")
-        quick_start_badge.grid(row=0, column=0, sticky="w", padx=10, pady=10)
-        self._localize_widget(ctk.CTkLabel(
-            quick_start,
-            text=self._t("settings_status"),
-            justify="left",
-            anchor="w",
-            wraplength=820,
-            font=self._font(12),
-            text_color=self._text_body,
-        ), "text", "settings_status").grid(row=0, column=1, sticky="we", padx=(0, 10), pady=10)
+        quick_start = self._make_panel(settings_card, panel_specs["setup_quick_start"])
+        self._add_text_label(quick_start, text_specs["setup_quick_start_badge"])
+        self._add_text_label(quick_start, text_specs["setup_quick_start_status"])
 
         row = 2
         self._add_path_field(
@@ -576,26 +489,9 @@ class GuiApp:  # pragma: no cover
         )
 
         row += 1
-        setup_toggle_row = ctk.CTkFrame(
-            settings_card,
-            fg_color=self._surface_alt,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        setup_toggle_row.grid(row=row, column=0, columnspan=3, sticky="we", padx=14, pady=(6, 12))
-        setup_toggle_row.grid_columnconfigure(0, weight=1)
-        self._setup_settings_hint_label = ctk.CTkLabel(
-            setup_toggle_row,
-            text=self._t("setup_initial_hint"),
-            justify="left",
-            anchor="w",
-            wraplength=760,
-            font=self._font(11),
-            text_color=self._text_muted,
-        )
-        self._localize_widget(self._setup_settings_hint_label, "text", "setup_initial_hint")
-        self._setup_settings_hint_label.grid(row=0, column=0, sticky="we", padx=12, pady=10)
+        settings_panel_specs = gui_state_helpers.gui_panel_specs(setup_toggle_row=row)
+        setup_toggle_row = self._make_panel(settings_card, settings_panel_specs["setup_toggle"])
+        self._add_text_label(setup_toggle_row, text_specs["setup_initial_hint"])
         self._setup_settings_toggle_button = ctk.CTkButton(
             setup_toggle_row,
             text=self._t("hide_settings"),
@@ -609,34 +505,11 @@ class GuiApp:  # pragma: no cover
         self._setup_settings_toggle_button.grid(row=0, column=1, sticky="e", padx=(8, 12), pady=10)
 
         row += 1
-        setup_settings_frame = ctk.CTkFrame(
-            settings_card,
-            fg_color=self._surface_fg,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        setup_settings_frame.grid(row=row, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
-        setup_settings_frame.grid_columnconfigure(1, weight=1)
-        self._setup_settings_frame = setup_settings_frame
+        settings_panel_specs = gui_state_helpers.gui_panel_specs(setup_settings_row=row)
+        setup_settings_frame = self._make_panel(settings_card, settings_panel_specs["setup_settings_frame"])
 
-        self._make_section_heading(
-            setup_settings_frame,
-            text_key="setup_settings",
-            tooltip_key="settings_section",
-            font_size=14,
-        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(12, 4))
-        self._settings_status_label = ctk.CTkLabel(
-            setup_settings_frame,
-            text=self._t("settings_status"),
-            justify="left",
-            anchor="w",
-            wraplength=880,
-            font=self._font(11),
-            text_color=self._text_muted,
-        )
-        self._localize_widget(self._settings_status_label, "text", "settings_status")
-        self._settings_status_label.grid(row=1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 8))
+        self._add_section_heading(setup_settings_frame, heading_specs["setup_settings_inner"])
+        self._add_text_label(setup_settings_frame, text_specs["settings_status"])
 
         settings_row = 2
         self._make_field_label(
@@ -733,16 +606,8 @@ class GuiApp:  # pragma: no cover
         self._add_path_field(setup_settings_frame, setup_path_specs["suppression_file"])
 
         settings_row += 1
-        github_remote_card = ctk.CTkFrame(
-            setup_settings_frame,
-            fg_color=self._info_panel_fg,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._info_panel_border,
-        )
-        github_remote_card.grid(row=settings_row, column=0, columnspan=3, sticky="we", padx=14, pady=(4, 10))
-        github_remote_card.grid_columnconfigure(1, weight=1)
-        github_remote_card.grid_columnconfigure(3, weight=1)
+        settings_panel_specs = gui_state_helpers.gui_panel_specs(github_remote_row=settings_row)
+        github_remote_card = self._make_panel(setup_settings_frame, settings_panel_specs["github_remote"])
         for entry_spec in gui_state_helpers.github_remote_entry_field_specs():
             self._add_entry_field(github_remote_card, entry_spec)
         for option_spec in gui_state_helpers.github_remote_option_checkbox_specs():
@@ -753,15 +618,12 @@ class GuiApp:  # pragma: no cover
             setup_settings_frame,
             gui_state_helpers.max_findings_entry_field_spec(row=settings_row),
         )
-        self._localize_widget(ctk.CTkLabel(
+        self._add_text_label(
             setup_settings_frame,
-            text=self._t("settings_persist_note"),
-            justify="left",
-            anchor="w",
-            wraplength=760,
-            font=self._font(11),
-            text_color=self._text_muted,
-        ), "text", "settings_persist_note").grid(row=settings_row + 1, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 8))
+            gui_state_helpers.gui_text_label_specs(settings_persist_note_row=settings_row + 1)[
+                "settings_persist_note"
+            ],
+        )
 
         setup_actions = ctk.CTkFrame(setup_settings_frame, fg_color="transparent")
         setup_actions.grid(row=settings_row + 2, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 10))
@@ -780,25 +642,12 @@ class GuiApp:  # pragma: no cover
         self._bind_tooltip_key(save_setup_button, "save_setup")
         save_setup_button.grid(row=0, column=1, sticky="e")
 
-        advanced_identity_row = ctk.CTkFrame(
+        settings_panel_specs = gui_state_helpers.gui_panel_specs(advanced_identity_row=settings_row + 3)
+        advanced_identity_row = self._make_panel(
             setup_settings_frame,
-            fg_color=self._surface_alt,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._card_border,
+            settings_panel_specs["advanced_identity_toggle"],
         )
-        advanced_identity_row.grid(row=settings_row + 3, column=0, columnspan=3, sticky="we", padx=14, pady=(0, 12))
-        advanced_identity_row.grid_columnconfigure(0, weight=1)
-        self._advanced_identity_hint_label = ctk.CTkLabel(
-            advanced_identity_row,
-            text=self._t("advanced_identity_hidden"),
-            justify="left",
-            anchor="w",
-            wraplength=760,
-            font=self._font(11),
-            text_color=self._text_muted,
-        )
-        self._advanced_identity_hint_label.grid(row=0, column=0, sticky="we", padx=12, pady=10)
+        self._add_text_label(advanced_identity_row, text_specs["advanced_identity_hint"])
         self._advanced_identity_toggle_button = ctk.CTkButton(
             advanced_identity_row,
             text=self._t("show_advanced_identity"),
@@ -823,21 +672,8 @@ class GuiApp:  # pragma: no cover
         self._profile_card = profile_card
         self._compact_top_layout = False
 
-        self._make_section_heading(
-            profile_card,
-            text_key="owner_profile",
-            tooltip_key="owner_profile_section",
-            font_size=16,
-        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
-        self._localize_widget(ctk.CTkLabel(
-            profile_card,
-            text=self._t("owner_profile_body"),
-            justify="left",
-            anchor="w",
-            wraplength=440,
-            font=self._font(11),
-            text_color=self._text_muted,
-        ), "text", "owner_profile_body").grid(row=1, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 6))
+        self._add_section_heading(profile_card, heading_specs["owner_profile"])
+        self._add_text_label(profile_card, text_specs["owner_profile_body"])
 
         for entry_spec in gui_state_helpers.owner_profile_entry_field_specs(start_row=2):
             self._add_entry_field(profile_card, entry_spec)
@@ -851,12 +687,7 @@ class GuiApp:  # pragma: no cover
         )
         identity_card.grid(row=1, column=0, sticky="we", padx=10, pady=(10, 8))
         identity_card.grid_columnconfigure(1, weight=1)
-        self._localize_widget(ctk.CTkLabel(
-            identity_card,
-            text=self._t("optional_git_identity"),
-            font=self._font(16, bold=True),
-            text_color=self._text_heading,
-        ), "text", "optional_git_identity").grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
+        self._add_text_label(identity_card, text_specs["optional_git_identity"])
 
         for entry_spec in gui_state_helpers.git_identity_entry_field_specs():
             self._add_entry_field(identity_card, entry_spec)
@@ -870,22 +701,7 @@ class GuiApp:  # pragma: no cover
             for spec in gui_state_helpers.identity_action_button_specs()
         ]
 
-        self._localize_widget(ctk.CTkLabel(
-            identity_card,
-            text=self._t("identity_help"),
-            justify="left",
-            anchor="w",
-            wraplength=1200,
-            font=self._font(12),
-            text_color=self._text_body,
-        ), "text", "identity_help").grid(
-            row=4,
-            column=0,
-            columnspan=2,
-            sticky="we",
-            padx=14,
-            pady=(8, 12),
-        )
+        self._add_text_label(identity_card, text_specs["identity_help"])
         self._identity_card = identity_card
         self._set_advanced_identity_visibility(False)
         self._set_setup_settings_visibility(self._setup_settings_visible)
@@ -893,26 +709,8 @@ class GuiApp:  # pragma: no cover
         self._build_reports_tab(reports_tab)
         self._build_prompts_tab(prompts_tab)
 
-        repair_options_toggle = ctk.CTkFrame(
-            repair_tab,
-            fg_color=self._warning_panel_fg,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._warning_panel_border,
-        )
-        repair_options_toggle.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
-        repair_options_toggle.grid_columnconfigure(0, weight=1)
-        self._repair_options_hint_label = ctk.CTkLabel(
-            repair_options_toggle,
-            text=self._t("repair_advanced_hint_hidden"),
-            justify="left",
-            anchor="w",
-            wraplength=860,
-            font=self._font(11),
-            text_color=self._warning_text,
-        )
-        self._localize_widget(self._repair_options_hint_label, "text", "repair_advanced_hint_hidden")
-        self._repair_options_hint_label.grid(row=0, column=0, sticky="we", padx=12, pady=10)
+        repair_options_toggle = self._make_panel(repair_tab, panel_specs["repair_options_toggle"])
+        self._add_text_label(repair_options_toggle, text_specs["repair_options_hint"])
         self._repair_options_toggle_button = ctk.CTkButton(
             repair_options_toggle,
             text=self._t("repair_advanced_toggle_show"),
@@ -937,30 +735,10 @@ class GuiApp:  # pragma: no cover
         options_card.grid_columnconfigure(1, weight=1)
         self._options_card = options_card
         self._repair_options_card = options_card
-        self._make_section_heading(
-            options_card,
-            text_key="repair_plan_options",
-            tooltip_key="repair_options_section",
-            font_size=16,
-        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12, 8))
+        self._add_section_heading(options_card, heading_specs["repair_options"])
 
-        safe_options = ctk.CTkFrame(
-            options_card,
-            fg_color=self._success_panel_fg,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._success_panel_border,
-        )
-        safe_options.grid(row=1, column=0, sticky="nsew", padx=(14, 7), pady=(0, 12))
-        safe_options.grid_columnconfigure(0, weight=1)
-        safe_options.grid_columnconfigure(1, weight=0)
-        self._safe_options_card = safe_options
-        self._localize_widget(ctk.CTkLabel(
-            safe_options,
-            text=self._t("review_output_options"),
-            font=self._font(13, bold=True),
-            text_color=self._success_text,
-        ), "text", "review_output_options").grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
+        safe_options = self._make_panel(options_card, panel_specs["repair_review_options"])
+        self._add_text_label(safe_options, text_specs["review_output_options"])
         self._make_info_badge(
             safe_options,
             lambda: self._t("review_output_info"),
@@ -969,57 +747,27 @@ class GuiApp:  # pragma: no cover
         for option_spec in gui_state_helpers.repair_review_option_checkbox_specs():
             self._make_option_checkbox(safe_options, option_spec)
 
-        destructive_options = ctk.CTkFrame(
-            options_card,
-            fg_color=self._warning_panel_fg,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._warning_panel_border,
-        )
-        destructive_options.grid(row=1, column=1, sticky="nsew", padx=(7, 14), pady=(0, 12))
-        destructive_options.grid_columnconfigure(0, weight=1)
-        destructive_options.grid_columnconfigure(1, weight=0)
-        self._destructive_options_card = destructive_options
+        destructive_options = self._make_panel(options_card, panel_specs["repair_write_options"])
         self._compact_options_layout = False
-        self._localize_widget(ctk.CTkLabel(
-            destructive_options,
-            text=self._t("repair_write_actions"),
-            font=self._font(13, bold=True),
-            text_color=self._warning_text,
-        ), "text", "repair_write_actions").grid(row=0, column=0, sticky="w", padx=12, pady=(10, 2))
+        self._add_text_label(destructive_options, text_specs["repair_write_actions"])
         self._make_info_badge(
             destructive_options,
             lambda: self._t("repair_write_info"),
         ).grid(row=0, column=1, sticky="e", padx=(0, 12), pady=(10, 2))
-        self._localize_widget(ctk.CTkLabel(
-            destructive_options,
-            text=self._t("repair_write_body"),
-            font=self._font(11),
-            text_color=self._warning_strong_text,
-        ), "text", "repair_write_body").grid(row=1, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 8))
+        self._add_text_label(destructive_options, text_specs["repair_write_body"])
 
         repair_write_specs = {
             spec.text_key: spec
             for spec in gui_state_helpers.repair_write_option_checkbox_specs()
         }
         self._make_option_checkbox(destructive_options, repair_write_specs["rewrite_personal_paths"])
-        self._localize_widget(ctk.CTkLabel(
-            destructive_options,
-            text=self._t("rewrite_personal_paths_body"),
-            font=self._font(11),
-            text_color=self._warning_strong_text,
-        ), "text", "rewrite_personal_paths_body").grid(row=3, column=0, columnspan=2, sticky="w", padx=36, pady=(0, 6))
+        self._add_text_label(destructive_options, text_specs["rewrite_personal_paths_body"])
 
         self._add_path_field(
             destructive_options,
             gui_state_helpers.repair_replace_text_path_field_spec(),
         )
-        self._localize_widget(ctk.CTkLabel(
-            destructive_options,
-            text=self._t("replace_text_rules_body"),
-            font=self._font(11),
-            text_color=self._warning_strong_text,
-        ), "text", "replace_text_rules_body").grid(row=6, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
+        self._add_text_label(destructive_options, text_specs["replace_text_rules_body"])
 
         self._make_option_checkbox(destructive_options, repair_write_specs["force_push"])
         self._make_option_checkbox(
@@ -1031,21 +779,11 @@ class GuiApp:  # pragma: no cover
             destructive_options,
             gui_state_helpers.repair_allowed_remote_owner_entry_field_spec(),
         )
-        self._localize_widget(ctk.CTkLabel(
-            destructive_options,
-            text=self._t("allowed_remote_owners_body"),
-            font=self._font(11),
-            text_color=self._warning_strong_text,
-        ), "text", "allowed_remote_owners_body").grid(row=11, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 6))
+        self._add_text_label(destructive_options, text_specs["allowed_remote_owners_body"])
 
         self._make_option_checkbox(destructive_options, repair_write_specs["purge_safe_secret_files"])
         self._make_option_checkbox(destructive_options, repair_write_specs["purge_risky_secret_files"])
-        self._localize_widget(ctk.CTkLabel(
-            destructive_options,
-            text=self._t("purge_body"),
-            font=self._font(11),
-            text_color=self._warning_strong_text,
-        ), "text", "purge_body").grid(row=14, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 10))
+        self._add_text_label(destructive_options, text_specs["purge_body"])
         self._sync_purge_mode_controls()
         self._sync_push_guardrail_controls()
         self._set_repair_options_visibility(False)
@@ -1059,49 +797,11 @@ class GuiApp:  # pragma: no cover
         )
         repair_actions_card.grid(row=2, column=0, sticky="we", padx=10, pady=(0, 8))
         repair_actions_card.grid_columnconfigure(0, weight=1)
-        self._make_section_heading(
-            repair_actions_card,
-            text_key="repair_flow",
-            tooltip_key="repair_flow_section",
-            font_size=14,
-            text_color=self._warning_text,
-        ).grid(row=0, column=0, sticky="w", padx=14, pady=(10, 4))
-        self._repair_status_panel = ctk.CTkFrame(
-            repair_actions_card,
-            fg_color=self._success_panel_fg,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._success_panel_border,
-        )
-        self._repair_status_panel.grid(row=1, column=0, sticky="we", padx=14, pady=(0, 8))
-        self._repair_status_panel.grid_columnconfigure(1, weight=1)
-        self._repair_status_badge = ctk.CTkLabel(
-            self._repair_status_panel,
-            text=self._t("audit_required"),
-            height=28,
-            corner_radius=14,
-            fg_color=self._success_badge_fg,
-            text_color=self._success_text,
-            font=self._font(11, bold=True),
-            padx=12,
-        )
-        self._repair_status_badge.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 6))
-        self._localize_widget(ctk.CTkLabel(
-            self._repair_status_panel,
-            text=self._t("latest_audit_summary"),
-            font=self._font(12, bold=True),
-            text_color=self._info_text,
-        ), "text", "latest_audit_summary").grid(row=0, column=1, sticky="w", padx=(0, 12), pady=(10, 6))
-        self._repair_status_label = ctk.CTkLabel(
-            self._repair_status_panel,
-            text=self._t("no_audit_results"),
-            justify="left",
-            anchor="w",
-            wraplength=1080,
-            font=self._font(12),
-            text_color=self._text_muted,
-        )
-        self._repair_status_label.grid(row=1, column=0, columnspan=2, sticky="we", padx=12, pady=(0, 12))
+        self._add_section_heading(repair_actions_card, heading_specs["repair_flow"])
+        repair_status_panel = self._make_panel(repair_actions_card, panel_specs["repair_status"])
+        self._add_text_label(repair_status_panel, text_specs["repair_status_badge"])
+        self._add_text_label(repair_status_panel, text_specs["latest_audit_summary"])
+        self._add_text_label(repair_status_panel, text_specs["repair_status_body"])
         repair_controls = ctk.CTkFrame(repair_actions_card, fg_color="transparent")
         repair_controls.grid(row=2, column=0, sticky="we", padx=14, pady=(0, 10))
         repair_controls.grid_columnconfigure(1, weight=1)
@@ -1118,15 +818,7 @@ class GuiApp:  # pragma: no cover
         )
         self._bind_tooltip_key(self._repair_button, "repair_button")
         self._repair_button.grid(row=0, column=0, sticky="w")
-        self._repair_gate_note_label = ctk.CTkLabel(
-            repair_controls,
-            text=self._t("repair_stays_disabled"),
-            justify="left",
-            anchor="w",
-            font=self._font(11),
-            text_color=self._text_muted,
-        )
-        self._repair_gate_note_label.grid(row=0, column=1, sticky="w", padx=(10, 0), pady=6)
+        self._add_text_label(repair_controls, text_specs["repair_gate_note"])
 
         blocker_overlay = ctk.CTkFrame(
             repair_tab,
@@ -1155,13 +847,7 @@ class GuiApp:  # pragma: no cover
         )
         if self._repair_gate_visual_label is not None:
             self._repair_gate_visual_label.grid(row=0, column=0, padx=24, pady=(10, 0), sticky="ew")
-        self._localize_widget(ctk.CTkLabel(
-            blocker_card,
-            text=self._t("repair_tab_locked"),
-            justify="center",
-            font=self._font(16, bold=True),
-            text_color=self._text_heading,
-        ), "text", "repair_tab_locked").grid(row=1, column=0, padx=24, pady=(6, 6), sticky="ew")
+        self._add_text_label(blocker_card, text_specs["repair_tab_locked"])
         self._repair_tab_block_label = ctk.CTkLabel(
             blocker_card,
             text="",
@@ -1171,32 +857,10 @@ class GuiApp:  # pragma: no cover
             wraplength=620,
         )
         self._repair_tab_block_label.grid(row=2, column=0, padx=24, pady=(0, 6), sticky="ew")
-        self._localize_widget(ctk.CTkLabel(
-            blocker_card,
-            text=self._t("before_repair"),
-            justify="center",
-            font=self._font(11, bold=True),
-            text_color=self._text_muted,
-        ), "text", "before_repair").grid(row=3, column=0, padx=24, pady=(0, 4), sticky="ew")
-        step_texts = [
-            "repair_lock_step_1",
-            "repair_lock_step_2",
-            "repair_lock_step_3",
-        ]
+        self._add_text_label(blocker_card, text_specs["before_repair"])
         self._repair_tab_block_steps = []
-        for idx, step_key in enumerate(step_texts, start=4):
-            step_label = ctk.CTkLabel(
-                blocker_card,
-                text=self._t(step_key),
-                justify="left",
-                anchor="w",
-                wraplength=620,
-                font=self._font(11),
-                text_color=self._text_body,
-            )
-            self._localize_widget(step_label, "text", step_key)
-            step_label.grid(row=idx, column=0, padx=24, pady=1, sticky="ew")
-            self._repair_tab_block_steps.append(step_label)
+        for step_spec in gui_state_helpers.repair_lock_step_label_specs():
+            self._repair_tab_block_steps.append(self._add_text_label(blocker_card, step_spec))
         self._localize_widget(ctk.CTkButton(
             blocker_card,
             text=self._t("go_to_audit"),
@@ -1232,12 +896,7 @@ class GuiApp:  # pragma: no cover
         repo_header.grid(row=0, column=0, columnspan=2, sticky="we", padx=14, pady=(12, 6))
         repo_header.grid_columnconfigure(0, weight=1)
         repo_header.grid_columnconfigure(1, weight=0)
-        self._make_section_heading(
-            repo_header,
-            text_key="repositories",
-            tooltip_key="repositories_section",
-            font_size=16,
-        ).grid(row=0, column=0, sticky="w")
+        self._add_section_heading(repo_header, heading_specs["repositories"])
         repo_actions = ctk.CTkFrame(repo_header, fg_color="transparent")
         repo_actions.grid(row=0, column=1, sticky="e")
         self._audit_button = ctk.CTkButton(
@@ -1278,15 +937,7 @@ class GuiApp:  # pragma: no cover
         self._localize_widget(self._refresh_button, "text", "refresh")
         self._bind_tooltip_key(self._refresh_button, "refresh_repos")
         self._refresh_button.pack(side="left")
-        self._repo_summary_label = ctk.CTkLabel(
-            repos_card,
-            text=self._t("repo_summary_default"),
-            justify="left",
-            anchor="w",
-            font=self._font(11),
-            text_color=self._text_muted,
-        )
-        self._repo_summary_label.grid(row=1, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 8))
+        self._add_text_label(repos_card, text_specs["repo_summary"])
 
         list_shell = ctk.CTkFrame(
             repos_card,
@@ -1298,16 +949,7 @@ class GuiApp:  # pragma: no cover
         list_shell.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=14, pady=(0, 8))
         list_shell.grid_columnconfigure(0, weight=1)
         list_shell.grid_rowconfigure(1, weight=1)
-        self._repo_drop_hint_label = ctk.CTkLabel(
-            list_shell,
-            text=self._t("repo_drop_hint"),
-            justify="left",
-            anchor="w",
-            font=self._font(11),
-            text_color=self._text_muted,
-        )
-        self._bind_tooltip_key(self._repo_drop_hint_label, "repo_drop_area")
-        self._repo_drop_hint_label.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 0))
+        self._add_text_label(list_shell, text_specs["repo_drop_hint"])
         self._make_info_badge_for(list_shell, "repo_drop_area").grid(row=0, column=1, sticky="e", padx=(0, 10), pady=(8, 0))
 
         self.repo_list = tk.Listbox(
@@ -1353,35 +995,9 @@ class GuiApp:  # pragma: no cover
         )
         if self._repo_empty_state_visual_label is not None:
             self._repo_empty_state_visual_label.grid(row=0, column=0, padx=18, pady=(14, 2), sticky="ew")
-        self._repo_empty_state_title_label = ctk.CTkLabel(
-            self._repo_empty_state,
-            text=self._t("repo_targets_unavailable"),
-            justify="center",
-            anchor="center",
-            font=self._font(14, bold=True),
-            text_color=self._text_heading,
-        )
-        self._repo_empty_state_title_label.grid(row=1, column=0, padx=18, pady=(6, 4), sticky="ew")
-        self._repo_empty_state_body_label = ctk.CTkLabel(
-            self._repo_empty_state,
-            text=self._t("choose_valid_root"),
-            justify="center",
-            anchor="center",
-            font=self._font(12),
-            text_color=self._text_muted,
-            wraplength=420,
-        )
-        self._repo_empty_state_body_label.grid(row=2, column=0, padx=18, pady=(0, 6), sticky="ew")
-        self._repo_empty_state_hint_label = ctk.CTkLabel(
-            self._repo_empty_state,
-            text=self._t("run_audit_available_hint"),
-            justify="center",
-            anchor="center",
-            font=self._font(11),
-            text_color=self._text_muted,
-            wraplength=420,
-        )
-        self._repo_empty_state_hint_label.grid(row=3, column=0, padx=18, pady=(0, 8), sticky="ew")
+        self._add_text_label(self._repo_empty_state, text_specs["repo_empty_title"])
+        self._add_text_label(self._repo_empty_state, text_specs["repo_empty_body"])
+        self._add_text_label(self._repo_empty_state, text_specs["repo_empty_hint"])
         self._repo_empty_state_action_button = ctk.CTkButton(
             self._repo_empty_state,
             text=self._t("repo_empty_choose_root_action"),
@@ -1446,12 +1062,7 @@ class GuiApp:  # pragma: no cover
         output_card.grid_columnconfigure(0, weight=1)
         output_card.grid_rowconfigure(1, weight=1)
         self._output_card = output_card
-        self._make_section_heading(
-            output_card,
-            text_key="execution_log",
-            tooltip_key="execution_log_section",
-            font_size=16,
-        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 8))
+        self._add_section_heading(output_card, heading_specs["execution_log"])
         self.output = ctk.CTkTextbox(
             output_card,
             fg_color=self._output_fg,
@@ -1462,17 +1073,7 @@ class GuiApp:  # pragma: no cover
             font=self._font(10, mono=True),
         )
         self.output.grid(row=1, column=0, sticky="nsew", padx=14, pady=(0, 12))
-        self._output_empty_state_label = ctk.CTkLabel(
-            self.output,
-            text=self._t("execution_log_empty"),
-            justify="center",
-            anchor="center",
-            wraplength=520,
-            font=self._font(11),
-            text_color=self._output_empty_text,
-            fg_color=self._output_fg,
-        )
-        self._localize_widget(self._output_empty_state_label, "text", "execution_log_empty")
+        self._add_text_label(self.output, text_specs["output_empty"])
         self._set_output_empty_state(True)
 
         self.refresh_repos()
@@ -2214,21 +1815,11 @@ class GuiApp:  # pragma: no cover
         reports_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
         reports_card.grid_columnconfigure(0, weight=1)
         reports_card.grid_columnconfigure(1, weight=0)
-        self._make_section_heading(
-            reports_card,
-            text_key="reports_dashboard",
-            tooltip_key="reports_section",
-            font_size=18,
-        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 4))
-        self._localize_widget(ctk.CTkLabel(
-            reports_card,
-            text=self._t("reports_dashboard_body"),
-            justify="left",
-            anchor="w",
-            wraplength=1120,
-            font=self._font(12),
-            text_color=self._text_muted,
-        ), "text", "reports_dashboard_body").grid(row=1, column=0, sticky="we", padx=14, pady=(0, 10))
+        heading_specs = gui_state_helpers.gui_section_heading_specs()
+        panel_specs = gui_state_helpers.gui_panel_specs()
+        text_specs = gui_state_helpers.gui_text_label_specs()
+        self._add_section_heading(reports_card, heading_specs["reports_dashboard"])
+        self._add_text_label(reports_card, text_specs["reports_dashboard_body"])
         self._reports_visual_label = self._make_asset_label(
             reports_card,
             "reports-evidence.png",
@@ -2237,35 +1828,9 @@ class GuiApp:  # pragma: no cover
         if self._reports_visual_label is not None:
             self._reports_visual_label.grid(row=0, column=1, rowspan=2, sticky="e", padx=(8, 14), pady=(10, 4))
 
-        status_row = ctk.CTkFrame(
-            reports_card,
-            fg_color=self._success_panel_fg,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._success_panel_border,
-        )
-        status_row.grid(row=2, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 10))
-        status_row.grid_columnconfigure(1, weight=1)
-        status_row.grid_columnconfigure(2, weight=0)
-        self._reports_status_badge = ctk.CTkLabel(
-            status_row,
-            text=self._t("last_run"),
-            height=28,
-            corner_radius=14,
-            fg_color=self._success_badge_fg,
-            text_color=self._success_text,
-            font=self._font(11, bold=True),
-            padx=12,
-        )
-        self._reports_status_badge.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 6))
-        latest_artifacts_label = self._localize_widget(ctk.CTkLabel(
-            status_row,
-            text=self._t("latest_artifacts"),
-            font=self._font(12, bold=True),
-            text_color=self._text_heading,
-        ), "text", "latest_artifacts")
-        self._bind_tooltip_key(latest_artifacts_label, "latest_artifacts_section")
-        latest_artifacts_label.grid(row=0, column=1, sticky="w", padx=(0, 8), pady=(10, 6))
+        status_row = self._make_panel(reports_card, panel_specs["reports_status"])
+        self._add_text_label(status_row, text_specs["reports_status_badge"])
+        self._add_text_label(status_row, text_specs["latest_artifacts"])
         self._make_info_badge_for(status_row, "latest_artifacts_section").grid(
             row=0,
             column=2,
@@ -2273,60 +1838,12 @@ class GuiApp:  # pragma: no cover
             padx=(0, 12),
             pady=(10, 6),
         )
-        self._reports_summary_label = ctk.CTkLabel(
-            status_row,
-            text=self._t("last_run_none"),
-            justify="left",
-            anchor="w",
-            wraplength=980,
-            font=self._font(12),
-            text_color=self._text_body,
-        )
-        self._reports_summary_label.grid(row=1, column=0, columnspan=2, sticky="we", padx=12, pady=(0, 8))
-        self._reports_paths_label = ctk.CTkLabel(
-            status_row,
-            text=self._t("latest_artifacts_none"),
-            justify="left",
-            anchor="w",
-            wraplength=980,
-            font=self._font(11, mono=True),
-            text_color=self._text_muted,
-        )
-        self._reports_paths_label.grid(row=2, column=0, columnspan=2, sticky="we", padx=12, pady=(0, 12))
+        self._add_text_label(status_row, text_specs["reports_summary"])
+        self._add_text_label(status_row, text_specs["reports_paths"])
 
-        decision_row = ctk.CTkFrame(
-            reports_card,
-            fg_color=self._info_panel_fg,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._info_panel_border,
-        )
-        decision_row.grid(row=3, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 10))
-        decision_row.grid_columnconfigure(1, weight=1)
-        decision_row.grid_columnconfigure(2, weight=0)
-        self._reports_next_action_badge = self._localize_widget(ctk.CTkLabel(
-            decision_row,
-            text=self._t("next_action"),
-            height=28,
-            corner_radius=14,
-            fg_color=self._success_badge_fg,
-            text_color=self._success_text,
-            font=self._font(11, bold=True),
-            padx=12,
-        ), "text", "next_action")
-        self._bind_tooltip_key(self._reports_next_action_badge, "next_action_section")
-        self._reports_next_action_badge.grid(row=0, column=0, sticky="w", padx=12, pady=(10, 8))
-        self._reports_next_action_label = ctk.CTkLabel(
-            decision_row,
-            text=self._t("next_action_run_audit"),
-            justify="left",
-            anchor="w",
-            wraplength=900,
-            font=self._font(12),
-            text_color=self._text_body,
-        )
-        self._bind_tooltip_key(self._reports_next_action_label, "next_action_section")
-        self._reports_next_action_label.grid(row=0, column=1, sticky="we", padx=(0, 8), pady=(10, 8))
+        decision_row = self._make_panel(reports_card, panel_specs["reports_decision"])
+        self._add_text_label(decision_row, text_specs["reports_next_action_badge"])
+        self._add_text_label(decision_row, text_specs["reports_next_action"])
         self._make_info_badge_for(decision_row, "next_action_section").grid(
             row=0,
             column=2,
@@ -2340,20 +1857,8 @@ class GuiApp:  # pragma: no cover
         self._reports_agent_steps_frame.grid_columnconfigure(1, weight=1)
         self._reports_agent_steps_frame.grid_columnconfigure(2, weight=1)
         self._reports_agent_step_labels = []
-        for idx, text_key in enumerate(("agent_step_evidence", "agent_step_copy", "agent_step_prompt")):
-            step_label = self._localize_widget(ctk.CTkLabel(
-                self._reports_agent_steps_frame,
-                text=self._t(text_key),
-                height=28,
-                fg_color="transparent",
-                text_color=self._text_body,
-                font=self._font(11, bold=True),
-                anchor="w",
-                justify="left",
-                padx=10,
-            ), "text", text_key)
-            step_label.grid(row=0, column=idx, sticky="we", padx=(0, 8 if idx < 2 else 0))
-            self._reports_agent_step_labels.append(step_label)
+        for step_spec in gui_state_helpers.reports_agent_step_label_specs():
+            self._reports_agent_step_labels.append(self._add_text_label(self._reports_agent_steps_frame, step_spec))
         self._reports_open_prompts_button = self._make_action_button(
             decision_row,
             gui_state_helpers.reports_decision_action_button_spec(),
@@ -2382,21 +1887,11 @@ class GuiApp:  # pragma: no cover
         prompts_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
         prompts_card.grid_columnconfigure(0, weight=1)
         prompts_card.grid_columnconfigure(1, weight=0)
-        self._make_section_heading(
-            prompts_card,
-            text_key="prompts_library",
-            tooltip_key="prompts_section",
-            font_size=18,
-        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 4))
-        self._localize_widget(ctk.CTkLabel(
-            prompts_card,
-            text=self._t("prompts_library_body"),
-            justify="left",
-            anchor="w",
-            wraplength=1120,
-            font=self._font(12),
-            text_color=self._text_muted,
-        ), "text", "prompts_library_body").grid(row=1, column=0, sticky="we", padx=14, pady=(0, 10))
+        heading_specs = gui_state_helpers.gui_section_heading_specs()
+        panel_specs = gui_state_helpers.gui_panel_specs()
+        text_specs = gui_state_helpers.gui_text_label_specs()
+        self._add_section_heading(prompts_card, heading_specs["prompts_library"])
+        self._add_text_label(prompts_card, text_specs["prompts_library_body"])
         self._prompts_visual_label = self._make_asset_label(
             prompts_card,
             "prompts-workflow.png",
@@ -2404,41 +1899,11 @@ class GuiApp:  # pragma: no cover
         )
         if self._prompts_visual_label is not None:
             self._prompts_visual_label.grid(row=0, column=1, rowspan=2, sticky="e", padx=(8, 14), pady=(10, 4))
-        workflow_guide = ctk.CTkFrame(
-            prompts_card,
-            fg_color=self._info_panel_fg,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._info_panel_border,
-        )
-        self._prompts_workflow_guide = workflow_guide
-        workflow_guide.grid(row=2, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 12))
-        workflow_guide.grid_columnconfigure(1, weight=1)
-        workflow_title_label = self._localize_widget(ctk.CTkLabel(
-            workflow_guide,
-            text=self._t("agent_workflow_title"),
-            height=28,
-            corner_radius=14,
-            fg_color=self._success_badge_fg,
-            text_color=self._success_text,
-            font=self._font(11, bold=True),
-            padx=12,
-        ), "text", "agent_workflow_title")
-        self._bind_tooltip_key(workflow_title_label, "agent_workflow_section")
-        self._prompts_workflow_title_label = workflow_title_label
+        workflow_guide = self._make_panel(prompts_card, panel_specs["prompts_workflow"])
+        self._add_text_label(workflow_guide, text_specs["prompts_workflow_title"])
         workflow_info_badge = self._make_info_badge_for(workflow_guide, "agent_workflow_section")
         self._prompts_workflow_info_badge = workflow_info_badge
-        workflow_body_label = self._localize_widget(ctk.CTkLabel(
-            workflow_guide,
-            text=self._t("agent_workflow_body"),
-            justify="left",
-            anchor="w",
-            wraplength=1040,
-            font=self._font(12),
-            text_color=self._text_body,
-        ), "text", "agent_workflow_body")
-        self._bind_tooltip_key(workflow_body_label, "agent_workflow_section")
-        self._prompts_workflow_body_label = workflow_body_label
+        self._add_text_label(workflow_guide, text_specs["prompts_workflow_body"])
         self._apply_prompts_workflow_layout(compact=self._prompt_card_columns_for_width(self._get_logical_window_width()) == 1)
         self._prompt_cards_frame = ctk.CTkFrame(prompts_card, fg_color="transparent")
         self._prompt_cards_frame.grid(row=3, column=0, columnspan=2, sticky="we", padx=14, pady=(0, 12))
@@ -3008,6 +2473,101 @@ class GuiApp:  # pragma: no cover
     def _make_info_badge_for(self, parent, key: str):
         return self._make_info_badge(parent, lambda: self._tooltip_text(key))
 
+    def _theme_color_role(self, role: str) -> str:
+        colors = {
+            "body": self._text_body,
+            "card_border": self._card_border,
+            "fixed_header_light": "#F8FAFC",
+            "fixed_header_subtitle": "#D8FFF3",
+            "header_chip": self._header_chip_fg,
+            "header_chip_text": self._header_chip_text,
+            "heading": self._text_heading,
+            "info": self._info_text,
+            "info_panel": self._info_panel_fg,
+            "info_panel_border": self._info_panel_border,
+            "muted": self._text_muted,
+            "output": self._output_fg,
+            "output_empty": self._output_empty_text,
+            "primary_button": self._primary_button_fg,
+            "success": self._success_text,
+            "success_badge": self._success_badge_fg,
+            "success_panel": self._success_panel_fg,
+            "success_panel_border": self._success_panel_border,
+            "surface": self._surface_fg,
+            "surface_alt": self._surface_alt,
+            "transparent": "transparent",
+            "warning": self._warning_text,
+            "warning_panel": self._warning_panel_fg,
+            "warning_panel_border": self._warning_panel_border,
+            "warning_strong": self._warning_strong_text,
+            "white_panel": self._white_panel_fg,
+        }
+        if role not in colors:
+            raise ValueError(f"Unknown GUI theme color role: {role}")
+        return colors[role]
+
+    def _make_panel(self, parent, spec: gui_state_helpers.PanelSpec):
+        panel = self.ctk.CTkFrame(
+            parent,
+            fg_color=self._theme_color_role(spec.fg_color_role),
+            corner_radius=spec.corner_radius,
+            border_width=spec.border_width,
+            border_color=self._theme_color_role(spec.border_color_role),
+        )
+        panel.grid(**spec.grid.kwargs)
+        for config in spec.column_configs:
+            panel.grid_columnconfigure(config.column, weight=config.weight)
+        for config in spec.row_configs:
+            panel.grid_rowconfigure(config.column, weight=config.weight)
+        if spec.widget_attr:
+            setattr(self, spec.widget_attr, panel)
+        return panel
+
+    def _add_text_label(self, parent, spec: gui_state_helpers.TextLabelSpec):
+        label_options: dict[str, object] = {
+            "text": self._t(spec.text_key),
+            "font": self._font(spec.font_size, bold=spec.bold, mono=spec.mono),
+            "text_color": self._theme_color_role(spec.text_color_role),
+            "justify": spec.justify,
+        }
+        if spec.anchor is not None:
+            label_options["anchor"] = spec.anchor
+        if spec.wraplength is not None:
+            label_options["wraplength"] = spec.wraplength
+        if spec.height is not None:
+            label_options["height"] = spec.height
+        if spec.corner_radius is not None:
+            label_options["corner_radius"] = spec.corner_radius
+        if spec.fg_color_role is not None:
+            label_options["fg_color"] = self._theme_color_role(spec.fg_color_role)
+        if spec.padx is not None:
+            label_options["padx"] = spec.padx
+
+        label = self.ctk.CTkLabel(parent, **label_options)
+        if spec.fixed_text_color:
+            self._register_fixed_theme_option(label, "text_color", self._theme_color_role(spec.text_color_role))
+        if spec.localize:
+            self._localize_widget(label, "text", spec.text_key)
+        if spec.tooltip_key:
+            self._bind_tooltip_key(label, spec.tooltip_key)
+        if spec.grid is not None:
+            label.grid(**spec.grid.kwargs)
+        if spec.widget_attr:
+            setattr(self, spec.widget_attr, label)
+        return label
+
+    def _add_section_heading(self, parent, spec: gui_state_helpers.SectionHeadingSpec):
+        heading = self._make_section_heading(
+            parent,
+            text_key=spec.text_key,
+            tooltip_key=spec.tooltip_key,
+            font_size=spec.font_size,
+            text_color=self._theme_color_role(spec.text_color_role),
+            fixed_text_color=spec.fixed_text_color,
+        )
+        heading.grid(**spec.grid.kwargs)
+        return heading
+
     def _make_section_heading(
         self,
         parent,
@@ -3016,6 +2576,7 @@ class GuiApp:  # pragma: no cover
         tooltip_key: str,
         font_size: int = 16,
         text_color: str | None = None,
+        fixed_text_color: bool = False,
     ):
         shell = self.ctk.CTkFrame(parent, fg_color="transparent")
         label = self.ctk.CTkLabel(
@@ -3024,8 +2585,8 @@ class GuiApp:  # pragma: no cover
             font=self._font(font_size, bold=True),
             text_color=text_color or self._text_heading,
         )
-        if text_color is not None:
-            self._register_fixed_theme_option(label, "text_color", text_color)
+        if fixed_text_color:
+            self._register_fixed_theme_option(label, "text_color", text_color or self._text_heading)
         self._localize_widget(label, "text", text_key)
         self._bind_tooltip_key(label, tooltip_key)
         label.pack(side="left")
@@ -3608,10 +3169,17 @@ class GuiApp:  # pragma: no cover
         if compact == self._compact_options_layout:
             return
 
+        safe_options_card = getattr(self, "_safe_options_card", None)
+        destructive_options_card = getattr(self, "_destructive_options_card", None)
+        if safe_options_card is None or destructive_options_card is None:
+            return
+
         self._compact_options_layout = compact
+        safe_options_card = cast(Any, safe_options_card)
+        destructive_options_card = cast(Any, destructive_options_card)
         if compact:
-            self._safe_options_card.grid_configure(row=1, column=0, padx=14, pady=(0, 8), sticky="we")
-            self._destructive_options_card.grid_configure(
+            safe_options_card.grid_configure(row=1, column=0, padx=14, pady=(0, 8), sticky="we")
+            destructive_options_card.grid_configure(
                 row=2,
                 column=0,
                 padx=14,
@@ -3620,8 +3188,8 @@ class GuiApp:  # pragma: no cover
             )
             return
 
-        self._safe_options_card.grid_configure(row=1, column=0, padx=(14, 7), pady=(0, 12), sticky="nsew")
-        self._destructive_options_card.grid_configure(
+        safe_options_card.grid_configure(row=1, column=0, padx=(14, 7), pady=(0, 12), sticky="nsew")
+        destructive_options_card.grid_configure(
             row=1,
             column=1,
             padx=(7, 14),
