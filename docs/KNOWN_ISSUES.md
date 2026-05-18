@@ -37,11 +37,6 @@ Workaround: GUI supports cooperative cancellation, but it only stops after the a
 Impact: medium.
 Workaround: continue extracting by domain behind the internal package while preserving the stable `1.x` facade and CLI/GUI parity tests. The next useful seams are GUI dialog/navigation helpers, background-worker orchestration, and remaining compatibility aggregation in `core.py`.
 
-1. GitHub Actions pinned revisions may emit Node.js 20 deprecation warnings as the hosted runner ecosystem moves toward Node.js 24.
-
-Impact: medium.
-Workaround: keep pinned action revisions reviewed, but update them to Node.js 24-compatible versions before the hosted runner defaults force Node.js 24 on 2026-06-02 and remove Node.js 20 support on 2026-09-16.
-
 1. Linux GUI support depends on optional desktop prerequisites.
 
 Impact: low.

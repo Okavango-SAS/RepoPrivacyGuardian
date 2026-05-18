@@ -1188,6 +1188,10 @@ def test_ci_workflow_matches_cost_first_validation_contract() -> None:
     assert "paths:" in pull_request_block
     assert "manual extended validation suite" in workflow
     assert "Docs-only changes stay local-first" in workflow
+    assert "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5" not in workflow
+    assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" not in workflow
+    assert workflow.count("uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2") == 5
+    assert workflow.count("uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0") == 5
     assert 'python-version: "3.13"' in workflow
     assert 'python-version: "3.11"' in workflow
     assert "python scripts/check_release_contract.py" in workflow

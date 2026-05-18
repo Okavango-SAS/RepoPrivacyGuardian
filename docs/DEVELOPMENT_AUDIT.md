@@ -68,9 +68,9 @@ Findings:
   solo-maintainer repository, admin bypass is an intentional operating model
   only when explicitly recorded with `--accept-github-admin-bypass`.
 - GitHub Actions emitted a Node.js 20 deprecation warning for pinned actions in
-  the latest remote CI run reviewed during the audit. This is not an immediate
-  functional break, but it should be resolved before the hosted runner defaults
-  force Node.js 24 on 2026-06-02 and remove Node.js 20 support on 2026-09-16.
+  the latest remote CI run reviewed during the audit. Follow-up hardening
+  updated the workflow to `actions/checkout` v6.0.2 and `actions/setup-python`
+  v6.2.0, both pinned by SHA and declaring Node.js 24 runtime support.
 
 Residual risk:
 
@@ -85,7 +85,8 @@ Residual risk:
 
 Recommended next actions:
 
-- Update pinned GitHub Actions to Node.js 24-compatible revisions.
+- Keep pinned GitHub Actions current with Node.js runtime migrations while
+  preserving SHA pins.
 - Keep self-audit release runs paired with the explicit accepted-risk flag when
   this solo-maintainer admin-bypass model is intentional.
 - Keep `pip-audit`, release readiness, and self-audit in the release checklist.
@@ -213,7 +214,8 @@ Highest-value debt to pay down next:
   narrower modules.
 - `repo_privacy_guardian/core.py` is still about 2,700 lines and remains the
   main compatibility aggregation surface.
-- CI pinned action revisions need a Node.js 24 compatibility refresh.
+- CI pinned action revisions now target Node.js 24-compatible action releases,
+  but they still need normal dependency-review cadence.
 - Large-history performance lacks explicit benchmark thresholds.
 - Artifact retention/cleanup is documented through guardrails but not yet an
   ergonomic product workflow.
@@ -224,12 +226,11 @@ Highest-value debt to pay down next:
 
 Suggested priority order:
 
-1. Update pinned GitHub Actions for Node.js 24 compatibility and verify CI.
-2. Extract GUI dialog/navigation and background-worker adapters with focused
+1. Extract GUI dialog/navigation and background-worker adapters with focused
    tests.
-3. Add a local artifact-retention cleanup path or stronger operator guidance.
-4. Add benchmark coverage for large-history scanning and track timing deltas.
-5. Continue shrinking `core.py` while preserving stable `1.x` compatibility
+2. Add a local artifact-retention cleanup path or stronger operator guidance.
+3. Add benchmark coverage for large-history scanning and track timing deltas.
+4. Continue shrinking `core.py` while preserving stable `1.x` compatibility
    facades.
-6. Defer provider-specific secret rotation and hosted backend features unless
+5. Defer provider-specific secret rotation and hosted backend features unless
    the product scope changes.

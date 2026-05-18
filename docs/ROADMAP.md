@@ -18,12 +18,12 @@ The repository is already stable in these areas:
 - stable repo-owned `ruff check` gate
 - local release harness and operator runbooks
 - documented versioning, release checklist, and public changelog
+- pinned GitHub Actions updated to Node.js 24-compatible revisions while preserving SHA pins
 
 ## Near-term improvements with real value
 
 These are the next improvements that still fit the current product scope:
 
-- update pinned GitHub Actions to Node.js 24-compatible revisions and verify the protected-branch smoke workflow
 - extract GUI dialog/navigation helpers and background-worker orchestration behind focused tests
 - add clearer local artifact-retention and cleanup guidance for frequent audit users
 - add repeatable benchmark coverage for large-history scanning and compare `run_state.json` phase timings across changes

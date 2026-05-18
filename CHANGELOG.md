@@ -15,6 +15,9 @@ All notable user-facing changes to this project are documented here.
 
 ### Changed
 
+- Updated pinned GitHub Actions to Node.js 24-compatible `actions/checkout`
+  v6.0.2 and `actions/setup-python` v6.2.0 while preserving SHA pins and
+  release-contract coverage.
 - Documented the 2026-05-18 development audit, including current security,
   functionality, UX, persistence, optimization, known-issue, and roadmap
   findings.
