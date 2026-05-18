@@ -23,6 +23,10 @@ The repository is already stable in these areas:
 
 These are the next improvements that still fit the current product scope:
 
+- update pinned GitHub Actions to Node.js 24-compatible revisions and verify the protected-branch smoke workflow
+- extract GUI dialog/navigation helpers and background-worker orchestration behind focused tests
+- add clearer local artifact-retention and cleanup guidance for frequent audit users
+- add repeatable benchmark coverage for large-history scanning and compare `run_state.json` phase timings across changes
 - expand synthetic integration coverage for redaction edge cases and remaining GUI widget construction helpers
 - expand target-resolution and preflight regression coverage further as local and GitHub owner/org repo-selection modes evolve
 - keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract
@@ -37,6 +41,7 @@ These ideas may still be useful later, but they are not the current focus:
 - batched fleet execution profiles for many repositories at once
 - GUI-only workflows that bypass the shared CLI backend
 - provider-specific secret rotation integrations
+- hosted persistence beyond local file artifacts
 
 ## Out of scope
 

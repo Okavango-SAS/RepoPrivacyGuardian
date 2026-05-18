@@ -1,0 +1,235 @@
+# Development Audit - 2026-05-18
+
+This audit records the current development state of Repo Privacy Guardian on
+`main` after the 1.5.x modularization work and before the documentation update
+that introduced this file.
+
+## Scope and evidence
+
+Audited surfaces:
+
+- CLI audit, remediation preview, reporting, policy, GitHub hardening, and
+  release-contract surfaces.
+- GUI companion flow across Audit, Reports, Prompts, Settings, and gated
+  Repair tabs.
+- Local persistence and generated artifacts.
+- Dependency, packaging, static-analysis, smoke, visual, and self-audit
+  evidence.
+
+Validation evidence from this audit:
+
+- `python -m ruff check .`: passed.
+- `python -m pyright -p pyrightconfig.json`: passed with 0 errors.
+- `python scripts/check_release_contract.py`: passed.
+- `python tests/release_smoke_cli.py`: passed.
+- `python tests/release_smoke_gui.py`: passed.
+- `python scripts/release_readiness.py`: passed.
+- Tracked `pytest` suite from the release-readiness run: 414 passed, 85.08%
+  coverage.
+- `pip-audit` from release readiness: no known vulnerabilities found in the
+  development, GUI, or remediation requirement sets at audit time.
+- `python scripts/visual_qa_gui.py`: passed and produced non-empty light, dark,
+  and system-mode screenshots for the main GUI tabs.
+- Self-audit artifact: `Audit_Results/20260518-160114/` stayed in ignored local
+  evidence and was not committed.
+- Visual QA artifact: `.local-meta/visual-qa/20260518-160135/` stayed in ignored
+  local evidence and was not committed.
+
+## Executive status
+
+Current phase: stable `1.5.x` CLI-first product with an optional desktop GUI
+companion.
+
+Status: release-ready for the current public scope, with advisory or accepted
+operational risks documented below.
+
+No blocking functional, security, persistence, packaging, or test failures were
+found in the tracked validation suite. The remaining work is mostly hardening,
+continued modular extraction, performance baselining for very large histories,
+and operational polish.
+
+## Cybersecurity audit
+
+Findings:
+
+- The self-audit reported zero blocking findings, zero dirty-tree findings,
+  zero path leaks, zero fsck failures, zero execution errors, and zero
+  high-confidence tracked, history, or Git metadata secrets.
+- Fixture and documentation examples were classified into safe fixture or
+  documentation buckets instead of blocking release status.
+- Repo-owned GitHub API probes and the Windows App Installer bootstrap path were
+  classified as reviewed network context, not generic exfiltration indicators.
+- Dependency audit found no known vulnerabilities in the audited optional
+  requirement sets at audit time.
+- Base package installation keeps Python runtime dependencies empty; optional
+  GUI, remediation, test, and development dependencies remain isolated.
+- GitHub hardening surfaced administrator branch-protection bypass as an
+  advisory finding when the accepted-risk flag is not set. For this public
+  solo-maintainer repository, admin bypass is an intentional operating model
+  only when explicitly recorded with `--accept-github-admin-bypass`.
+- GitHub Actions emitted a Node.js 20 deprecation warning for pinned actions in
+  the latest remote CI run reviewed during the audit. This is not an immediate
+  functional break, but it should be resolved before the hosted runner defaults
+  force Node.js 24 on 2026-06-02 and remove Node.js 20 support on 2026-09-16.
+
+Residual risk:
+
+- Repo Privacy Guardian cannot rotate provider secrets by itself. Rotation
+  remains an external mandatory post-remediation action after any confirmed
+  leak.
+- Generated audit artifacts are redacted where designed, but they can still
+  contain sensitive operational context. They must remain ignored local evidence
+  unless explicitly sanitized for publication.
+- Advisory exfiltration and low-confidence identity heuristics still require
+  operator classification by design.
+
+Recommended next actions:
+
+- Update pinned GitHub Actions to Node.js 24-compatible revisions.
+- Keep self-audit release runs paired with the explicit accepted-risk flag when
+  this solo-maintainer admin-bypass model is intentional.
+- Keep `pip-audit`, release readiness, and self-audit in the release checklist.
+
+## Functionality audit
+
+Findings:
+
+- CLI help, module entry point, direct script entry point, packaging, wheel,
+  sdist, and install smoke paths all passed release readiness.
+- CLI/GUI parity remains the product invariant. The GUI uses the shared backend
+  pipeline and keeps the staged flow: Audit first, then gated Repair.
+- Recent extractions moved scanner subprocess execution, history parsing,
+  taxonomy aggregation, GUI state, theme, assets, and window lifecycle logic
+  into narrower modules with contract tests.
+- Report comparison, agent summary, strict profiles, suppression handling,
+  GitHub hardening, remote owner/org audit controls, and release smoke scripts
+  remain covered by tracked tests.
+- No functional regression was found against the current 1.5.x release contract.
+
+Known functional limitations:
+
+- GUI cancellation is cooperative and stops after the active repository step
+  completes; there is still no pause/resume model.
+- `repo_privacy_guardian/core.py` remains a compatibility nexus and should keep
+  shrinking behind stable `1.x` facades.
+- `repo_privacy_guardian/gui/app.py` remains the largest runtime module and is
+  the main remaining GUI extraction target.
+
+## UX audit
+
+Findings:
+
+- Visual QA passed for System, Light, and Dark modes across Audit, Reports,
+  Prompts, and Repair views.
+- README screenshots now include dark-mode context, and local screenshot
+  generation uses neutral visible paths.
+- The desktop GUI continues to present itself as a companion for manual review
+  rather than a separate product path. This matches the CLI-first agentic use
+  case.
+- Repair remains visually locked until audit context exists, which preserves the
+  reviewed-write workflow.
+
+UX limitations:
+
+- Visual QA checks non-empty, stable screenshots, but it is not a pixel-perfect
+  regression system.
+- Linux GUI support still depends on optional desktop/Tk prerequisites.
+- Long-running GUI audits still benefit from CLI use when tighter execution
+  control is needed.
+
+Recommended next actions:
+
+- Keep README screenshots refreshed only when the user-visible GUI changes.
+- Continue extracting GUI dialogs, navigation helpers, and background-worker
+  orchestration behind tests.
+- Consider a small artifact-retention and cleanup affordance for users who run
+  frequent local audits.
+
+## Databases and persistence audit
+
+Findings:
+
+- The application does not use a hosted backend, database server, SQLite file,
+  or remote telemetry by default.
+- Persistence is local and file-based:
+  - GUI settings JSON.
+  - `Audit_Results/<run_id>/report.json`.
+  - `Audit_Results/<run_id>/report.html`.
+  - `Audit_Results/<run_id>/run.log`.
+  - `Audit_Results/<run_id>/run_state.json`.
+  - `Audit_Results/<run_id>/agent_summary.json`.
+  - Optional suppression and report-comparison JSON files.
+- Existing tests verify that GUI settings persist user preferences without
+  persisting Git identity secrets.
+- Artifact directories are ignored by the repository guardrails.
+
+Persistence risks:
+
+- Audit artifacts can accumulate and may retain sensitive operational context
+  even when secrets are redacted.
+- Suppression files are powerful policy inputs and must stay narrow, reviewed,
+  and versioned when committed.
+
+Recommended next actions:
+
+- Add clearer retention/cleanup guidance or a small local cleanup helper for
+  ignored audit artifacts.
+- Keep suppression schema validation and release-contract checks strict.
+
+## Optimization audit
+
+Findings:
+
+- The release-readiness harness now validates static analysis, package build,
+  install smoke, dependency audit, self-audit, CLI smoke, GUI smoke, and tracked
+  tests in one repeatable flow.
+- Performance metrics are already emitted in `run_state.json`.
+- The product has useful fast paths such as scoped `--repos`, GitHub fast mode,
+  and bounded remote clone worker settings.
+
+Optimization risks:
+
+- Very large repositories can still spend significant time in history patch
+  scanning.
+- There is no formal performance budget or benchmark fixture for worst-case
+  Git history scans.
+- More module extraction is still needed before the largest runtime modules are
+  easy to profile and optimize in isolation.
+
+Recommended next actions:
+
+- Add a repeatable benchmark fixture for large-history scanning.
+- Preserve and compare phase timings from `run_state.json` during performance
+  work.
+- Continue extracting pure planning/parsing code away from side-effecting
+  adapters so hotspots can be tested and profiled independently.
+
+## Technical debt
+
+Highest-value debt to pay down next:
+
+- `repo_privacy_guardian/gui/app.py` is still about 4,000 lines and should keep
+  losing dialog, navigation, background-worker, and widget-construction logic to
+  narrower modules.
+- `repo_privacy_guardian/core.py` is still about 2,700 lines and remains the
+  main compatibility aggregation surface.
+- CI pinned action revisions need a Node.js 24 compatibility refresh.
+- Large-history performance lacks explicit benchmark thresholds.
+- Artifact retention/cleanup is documented through guardrails but not yet an
+  ergonomic product workflow.
+- Provider-specific secret rotation is intentionally out of scope, but the docs
+  should keep making that operator responsibility explicit.
+
+## Roadmap recommendation
+
+Suggested priority order:
+
+1. Update pinned GitHub Actions for Node.js 24 compatibility and verify CI.
+2. Extract GUI dialog/navigation and background-worker adapters with focused
+   tests.
+3. Add a local artifact-retention cleanup path or stronger operator guidance.
+4. Add benchmark coverage for large-history scanning and track timing deltas.
+5. Continue shrinking `core.py` while preserving stable `1.x` compatibility
+   facades.
+6. Defer provider-specific secret rotation and hosted backend features unless
+   the product scope changes.

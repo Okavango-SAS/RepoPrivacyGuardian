@@ -15,6 +15,9 @@ All notable user-facing changes to this project are documented here.
 
 ### Changed
 
+- Documented the 2026-05-18 development audit, including current security,
+  functionality, UX, persistence, optimization, known-issue, and roadmap
+  findings.
 - Consolidated the historical UX/UI audit notes into a current visual QA record and removed obsolete tracked before-state screenshots.
 - Reduced compatibility-bridge coupling in the config, redaction, tooling, reporting, policy, remediation, scanner, GUI app, and GUI locale modules by replacing broad core star imports or core-owned constants with explicit dependencies while preserving public facades.
 - Moved `git-filter-repo` rewrite command construction into remediation planning helpers so dry-run previews and real rewrite commands stay covered by focused contract tests.

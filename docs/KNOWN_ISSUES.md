@@ -32,10 +32,15 @@ Workaround: always create bundle backups and coordinate with collaborators.
 Impact: low.
 Workaround: GUI supports cooperative cancellation, but it only stops after the active repository step completes. Use CLI for tighter control over long runs.
 
-1. `repo_privacy_guardian/core.py` is still large after the package split.
+1. `repo_privacy_guardian/core.py` and `repo_privacy_guardian/gui/app.py` are still large after the package split and recent GUI helper extractions.
 
 Impact: medium.
-Workaround: continue extracting by domain behind the internal package while preserving the stable `1.x` facade and CLI/GUI parity tests.
+Workaround: continue extracting by domain behind the internal package while preserving the stable `1.x` facade and CLI/GUI parity tests. The next useful seams are GUI dialog/navigation helpers, background-worker orchestration, and remaining compatibility aggregation in `core.py`.
+
+1. GitHub Actions pinned revisions may emit Node.js 20 deprecation warnings as the hosted runner ecosystem moves toward Node.js 24.
+
+Impact: medium.
+Workaround: keep pinned action revisions reviewed, but update them to Node.js 24-compatible versions before the hosted runner defaults force Node.js 24 on 2026-06-02 and remove Node.js 20 support on 2026-09-16.
 
 1. Linux GUI support depends on optional desktop prerequisites.
 
@@ -64,6 +69,7 @@ Workaround: treat rotation as an external mandatory post-remediation step.
 - `reviewed_network_indicators` is non-blocking safe context for narrow Repo Privacy Guardian self-audit network paths, not a general allowlist.
 - `pytest` release validation intentionally ignores untracked/local-only `tests/test_*.py` files so the release signal matches a clean clone.
 - Suppression files are intentionally narrow: high-confidence secrets, path leaks, dirty tree state, fsck failures, execution errors, fix errors, and Git metadata blocking secrets cannot be suppressed.
+- Administrator branch-protection bypass can be an accepted GitHub hardening risk only when a solo-maintainer repository explicitly records that posture with `--accept-github-admin-bypass`.
 
 ## Tracking policy
 
