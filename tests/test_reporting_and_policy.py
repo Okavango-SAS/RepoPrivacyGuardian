@@ -1306,10 +1306,10 @@ def test_process_exists_windows_error_code_paths(monkeypatch) -> None:
 
     monkeypatch.setattr(rpg.os, "name", "nt", raising=False)
     monkeypatch.setattr(ctypes, "WinDLL", lambda *_args, **_kwargs: DummyKernel(), raising=False)
-    monkeypatch.setattr(ctypes, "get_last_error", lambda: 87)
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 87, raising=False)
     assert rpg.process_exists(1234) is False
 
-    monkeypatch.setattr(ctypes, "get_last_error", lambda: 5)
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 5, raising=False)
     assert rpg.process_exists(1234) is True
 
 
