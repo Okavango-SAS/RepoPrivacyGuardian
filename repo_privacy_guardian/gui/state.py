@@ -1576,6 +1576,14 @@ def report_artifact_action_button_specs() -> tuple[ActionButtonSpec, ...]:
             grid=WidgetGridConfig(row=0, column=5, sticky="w", padx=(0, 8), pady=0),
             icon="icon-folder.png",
         ),
+        ActionButtonSpec(
+            text_key="cleanup_audit_results_action",
+            tooltip_key="cleanup_audit_results",
+            command_kind="method",
+            command_attr="_cleanup_old_audit_results",
+            grid=WidgetGridConfig(row=0, column=6, sticky="w", padx=(0, 8), pady=0),
+            icon="icon-folder.png",
+        ),
     )
 
 
@@ -1585,7 +1593,7 @@ def reports_action_layout_state(*, compact: bool, artifact_button_count: int) ->
             compact=True,
             agent_handoff_grid=WidgetGridConfig(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 6)),
             artifact_button_grids=tuple(
-                WidgetGridConfig(row=1, column=idx, sticky="w", padx=(0, 8), pady=(2, 0))
+                WidgetGridConfig(row=1 + (idx // 3), column=idx % 3, sticky="w", padx=(0, 8), pady=(2, 0))
                 for idx in range(artifact_button_count)
             ),
         )

@@ -1256,6 +1256,71 @@ def test_create_run_artifacts_fails_after_collision_budget(tmp_path: Path) -> No
         )
 
 
+def test_audit_results_cleanup_plan_keeps_newest_runs_and_skips_non_runs(tmp_path: Path) -> None:
+    base = tmp_path / "Audit_Results"
+    base.mkdir()
+    for name in ("20260516-120000", "20260517-120000", "20260518-120000"):
+        (base / name).mkdir()
+    (base / "notes").mkdir()
+    (base / "20260518-120000.txt").write_text("not a run directory", encoding="utf-8")
+
+    plan = rpg.build_audit_results_cleanup_plan(base, keep_runs=2)
+
+    assert plan.discovered_count == 3
+    assert [path.name for path in plan.kept_run_dirs] == ["20260518-120000", "20260517-120000"]
+    assert [path.name for path in plan.removable_run_dirs] == ["20260516-120000"]
+    assert sorted(Path(item).name for item in plan.skipped_entries) == ["20260518-120000.txt", "notes"]
+
+
+def test_audit_results_cleanup_supports_dry_run_then_delete(tmp_path: Path) -> None:
+    base = tmp_path / "Audit_Results"
+    base.mkdir()
+    old_run = base / "20260517-120000"
+    new_run = base / "20260518-120000"
+    old_run.mkdir()
+    new_run.mkdir()
+
+    plan = rpg.build_audit_results_cleanup_plan(base, keep_runs=1)
+
+    dry_run_result = rpg.clean_audit_results(plan, dry_run=True)
+    assert dry_run_result.success is True
+    assert dry_run_result.deleted_run_dirs == ()
+    assert old_run.exists()
+    assert new_run.exists()
+
+    delete_result = rpg.clean_audit_results(plan, dry_run=False)
+    assert delete_result.success is True
+    assert [path.name for path in delete_result.deleted_run_dirs] == ["20260517-120000"]
+    assert not old_run.exists()
+    assert new_run.exists()
+
+
+def test_audit_results_cleanup_refuses_non_run_delete_targets(tmp_path: Path) -> None:
+    base = tmp_path / "Audit_Results"
+    base.mkdir()
+    notes_dir = base / "notes"
+    notes_dir.mkdir()
+    plan = rpg.AuditResultsCleanupPlan(
+        base_dir=base,
+        keep_runs=0,
+        kept_run_dirs=(),
+        removable_run_dirs=(notes_dir,),
+        skipped_entries=(),
+    )
+
+    result = rpg.clean_audit_results(plan, dry_run=False)
+
+    assert result.success is False
+    assert notes_dir.exists()
+    assert result.failed_deletions
+    assert "refusing to remove non-run artifact directory" in result.failed_deletions[0]
+
+
+def test_audit_results_cleanup_rejects_negative_keep_count(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="keep_runs must be greater than or equal to zero"):
+        rpg.build_audit_results_cleanup_plan(tmp_path / "Audit_Results", keep_runs=-1)
+
+
 def test_run_state_tracker_persists_phase_updates(tmp_path: Path) -> None:
     artifacts = rpg.create_run_artifacts(tmp_path / "Audit_Results")
     config = _make_run_config(root=tmp_path, policy=tmp_path / "POLICY.md")

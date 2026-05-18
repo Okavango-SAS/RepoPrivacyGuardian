@@ -109,6 +109,21 @@ What to do:
 - rerun `python scripts/release_readiness.py` without `--skip-clean-build-artifacts`
 - if you are building manually, remove `dist/`, `build/`, and `*.egg-info/` before rebuilding
 
+## Audit_Results is growing
+
+Symptoms:
+
+- local audit runs have accumulated many `Audit_Results/<run_id>/` folders
+- reports are already reviewed, but you want to keep the newest local evidence
+
+What to do:
+
+- preview first with `repo-privacy-guardian --cleanup-audit-results --keep-audit-runs 20 --dry-run --yes`
+- review the selected timestamp-named run folders
+- rerun without `--dry-run` to delete old runs, or use the GUI Reports cleanup action and confirm the preview
+
+Cleanup skips non-run entries and refuses symlinked paths. Treat all retained artifacts as sensitive local evidence.
+
 ## GUI stop feels delayed
 
 Symptoms:

@@ -45,10 +45,12 @@ if TYPE_CHECKING:
         apply_git_identity_config,
         artifact_helpers,
         blend_near_white_gui_asset_background,
+        build_audit_results_cleanup_plan,
         build_github_optional_tooling_checks,
         build_guard_run_config,
         choose_gui_font_family,
         compare_report_files,
+        clean_audit_results,
         create_run_artifacts,
         default_gui_settings_path,
         default_results_dir,
@@ -1780,6 +1782,53 @@ class GuiApp:  # pragma: no cover
         for line in summary.splitlines():
             self.log(line)
         self._copy_text_to_clipboard(summary, self._t("report_diff_copied"))
+
+    def _cleanup_old_audit_results(self) -> None:
+        try:
+            requested_report_dir = self.report_dir_var.get().strip() or str(default_results_dir())
+            results_dir, forced = enforce_results_dir(Path(requested_report_dir))
+            plan = build_audit_results_cleanup_plan(results_dir, keep_runs=20)
+        except Exception as exc:
+            self.log(f"[WARN] {self._t('cleanup_audit_results_failed', error=exc)}")
+            return
+
+        if forced:
+            self.log(
+                f"[WARN] report-dir was forced to {default_results_dir()} to comply with mandatory Audit_Results policy"
+            )
+        if not plan.removable_run_dirs:
+            self.log(f"[INFO] {self._t('cleanup_audit_results_none')}")
+            return
+
+        preview_lines = [path.name for path in plan.removable_run_dirs[:8]]
+        if len(plan.removable_run_dirs) > 8:
+            preview_lines.append(f"... and {len(plan.removable_run_dirs) - 8} more")
+        confirmed = self.messagebox.askyesno(
+            self._t("dialog_cleanup_audit_results_title"),
+            self._t(
+                "dialog_cleanup_audit_results_message",
+                count=len(plan.removable_run_dirs),
+                keep=plan.keep_runs,
+                preview="\n".join(preview_lines),
+            ),
+        )
+        if not confirmed:
+            self.log(f"[INFO] {self._t('cleanup_audit_results_cancelled')}")
+            return
+
+        result = clean_audit_results(plan, dry_run=False)
+        if not result.success:
+            self.log(
+                f"[WARN] {self._t('cleanup_audit_results_failed', error='; '.join(result.failed_deletions))}"
+            )
+            return
+        self.log(f"[INFO] {self._t('cleanup_audit_results_deleted', count=len(result.deleted_run_dirs))}")
+        artifacts = getattr(self, "_last_run_artifacts", None)
+        if artifacts is not None and not artifacts.run_dir.exists():
+            self._last_run_artifacts = None
+            self._last_run_exit_code = None
+            self._last_run_action = ""
+            self._refresh_reports_tab()
 
     def _artifact_handoff_path(self, path: Path) -> str:
         repo_root = source_tree_root()
@@ -4283,10 +4332,12 @@ _GUI_OVERRIDE_NAMES = (
     "argparse",
     "artifact_helpers",
     "blend_near_white_gui_asset_background",
+    "build_audit_results_cleanup_plan",
     "build_github_optional_tooling_checks",
     "build_guard_run_config",
     "choose_gui_font_family",
     "compare_report_files",
+    "clean_audit_results",
     "create_run_artifacts",
     "default_gui_settings_path",
     "default_results_dir",

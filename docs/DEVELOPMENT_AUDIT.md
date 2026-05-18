@@ -142,8 +142,8 @@ Recommended next actions:
 
 - Keep README screenshots refreshed only when the user-visible GUI changes.
 - Continue extracting remaining GUI widget construction helpers behind tests.
-- Consider a small artifact-retention and cleanup affordance for users who run
-  frequent local audits.
+- Keep the artifact-retention cleanup affordance aligned across CLI, GUI, and
+  docs as artifact outputs evolve.
 
 ## Databases and persistence audit
 
@@ -166,14 +166,15 @@ Findings:
 Persistence risks:
 
 - Audit artifacts can accumulate and may retain sensitive operational context
-  even when secrets are redacted.
+  even when secrets are redacted; the CLI/GUI cleanup path now removes old
+  timestamp-named local runs after preview or confirmation.
 - Suppression files are powerful policy inputs and must stay narrow, reviewed,
   and versioned when committed.
 
 Recommended next actions:
 
-- Add clearer retention/cleanup guidance or a small local cleanup helper for
-  ignored audit artifacts.
+- Keep retention guidance visible and use `--cleanup-audit-results --dry-run`
+  before deleting old ignored audit artifacts.
 - Keep suppression schema validation and release-contract checks strict.
 
 ## Optimization audit
@@ -215,8 +216,8 @@ Highest-value debt to pay down next:
 - CI pinned action revisions now target Node.js 24-compatible action releases,
   but they still need normal dependency-review cadence.
 - Large-history performance lacks explicit benchmark thresholds.
-- Artifact retention/cleanup is documented through guardrails but not yet an
-  ergonomic product workflow.
+- Artifact retention/cleanup is now an ergonomic CLI/GUI workflow, but it
+  should stay scoped to local ignored run artifacts only.
 - Provider-specific secret rotation is intentionally out of scope, but the docs
   should keep making that operator responsibility explicit.
 
@@ -224,11 +225,10 @@ Highest-value debt to pay down next:
 
 Suggested priority order:
 
-1. Add a local artifact-retention cleanup path or stronger operator guidance.
-2. Add benchmark coverage for large-history scanning and track timing deltas.
-3. Continue extracting remaining GUI widget-construction helpers behind focused
+1. Add benchmark coverage for large-history scanning and track timing deltas.
+2. Continue extracting remaining GUI widget-construction helpers behind focused
    tests.
-4. Continue shrinking `core.py` while preserving stable `1.x` compatibility
+3. Continue shrinking `core.py` while preserving stable `1.x` compatibility
    facades.
-5. Defer provider-specific secret rotation and hosted backend features unless
+4. Defer provider-specific secret rotation and hosted backend features unless
    the product scope changes.

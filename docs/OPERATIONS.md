@@ -131,6 +131,15 @@ Operational outputs remain local by default:
 
 Treat audit artifacts and backup bundles as sensitive local outputs even when report content is redacted.
 
+Frequent audit users can review and prune old local run folders without touching current evidence:
+
+```sh
+repo-privacy-guardian --cleanup-audit-results --keep-audit-runs 20 --dry-run --yes
+repo-privacy-guardian --cleanup-audit-results --keep-audit-runs 20 --yes
+```
+
+Cleanup is scoped to timestamp-named `Audit_Results/<run_id>/` directories. It skips non-run entries, refuses symlinked paths, and asks for confirmation unless `--yes` is supplied. The GUI Reports tab exposes the same cleanup path with a confirmation dialog and keeps the 20 newest runs.
+
 The tool also applies a few local-safety defaults during normal operation:
 
 - report and export writes avoid symlink targets
@@ -141,6 +150,7 @@ The tool also applies a few local-safety defaults during normal operation:
 - `agent_summary.json` is written as a privacy-safe compact handoff for coding agents
 - `report.html` starts with `Decision first` so blockers, advisory/manual-review signals, fixtures/docs, suppressions, and next action are visible before details
 - `--compare-reports Audit_Results/<old>/report.json Audit_Results/<new>/report.json` compares re-audits with count-only category deltas and does not create a new run directory
+- `--cleanup-audit-results` previews or removes old timestamp-named local run folders while retaining the newest configured count
 - run artifact directory collision handling is bounded and fails visibly instead of looping indefinitely
 - repository execution is guarded by an OS-backed lock file in the Git metadata directory to prevent overlapping runs on the same checkout without relying on PID/timestamp stale-lock reclamation
 - automatic `--fix` refuses to mutate a repository when the worktree is dirty, `git fsck` has already failed, or the audit recorded runtime/timeout errors

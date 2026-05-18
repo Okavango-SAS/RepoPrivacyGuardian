@@ -43,6 +43,7 @@ README_REQUIREMENTS = [
     "--strict-profile",
     "--suppressions",
     "--compare-reports",
+    "--cleanup-audit-results",
     "Root is intentionally small and allowlisted by tests",
     "Developed and maintained by **Okavango SAS**",
     "docs/ux-audit/after/audit-default-desktop-after.png",
@@ -91,6 +92,7 @@ TROUBLESHOOTING_REQUIREMENTS = [
     "Stopping after current step...",
     "token-gated GitHub settings are not fully inspected",
     "security-alert access",
+    "## Audit_Results is growing",
 ]
 
 VERSIONING_REQUIREMENTS = [
@@ -152,6 +154,7 @@ OPERATIONS_REQUIREMENTS = [
     "@google/design.md@0.1.0",
     "REPO_PRIVACY_GUARDIAN_GITHUB_TOKEN",
     "NPM_TOKEN",
+    "--cleanup-audit-results",
     "Public repository posture",
     "already public on GitHub",
     "windows-2025-vs2026",

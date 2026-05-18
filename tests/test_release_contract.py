@@ -78,6 +78,105 @@ def test_parser_help_mentions_common_cli_flow() -> None:
     assert "repo-privacy-guardian --check-tooling" in help_text
     assert "repo-privacy-guardian --gui" in help_text
     assert "--compare-reports" in help_text
+    assert "--cleanup-audit-results" in help_text
+
+
+def test_run_cli_cleanup_audit_results_dry_run_skips_pipeline(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    results_dir = tmp_path / "Audit_Results"
+    results_dir.mkdir()
+    old_run = results_dir / "20260501-120000"
+    new_run = results_dir / "20260521-120000"
+    for day in range(1, 22):
+        (results_dir / f"202605{day:02d}-120000").mkdir()
+
+    monkeypatch.setattr(rpg, "default_results_dir", lambda: results_dir)
+    monkeypatch.setattr(
+        rpg,
+        "create_run_artifacts",
+        lambda _results_dir: (_ for _ in ()).throw(AssertionError("artifacts should not be created")),
+    )
+    monkeypatch.setattr(
+        rpg,
+        "execute_guard_pipeline",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("pipeline should not run")),
+    )
+
+    args = rpg.make_parser().parse_args(
+        [
+            "--cleanup-audit-results",
+            "--report-dir",
+            str(results_dir),
+            "--keep-audit-runs",
+            "1",
+            "--dry-run",
+            "--yes",
+        ]
+    )
+
+    assert rpg.run_cli(args) == rpg.EXIT_OK
+    captured = capsys.readouterr()
+    assert "[DRY-RUN] Would delete" in captured.out
+    assert old_run.exists()
+    assert new_run.exists()
+
+
+def test_run_cli_cleanup_audit_results_deletes_with_yes(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    results_dir = tmp_path / "Audit_Results"
+    results_dir.mkdir()
+    old_run = results_dir / "20260517-120000"
+    new_run = results_dir / "20260518-120000"
+    old_run.mkdir()
+    new_run.mkdir()
+
+    monkeypatch.setattr(rpg, "default_results_dir", lambda: results_dir)
+
+    args = rpg.make_parser().parse_args(
+        [
+            "--cleanup-audit-results",
+            "--report-dir",
+            str(results_dir),
+            "--keep-audit-runs",
+            "1",
+            "--yes",
+        ]
+    )
+
+    assert rpg.run_cli(args) == rpg.EXIT_OK
+    captured = capsys.readouterr()
+    assert "Audit_Results cleanup deleted 1 run folder" in captured.out
+    assert not old_run.exists()
+    assert new_run.exists()
+
+
+def test_run_cli_cleanup_audit_results_conflicts_with_compare_reports(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    old_report = tmp_path / "old.json"
+    new_report = tmp_path / "new.json"
+    old_report.write_text("{}", encoding="utf-8")
+    new_report.write_text("{}", encoding="utf-8")
+
+    args = rpg.make_parser().parse_args(
+        [
+            "--cleanup-audit-results",
+            "--compare-reports",
+            str(old_report),
+            str(new_report),
+        ]
+    )
+
+    assert rpg.run_cli(args) == rpg.EXIT_RUNTIME_ERROR
+    captured = capsys.readouterr()
+    assert "--compare-reports and --cleanup-audit-results cannot be combined" in captured.err
 
 
 def test_render_ignore_baseline_keeps_env_example_exception_after_env_wildcard() -> None:
@@ -3492,6 +3591,15 @@ def test_gui_action_button_specs_cover_identity_reports_and_prompts() -> None:
         ),
         ("open_run_log_action", "reports_tab", "artifact", "log", None, "icon-open.png", 4),
         ("open_artifacts_folder_action", "reports_tab", "artifact", "folder", None, "icon-folder.png", 5),
+        (
+            "cleanup_audit_results_action",
+            "cleanup_audit_results",
+            "method",
+            None,
+            "_cleanup_old_audit_results",
+            "icon-folder.png",
+            6,
+        ),
     ]
 
     prompt_specs = gui_state_helpers.prompt_card_action_button_specs()
@@ -4192,7 +4300,7 @@ def test_gui_state_action_layout_helpers_preserve_grid_contract() -> None:
 
     compact_reports = gui_state_helpers.reports_action_layout_state(
         compact=True,
-        artifact_button_count=3,
+        artifact_button_count=6,
     )
     assert compact_reports.agent_handoff_grid.kwargs == {
         "row": 0,
@@ -4205,6 +4313,9 @@ def test_gui_state_action_layout_helpers_preserve_grid_contract() -> None:
         {"row": 1, "column": 0, "sticky": "w", "padx": (0, 8), "pady": (2, 0)},
         {"row": 1, "column": 1, "sticky": "w", "padx": (0, 8), "pady": (2, 0)},
         {"row": 1, "column": 2, "sticky": "w", "padx": (0, 8), "pady": (2, 0)},
+        {"row": 2, "column": 0, "sticky": "w", "padx": (0, 8), "pady": (2, 0)},
+        {"row": 2, "column": 1, "sticky": "w", "padx": (0, 8), "pady": (2, 0)},
+        {"row": 2, "column": 2, "sticky": "w", "padx": (0, 8), "pady": (2, 0)},
     ]
 
     wide_reports = gui_state_helpers.reports_action_layout_state(
@@ -4353,6 +4464,7 @@ def test_gui_action_button_command_dispatch_uses_spec_contract(tmp_path: Path) -
     app._set_active_flow_tab = lambda tab_name: calls.append(("tab", tab_name))
     app._open_last_artifact = lambda kind: calls.append(("artifact", kind))
     app._compare_previous_report_to_latest = lambda: calls.append(("compare", "reports"))
+    app._cleanup_old_audit_results = lambda: calls.append(("cleanup", "artifacts"))
     app._copy_agent_handoff_to_clipboard = lambda: calls.append(("handoff", "copy"))
     app.apply_git_identity_global_clicked = lambda: calls.append(("identity", "global"))
     app._copy_prompt_to_clipboard = lambda prompt: calls.append(("prompt", prompt))
@@ -4364,6 +4476,7 @@ def test_gui_action_button_command_dispatch_uses_spec_contract(tmp_path: Path) -
     app._action_button_command(gui_state_helpers.reports_decision_action_button_spec())()
     app._action_button_command(gui_state_helpers.report_artifact_action_button_specs()[0])()
     app._action_button_command(gui_state_helpers.report_artifact_action_button_specs()[2])()
+    app._action_button_command(gui_state_helpers.report_artifact_action_button_specs()[5])()
     app._action_button_command(gui_state_helpers.reports_primary_action_button_specs()[1])()
 
     prompt = DummyPrompt()
@@ -4377,11 +4490,62 @@ def test_gui_action_button_command_dispatch_uses_spec_contract(tmp_path: Path) -
         ("tab", "Prompts"),
         ("artifact", "html"),
         ("compare", "reports"),
+        ("cleanup", "artifacts"),
         ("handoff", "copy"),
         ("prompt", prompt),
         ("text", ("repo-privacy-guardian --dry-run", "Command copied to clipboard.")),
         ("open_prompt", (prompt, tmp_path)),
     ]
+
+
+def test_gui_cleanup_old_audit_results_confirms_and_deletes(tmp_path: Path, monkeypatch) -> None:
+    class DummyVar:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def get(self) -> str:
+            return self.value
+
+    class DummyMessageBox:
+        def askyesno(self, title: str, message: str) -> bool:
+            confirmations.append((title, message))
+            return True
+
+    results_dir = tmp_path / "Audit_Results"
+    results_dir.mkdir()
+    old_run = results_dir / "20260501-120000"
+    new_run = results_dir / "20260521-120000"
+    for day in range(1, 22):
+        (results_dir / f"202605{day:02d}-120000").mkdir()
+
+    confirmations: list[tuple[str, str]] = []
+    logs: list[str] = []
+    refresh_calls: list[bool] = []
+
+    def translate(key: str, **kwargs: object) -> str:
+        template = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT][key]
+        return template.format(**kwargs) if kwargs else template
+
+    monkeypatch.setattr(rpg, "default_results_dir", lambda: results_dir)
+
+    app = object.__new__(rpg.GuiApp)
+    app.report_dir_var = DummyVar(str(results_dir))
+    app.messagebox = DummyMessageBox()
+    app.log = logs.append
+    app._t = translate
+    app._last_run_artifacts = None
+    app._last_run_exit_code = None
+    app._last_run_action = ""
+    app._refresh_reports_tab = lambda: refresh_calls.append(True)
+
+    app._cleanup_old_audit_results()
+
+    assert confirmations
+    assert "20260501-120000" in confirmations[0][1]
+    assert not old_run.exists()
+    assert new_run.exists()
+    assert any("Deleted 1 old Audit_Results run folder" in line for line in logs)
+    assert refresh_calls == []
 
 
 def test_gui_repair_confirmation_text_uses_english_labels() -> None:

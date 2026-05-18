@@ -25,6 +25,16 @@ def parse_positive_int(raw_value: str) -> int:
     return parsed
 
 
+def parse_non_negative_int(raw_value: str) -> int:
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be zero or a positive integer") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be zero or a positive integer")
+    return parsed
+
+
 def normalize_github_jobs(value: int) -> int:
     return min(MAX_GITHUB_CLONE_JOBS, max(1, value))
 
@@ -212,6 +222,20 @@ def make_parser(
         help=(
             "Compare two redacted report.json artifacts and print count-only deltas without running a new audit."
         ),
+    )
+    parser.add_argument(
+        "--cleanup-audit-results",
+        action="store_true",
+        help=(
+            "Clean old local Audit_Results run folders and exit. Use --dry-run to preview; "
+            "without --dry-run this prompts unless --yes is supplied."
+        ),
+    )
+    parser.add_argument(
+        "--keep-audit-runs",
+        type=parse_non_negative_int,
+        default=20,
+        help="With --cleanup-audit-results, keep this many newest Audit_Results run folders (default: 20).",
     )
     parser.add_argument(
         "--report-dir",

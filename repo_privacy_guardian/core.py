@@ -71,6 +71,8 @@ compare_report_files = report_diff_helpers.compare_report_files
 compare_report_payloads = report_diff_helpers.compare_report_payloads
 find_previous_report_json = report_diff_helpers.find_previous_report_json
 format_report_diff_summary = report_diff_helpers.format_report_diff_summary
+AuditResultsCleanupPlan = artifact_helpers.AuditResultsCleanupPlan
+AuditResultsCleanupResult = artifact_helpers.AuditResultsCleanupResult
 
 
 def default_root_dir() -> Path:
@@ -1342,6 +1344,22 @@ def create_run_artifacts(base_dir: Path) -> RunArtifacts:
         apply_private_permissions=_apply_private_permissions,
         run_state_filename=RUN_STATE_FILENAME,
         now_factory=datetime.now,
+    )
+
+
+def build_audit_results_cleanup_plan(base_dir: Path, *, keep_runs: int) -> AuditResultsCleanupPlan:
+    return artifact_helpers.build_audit_results_cleanup_plan(base_dir, keep_runs=keep_runs)
+
+
+def clean_audit_results(plan: AuditResultsCleanupPlan, *, dry_run: bool) -> AuditResultsCleanupResult:
+    def _remove_tree(path: Path) -> None:
+        shutil.rmtree(path, onerror=_make_path_writable_and_retry_remove)
+
+    return artifact_helpers.clean_audit_results(
+        plan,
+        dry_run=dry_run,
+        path_has_existing_symlink_ancestor=_path_has_existing_symlink_ancestor,
+        remove_tree=_remove_tree,
     )
 
 
@@ -2904,7 +2922,63 @@ def run_report_comparison(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def run_audit_results_cleanup(args: argparse.Namespace) -> int:
+    enforced_results_dir, forced = enforce_results_dir(Path(args.report_dir))
+    if forced:
+        print(
+            f"[WARN] report-dir was forced to {default_results_dir()} to comply with mandatory Audit_Results policy"
+        )
+    try:
+        plan = build_audit_results_cleanup_plan(enforced_results_dir, keep_runs=int(args.keep_audit_runs))
+    except Exception as exc:
+        print(f"[ERROR] Could not plan Audit_Results cleanup: {exc}", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+
+    print(f"[INFO] Audit_Results cleanup target: {enforced_results_dir}")
+    print(f"[INFO] Run folders discovered: {plan.discovered_count}")
+    print(f"[INFO] Newest run folders kept: {len(plan.kept_run_dirs)}")
+    print(f"[INFO] Old run folders selected for cleanup: {len(plan.removable_run_dirs)}")
+    if plan.skipped_entries:
+        print(f"[INFO] Non-run entries skipped: {len(plan.skipped_entries)}")
+
+    for path in plan.removable_run_dirs[:10]:
+        prefix = "[DRY-RUN] Would delete" if args.dry_run else "[CLEANUP] Selected"
+        print(f"{prefix}: {path}")
+    if len(plan.removable_run_dirs) > 10:
+        print(f"[INFO] ... and {len(plan.removable_run_dirs) - 10} more")
+
+    if not plan.removable_run_dirs:
+        print("[INFO] No old Audit_Results run folders need cleanup.")
+        return EXIT_OK
+
+    if args.dry_run:
+        result = clean_audit_results(plan, dry_run=True)
+        print("[DRY-RUN] No Audit_Results folders were deleted.")
+        return EXIT_OK if result.success else EXIT_RUNTIME_ERROR
+
+    if not args.yes:
+        answer = input("Delete selected old Audit_Results run folders? [y/N]: ").strip().lower()
+        if answer not in {"y", "yes"}:
+            print("[INFO] Audit_Results cleanup cancelled.")
+            return EXIT_ABORTED
+
+    result = clean_audit_results(plan, dry_run=False)
+    for path in result.deleted_run_dirs[:10]:
+        print(f"[CLEANUP] Deleted: {path}")
+    if len(result.deleted_run_dirs) > 10:
+        print(f"[INFO] ... and {len(result.deleted_run_dirs) - 10} more deleted")
+    for item in result.failed_deletions:
+        print(f"[ERROR] {item}", file=sys.stderr)
+    print(f"[INFO] Audit_Results cleanup deleted {len(result.deleted_run_dirs)} run folder(s).")
+    return EXIT_OK if result.success else EXIT_RUNTIME_ERROR
+
+
 def run_cli(args: argparse.Namespace) -> int:  # pragma: no cover
+    if getattr(args, "compare_reports", None) and getattr(args, "cleanup_audit_results", False):
+        print("[ERROR] --compare-reports and --cleanup-audit-results cannot be combined.", file=sys.stderr)
+        return EXIT_RUNTIME_ERROR
+    if getattr(args, "cleanup_audit_results", False):
+        return run_audit_results_cleanup(args)
     if getattr(args, "compare_reports", None):
         return run_report_comparison(args)
 

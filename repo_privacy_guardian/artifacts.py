@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import shutil
 import sys
 import threading
 from dataclasses import dataclass
@@ -10,6 +12,7 @@ from typing import Callable, TypeVar
 
 
 RUN_ARTIFACT_COLLISION_ATTEMPTS = 1000
+AUDIT_RESULTS_RUN_DIR_RE = re.compile(r"^\d{8}-\d{6}(?:-\d{2})?$")
 
 
 @dataclass
@@ -26,6 +29,31 @@ class RunArtifacts:
     def __post_init__(self) -> None:
         if self.agent_summary_path is None:
             self.agent_summary_path = self.run_dir / "agent_summary.json"
+
+
+@dataclass(frozen=True)
+class AuditResultsCleanupPlan:
+    base_dir: Path
+    keep_runs: int
+    kept_run_dirs: tuple[Path, ...]
+    removable_run_dirs: tuple[Path, ...]
+    skipped_entries: tuple[str, ...]
+
+    @property
+    def discovered_count(self) -> int:
+        return len(self.kept_run_dirs) + len(self.removable_run_dirs)
+
+
+@dataclass(frozen=True)
+class AuditResultsCleanupResult:
+    plan: AuditResultsCleanupPlan
+    dry_run: bool
+    deleted_run_dirs: tuple[Path, ...]
+    failed_deletions: tuple[str, ...]
+
+    @property
+    def success(self) -> bool:
+        return not self.failed_deletions
 
 
 ReportT = TypeVar("ReportT")
@@ -170,6 +198,86 @@ def create_run_artifacts(
         state_path=run_dir / run_state_filename,
         started_at=started,
         agent_summary_path=run_dir / "agent_summary.json",
+    )
+
+
+def is_audit_results_run_dir(path: Path) -> bool:
+    return path.is_dir() and not path.is_symlink() and bool(AUDIT_RESULTS_RUN_DIR_RE.fullmatch(path.name))
+
+
+def build_audit_results_cleanup_plan(base_dir: Path, *, keep_runs: int) -> AuditResultsCleanupPlan:
+    if keep_runs < 0:
+        raise ValueError("keep_runs must be greater than or equal to zero")
+
+    if not base_dir.exists():
+        return AuditResultsCleanupPlan(
+            base_dir=base_dir,
+            keep_runs=keep_runs,
+            kept_run_dirs=(),
+            removable_run_dirs=(),
+            skipped_entries=(),
+        )
+    if not base_dir.is_dir():
+        raise RuntimeError(f"Expected Audit_Results directory: {base_dir}")
+    if base_dir.is_symlink():
+        raise RuntimeError(f"Refusing to clean symlinked Audit_Results directory: {base_dir}")
+
+    run_dirs: list[Path] = []
+    skipped: list[str] = []
+    for entry in base_dir.iterdir():
+        if is_audit_results_run_dir(entry):
+            run_dirs.append(entry)
+            continue
+        skipped.append(str(entry))
+
+    newest_first = tuple(sorted(run_dirs, key=lambda item: item.name, reverse=True))
+    kept = newest_first[:keep_runs]
+    removable = newest_first[keep_runs:]
+    return AuditResultsCleanupPlan(
+        base_dir=base_dir,
+        keep_runs=keep_runs,
+        kept_run_dirs=kept,
+        removable_run_dirs=removable,
+        skipped_entries=tuple(sorted(skipped)),
+    )
+
+
+def clean_audit_results(
+    plan: AuditResultsCleanupPlan,
+    *,
+    dry_run: bool,
+    path_has_existing_symlink_ancestor: Callable[[Path], bool],
+    remove_tree: Callable[..., None] = shutil.rmtree,
+) -> AuditResultsCleanupResult:
+    if dry_run:
+        return AuditResultsCleanupResult(
+            plan=plan,
+            dry_run=True,
+            deleted_run_dirs=(),
+            failed_deletions=(),
+        )
+
+    deleted: list[Path] = []
+    failed: list[str] = []
+    for run_dir in plan.removable_run_dirs:
+        if path_has_existing_symlink_ancestor(run_dir):
+            failed.append(f"refusing to remove symlinked path component: {run_dir}")
+            continue
+        if not is_audit_results_run_dir(run_dir):
+            failed.append(f"refusing to remove non-run artifact directory: {run_dir}")
+            continue
+        try:
+            remove_tree(run_dir)
+        except OSError as exc:
+            failed.append(f"{run_dir}: {exc}")
+            continue
+        deleted.append(run_dir)
+
+    return AuditResultsCleanupResult(
+        plan=plan,
+        dry_run=False,
+        deleted_run_dirs=tuple(deleted),
+        failed_deletions=tuple(failed),
     )
 
 

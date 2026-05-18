@@ -35,7 +35,7 @@ Workaround: GUI supports cooperative cancellation, but it only stops after the a
 1. `repo_privacy_guardian/core.py` and `repo_privacy_guardian/gui/app.py` are still large after the package split and recent GUI helper extractions.
 
 Impact: medium.
-Workaround: continue extracting by domain behind the internal package while preserving the stable `1.x` facade and CLI/GUI parity tests. GUI dialog, navigation, and background-worker adapters now have focused helper coverage; the next useful seams are local artifact-retention cleanup and remaining compatibility aggregation in `core.py`.
+Workaround: continue extracting by domain behind the internal package while preserving the stable `1.x` facade and CLI/GUI parity tests. GUI dialog, navigation, background-worker adapters, and local artifact cleanup now have focused helper coverage; the next useful seams are large-history benchmark coverage and remaining compatibility aggregation in `core.py`.
 
 1. Linux GUI support depends on optional desktop prerequisites.
 

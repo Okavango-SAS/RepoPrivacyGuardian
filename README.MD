@@ -453,6 +453,20 @@ repo-privacy-guardian --compare-reports Audit_Results/<old-run>/report.json Audi
 
 The comparison prints only repository counts, category deltas, and a recommended next action. It does not paste raw finding evidence. Add `--report-json /path/to/diff.json` when an automation needs the same count-only comparison as structured JSON.
 
+Preview local artifact cleanup without deleting anything:
+
+```sh
+repo-privacy-guardian --cleanup-audit-results --keep-audit-runs 20 --dry-run --yes
+```
+
+After review, delete older local `Audit_Results/<run_id>/` folders while keeping the newest runs:
+
+```sh
+repo-privacy-guardian --cleanup-audit-results --keep-audit-runs 20 --yes
+```
+
+Cleanup only targets timestamp-named run folders under the enforced `Audit_Results` directory. Non-run entries are skipped, and without `--yes` the CLI asks for confirmation.
+
 Safe fix preview:
 
 ```sh
@@ -520,7 +534,7 @@ Behavioral parity means the GUI preserves the same audit, report, hardening, rem
 
 The GUI is now a CLI companion for manual use: Audit stays simple, Reports keeps the latest local evidence visible, Prompts helps copy the maintained agentic CLI workflows, Settings holds advanced parity controls, and Repair remains gated.
 
-After a GUI run, `Reports` can also copy a privacy-safe agent handoff prompt that references the latest local artifacts without pasting raw findings into chat. The same tab can compare the latest `report.json` with the previous local run and copy a count-only regression summary. Artifact labels prefer repository-relative paths when possible; the open buttons still use the real local paths.
+After a GUI run, `Reports` can also copy a privacy-safe agent handoff prompt that references the latest local artifacts without pasting raw findings into chat. The same tab can compare the latest `report.json` with the previous local run, copy a count-only regression summary, and clean older local `Audit_Results` run folders after visual confirmation. Artifact labels prefer repository-relative paths when possible; the open buttons still use the real local paths.
 
 The GUI keeps the staged safety contract:
 
@@ -553,6 +567,8 @@ Each run writes local artifacts under `Audit_Results/<run_id>/`:
 The HTML report starts with a `Decision first` section that separates blockers, advisory/manual-review signals, fixture/documentation context, suppressed findings, and the next action. Artifacts are redacted, but they still contain operational security context and should be treated as sensitive local outputs.
 
 Use `--compare-reports` or the GUI `Compare previous run` action after a re-audit to confirm whether blocking or manual-review categories were resolved, added, or unchanged before deciding the next repair step.
+
+For frequent local audits, use `--cleanup-audit-results --dry-run --yes` first, then rerun without `--dry-run` after reviewing the selected folders. The GUI Reports tab exposes the same cleanup behavior with a confirmation dialog and keeps the 20 newest runs.
 
 ## 🛠️ What `--fix` Can Do
 

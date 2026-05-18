@@ -157,6 +157,9 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
     "compare_previous_report": (
         "Compares the latest report.json with the previous local run and copies a count-only regression summary."
     ),
+    "cleanup_audit_results": (
+        "Deletes older local Audit_Results run folders after confirmation, keeping the 20 newest runs."
+    ),
     "copy_prompt": "Copies the full prompt text to the clipboard so it can be pasted into an agentic IDE session.",
     "copy_prompt_command": "Copies the recommended CLI command template for this prompt.",
     "open_prompt_file": "Opens the tracked prompt file for review in the default local application.",
@@ -337,6 +340,9 @@ GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
     "compare_previous_report": (
         "Compara el último report.json con la corrida local anterior y copia un resumen de regresión sólo con conteos."
     ),
+    "cleanup_audit_results": (
+        "Elimina carpetas locales antiguas de Audit_Results después de confirmar y conserva las 20 corridas más recientes."
+    ),
     "copy_prompt": "Copia la instrucción completa al portapapeles para pegarla en una sesión de IDE agéntica.",
     "copy_prompt_command": "Copia el comando CLI recomendado para esta instrucción.",
     "open_prompt_file": "Abre el archivo de instrucción versionado para revisarlo en la aplicación local predeterminada.",
@@ -463,6 +469,17 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "report_diff_failed": "Run comparison failed: {error}",
         "open_run_log_action": "Open run.log",
         "open_artifacts_folder_action": "Open artifacts folder",
+        "cleanup_audit_results_action": "Clean old runs",
+        "dialog_cleanup_audit_results_title": "Clean old Audit_Results runs?",
+        "dialog_cleanup_audit_results_message": (
+            "This will delete {count} older local Audit_Results run folder(s), keeping the {keep} newest.\n\n"
+            "Preview:\n{preview}\n\n"
+            "Delete the selected old run folders?"
+        ),
+        "cleanup_audit_results_none": "No old Audit_Results run folders need cleanup.",
+        "cleanup_audit_results_cancelled": "Audit_Results cleanup cancelled.",
+        "cleanup_audit_results_deleted": "Deleted {count} old Audit_Results run folder(s).",
+        "cleanup_audit_results_failed": "Audit_Results cleanup failed: {error}",
         "prompts_library": "Agent Workflow Prompts",
         "prompts_library_body": "Copy a vetted prompt into Codex, Claude Code, Antigravity, GitHub Copilot, Cursor, or a similar agentic IDE. This is the orchestration layer for analysis, classification, and reviewed repair.",
         "agent_workflow_title": "How to use this tab",
@@ -801,6 +818,17 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "report_diff_failed": "Falló la comparación de corridas: {error}",
         "open_run_log_action": "Abrir run.log",
         "open_artifacts_folder_action": "Abrir carpeta de artefactos",
+        "cleanup_audit_results_action": "Limpiar corridas antiguas",
+        "dialog_cleanup_audit_results_title": "¿Limpiar corridas antiguas de Audit_Results?",
+        "dialog_cleanup_audit_results_message": (
+            "Esto eliminará {count} carpeta(s) locales antiguas de Audit_Results y conservará las {keep} más recientes.\n\n"
+            "Vista previa:\n{preview}\n\n"
+            "¿Eliminar las carpetas antiguas seleccionadas?"
+        ),
+        "cleanup_audit_results_none": "No hay carpetas antiguas de Audit_Results para limpiar.",
+        "cleanup_audit_results_cancelled": "Limpieza de Audit_Results cancelada.",
+        "cleanup_audit_results_deleted": "Se eliminaron {count} carpeta(s) antiguas de Audit_Results.",
+        "cleanup_audit_results_failed": "Falló la limpieza de Audit_Results: {error}",
         "prompts_library": "Instrucciones para flujo agéntico",
         "prompts_library_body": "Copiá una instrucción revisada en Codex, Claude Code, Antigravity, GitHub Copilot, Cursor o una IDE agéntica similar. Esta es la capa de orquestación para análisis, clasificación y reparación revisada.",
         "agent_workflow_title": "Cómo usar esta pestaña",
