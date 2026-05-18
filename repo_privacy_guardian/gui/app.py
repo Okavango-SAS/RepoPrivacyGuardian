@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Callable, cast
 from repo_privacy_guardian.gui import assets as gui_asset_helpers
 from repo_privacy_guardian.gui import state as gui_state_helpers
 from repo_privacy_guardian.gui import theme as gui_theme_helpers
+from repo_privacy_guardian.gui import window as gui_window_helpers
 
 if TYPE_CHECKING:
     from repo_privacy_guardian.core import (
@@ -101,21 +102,13 @@ class GuiApp:  # pragma: no cover
         self._gui_appearance = normalize_gui_appearance(
             gui_setting_str(self._gui_settings, "gui_appearance", GUI_APPEARANCE_DEFAULT)
         )
-        ctk.set_appearance_mode(self._gui_appearance)
-        ctk.set_default_color_theme("blue")
+        gui_window_helpers.configure_ctk_theme(ctk, self._gui_appearance)
 
         self.tk = tk
         self.ctk = ctk
         self.messagebox = messagebox
         self.filedialog = filedialog
-        try:
-            self.root = ctk.CTk()
-        except tcl_error as exc:
-            raise RuntimeError(
-                "GUI mode could not initialize Tk. "
-                "On Linux desktop, install python3-tk and start from a graphical session. "
-                "Otherwise, use the CLI."
-            ) from exc
+        self.root = gui_window_helpers.create_root(ctk, tcl_error)
         self._sync_ctk_system_appearance_probe()
         self._gui_asset_manager = self._create_gui_asset_manager()
         self._gui_asset_images = self._load_gui_assets()
@@ -127,20 +120,11 @@ class GuiApp:  # pragma: no cover
         self._effective_gui_appearance = GUI_APPEARANCE_LIGHT
         self._appearance_mode_callback_registered = False
         self._set_window_icon()
-        self.root.title("Repo Privacy Guardian")
-        screen_w = self.root.winfo_screenwidth()
-        screen_h = self.root.winfo_screenheight()
-        window_w = min(max(int(screen_w * 0.92), 1180), 1620)
-        window_h = min(max(int(screen_h * 0.9), 760), 980)
-        window_x = max((screen_w - window_w) // 2, 0)
-        window_y = max((screen_h - window_h) // 2, 0)
+        gui_window_helpers.configure_root_window(self.root)
         self._top_stack_width_threshold = 1220
         self._options_stack_width_threshold = 1220
         self._results_stack_width_threshold = 1240
         self._prompts_stack_width_threshold = 1240
-        self.root.geometry(f"{window_w}x{window_h}+{window_x}+{window_y}")
-        self.root.minsize(min(1180, screen_w), min(700, screen_h))
-        self.root.maxsize(screen_w, screen_h)
 
         available_families: set[str] | None = None
         try:
@@ -1309,45 +1293,34 @@ class GuiApp:  # pragma: no cover
         }
 
     def _sync_ctk_system_appearance_probe(self) -> None:
-        if self._current_appearance() != GUI_APPEARANCE_SYSTEM:
-            return
-        tracker = getattr(self.ctk, "AppearanceModeTracker", None)
-        init_appearance = getattr(tracker, "init_appearance_mode", None)
-        if init_appearance is None:
-            return
-        try:
-            init_appearance()
-        except Exception as exc:
-            self._record_gui_warning("appearance mode tracker initialization failed", exc)
+        gui_window_helpers.sync_ctk_system_appearance_probe(
+            self.ctk,
+            current_appearance=self._current_appearance(),
+            system_appearance=GUI_APPEARANCE_SYSTEM,
+            record_warning=self._record_gui_warning,
+        )
 
     def _register_appearance_mode_callback(self) -> None:
-        if getattr(self, "_appearance_mode_callback_registered", False):
-            return
-        tracker = getattr(self.ctk, "AppearanceModeTracker", None)
-        add_callback = getattr(tracker, "add", None)
-        if add_callback is None:
-            return
-        try:
-            add_callback(self._on_ctk_appearance_mode_changed, self.root)
-        except Exception as exc:
-            self._record_gui_warning("appearance mode callback registration failed", exc)
-            return
-        self._appearance_mode_callback_registered = True
+        self._appearance_mode_callback_registered = gui_window_helpers.register_appearance_mode_callback(
+            self.ctk,
+            callback=self._on_ctk_appearance_mode_changed,
+            root=self.root,
+            already_registered=getattr(self, "_appearance_mode_callback_registered", False),
+            record_warning=self._record_gui_warning,
+        )
 
     def _unregister_appearance_mode_callback(self) -> None:
-        if not getattr(self, "_appearance_mode_callback_registered", False):
-            return
-        tracker = getattr(self.ctk, "AppearanceModeTracker", None)
-        remove_callback = getattr(tracker, "remove", None)
-        if remove_callback is not None:
-            try:
-                remove_callback(self._on_ctk_appearance_mode_changed)
-            except Exception as exc:
-                self._record_gui_warning("appearance mode callback unregister failed", exc)
-        self._appearance_mode_callback_registered = False
+        self._appearance_mode_callback_registered = gui_window_helpers.unregister_appearance_mode_callback(
+            self.ctk,
+            callback=self._on_ctk_appearance_mode_changed,
+            was_registered=getattr(self, "_appearance_mode_callback_registered", False),
+            record_warning=self._record_gui_warning,
+        )
 
     def _on_ctk_appearance_mode_changed(self, _mode_name: str) -> None:
-        if getattr(self, "_gui_destroying", False):
+        if not gui_window_helpers.should_apply_appearance_mode_change(
+            gui_destroying=getattr(self, "_gui_destroying", False),
+        ):
             return
         self._apply_effective_gui_theme()
 
@@ -4326,7 +4299,7 @@ class GuiApp:  # pragma: no cover
             self.root.after(0, _finish_ui_error)
 
     def run(self) -> None:
-        self.root.mainloop()
+        gui_window_helpers.run_mainloop(self.root)
 
 
 from repo_privacy_guardian import core as _core  # noqa: E402

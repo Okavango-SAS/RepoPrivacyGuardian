@@ -15,6 +15,7 @@ import repo_privacy_guardian_prompts as prompt_helpers
 from repo_privacy_guardian.gui import assets as gui_asset_helpers
 from repo_privacy_guardian.gui import state as gui_state_helpers
 from repo_privacy_guardian.gui import theme as gui_theme_helpers
+from repo_privacy_guardian.gui import window as gui_window_helpers
 from repo_privacy_guardian_artifacts import RunArtifacts
 
 
@@ -526,6 +527,219 @@ def test_load_gui_runtime_requires_display(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match="headless environments"):
         rpg.load_gui_runtime()
+
+
+def test_gui_window_geometry_preserves_existing_screen_bounds() -> None:
+    desktop = gui_window_helpers.window_geometry_for_screen(1920, 1080)
+    assert desktop == gui_window_helpers.GuiWindowGeometry(
+        width=1620,
+        height=972,
+        x=150,
+        y=54,
+        min_width=1180,
+        min_height=700,
+        max_width=1920,
+        max_height=1080,
+    )
+    assert desktop.geometry_value == "1620x972+150+54"
+
+    compact = gui_window_helpers.window_geometry_for_screen(1000, 600)
+    assert compact == gui_window_helpers.GuiWindowGeometry(
+        width=1180,
+        height=760,
+        x=0,
+        y=0,
+        min_width=1000,
+        min_height=600,
+        max_width=1000,
+        max_height=600,
+    )
+    assert compact.geometry_value == "1180x760+0+0"
+
+
+def test_gui_window_helpers_create_and_configure_root() -> None:
+    class FakeTclError(Exception):
+        pass
+
+    class FakeRoot:
+        def __init__(self, screen_width: int = 1600, screen_height: int = 900) -> None:
+            self.screen_width = screen_width
+            self.screen_height = screen_height
+            self.calls: list[tuple[str, tuple[object, ...]]] = []
+
+        def title(self, value: str) -> None:
+            self.calls.append(("title", (value,)))
+
+        def winfo_screenwidth(self) -> int:
+            return self.screen_width
+
+        def winfo_screenheight(self) -> int:
+            return self.screen_height
+
+        def geometry(self, value: str) -> None:
+            self.calls.append(("geometry", (value,)))
+
+        def minsize(self, width: int, height: int) -> None:
+            self.calls.append(("minsize", (width, height)))
+
+        def maxsize(self, width: int, height: int) -> None:
+            self.calls.append(("maxsize", (width, height)))
+
+        def mainloop(self) -> None:
+            self.calls.append(("mainloop", ()))
+
+    class FakeCtk:
+        def __init__(self, *, fail_root: bool = False) -> None:
+            self.fail_root = fail_root
+            self.calls: list[tuple[str, tuple[object, ...]]] = []
+            self.root = FakeRoot()
+
+        def set_appearance_mode(self, appearance: str) -> None:
+            self.calls.append(("set_appearance_mode", (appearance,)))
+
+        def set_default_color_theme(self, theme: str) -> None:
+            self.calls.append(("set_default_color_theme", (theme,)))
+
+        def CTk(self) -> FakeRoot:
+            if self.fail_root:
+                raise FakeTclError("no display")
+            return self.root
+
+    ctk = FakeCtk()
+    gui_window_helpers.configure_ctk_theme(ctk, "Dark")
+    root = gui_window_helpers.create_root(ctk, FakeTclError)
+    geometry = gui_window_helpers.configure_root_window(root, title="Custom")
+    gui_window_helpers.run_mainloop(root)
+
+    assert ctk.calls == [("set_appearance_mode", ("Dark",)), ("set_default_color_theme", ("blue",))]
+    assert geometry.geometry_value == "1472x810+64+45"
+    assert root.calls == [
+        ("title", ("Custom",)),
+        ("geometry", ("1472x810+64+45",)),
+        ("minsize", (1180, 700)),
+        ("maxsize", (1600, 900)),
+        ("mainloop", ()),
+    ]
+
+    with pytest.raises(RuntimeError, match="GUI mode could not initialize Tk") as exc_info:
+        gui_window_helpers.create_root(FakeCtk(fail_root=True), FakeTclError)
+    assert isinstance(exc_info.value.__cause__, FakeTclError)
+
+
+def test_gui_window_appearance_callbacks_report_failures() -> None:
+    class Tracker:
+        def __init__(self) -> None:
+            self.add_calls: list[tuple[object, object]] = []
+            self.remove_calls: list[object] = []
+            self.init_calls = 0
+            self.fail_init = False
+            self.fail_add = False
+            self.fail_remove = False
+
+        def init_appearance_mode(self) -> None:
+            self.init_calls += 1
+            if self.fail_init:
+                raise RuntimeError("init failed")
+
+        def add(self, callback: object, root: object) -> None:
+            if self.fail_add:
+                raise RuntimeError("add failed")
+            self.add_calls.append((callback, root))
+
+        def remove(self, callback: object) -> None:
+            if self.fail_remove:
+                raise RuntimeError("remove failed")
+            self.remove_calls.append(callback)
+
+    class FakeCtk:
+        def __init__(self, tracker: Tracker | None) -> None:
+            self.AppearanceModeTracker = tracker
+
+    warnings: list[tuple[str, str]] = []
+    tracker = Tracker()
+    ctk = FakeCtk(tracker)
+
+    def callback(_mode: str) -> None:
+        return None
+
+    root = object()
+
+    gui_window_helpers.sync_ctk_system_appearance_probe(
+        ctk,
+        current_appearance="Light",
+        system_appearance="System",
+        record_warning=lambda context, exc: warnings.append((context, str(exc))),
+    )
+    assert tracker.init_calls == 0
+
+    gui_window_helpers.sync_ctk_system_appearance_probe(
+        ctk,
+        current_appearance="System",
+        system_appearance="System",
+        record_warning=lambda context, exc: warnings.append((context, str(exc))),
+    )
+    assert tracker.init_calls == 1
+
+    assert gui_window_helpers.register_appearance_mode_callback(
+        ctk,
+        callback=callback,
+        root=root,
+        already_registered=False,
+        record_warning=lambda context, exc: warnings.append((context, str(exc))),
+    ) is True
+    assert tracker.add_calls == [(callback, root)]
+    assert gui_window_helpers.register_appearance_mode_callback(
+        ctk,
+        callback=callback,
+        root=root,
+        already_registered=True,
+        record_warning=lambda context, exc: warnings.append((context, str(exc))),
+    ) is True
+    assert len(tracker.add_calls) == 1
+
+    assert gui_window_helpers.unregister_appearance_mode_callback(
+        ctk,
+        callback=callback,
+        was_registered=True,
+        record_warning=lambda context, exc: warnings.append((context, str(exc))),
+    ) is False
+    assert tracker.remove_calls == [callback]
+    assert gui_window_helpers.unregister_appearance_mode_callback(
+        ctk,
+        callback=callback,
+        was_registered=False,
+        record_warning=lambda context, exc: warnings.append((context, str(exc))),
+    ) is False
+
+    tracker.fail_init = True
+    tracker.fail_add = True
+    tracker.fail_remove = True
+    gui_window_helpers.sync_ctk_system_appearance_probe(
+        ctk,
+        current_appearance="System",
+        system_appearance="System",
+        record_warning=lambda context, exc: warnings.append((context, str(exc))),
+    )
+    assert gui_window_helpers.register_appearance_mode_callback(
+        ctk,
+        callback=callback,
+        root=root,
+        already_registered=False,
+        record_warning=lambda context, exc: warnings.append((context, str(exc))),
+    ) is False
+    assert gui_window_helpers.unregister_appearance_mode_callback(
+        ctk,
+        callback=callback,
+        was_registered=True,
+        record_warning=lambda context, exc: warnings.append((context, str(exc))),
+    ) is False
+    assert warnings == [
+        ("appearance mode tracker initialization failed", "init failed"),
+        ("appearance mode callback registration failed", "add failed"),
+        ("appearance mode callback unregister failed", "remove failed"),
+    ]
+    assert gui_window_helpers.should_apply_appearance_mode_change(gui_destroying=False) is True
+    assert gui_window_helpers.should_apply_appearance_mode_change(gui_destroying=True) is False
 
 
 def test_gui_runtime_assets_resolve_without_gui_imports() -> None:
