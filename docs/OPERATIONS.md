@@ -118,6 +118,8 @@ Manual GitHub hardening fix guide:
 
 RepoPrivacyGuardian's own public repository should keep the automatic required check aligned to `CLI smoke + release contract (automatic, ubuntu-latest, py3.13)`. That smoke workflow is path-gated for protected-branch pull requests and `main` pushes that touch executable, packaging, resource, test, or validation-tooling surfaces. Docs-only changes stay local-first: run `python scripts/check_release_contract.py`, and if branch protection needs the smoke check for a docs-only PR, run `workflow_dispatch` without extended checks on that branch/commit. Manual extended workflow jobs remain maintainer-invoked release evidence and are not required on every push.
 
+The manual Windows GUI smoke job is pinned to the explicit `windows-2025-vs2026` runner while GitHub transitions `windows-latest` and `windows-2025` to the Visual Studio 2026 image in June 2026. Keep that label until the migration window has settled, then review whether the explicit runner should remain pinned or move to a newer stable label with release-contract coverage updated in the same change set.
+
 ## Artifacts and outputs
 
 Operational outputs remain local by default:

@@ -151,6 +151,7 @@ OPERATIONS_REQUIREMENTS = [
     "NPM_TOKEN",
     "Public repository posture",
     "already public on GitHub",
+    "windows-2025-vs2026",
 ]
 
 DESIGN_REQUIREMENTS = [
@@ -173,6 +174,8 @@ WORKFLOW_REQUIREMENTS = [
     'description: Run the manual extended validation suite',
     'uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2',
     'uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0',
+    'name: GUI smoke (manual, windows-2025-vs2026, py3.11)',
+    'runs-on: windows-2025-vs2026',
     'run: python scripts/check_release_contract.py',
     'run: python tests/release_smoke_cli.py',
     'run: python tests/release_smoke_gui.py',

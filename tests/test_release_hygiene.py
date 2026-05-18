@@ -1194,6 +1194,9 @@ def test_ci_workflow_matches_cost_first_validation_contract() -> None:
     assert workflow.count("uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0") == 5
     assert 'python-version: "3.13"' in workflow
     assert 'python-version: "3.11"' in workflow
+    assert "GUI smoke (manual, windows-2025-vs2026, py3.11)" in workflow
+    assert "runs-on: windows-2025-vs2026" in workflow
+    assert "windows-latest" not in workflow
     assert "python scripts/check_release_contract.py" in workflow
     for path in (
         '".github/CODEOWNERS"',
@@ -1235,6 +1238,7 @@ def test_release_docs_describe_cost_first_validation_tiers() -> None:
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
     known_issues = (_repo_root() / "docs" / "KNOWN_ISSUES.md").read_text(encoding="utf-8")
     checklist = (_repo_root() / "docs" / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    operations = (_repo_root() / "docs" / "OPERATIONS.md").read_text(encoding="utf-8")
     troubleshooting = (_repo_root() / "docs" / "TROUBLESHOOTING.md").read_text(encoding="utf-8")
     versioning = (_repo_root() / "docs" / "VERSIONING.md").read_text(encoding="utf-8")
 
@@ -1245,6 +1249,8 @@ def test_release_docs_describe_cost_first_validation_tiers() -> None:
     assert "manual extended CI suite has been run" in checklist
     assert "validation tiers documented in README" in checklist
     assert "branch protection required status checks match the current automatic CI smoke job names" in checklist
+    assert "windows-2025-vs2026" in operations
+    assert "windows-2025-vs2026" in versioning
     assert "Stopping after current step..." in troubleshooting
     assert "validation tiers" in versioning
     assert "automatic CI smoke" in versioning

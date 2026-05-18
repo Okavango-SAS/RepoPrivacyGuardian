@@ -18,6 +18,9 @@ All notable user-facing changes to this project are documented here.
 - Updated pinned GitHub Actions to Node.js 24-compatible `actions/checkout`
   v6.0.2 and `actions/setup-python` v6.2.0 while preserving SHA pins and
   release-contract coverage.
+- Pinned the manual Windows GUI smoke job to the explicit
+  `windows-2025-vs2026` runner so the suite validates GitHub's 2026 Windows
+  hosted-runner migration without relying on `windows-latest`.
 - Hardened manual extended CI by installing GUI extras for typecheck/full
   pytest jobs and making GUI/Windows contract tests independent of the host OS.
 - Documented the 2026-05-18 development audit, including current security,
