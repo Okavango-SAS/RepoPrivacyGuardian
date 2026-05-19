@@ -80,8 +80,8 @@ GUI flow uses the same backend pipeline, but keeps the companion-style staged co
 Each run writes:
 
 - `agent_summary.json`: privacy-safe summary for coding agents with status, counts, relative artifact names, blocking/advisory/fixture/accepted-risk/suppression counts, and next action
-- `report.json`: redacted structured report with full traceability, including `suppressed_findings` and GitHub hardening fix guide data when present
-- `report.html`: human review report that starts with `Decision first`
+- `report.json`: redacted structured report with full traceability, including repository labels, scalar status/branch fields, failures, LiteLLM evidence, `suppressed_findings`, and GitHub hardening fix guide data when present
+- `report.html`: human review report that starts with `Decision first` and applies the same redaction helper to rendered settings, paths, repository labels, failures, samples, and optional supply-chain probe metadata
 - `run.log`: redacted execution log
 - `run_state.json`: status manifest with phase and performance diagnostics
 

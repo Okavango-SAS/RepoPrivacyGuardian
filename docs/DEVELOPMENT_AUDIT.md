@@ -221,6 +221,9 @@ Highest-value debt to pay down next:
   but they still need normal dependency-review cadence.
 - Large-history performance now has a repeatable benchmark path, but release
   thresholds are still advisory until enough baselines exist.
+- Redacted reporting and repository-target resolution now have broader
+  synthetic edge-case integration coverage, including explicit symlink target
+  selection and GitHub owner/org preflight.
 - Artifact retention/cleanup is now an ergonomic CLI/GUI workflow, but it
   should stay scoped to local ignored run artifacts only.
 - Provider-specific secret rotation is intentionally out of scope, but the docs
@@ -230,11 +233,11 @@ Highest-value debt to pay down next:
 
 Suggested priority order:
 
-1. Expand synthetic integration coverage for redaction edge cases and
-   target-resolution/preflight paths.
-2. Continue extracting remaining GUI widget-construction helpers behind focused
+1. Continue extracting remaining GUI widget-construction helpers behind focused
    tests.
-3. Continue shrinking `core.py` while preserving stable `1.x` compatibility
+2. Continue shrinking `core.py` while preserving stable `1.x` compatibility
    facades.
+3. Keep synthetic redaction, target-resolution, and preflight contracts aligned
+   as new report fields or target-selection modes are added.
 4. Defer provider-specific secret rotation and hosted backend features unless
    the product scope changes.

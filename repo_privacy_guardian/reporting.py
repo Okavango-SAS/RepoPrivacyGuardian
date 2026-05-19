@@ -51,6 +51,19 @@ def _redact_text_list(items: list[str]) -> list[str]:
 
 def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload = dict(report.__dict__)
+    for key in (
+        "name",
+        "branch",
+        "head",
+        "origin_head",
+        "low_confidence_email_mode",
+        "strict_profile",
+        "litellm_incident_severity",
+        "status",
+    ):
+        value = payload.get(key)
+        if value is not None:
+            payload[key] = redact_sensitive_text(str(value))
     payload["path"] = redact_sensitive_text(report.path)
     payload["origin_url"] = redact_sensitive_text(report.origin_url) if report.origin_url else None
     payload["upstream_url"] = redact_sensitive_text(report.upstream_url) if report.upstream_url else None
@@ -141,6 +154,15 @@ def sanitize_report_for_export(report: RepoReport) -> dict[str, object]:
     payload["fix_errors"] = _redact_text_list(report.fix_errors)
     payload["execution_errors"] = _redact_text_list(report.execution_errors)
     payload["fsck_output"] = _redact_text_list(report.fsck_output)
+    payload["litellm_reference_hits"] = _redact_text_list(report.litellm_reference_hits)
+    payload["litellm_compromised_reference_hits"] = _redact_text_list(
+        report.litellm_compromised_reference_hits
+    )
+    payload["litellm_install_command_hits"] = _redact_text_list(
+        report.litellm_install_command_hits
+    )
+    payload["litellm_ioc_hits"] = _redact_text_list(report.litellm_ioc_hits)
+    payload["failures"] = _redact_text_list(report.failures)
     return payload
 
 
@@ -279,6 +301,10 @@ def render_html_report(
     optional_supply_chain_payload: dict[str, object] | None = None,
 ) -> str:
     esc = html.escape
+
+    def safe_text(value: object) -> str:
+        return esc(redact_sensitive_text(str(value)))
+
     total = len(reports)
     passed = sum(1 for item in reports if item.status == "PASS")
     failed = total - passed
@@ -355,24 +381,24 @@ def render_html_report(
     )
 
     reason_rows = "".join(
-        f"<tr><td>{esc(reason)}</td><td class=\"num\">{count}</td></tr>"
+        f"<tr><td>{safe_text(reason)}</td><td class=\"num\">{count}</td></tr>"
         for reason, count in ordered_reasons
     )
     if not reason_rows:
         reason_rows = '<tr><td class="empty" colspan="2">No failure reasons recorded.</td></tr>'
 
     settings_rows = "".join(
-        f"<tr><td>{esc(key)}</td><td><code>{esc(redact_sensitive_text(value))}</code></td></tr>"
+        f"<tr><td>{safe_text(key)}</td><td><code>{safe_text(value)}</code></td></tr>"
         for key, value in sorted(run_settings.items(), key=lambda item: item[0])
     )
 
     high_cards = ""
     for rep, _label, _score, highlights in high_risk_repos:
-        detail = "".join(f"<li>{esc(item)}</li>" for item in highlights)
+        detail = "".join(f"<li>{safe_text(item)}</li>" for item in highlights)
         high_cards += (
             "<article class=\"high-card\">"
-            f"<h4>{esc(rep.name)}</h4>"
-            f"<p>Status: <strong>{esc(rep.status)}</strong> | Failures: <strong>{len(rep.failures)}</strong></p>"
+            f"<h4>{safe_text(rep.name)}</h4>"
+            f"<p>Status: <strong>{safe_text(rep.status)}</strong> | Failures: <strong>{len(rep.failures)}</strong></p>"
             f"<ul>{detail}</ul>"
             "</article>"
         )
@@ -415,10 +441,10 @@ def render_html_report(
                     continue
                 probe_rows += (
                     "<tr>"
-                    f"<td><code>{esc(redact_sensitive_text(str(probe.get('python', '-'))))}</code></td>"
-                    f"<td>{esc(str(probe.get('installed', False)))}</td>"
-                    f"<td>{esc(str(probe.get('version', '-')))}</td>"
-                    f"<td><code>{esc(redact_sensitive_text(str(probe.get('location', '-'))))}</code></td>"
+                    f"<td><code>{safe_text(probe.get('python', '-'))}</code></td>"
+                    f"<td>{safe_text(probe.get('installed', False))}</td>"
+                    f"<td>{safe_text(probe.get('version', '-'))}</td>"
+                    f"<td><code>{safe_text(probe.get('location', '-'))}</code></td>"
                     "</tr>"
                 )
         if not probe_rows:
@@ -427,7 +453,7 @@ def render_html_report(
         supply_chain_panel = (
             '<section class="panel">'
             '<h2>Supply-chain incident audit (LiteLLM)</h2>'
-            f'<p><strong>Global severity:</strong> <span class="sev-pill {global_severity_css}">{esc(global_severity)}</span></p>'
+            f'<p><strong>Global severity:</strong> <span class="sev-pill {global_severity_css}">{safe_text(global_severity)}</span></p>'
             '<div class="detail-grid">'
             '<section><h5>Critical evidence</h5>'
             f'{render_lines(critical_evidence, limit=12)}'
@@ -497,10 +523,10 @@ def render_html_report(
         sev_class = f"sev-{sev_label.lower()}"
         repo_rows += (
             "<tr>"
-            f"<td>{esc(rep.name)}</td>"
-            f"<td><span class=\"sev-pill {sev_class}\">{esc(sev_label)}</span></td>"
-            f"<td>{esc(rep.status)}</td>"
-            f"<td>{esc(classify_litellm_incident_severity(rep))}</td>"
+            f"<td>{safe_text(rep.name)}</td>"
+            f"<td><span class=\"sev-pill {sev_class}\">{safe_text(sev_label)}</span></td>"
+            f"<td>{safe_text(rep.status)}</td>"
+            f"<td>{safe_text(classify_litellm_incident_severity(rep))}</td>"
             f"<td class=\"num\">{len(rep.failures)}</td>"
             f"<td class=\"num\">{len(rep.tracked_secret_matches) + len(rep.history_secret_matches) + len(rep.git_metadata_secret_matches)}</td>"
             f"<td class=\"num\">{len(rep.secret_file_candidates)}</td>"
@@ -514,11 +540,11 @@ def render_html_report(
             "</tr>"
         )
 
-        highlights_html = "".join(f"<li>{esc(item)}</li>" for item in highlights)
+        highlights_html = "".join(f"<li>{safe_text(item)}</li>" for item in highlights)
         if not highlights_html:
             highlights_html = "<li>No highlight details.</li>"
 
-        failures_html = "".join(f"<li>{esc(item)}</li>" for item in rep.failures)
+        failures_html = "".join(f"<li>{safe_text(item)}</li>" for item in rep.failures)
         if not failures_html:
             failures_html = "<li>No failures.</li>"
 
@@ -532,7 +558,7 @@ def render_html_report(
         details_metrics = (
             "<table class=\"metrics\">"
             "<tr><th>Metric</th><th class=\"num\">Value</th></tr>"
-            f"<tr><td>low_confidence_email_mode</td><td>{esc(rep.low_confidence_email_mode)}</td></tr>"
+            f"<tr><td>low_confidence_email_mode</td><td>{safe_text(rep.low_confidence_email_mode)}</td></tr>"
             f"<tr><td>unexpected_emails_total</td><td class=\"num\">{len(rep.unexpected_emails)}</td></tr>"
             f"<tr><td>unexpected_emails_owned_repo</td><td class=\"num\">{len(owned_unexpected)}</td></tr>"
             f"<tr><td>unexpected_emails_third_party_repo</td><td class=\"num\">{len(third_party_unexpected)}</td></tr>"
@@ -568,13 +594,13 @@ def render_html_report(
             f"<tr><td>gitignore_missing_patterns</td><td class=\"num\">{len(rep.gitignore_missing_patterns)}</td></tr>"
             f"<tr><td>exfil_code_indicators</td><td class=\"num\">{len(rep.exfil_code_indicators)}</td></tr>"
             f"<tr><td>reviewed_network_indicators</td><td class=\"num\">{len(rep.reviewed_network_indicators)}</td></tr>"
-            f"<tr><td>github_hardening_checked</td><td>{esc(str(rep.github_hardening_checked))}</td></tr>"
+            f"<tr><td>github_hardening_checked</td><td>{safe_text(rep.github_hardening_checked)}</td></tr>"
             f"<tr><td>github_hardening_findings</td><td class=\"num\">{len(rep.github_hardening_findings)}</td></tr>"
             f"<tr><td>github_hardening_warnings</td><td class=\"num\">{len(rep.github_hardening_warnings)}</td></tr>"
             f"<tr><td>github_hardening_accepted_risks</td><td class=\"num\">{len(rep.github_hardening_accepted_risks)}</td></tr>"
             f"<tr><td>github_hardening_fix_guide</td><td class=\"num\">{len(rep.github_hardening_fix_guide)}</td></tr>"
             f"<tr><td>suppressed_findings</td><td class=\"num\">{len(rep.suppressed_findings)}</td></tr>"
-            f"<tr><td>litellm_incident_severity</td><td>{esc(classify_litellm_incident_severity(rep))}</td></tr>"
+            f"<tr><td>litellm_incident_severity</td><td>{safe_text(classify_litellm_incident_severity(rep))}</td></tr>"
             f"<tr><td>litellm_reference_hits</td><td class=\"num\">{len(rep.litellm_reference_hits)}</td></tr>"
             f"<tr><td>litellm_compromised_reference_hits</td><td class=\"num\">{len(rep.litellm_compromised_reference_hits)}</td></tr>"
             f"<tr><td>litellm_install_command_hits</td><td class=\"num\">{len(rep.litellm_install_command_hits)}</td></tr>"
@@ -590,12 +616,12 @@ def render_html_report(
         detail_sections = (
             "<div class=\"detail-grid\">"
             "<section><h5>User guidance</h5>"
-            f"<p><strong>{esc(guidance_level)}</strong> - {esc(guidance_risk)}</p>"
-            f"<p><strong>Possible consequence:</strong> {esc(guidance_consequence)}</p>"
-            f"<p><strong>Suggestion:</strong> {esc(guidance_suggestion)}</p>"
+            f"<p><strong>{safe_text(guidance_level)}</strong> - {safe_text(guidance_risk)}</p>"
+            f"<p><strong>Possible consequence:</strong> {safe_text(guidance_consequence)}</p>"
+            f"<p><strong>Suggestion:</strong> {safe_text(guidance_suggestion)}</p>"
             "</section>"
             "<section><h5>Email remediation decision</h5>"
-            f"<p><strong>{esc(decision_status)}</strong> - {esc(decision_message)}</p>"
+            f"<p><strong>{safe_text(decision_status)}</strong> - {safe_text(decision_message)}</p>"
             "</section>"
             "</div>"
             "<div class=\"detail-grid\">"
@@ -753,10 +779,10 @@ def render_html_report(
 
         repo_details += (
             "<details class=\"repo-detail\">"
-            f"<summary>{esc(rep.name)} | severity {esc(sev_label)} | status {esc(rep.status)}</summary>"
-            f"<p class=\"meta\">path: <code>{esc(redact_sensitive_text(rep.path))}</code></p>"
-            f"<p class=\"meta\">origin: <code>{esc(redact_sensitive_text(rep.origin_url or '-'))}</code></p>"
-            f"<p class=\"meta\">upstream: <code>{esc(redact_sensitive_text(rep.upstream_url or '-'))}</code></p>"
+            f"<summary>{safe_text(rep.name)} | severity {safe_text(sev_label)} | status {safe_text(rep.status)}</summary>"
+            f"<p class=\"meta\">path: <code>{safe_text(rep.path)}</code></p>"
+            f"<p class=\"meta\">origin: <code>{safe_text(rep.origin_url or '-')}</code></p>"
+            f"<p class=\"meta\">upstream: <code>{safe_text(rep.upstream_url or '-')}</code></p>"
             f"{detail_sections}"
             "</details>"
         )

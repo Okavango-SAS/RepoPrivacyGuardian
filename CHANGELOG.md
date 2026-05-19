@@ -6,6 +6,7 @@ All notable user-facing changes to this project are documented here.
 
 ### Added
 
+- Added synthetic integration regression coverage for redacted report surfaces and target-resolution/preflight edge paths, including explicit symlink target selection and GitHub owner/org tooling preflight.
 - Added a reviewed network-context bucket so Repo Privacy Guardian's own GitHub API probes and Windows App Installer bootstrap command remain traceable without keeping self-audits in manual-review state.
 - Added a large-history benchmark helper that creates a synthetic Git history, runs the real audit pipeline, and compares `run_state.json` timings against an optional baseline.
 - Added a count-only report comparison workflow for re-audits: CLI `--compare-reports` and a GUI Reports action compare the latest `report.json` with an earlier run without exposing raw finding evidence.
@@ -17,6 +18,7 @@ All notable user-facing changes to this project are documented here.
 
 ### Changed
 
+- Hardened redacted JSON and HTML reports so repository labels, branch/head-like scalar fields, failure text, LiteLLM evidence, and supply-chain probe metadata pass through the shared redaction layer before persistence or display.
 - Updated pinned GitHub Actions to Node.js 24-compatible `actions/checkout`
   v6.0.2 and `actions/setup-python` v6.2.0 while preserving SHA pins and
   release-contract coverage.

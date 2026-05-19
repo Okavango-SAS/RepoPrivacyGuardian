@@ -571,7 +571,7 @@ Each run writes local artifacts under `Audit_Results/<run_id>/`:
 - `run.log`
 - `run_state.json`
 
-The HTML report starts with a `Decision first` section that separates blockers, advisory/manual-review signals, fixture/documentation context, suppressed findings, and the next action. Artifacts are redacted, but they still contain operational security context and should be treated as sensitive local outputs.
+The HTML report starts with a `Decision first` section that separates blockers, advisory/manual-review signals, fixture/documentation context, suppressed findings, and the next action. JSON and HTML reports redact repository labels, settings, rendered samples, failures, and artifact paths through the shared redaction layer, but they still contain operational security context and should be treated as sensitive local outputs.
 
 Use `--compare-reports` or the GUI `Compare previous run` action after a re-audit to confirm whether blocking or manual-review categories were resolved, added, or unchanged before deciding the next repair step.
 

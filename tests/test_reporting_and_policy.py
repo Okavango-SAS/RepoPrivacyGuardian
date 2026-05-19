@@ -2133,6 +2133,33 @@ def test_build_cli_tooling_checks_include_winget_once_when_git_and_github_need_i
     assert [check.name for check in checks] == ["winget", "git", "github-auth"]
 
 
+def test_build_cli_tooling_checks_include_github_auth_for_remote_owner_without_rewrite(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(rpg, "probe_git_available", lambda runner=None: (True, None))
+    monkeypatch.setattr(
+        rpg,
+        "probe_git_filter_repo_available",
+        lambda: (_ for _ in ()).throw(AssertionError("rewrite tooling should not be checked")),
+    )
+    monkeypatch.setattr(
+        rpg,
+        "build_github_tooling_check",
+        lambda: rpg.ToolingCheck(
+            name="github-auth",
+            state="warning",
+            blocking=False,
+            detail="missing gh auth",
+            install_hint="gh auth login",
+        ),
+    )
+
+    checks = rpg.build_cli_tooling_checks(_make_run_config(github_owner="acme", fix=False))
+
+    assert [check.name for check in checks] == ["git", "github-auth"]
+    assert checks[-1].install_hint == "gh auth login"
+
+
 def test_build_github_tooling_check_warns_when_no_token_or_gh(monkeypatch) -> None:
     monkeypatch.setattr(rpg, "resolve_github_hardening_token", lambda env=None, runner=None: None)
     monkeypatch.setattr(rpg, "probe_command_available", lambda executable, version_args=("--version",), runner=None: (False, "missing"))
@@ -2977,6 +3004,95 @@ def test_redact_sensitive_text_and_sanitize_export_payload() -> None:
     assert rpg.REDACTED_EMAIL in payload["fix_actions"][0]
 
 
+def test_sanitize_report_for_export_redacts_edge_surfaces() -> None:
+    secret = _fixture_secret()
+    low_confidence_secret = "api_key=" + ("synthetic-review-token" * 2)
+    email = "private.ops@example.com"
+    user = "reportedgeuser"
+    win_path = _fixture_win_user_path("Repos", "repo-a", user=user)
+    slash_path = _fixture_win_user_path_slash("Repos", "repo-a", user=user)
+    unix_path = _fixture_unix_user_path("home", user, "repo-a")
+    raw_line = f"src/app.py:1:{secret} {low_confidence_secret} {email} {win_path} {unix_path}"
+
+    report = _make_report(f"repo-{email}-{secret}")
+    report.path = slash_path
+    report.origin_url = f"https://{email}:{secret}@github.com/example/repo-a.git"
+    report.upstream_url = f"file:///{slash_path}"
+    report.branch = f"feature/{email}"
+    report.head = secret
+    report.origin_head = secret
+    report.clean_status = f"## main\n M {win_path}\n?? {email}\n"
+    report.author_emails = [email]
+    report.committer_emails = [email]
+    report.author_identity_tokens = ["owner at privacy dot dev"]
+    report.committer_identity_tokens = ["12345"]
+    report.unexpected_emails = [email]
+    report.unexpected_emails_owned_repo = [email]
+    report.unexpected_emails_third_party_repo = [email]
+    report.unexpected_identity_tokens = ["owner at privacy dot dev"]
+    report.unexpected_identity_tokens_owned_repo = ["owner at privacy dot dev"]
+    report.unexpected_identity_tokens_third_party_repo = ["owner at privacy dot dev"]
+    report.tracked_secret_matches = [raw_line]
+    report.tracked_secret_high_confidence = [raw_line]
+    report.tracked_secret_low_confidence = [raw_line]
+    report.tracked_secret_fixture_matches = [raw_line]
+    report.tracked_secret_documentation_matches = [raw_line]
+    report.tracked_path_matches = [raw_line]
+    report.tracked_email_matches = [raw_line]
+    report.tracked_email_high_confidence = [raw_line]
+    report.tracked_email_low_confidence = [raw_line]
+    report.tracked_email_fixture_matches = [raw_line]
+    report.tracked_secret_files = [raw_line]
+    report.history_secret_matches = [raw_line]
+    report.history_secret_high_confidence = [raw_line]
+    report.history_secret_low_confidence = [raw_line]
+    report.history_secret_fixture_matches = [raw_line]
+    report.history_secret_documentation_matches = [raw_line]
+    report.history_path_matches = [raw_line]
+    report.history_email_matches = [raw_line]
+    report.history_email_high_confidence = [raw_line]
+    report.history_email_low_confidence = [raw_line]
+    report.history_email_fixture_matches = [raw_line]
+    report.history_secret_files = [raw_line]
+    report.git_metadata_secret_matches = [raw_line]
+    report.git_metadata_secret_low_confidence = [raw_line]
+    report.history_sensitive_added = [raw_line]
+    report.history_sensitive_deleted = [raw_line]
+    report.secret_file_candidates = [raw_line]
+    report.secret_file_autopurge_candidates = [raw_line]
+    report.secret_file_manual_review_candidates = [raw_line]
+    report.secret_history_purge_paths = [raw_line]
+    report.tracked_but_ignored = [raw_line]
+    report.gitignore_missing_patterns = [raw_line]
+    report.exfil_code_indicators = [raw_line]
+    report.reviewed_network_indicators = [raw_line]
+    report.github_hardening_findings = [raw_line]
+    report.github_hardening_warnings = [raw_line]
+    report.github_hardening_accepted_risks = [raw_line]
+    report.github_hardening_fix_guide = [raw_line]
+    report.suppressed_findings = [{"category": "manual", "finding": raw_line}]
+    report.litellm_reference_hits = [raw_line]
+    report.litellm_compromised_reference_hits = [raw_line]
+    report.litellm_install_command_hits = [raw_line]
+    report.litellm_ioc_hits = [raw_line]
+    report.backups_created = [raw_line]
+    report.fix_actions = [raw_line]
+    report.fix_errors = [raw_line]
+    report.execution_errors = [raw_line]
+    report.fsck_output = [raw_line]
+    report.failures = [raw_line]
+
+    payload = rpg.sanitize_report_for_export(report)
+    serialized = json.dumps(payload, sort_keys=True)
+
+    for raw in (secret, "synthetic-review-token", email, user):
+        assert raw not in serialized
+    assert rpg.REDACTED_SECRET in serialized
+    assert rpg.REDACTED_EMAIL in serialized
+    assert "C:/Users/<redacted>" in serialized
+    assert "/home/<redacted>" in serialized
+
+
 def test_extract_personal_path_literals_filters_regex_scaffolding() -> None:
     regex_snippet = (
         'PERSONAL_PATH_RE = re.compile(r"C:\\\\Users\\\\|/Users/|/home/|AppData\\\\|Documents\\\\")'
@@ -3535,6 +3651,84 @@ def test_render_html_report_with_high_and_samples(tmp_path: Path) -> None:
     assert "Possible consequence:" in html_doc
 
 
+def test_render_html_report_redacts_edge_surfaces(tmp_path: Path) -> None:
+    artifacts = rpg.create_run_artifacts(tmp_path)
+    secret = _fixture_secret()
+    low_confidence_secret = "api_key=" + ("synthetic-review-token" * 2)
+    email = "private.ops@example.com"
+    user = "htmledgeuser"
+    win_path = _fixture_win_user_path("Repos", "repo-a", user=user)
+    slash_path = _fixture_win_user_path_slash("Repos", "repo-a", user=user)
+    raw_line = f"src/app.py:1:{secret} {low_confidence_secret} {email} {win_path}"
+    artifacts.run_dir = Path(_fixture_win_user_path("Audit_Results", artifacts.run_id, user=user))
+
+    report = _make_report(f"repo-{email}-{secret}")
+    report.path = slash_path
+    report.origin_url = f"https://{email}:{secret}@github.com/example/repo-a.git"
+    report.upstream_url = f"file:///{slash_path}"
+    report.tracked_secret_matches = [raw_line]
+    report.history_secret_matches = [raw_line]
+    report.tracked_secret_low_confidence = [raw_line]
+    report.history_secret_low_confidence = [raw_line]
+    report.git_metadata_secret_matches = [raw_line]
+    report.git_metadata_secret_low_confidence = [raw_line]
+    report.secret_file_candidates = [raw_line]
+    report.tracked_path_matches = [raw_line]
+    report.history_path_matches = [raw_line]
+    report.tracked_email_matches = [raw_line]
+    report.history_email_matches = [raw_line]
+    report.unexpected_emails = [email]
+    report.unexpected_identity_tokens = ["owner at privacy dot dev"]
+    report.exfil_code_indicators = [raw_line]
+    report.reviewed_network_indicators = [raw_line]
+    report.github_hardening_findings = [raw_line]
+    report.github_hardening_warnings = [raw_line]
+    report.github_hardening_accepted_risks = [raw_line]
+    report.github_hardening_fix_guide = [raw_line]
+    report.suppressed_findings = [{"category": "manual", "finding": raw_line}]
+    report.litellm_reference_hits = [raw_line]
+    report.litellm_ioc_hits = [raw_line]
+    report.execution_errors = [raw_line]
+    report.fix_errors = [raw_line]
+    report.failures = [raw_line]
+    report.status = "FAIL"
+
+    html_doc = rpg.render_html_report(
+        reports=[report],
+        artifacts=artifacts,
+        root_path=Path(win_path),
+        policy_path=Path(_fixture_win_user_path("Repos", "repo-a", "docs", "POLICY.md", user=user)),
+        run_settings={
+            "operator": email,
+            "workspace": win_path,
+            "token": secret,
+            "low_confidence": low_confidence_secret,
+        },
+        finished_at=datetime(2026, 4, 7, 12, 7, 0),
+        optional_supply_chain_payload={
+            "severity": "HIGH",
+            "critical_evidence": [raw_line],
+            "high_evidence": [raw_line],
+            "medium_evidence": [raw_line],
+            "python_probes": [
+                {
+                    "python": win_path,
+                    "installed": True,
+                    "version": email,
+                    "location": f"{win_path}\\site-packages\\{secret}",
+                }
+            ],
+        },
+    )
+
+    for raw in (secret, "synthetic-review-token", email, user):
+        assert raw not in html_doc
+    assert "&lt;redacted-secret&gt;" in html_doc
+    assert "&lt;redacted-email&gt;" in html_doc
+    assert "C:\\Users\\&lt;redacted&gt;" in html_doc
+    assert "C:/Users/&lt;redacted&gt;" in html_doc
+
+
 def test_render_html_report_with_no_failures(tmp_path: Path) -> None:
     artifacts = rpg.create_run_artifacts(tmp_path)
     passed = _make_report("clean-repo")
@@ -3774,6 +3968,73 @@ def test_discover_repository_targets_does_not_auto_follow_symlinked_children(
     assert root_error is None
     assert skipped == []
     assert repos == [real_repo]
+
+
+def test_discover_repository_targets_accepts_explicit_symlinked_child_filter(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    real_repo = tmp_path / "repo-a"
+    linked_repo = tmp_path / "linked-repo"
+    (real_repo / ".git").mkdir(parents=True)
+    (linked_repo / ".git").mkdir(parents=True)
+    original_is_symlink = Path.is_symlink
+
+    def fake_is_symlink(self: Path) -> bool:
+        if self == linked_repo:
+            return True
+        return original_is_symlink(self)
+
+    monkeypatch.setattr(Path, "is_symlink", fake_is_symlink)
+
+    repos, skipped, root_error = rpg.discover_repository_targets(
+        tmp_path,
+        repo_filters=["linked-repo"],
+    )
+
+    assert root_error is None
+    assert skipped == []
+    assert repos == [linked_repo]
+
+
+def test_discover_repository_targets_deduplicates_explicit_filters_by_resolved_identity(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    real_repo = tmp_path / "repo-a"
+    linked_repo = tmp_path / "linked-repo"
+    (real_repo / ".git").mkdir(parents=True)
+    (linked_repo / ".git").mkdir(parents=True)
+    original_resolve = Path.resolve
+
+    def fake_resolve(self: Path, *args, **kwargs) -> Path:  # type: ignore[no-untyped-def]
+        if self == linked_repo:
+            return real_repo
+        return original_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", fake_resolve)
+
+    repos, skipped, root_error = rpg.discover_repository_targets(
+        tmp_path,
+        repo_filters=["linked-repo", "repo-a"],
+    )
+
+    assert root_error is None
+    assert skipped == []
+    assert repos == [linked_repo]
+
+
+def test_describe_no_target_resolution_mentions_public_only_for_filtered_targets(
+    tmp_path: Path,
+) -> None:
+    error, guidance = rpg.describe_no_target_resolution(
+        root=tmp_path,
+        repo_filters=["repo-a", "repo-b"],
+        public_only=True,
+    )
+
+    assert "after applying --public-only: repo-a, repo-b" in error
+    assert "publicly accessible on GitHub" in guidance
 
 
 def test_normalize_csv_values_and_text_values_helpers() -> None:
