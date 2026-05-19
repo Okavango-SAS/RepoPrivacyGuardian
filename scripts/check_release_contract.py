@@ -118,6 +118,8 @@ VERSIONING_REQUIREMENTS = [
 ROADMAP_REQUIREMENTS = [
     "current stable `1.5.x`",
     "companion-style GUI with Audit, Reports, Prompts, Settings, and gated Repair views",
+    "monitor the public `v1.5.1` release",
+    "choose the next user-facing improvement from observed operator friction",
     "keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract",
     "GUI-only workflows that bypass the shared CLI backend",
 ]

@@ -352,6 +352,8 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "semantic versioning" in versioning.lower()
     assert "current stable `1.5.x`" in roadmap
     assert "companion-style GUI with Audit, Reports, Prompts, Settings, and gated Repair views" in roadmap
+    assert "monitor the public `v1.5.1` release" in roadmap
+    assert "choose the next user-facing improvement from observed operator friction" in roadmap
     assert "current stable `1.3.x`" not in roadmap
     assert "Validation evidence" in release_notes
 
@@ -921,13 +923,32 @@ def test_current_release_notes_are_public_safe_and_validated() -> None:
     assert "python scripts/release_readiness.py --skip-self-audit" in notes
     assert "Self-audit dogfood" in notes
     assert "GitHub automatic push CI" in notes
-    assert "GitHub Dependency Graph update" in notes
     assert "Changed defaults: none." in notes
     assert "Migration or operator action required: none" in notes
     assert "Follow-up candidates" in notes
     assert "C:\\Users\\" not in notes
     assert "/Users/" not in notes
     assert "gho_" not in notes
+
+
+def test_post_release_docs_do_not_list_completed_gui_extraction_as_next_work() -> None:
+    root = _repo_root()
+    roadmap = (root / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
+    known_issues = (root / "docs" / "KNOWN_ISSUES.md").read_text(encoding="utf-8")
+    development_audit = (root / "docs" / "DEVELOPMENT_AUDIT.md").read_text(encoding="utf-8")
+
+    stale_claims = (
+        "Settings/Reports/Prompts cards and nested Repair gate/list-shell frames remain inline",
+        "starting with Settings/Reports/Prompts cards and nested Repair",
+        "continue extracting remaining GUI widget construction helpers",
+        "GitHub Dependency Graph update for the release-prep commit",
+    )
+    for text in (roadmap, known_issues, development_audit):
+        for stale_claim in stale_claims:
+            assert stale_claim not in text
+
+    assert "post-release" in development_audit
+    assert "observed operator friction" in roadmap
 
 
 def test_pyproject_version_matches_current_release_line() -> None:

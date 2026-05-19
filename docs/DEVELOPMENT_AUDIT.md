@@ -100,8 +100,8 @@ Findings:
 - CLI/GUI parity remains the product invariant. The GUI uses the shared backend
   pipeline and keeps the staged flow: Audit first, then gated Repair.
 - Recent extractions moved scanner subprocess execution, history parsing,
-  taxonomy aggregation, GUI state, theme, assets, and window lifecycle logic
-  into narrower modules with contract tests.
+  taxonomy aggregation, GUI state, card specs, theme, assets, and window
+  lifecycle logic into narrower modules with contract tests.
 - Report comparison, agent summary, strict profiles, suppression handling,
   GitHub hardening, remote owner/org audit controls, and release smoke scripts
   remain covered by tracked tests.
@@ -141,7 +141,9 @@ UX limitations:
 Recommended next actions:
 
 - Keep README screenshots refreshed only when the user-visible GUI changes.
-- Continue extracting remaining GUI widget construction helpers behind tests.
+- Keep GUI spec/helper extraction opportunistic instead of release-driven; the
+  next GUI work should come from real operator friction or a clear behavior
+  boundary.
 - Keep the artifact-retention cleanup affordance aligned across CLI, GUI, and
   docs as artifact outputs evolve.
 
@@ -214,10 +216,10 @@ Recommended next actions:
 Highest-value debt to pay down next:
 
 - `repo_privacy_guardian/gui/app.py` is still about 4,000 lines and should keep
-  losing remaining widget-construction logic to narrower modules; setup
-  option-menu construction and top-level Audit/Repair card construction are now
-  spec-driven, but Settings/Reports/Prompts cards and nested gate/list-shell
-  frames remain inline.
+  losing behavior-bearing coordinator logic to narrower modules when a clean
+  tested boundary exists; setup option menus, top-level cards,
+  Settings/Reports/Prompts cards, nested Repair gate/list-shell frames, and
+  repository empty-state cards are now spec-driven.
 - `repo_privacy_guardian/core.py` is still about 2,700 lines and remains the
   main compatibility aggregation surface.
 - CI pinned action revisions now target Node.js 24-compatible action releases,
@@ -236,12 +238,14 @@ Highest-value debt to pay down next:
 
 Suggested priority order:
 
-1. Continue extracting remaining GUI widget-construction helpers behind focused
-   tests, starting with Settings/Reports/Prompts cards and nested Repair
-   gate/list-shell frames.
-2. Continue shrinking `core.py` while preserving stable `1.x` compatibility
-   facades.
-3. Keep synthetic redaction, target-resolution, and preflight contracts aligned
+1. Monitor `v1.5.1` post-release for real installation, audit, GUI, and docs
+   feedback before opening a new implementation cycle.
+2. Choose the next user-facing improvement from observed operator friction,
+   likely in report actionability, remediation guidance, artifact cleanup
+   ergonomics, or remote-audit review flow.
+3. Continue shrinking `core.py` and the broad GUI coordinator only when the
+   next boundary is behavior-bearing and covered by focused tests.
+4. Keep synthetic redaction, target-resolution, and preflight contracts aligned
    as new report fields or target-selection modes are added.
-4. Defer provider-specific secret rotation and hosted backend features unless
+5. Defer provider-specific secret rotation and hosted backend features unless
    the product scope changes.
