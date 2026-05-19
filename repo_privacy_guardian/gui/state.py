@@ -240,7 +240,7 @@ class PanelSpec:
 
 @dataclass(frozen=True)
 class CardSpec:
-    grid: WidgetGridConfig
+    grid: WidgetGridConfig | None
     column_configs: tuple[GridColumnConfig, ...] = ()
     row_configs: tuple[GridColumnConfig, ...] = ()
     fg_color_role: FillColorRole = "surface"
@@ -784,11 +784,21 @@ def gui_panel_specs(
     }
 
 
-def audit_repair_card_specs() -> dict[str, CardSpec]:
+def gui_card_specs() -> dict[str, CardSpec]:
     return {
         "audit_target": CardSpec(
             grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=10, pady=(8, 8)),
             column_configs=(GridColumnConfig(column=1, weight=1),),
+        ),
+        "settings": CardSpec(
+            grid=WidgetGridConfig(row=0, column=0, sticky="nsew", padx=(0, 8), pady=0),
+            column_configs=(GridColumnConfig(column=1, weight=1),),
+            widget_attrs=("_settings_card",),
+        ),
+        "owner_profile": CardSpec(
+            grid=WidgetGridConfig(row=0, column=1, sticky="nsew", padx=(8, 0), pady=0),
+            column_configs=(GridColumnConfig(column=1, weight=1),),
+            widget_attrs=("_profile_card",),
         ),
         "identity": CardSpec(
             grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=10, pady=(10, 8)),
@@ -807,6 +817,20 @@ def audit_repair_card_specs() -> dict[str, CardSpec]:
             grid=WidgetGridConfig(row=2, column=0, sticky="we", padx=10, pady=(0, 8)),
             column_configs=(GridColumnConfig(column=0, weight=1),),
         ),
+        "repair_block_overlay": CardSpec(
+            grid=None,
+            fg_color_role="surface_alt",
+            corner_radius=10,
+            column_configs=(GridColumnConfig(column=0, weight=1),),
+            row_configs=(GridColumnConfig(column=0, weight=1),),
+            widget_attrs=("_repair_tab_block_overlay",),
+        ),
+        "repair_block_card": CardSpec(
+            grid=WidgetGridConfig(row=0, column=0, sticky="n", padx=28, pady=(16, 14)),
+            fg_color_role="white_panel",
+            corner_radius=14,
+            column_configs=(GridColumnConfig(column=0, weight=1),),
+        ),
         "repositories": CardSpec(
             grid=WidgetGridConfig(row=0, column=0, sticky="nsew", padx=(0, 8), pady=0),
             column_configs=(
@@ -816,12 +840,55 @@ def audit_repair_card_specs() -> dict[str, CardSpec]:
             row_configs=(GridColumnConfig(column=2, weight=1),),
             widget_attrs=("_repos_card",),
         ),
+        "repo_list_shell": CardSpec(
+            grid=WidgetGridConfig(row=2, column=0, sticky="nsew", padx=14, pady=(0, 8), columnspan=2),
+            fg_color_role="white_panel",
+            corner_radius=10,
+            column_configs=(GridColumnConfig(column=0, weight=1),),
+            row_configs=(GridColumnConfig(column=1, weight=1),),
+        ),
+        "repo_empty_state": CardSpec(
+            grid=None,
+            fg_color_role="surface_alt",
+            corner_radius=12,
+            column_configs=(GridColumnConfig(column=0, weight=1),),
+            widget_attrs=("_repo_empty_state",),
+        ),
         "execution_log": CardSpec(
             grid=WidgetGridConfig(row=0, column=1, sticky="nsew", padx=(8, 0), pady=0),
             column_configs=(GridColumnConfig(column=0, weight=1),),
             row_configs=(GridColumnConfig(column=1, weight=1),),
             widget_attrs=("_output_card",),
         ),
+        "reports_dashboard": CardSpec(
+            grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=10, pady=(8, 8)),
+            column_configs=(
+                GridColumnConfig(column=0, weight=1),
+                GridColumnConfig(column=1, weight=0),
+            ),
+        ),
+        "prompts_library": CardSpec(
+            grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=10, pady=(8, 8)),
+            column_configs=(
+                GridColumnConfig(column=0, weight=1),
+                GridColumnConfig(column=1, weight=0),
+            ),
+        ),
+    }
+
+
+def audit_repair_card_specs() -> dict[str, CardSpec]:
+    specs = gui_card_specs()
+    return {
+        key: specs[key]
+        for key in (
+            "audit_target",
+            "identity",
+            "repair_options",
+            "repair_actions",
+            "repositories",
+            "execution_log",
+        )
     }
 
 

@@ -240,6 +240,8 @@ class GuiApp:  # pragma: no cover
         self._settings_tab_name = self._t("tab_settings")
         self._repair_tab_name = self._t("tab_repair")
         self._setup_settings_visible = not setup_completed
+        self._settings_card: Any = None
+        self._profile_card: Any = None
         self._setup_settings_toggle_button = None
         self._setup_settings_hint_label = None
         self._setup_settings_frame = None
@@ -339,7 +341,7 @@ class GuiApp:  # pragma: no cover
         self._app_frame = app
         heading_specs = gui_state_helpers.gui_section_heading_specs()
         panel_specs = gui_state_helpers.gui_panel_specs()
-        card_specs = gui_state_helpers.audit_repair_card_specs()
+        card_specs = gui_state_helpers.gui_card_specs()
         text_specs = gui_state_helpers.gui_text_label_specs()
 
         header = ctk.CTkFrame(app, fg_color=self._header_fg, corner_radius=18)
@@ -451,16 +453,7 @@ class GuiApp:  # pragma: no cover
         top_row.grid_columnconfigure(1, weight=1)
         self._top_row = top_row
 
-        settings_card = ctk.CTkFrame(
-            top_row,
-            fg_color=self._surface_fg,
-            corner_radius=12,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        settings_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        settings_card.grid_columnconfigure(1, weight=1)
-        self._settings_card = settings_card
+        settings_card = self._make_card(top_row, card_specs["settings"])
         self._add_section_heading(settings_card, heading_specs["setup_settings_card"])
 
         quick_start = self._make_panel(settings_card, panel_specs["setup_quick_start"])
@@ -597,16 +590,7 @@ class GuiApp:  # pragma: no cover
         self._bind_tooltip_key(self._advanced_identity_toggle_button, "advanced_identity")
         self._advanced_identity_toggle_button.grid(row=0, column=1, sticky="e", padx=(8, 12), pady=10)
 
-        profile_card = ctk.CTkFrame(
-            top_row,
-            fg_color=self._surface_fg,
-            corner_radius=12,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        profile_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        profile_card.grid_columnconfigure(1, weight=1)
-        self._profile_card = profile_card
+        profile_card = self._make_card(top_row, card_specs["owner_profile"])
         self._compact_top_layout = False
 
         self._add_section_heading(profile_card, heading_specs["owner_profile"])
@@ -729,26 +713,9 @@ class GuiApp:  # pragma: no cover
         self._repair_button.grid(row=0, column=0, sticky="w")
         self._add_text_label(repair_controls, text_specs["repair_gate_note"])
 
-        blocker_overlay = ctk.CTkFrame(
-            repair_tab,
-            fg_color=self._surface_alt,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        blocker_overlay.grid_columnconfigure(0, weight=1)
-        blocker_overlay.grid_rowconfigure(0, weight=1)
-        self._repair_tab_block_overlay = blocker_overlay
+        blocker_overlay = self._make_card(repair_tab, card_specs["repair_block_overlay"])
 
-        blocker_card = ctk.CTkFrame(
-            blocker_overlay,
-            fg_color=self._white_panel_fg,
-            corner_radius=14,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        blocker_card.grid(row=0, column=0, padx=28, pady=(16, 14), sticky="n")
-        blocker_card.grid_columnconfigure(0, weight=1)
+        blocker_card = self._make_card(blocker_overlay, card_specs["repair_block_card"])
         self._repair_gate_visual_label = self._make_asset_label(
             blocker_card,
             "repair-gate.png",
@@ -837,16 +804,7 @@ class GuiApp:  # pragma: no cover
         self._refresh_button.pack(side="left")
         self._add_text_label(repos_card, text_specs["repo_summary"])
 
-        list_shell = ctk.CTkFrame(
-            repos_card,
-            fg_color=self._white_panel_fg,
-            corner_radius=10,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        list_shell.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=14, pady=(0, 8))
-        list_shell.grid_columnconfigure(0, weight=1)
-        list_shell.grid_rowconfigure(1, weight=1)
+        list_shell = self._make_card(repos_card, card_specs["repo_list_shell"])
         self._add_text_label(list_shell, text_specs["repo_drop_hint"])
         self._make_info_badge_for(list_shell, "repo_drop_area").grid(row=0, column=1, sticky="e", padx=(0, 10), pady=(8, 0))
 
@@ -878,26 +836,19 @@ class GuiApp:  # pragma: no cover
         self.repo_list.configure(yscrollcommand=repo_scroll.set)
         self.repo_list.bind("<<ListboxSelect>>", self._on_repo_selection_changed)
         self._enable_repo_drag_and_drop(list_shell, self.repo_list)
-        self._repo_empty_state = ctk.CTkFrame(
-            list_shell,
-            fg_color=self._surface_alt,
-            corner_radius=12,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        self._repo_empty_state.grid_columnconfigure(0, weight=1)
+        repo_empty_state = self._make_card(list_shell, card_specs["repo_empty_state"])
         self._repo_empty_state_visual_label = self._make_asset_label(
-            self._repo_empty_state,
+            repo_empty_state,
             "repo-dropzone.png",
             background=self._surface_alt,
         )
         if self._repo_empty_state_visual_label is not None:
             self._repo_empty_state_visual_label.grid(row=0, column=0, padx=18, pady=(14, 2), sticky="ew")
-        self._add_text_label(self._repo_empty_state, text_specs["repo_empty_title"])
-        self._add_text_label(self._repo_empty_state, text_specs["repo_empty_body"])
-        self._add_text_label(self._repo_empty_state, text_specs["repo_empty_hint"])
+        self._add_text_label(repo_empty_state, text_specs["repo_empty_title"])
+        self._add_text_label(repo_empty_state, text_specs["repo_empty_body"])
+        self._add_text_label(repo_empty_state, text_specs["repo_empty_hint"])
         self._repo_empty_state_action_button = ctk.CTkButton(
-            self._repo_empty_state,
+            repo_empty_state,
             text=self._t("repo_empty_choose_root_action"),
             command=self._choose_root_from_empty_state,
             width=150,
@@ -1420,16 +1371,8 @@ class GuiApp:  # pragma: no cover
 
     def _build_reports_tab(self, reports_tab) -> None:
         ctk = self.ctk
-        reports_card = ctk.CTkFrame(
-            reports_tab,
-            fg_color=self._surface_fg,
-            corner_radius=12,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        reports_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
-        reports_card.grid_columnconfigure(0, weight=1)
-        reports_card.grid_columnconfigure(1, weight=0)
+        card_specs = gui_state_helpers.gui_card_specs()
+        reports_card = self._make_card(reports_tab, card_specs["reports_dashboard"])
         heading_specs = gui_state_helpers.gui_section_heading_specs()
         panel_specs = gui_state_helpers.gui_panel_specs()
         text_specs = gui_state_helpers.gui_text_label_specs()
@@ -1492,16 +1435,8 @@ class GuiApp:  # pragma: no cover
 
     def _build_prompts_tab(self, prompts_tab) -> None:
         ctk = self.ctk
-        prompts_card = ctk.CTkFrame(
-            prompts_tab,
-            fg_color=self._surface_fg,
-            corner_radius=12,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        prompts_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
-        prompts_card.grid_columnconfigure(0, weight=1)
-        prompts_card.grid_columnconfigure(1, weight=0)
+        card_specs = gui_state_helpers.gui_card_specs()
+        prompts_card = self._make_card(prompts_tab, card_specs["prompts_library"])
         heading_specs = gui_state_helpers.gui_section_heading_specs()
         panel_specs = gui_state_helpers.gui_panel_specs()
         text_specs = gui_state_helpers.gui_text_label_specs()
@@ -2148,7 +2083,8 @@ class GuiApp:  # pragma: no cover
             border_width=spec.border_width,
             border_color=self._theme_color_role(spec.border_color_role),
         )
-        card.grid(**spec.grid.kwargs)
+        if spec.grid is not None:
+            card.grid(**spec.grid.kwargs)
         for config in spec.column_configs:
             card.grid_columnconfigure(config.column, weight=config.weight)
         for config in spec.row_configs:

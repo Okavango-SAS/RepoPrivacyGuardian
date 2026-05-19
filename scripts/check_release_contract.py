@@ -6,10 +6,11 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CURRENT_VERSION = "1.5.0"
+CURRENT_VERSION = "1.5.1"
+CURRENT_RELEASE_KIND = "patch release"
 CURRENT_VERSION_DESCRIPTION = (
-    "modular architecture, agent-summary, strict-profile, suppression workflow, "
-    "and modular CI validation coverage"
+    "completed GUI card-spec extraction, core GUI asset facade cleanup, "
+    "target/preflight/redaction contract coverage, and release-closure documentation"
 )
 CURRENT_RELEASE_REFERENCE_RE = re.compile(
     r"`v(?P<version>\d+\.\d+\.\d+)` is the current (?P<kind>patch-level|patch release|minor release)"
@@ -19,7 +20,7 @@ README_REQUIREMENTS = [
     "automatic CI smoke",
     "manual extended CI",
     "docs-only changes stay local-first",
-    f"`v{CURRENT_VERSION}` is the current minor release with {CURRENT_VERSION_DESCRIPTION}",
+    f"`v{CURRENT_VERSION}` is the current {CURRENT_RELEASE_KIND} with {CURRENT_VERSION_DESCRIPTION}",
     "## ⚡ 60-Second First Run",
     "How to read the first result:",
     "malformed non-email identity tokens",
@@ -111,6 +112,7 @@ VERSIONING_REQUIREMENTS = [
     "`1.4.6`",
     "`1.4.7`",
     "`1.5.0`",
+    "`1.5.1`",
 ]
 
 ROADMAP_REQUIREMENTS = [

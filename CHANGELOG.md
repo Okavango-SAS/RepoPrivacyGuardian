@@ -4,8 +4,12 @@ All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-05-19
+
 ### Added
 
+- Added contract coverage for the remaining GUI card specs, floating Repair gate frames, repository list shell, and Settings/Reports/Prompts containers.
+- Added facade-alignment coverage for target discovery, tooling preflight, redaction, and GUI asset helpers after the modular refactor.
 - Added synthetic integration regression coverage for redacted report surfaces and target-resolution/preflight edge paths, including explicit symlink target selection and GitHub owner/org tooling preflight.
 - Added a reviewed network-context bucket so Repo Privacy Guardian's own GitHub API probes and Windows App Installer bootstrap command remain traceable without keeping self-audits in manual-review state.
 - Added a large-history benchmark helper that creates a synthetic Git history, runs the real audit pipeline, and compares `run_state.json` timings against an optional baseline.
@@ -18,6 +22,8 @@ All notable user-facing changes to this project are documented here.
 
 ### Changed
 
+- Completed the GUI card-spec extraction for Settings, Reports, Prompts, and nested Repair/list frames while preserving the existing layout and staged Repair behavior.
+- Moved GUI asset path, themeable asset constants, hex color parsing, and near-white asset blending behind the GUI asset module while keeping the public `Repo_Privacy_Guardian` facade compatible.
 - Hardened redacted JSON and HTML reports so repository labels, branch/head-like scalar fields, failure text, LiteLLM evidence, and supply-chain probe metadata pass through the shared redaction layer before persistence or display.
 - Updated pinned GitHub Actions to Node.js 24-compatible `actions/checkout`
   v6.0.2 and `actions/setup-python` v6.2.0 while preserving SHA pins and

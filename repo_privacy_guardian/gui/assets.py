@@ -4,12 +4,90 @@ from __future__ import annotations
 
 from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass, field
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
 
 DARK_ICON_COLOR = "#E7F4F0"
 ICON_SIZE = (24, 24)
+GUI_ASSET_PACKAGE = "repo_privacy_guardian_assets"
+GUI_ASSET_FILENAMES: tuple[str, ...] = (
+    "app-icon.png",
+    "header-watermark.png",
+    "repo-dropzone.png",
+    "reports-evidence.png",
+    "prompts-workflow.png",
+    "repair-gate.png",
+    "icon-audit.png",
+    "icon-copy.png",
+    "icon-folder.png",
+    "icon-open.png",
+    "icon-refresh.png",
+    "icon-repair.png",
+    "icon-report.png",
+    "icon-settings.png",
+    "icon-stop.png",
+)
+GUI_THEMEABLE_ASSET_FILENAMES: frozenset[str] = frozenset(
+    {
+        "prompts-workflow.png",
+        "repair-gate.png",
+        "repo-dropzone.png",
+        "reports-evidence.png",
+    }
+)
+
+
+def source_tree_root() -> Path:
+    package_root = Path(__file__).resolve().parents[1]
+    repo_root = package_root.parent
+    if (repo_root / "docs" / "POLICY.md").exists():
+        return repo_root
+    return package_root
+
+
+def gui_asset_path(filename: str) -> Path | None:
+    if filename not in GUI_ASSET_FILENAMES:
+        return None
+
+    source_tree_asset = source_tree_root() / GUI_ASSET_PACKAGE / filename
+    if source_tree_asset.exists():
+        return source_tree_asset
+
+    try:
+        packaged_asset = resources.files(GUI_ASSET_PACKAGE).joinpath(filename)
+        packaged_asset_path = Path(str(packaged_asset))
+        if packaged_asset_path.exists():
+            return packaged_asset_path
+    except (ImportError, ModuleNotFoundError, OSError):
+        pass
+
+    return None
+
+
+def parse_hex_rgb(color: str) -> tuple[int, int, int] | None:
+    value = color.strip()
+    if len(value) != 7 or not value.startswith("#"):
+        return None
+    try:
+        return (int(value[1:3], 16), int(value[3:5], 16), int(value[5:7], 16))
+    except ValueError:
+        return None
+
+
+def blend_near_white_gui_asset_background(image: Any, background_rgb: tuple[int, int, int]) -> Any:
+    output = image.convert("RGBA")
+    pixels = []
+    get_pixel_data = getattr(output, "get_flattened_data", output.getdata)
+    for red, green, blue, alpha in get_pixel_data():
+        is_low_saturation_light_pixel = min(red, green, blue) >= 232 and max(red, green, blue) - min(red, green, blue) <= 28
+        if alpha and is_low_saturation_light_pixel:
+            pixels.append((*background_rgb, alpha))
+        else:
+            pixels.append((red, green, blue, alpha))
+    output.putdata(pixels)
+    return output
 
 
 def load_pillow_icon_modules() -> tuple[object, object]:

@@ -12,6 +12,8 @@ from pathlib import Path
 import pytest
 import Repo_Privacy_Guardian as rpg
 import repo_privacy_guardian_prompts as prompt_helpers
+from repo_privacy_guardian import redaction as redaction_helpers
+from repo_privacy_guardian import runtime as runtime_helpers
 from repo_privacy_guardian.gui import assets as gui_asset_helpers
 from repo_privacy_guardian.gui import state as gui_state_helpers
 from repo_privacy_guardian.gui import theme as gui_theme_helpers
@@ -850,6 +852,13 @@ def test_gui_window_appearance_callbacks_report_failures() -> None:
 
 
 def test_gui_runtime_assets_resolve_without_gui_imports() -> None:
+    assert rpg.GUI_ASSET_PACKAGE == gui_asset_helpers.GUI_ASSET_PACKAGE
+    assert rpg.GUI_ASSET_FILENAMES == gui_asset_helpers.GUI_ASSET_FILENAMES
+    assert rpg.GUI_THEMEABLE_ASSET_FILENAMES == gui_asset_helpers.GUI_THEMEABLE_ASSET_FILENAMES
+    assert rpg.gui_asset_path is gui_asset_helpers.gui_asset_path
+    assert rpg.parse_hex_rgb is gui_asset_helpers.parse_hex_rgb
+    assert rpg.blend_near_white_gui_asset_background is gui_asset_helpers.blend_near_white_gui_asset_background
+
     for filename in rpg.GUI_ASSET_FILENAMES:
         asset_path = rpg.gui_asset_path(filename)
         assert asset_path is not None
@@ -1194,6 +1203,82 @@ def test_public_facade_exports_refactor_feature_helpers() -> None:
         assert hasattr(package, name), name
 
 
+def test_target_preflight_redaction_contracts_use_shared_modules(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert rpg.validate_repository_root is runtime_helpers.validate_repository_root
+    assert rpg.discover_repository_targets is runtime_helpers.discover_repository_targets
+    assert rpg.redact_sensitive_text is redaction_helpers.redact_sensitive_text
+
+    missing_root = tmp_path / "missing"
+    assert rpg.validate_repository_root(missing_root) == f"Root folder does not exist: {missing_root}"
+
+    root = tmp_path / "repos"
+    repo = root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+    repos, skipped, error = rpg.discover_repository_targets(root, ["repo-a", "missing-repo"])
+    assert repos == [repo]
+    assert skipped == [str(root / "missing-repo")]
+    assert error is None
+
+    policy = tmp_path / "POLICY.md"
+    policy.write_text("# Policy\n", encoding="utf-8")
+    config = rpg.build_guard_run_config(
+        mode="audit",
+        root=root,
+        policy=policy,
+        repos=["repo-a"],
+        public_only=False,
+        fix=False,
+        push=False,
+        dry_run=True,
+        redact_third_party_emails=False,
+        purge_detected_secret_files=False,
+        purge_all_detected_secret_files=False,
+        rewrite_personal_paths=False,
+        low_confidence_email_mode="informational",
+        owner_name="Owner",
+        owner_emails=[],
+        noreply_email=rpg.DEFAULT_NOREPLY,
+        placeholder_email=rpg.DEFAULT_PLACEHOLDER,
+        max_matches=50,
+        open_report=False,
+        confirm_each_repo_fix=True,
+        allow_non_owner_push=False,
+        allowed_remote_owners=[],
+        replace_text_file=None,
+        report_json=None,
+        audit_github_hardening=False,
+        agent_summary=True,
+        strict_profile="audit-only",
+    )
+
+    monkeypatch.setattr(rpg, "probe_git_available", lambda: (False, "synthetic git probe failure"))
+    monkeypatch.setattr(
+        rpg,
+        "build_system_tool_install_command",
+        lambda _name: ["python", "-m", "pip", "install", "git"],
+    )
+
+    checks = rpg.build_cli_tooling_checks(config)
+    git_check = next(check for check in checks if check.name == "git")
+    assert git_check.state == "missing"
+    assert git_check.blocking is True
+    assert git_check.detail == "synthetic git probe failure"
+    assert git_check.auto_install_command == ["python", "-m", "pip", "install", "git"]
+
+    personal_path = "C:" + "\\Users\\Alice\\Repo"
+    redacted = rpg.redact_sensitive_text(
+        f"{personal_path} api_key = syntheticReviewToken123456 owner@example.com"
+    )
+    assert "Alice" not in redacted
+    assert "syntheticReviewToken123456" not in redacted
+    assert "owner@example.com" not in redacted
+    assert rpg.REDACTED_EMAIL in redacted
+    assert rpg.REDACTED_SECRET in redacted
+
+
 def test_module_wrapper_runs_help_without_launching_gui() -> None:
     proc = subprocess.run(
         [sys.executable, "-m", "Repo_Privacy_Guardian"],
@@ -1290,13 +1375,15 @@ def test_release_contract_detects_stale_current_release_references() -> None:
                 "`v1.2.3` is the current patch-level baseline.",
                 "`v1.4.0` is the current minor release.",
                 "`v1.4.6` is the current patch release with old notes.",
-                "`v1.5.0` is the current minor release with current notes.",
+                "`v1.5.0` is the current minor release with old notes.",
+                "`v1.5.1` is the current patch release with current notes.",
             ]
         )
     ) == [
         "`v1.2.3` is the current patch-level",
         "`v1.4.0` is the current minor release",
         "`v1.4.6` is the current patch release",
+        "`v1.5.0` is the current minor release",
     ]
 
 
@@ -3172,9 +3259,14 @@ def test_gui_audit_repair_card_specs_cover_layouts() -> None:
         "repositories",
         "execution_log",
     ]
+
+    def grid_kwargs(spec: gui_state_helpers.CardSpec) -> dict[str, object]:
+        assert spec.grid is not None
+        return spec.grid.kwargs
+
     assert {
         key: (
-            spec.grid.kwargs,
+            grid_kwargs(spec),
             [(config.column, config.weight) for config in spec.column_configs],
             [(config.column, config.weight) for config in spec.row_configs],
             spec.widget_attrs,
@@ -3223,6 +3315,87 @@ def test_gui_audit_repair_card_specs_cover_layouts() -> None:
     assert all(spec.corner_radius == 12 and spec.border_width == 1 for spec in specs.values())
 
 
+def test_gui_card_specs_cover_settings_reports_prompts_and_nested_frames() -> None:
+    specs = gui_state_helpers.gui_card_specs()
+
+    assert list(specs) == [
+        "audit_target",
+        "settings",
+        "owner_profile",
+        "identity",
+        "repair_options",
+        "repair_actions",
+        "repair_block_overlay",
+        "repair_block_card",
+        "repositories",
+        "repo_list_shell",
+        "repo_empty_state",
+        "execution_log",
+        "reports_dashboard",
+        "prompts_library",
+    ]
+
+    settings = specs["settings"]
+    assert settings.grid is not None
+    assert settings.grid.kwargs == {"row": 0, "column": 0, "sticky": "nsew", "padx": (0, 8), "pady": 0}
+    assert settings.column_configs == (gui_state_helpers.GridColumnConfig(column=1, weight=1),)
+    assert settings.widget_attrs == ("_settings_card",)
+
+    owner_profile = specs["owner_profile"]
+    assert owner_profile.grid is not None
+    assert owner_profile.grid.kwargs == {"row": 0, "column": 1, "sticky": "nsew", "padx": (8, 0), "pady": 0}
+    assert owner_profile.column_configs == (gui_state_helpers.GridColumnConfig(column=1, weight=1),)
+    assert owner_profile.widget_attrs == ("_profile_card",)
+
+    repair_overlay = specs["repair_block_overlay"]
+    assert repair_overlay.grid is None
+    assert repair_overlay.fg_color_role == "surface_alt"
+    assert repair_overlay.corner_radius == 10
+    assert repair_overlay.column_configs == (gui_state_helpers.GridColumnConfig(column=0, weight=1),)
+    assert repair_overlay.row_configs == (gui_state_helpers.GridColumnConfig(column=0, weight=1),)
+    assert repair_overlay.widget_attrs == ("_repair_tab_block_overlay",)
+
+    repair_block_card = specs["repair_block_card"]
+    assert repair_block_card.grid is not None
+    assert repair_block_card.grid.kwargs == {
+        "row": 0,
+        "column": 0,
+        "sticky": "n",
+        "padx": 28,
+        "pady": (16, 14),
+    }
+    assert repair_block_card.fg_color_role == "white_panel"
+    assert repair_block_card.corner_radius == 14
+
+    list_shell = specs["repo_list_shell"]
+    assert list_shell.grid is not None
+    assert list_shell.grid.kwargs == {
+        "row": 2,
+        "column": 0,
+        "sticky": "nsew",
+        "padx": 14,
+        "pady": (0, 8),
+        "columnspan": 2,
+    }
+    assert list_shell.fg_color_role == "white_panel"
+    assert list_shell.column_configs == (gui_state_helpers.GridColumnConfig(column=0, weight=1),)
+    assert list_shell.row_configs == (gui_state_helpers.GridColumnConfig(column=1, weight=1),)
+
+    repo_empty = specs["repo_empty_state"]
+    assert repo_empty.grid is None
+    assert repo_empty.fg_color_role == "surface_alt"
+    assert repo_empty.widget_attrs == ("_repo_empty_state",)
+
+    for key in ("reports_dashboard", "prompts_library"):
+        spec = specs[key]
+        assert spec.grid is not None
+        assert spec.grid.kwargs == {"row": 0, "column": 0, "sticky": "we", "padx": 10, "pady": (8, 8)}
+        assert spec.column_configs == (
+            gui_state_helpers.GridColumnConfig(column=0, weight=1),
+            gui_state_helpers.GridColumnConfig(column=1, weight=0),
+        )
+
+
 def test_gui_make_card_uses_spec_and_registers_widgets() -> None:
     created: list[object] = []
 
@@ -3249,10 +3422,15 @@ def test_gui_make_card_uses_spec_and_registers_widgets() -> None:
 
     app = object.__new__(rpg.GuiApp)
     app.ctk = DummyCtk()
-    app._theme_color_role = lambda role: {"surface": "#111111", "card_border": "#222222"}[role]
+    app._theme_color_role = lambda role: {
+        "surface": "#111111",
+        "surface_alt": "#333333",
+        "card_border": "#222222",
+    }[role]
 
     spec = gui_state_helpers.audit_repair_card_specs()["repair_options"]
     card = rpg.GuiApp._make_card(app, "parent", spec)
+    assert spec.grid is not None
 
     assert card is created[0]
     assert app._options_card is card
@@ -3267,6 +3445,15 @@ def test_gui_make_card_uses_spec_and_registers_widgets() -> None:
     assert card.grid_kwargs == spec.grid.kwargs
     assert card.column_configs == [(0, 1), (1, 1)]
     assert card.row_configs == []
+
+    floating_spec = gui_state_helpers.gui_card_specs()["repair_block_overlay"]
+    floating_card = rpg.GuiApp._make_card(app, "parent", floating_spec)
+
+    assert floating_card is created[1]
+    assert app._repair_tab_block_overlay is floating_card
+    assert floating_card.grid_kwargs == {}
+    assert floating_card.column_configs == [(0, 1)]
+    assert floating_card.row_configs == [(0, 1)]
 
 
 def test_gui_option_menu_specs_cover_setup_settings_rows() -> None:

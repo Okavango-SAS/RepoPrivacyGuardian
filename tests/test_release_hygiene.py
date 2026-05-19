@@ -348,6 +348,7 @@ def test_release_docs_exist_and_cover_versioning_exit_criteria() -> None:
     assert "`1.4.6`" in versioning
     assert "`1.4.7`" in versioning
     assert "`1.5.0`" in versioning
+    assert "`1.5.1`" in versioning
     assert "semantic versioning" in versioning.lower()
     assert "current stable `1.5.x`" in roadmap
     assert "companion-style GUI with Audit, Reports, Prompts, Settings, and gated Repair views" in roadmap
@@ -852,6 +853,8 @@ def test_changelog_records_stable_release() -> None:
     changelog = (_repo_root() / "CHANGELOG.md").read_text(encoding="utf-8")
 
     assert "## [1.3.0] - 2026-04-25" in changelog
+    assert "## [1.5.1] - 2026-05-19" in changelog
+    assert "refactor-closure" in changelog or "GUI card-spec extraction" in changelog
     assert "## [1.5.0] - 2026-05-04" in changelog
     assert "modular architecture" in changelog
     assert "## [1.4.7] - 2026-05-04" in changelog
@@ -909,7 +912,7 @@ def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
 
-    assert 'version = "1.5.0"' in pyproject
+    assert 'version = "1.5.1"' in pyproject
     assert "Current release line: `v1.5.x`." in readme
     assert "`v1.4.0` rebuilt the GUI as a CLI companion with Reports and Prompts tabs." in readme
     assert "`v1.4.1` hardened roadmap and CI trigger coverage for release-contract docs." in readme
@@ -919,7 +922,8 @@ def test_pyproject_version_matches_current_release_line() -> None:
     assert "`v1.4.5` hardened root layout allowlist coverage." in readme
     assert "`v1.4.6` hardened desktop GUI, locale, reporting-artifact, and cleanup behavior." in readme
     assert "`v1.4.7` added system-aware GUI theme, contextual-help, and agent-first UX hardening." in readme
-    assert "`v1.5.0` is the current minor release with modular architecture, agent-summary, strict-profile, suppression workflow, and modular CI validation coverage." in readme
+    assert "`v1.5.0` introduced the modular architecture, agent-summary, strict-profile, suppression workflow, and modular CI validation coverage." in readme
+    assert "`v1.5.1` is the current patch release with completed GUI card-spec extraction, core GUI asset facade cleanup, target/preflight/redaction contract coverage, and release-closure documentation." in readme
     assert "`v1.2.1` is the current patch-level" not in readme
     assert "`v1.2.2` is the current patch-level" not in readme
     assert "`v1.2.3` is the current patch-level" not in readme

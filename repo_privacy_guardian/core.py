@@ -46,6 +46,7 @@ from repo_privacy_guardian import agent_summary as agent_summary_helpers  # noqa
 from repo_privacy_guardian import config as config_helpers
 from repo_privacy_guardian import github as github_helpers
 from repo_privacy_guardian import github_fix_guide
+from repo_privacy_guardian.gui import assets as gui_asset_helpers
 from repo_privacy_guardian.gui import locale as gui_locale_helpers
 from repo_privacy_guardian import metrics as metrics_helpers
 from repo_privacy_guardian import policy as policy_helpers
@@ -142,32 +143,12 @@ GUI_APPEARANCE_OPTIONS_BY_LOCALE: dict[str, tuple[tuple[str, str], ...]] = {
         (GUI_APPEARANCE_DARK, "Oscuro"),
     ),
 }
-GUI_ASSET_PACKAGE = "repo_privacy_guardian_assets"
-GUI_ASSET_FILENAMES: tuple[str, ...] = (
-    "app-icon.png",
-    "header-watermark.png",
-    "repo-dropzone.png",
-    "reports-evidence.png",
-    "prompts-workflow.png",
-    "repair-gate.png",
-    "icon-audit.png",
-    "icon-copy.png",
-    "icon-folder.png",
-    "icon-open.png",
-    "icon-refresh.png",
-    "icon-repair.png",
-    "icon-report.png",
-    "icon-settings.png",
-    "icon-stop.png",
-)
-GUI_THEMEABLE_ASSET_FILENAMES: frozenset[str] = frozenset(
-    {
-        "prompts-workflow.png",
-        "repair-gate.png",
-        "repo-dropzone.png",
-        "reports-evidence.png",
-    }
-)
+GUI_ASSET_PACKAGE = gui_asset_helpers.GUI_ASSET_PACKAGE
+GUI_ASSET_FILENAMES = gui_asset_helpers.GUI_ASSET_FILENAMES
+GUI_THEMEABLE_ASSET_FILENAMES = gui_asset_helpers.GUI_THEMEABLE_ASSET_FILENAMES
+gui_asset_path = gui_asset_helpers.gui_asset_path
+parse_hex_rgb = gui_asset_helpers.parse_hex_rgb
+blend_near_white_gui_asset_background = gui_asset_helpers.blend_near_white_gui_asset_background
 WINGET_BOOTSTRAP_URL = "https://aka.ms/getwinget"
 WINGET_PACKAGE_FAMILY_NAME = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe"
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
@@ -179,51 +160,6 @@ REDACTED_IDENTITY_TOKEN = "<redacted-identity-token>"
 # Redaction placeholder, not a credential.
 REDACTED_SECRET = "<redacted-secret>"  # nosec B105
 REDACTED_PATH = "<redacted-path>"
-
-
-def gui_asset_path(filename: str) -> Path | None:
-    if filename not in GUI_ASSET_FILENAMES:
-        return None
-
-    source_tree_asset = source_tree_root() / GUI_ASSET_PACKAGE / filename
-    if source_tree_asset.exists():
-        return source_tree_asset
-
-    try:
-        from importlib import resources
-
-        packaged_asset = resources.files(GUI_ASSET_PACKAGE).joinpath(filename)
-        packaged_asset_path = Path(str(packaged_asset))
-        if packaged_asset_path.exists():
-            return packaged_asset_path
-    except (ImportError, ModuleNotFoundError, OSError):
-        pass
-
-    return None
-
-
-def parse_hex_rgb(color: str) -> tuple[int, int, int] | None:
-    value = color.strip()
-    if len(value) != 7 or not value.startswith("#"):
-        return None
-    try:
-        return (int(value[1:3], 16), int(value[3:5], 16), int(value[5:7], 16))
-    except ValueError:
-        return None
-
-
-def blend_near_white_gui_asset_background(image, background_rgb: tuple[int, int, int]):
-    output = image.convert("RGBA")
-    pixels = []
-    get_pixel_data = getattr(output, "get_flattened_data", output.getdata)
-    for red, green, blue, alpha in get_pixel_data():
-        is_low_saturation_light_pixel = min(red, green, blue) >= 232 and max(red, green, blue) - min(red, green, blue) <= 28
-        if alpha and is_low_saturation_light_pixel:
-            pixels.append((*background_rgb, alpha))
-        else:
-            pixels.append((red, green, blue, alpha))
-    output.putdata(pixels)
-    return output
 
 
 EMAIL_NOISE_DOMAINS = {

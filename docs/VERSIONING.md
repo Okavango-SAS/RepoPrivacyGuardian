@@ -60,6 +60,8 @@ Repo Privacy Guardian uses semantic versioning with the CLI contract, packaging 
 
 `1.5.0` is an additive modular-architecture release on top of `1.4.7`. It keeps all stable `1.x` entry paths while introducing the internal `repo_privacy_guardian/` package, compatible root shims, `agent_summary.json`, `--agent-summary`, strict profiles, versioned advisory/manual-review suppressions, HTML `Decision first`, GitHub hardening fix guide output, performance timings in `run_state.json`, basic desktop visual QA scripting, and CI/release-contract coverage for the modular runtime surfaces.
 
+`1.5.1` is a refactor-closure patch on top of `1.5.0`. It completes the remaining GUI card-spec extraction for Settings, Reports, Prompts, and nested Repair/list frames, moves GUI asset helper behavior behind the GUI asset module while preserving public facades, adds target/preflight/redaction contract coverage, and refreshes release documentation without changing CLI flags, report schema, policy keys, or remediation defaults.
+
 ## Versioning rules
 
 - Major: breaking CLI contract changes, incompatible report/schema changes, or supported-platform changes that require explicit upgrade guidance

@@ -671,7 +671,8 @@ The desktop GUI exposes the same prompt library in its `Prompts` tab. Locale onl
 - `v1.4.5` hardened root layout allowlist coverage.
 - `v1.4.6` hardened desktop GUI, locale, reporting-artifact, and cleanup behavior.
 - `v1.4.7` added system-aware GUI theme, contextual-help, and agent-first UX hardening.
-- `v1.5.0` is the current minor release with modular architecture, agent-summary, strict-profile, suppression workflow, and modular CI validation coverage.
+- `v1.5.0` introduced the modular architecture, agent-summary, strict-profile, suppression workflow, and modular CI validation coverage.
+- `v1.5.1` is the current patch release with completed GUI card-spec extraction, core GUI asset facade cleanup, target/preflight/redaction contract coverage, and release-closure documentation.
 - Python `3.10` through `3.13` remain compatibility targets, but validation is tiered: automatic CI smoke is intentionally selective, broader checks live in manual extended CI and the local release harness.
 - Built package validation covers both `sdist` and `wheel` install paths.
 - GUI remains intentionally best-effort outside the Windows desktop path that has CI smoke coverage.
