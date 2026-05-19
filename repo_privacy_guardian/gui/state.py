@@ -11,6 +11,7 @@ WidgetState = Literal["normal", "disabled"]
 RepairGateTone = Literal["locked", "review", "ready"]
 PathFieldKind = Literal["directory", "existing_file", "save_file"]
 ActionButtonStyle = Literal["primary", "secondary", "support"]
+OptionMenuValuesKind = Literal["locale", "appearance", "strict_profile"]
 ActionCommandKind = Literal[
     "method",
     "flow_tab",
@@ -163,6 +164,18 @@ class EntryFieldSpec:
     width: int | None = None
     placeholder_key: str | None = None
     widget_attr: str | None = None
+
+
+@dataclass(frozen=True)
+class OptionMenuSpec:
+    text_key: str
+    variable_attr: str
+    tooltip_key: str
+    values_kind: OptionMenuValuesKind
+    label_grid: WidgetGridConfig
+    menu_grid: WidgetGridConfig
+    widget_attr: str | None = None
+    command_attr: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1322,6 +1335,44 @@ def repair_replace_text_path_field_spec() -> PathFieldSpec:
         filetypes=(("Text files", "*.txt"), ("All files", "*.*")),
         row_frame_grid=WidgetGridConfig(row=5, column=0, sticky="we", padx=12, pady=(2, 4), columnspan=2),
         row_frame_weight_column=0,
+    )
+
+
+def setup_option_menu_specs(
+    *,
+    language_row: int,
+    appearance_row: int,
+    strict_profile_row: int,
+) -> tuple[OptionMenuSpec, OptionMenuSpec, OptionMenuSpec]:
+    return (
+        OptionMenuSpec(
+            text_key="gui_language",
+            variable_attr="locale_var",
+            tooltip_key="gui_language",
+            values_kind="locale",
+            label_grid=WidgetGridConfig(row=language_row, column=0, sticky="w", padx=(14, 8), pady=4),
+            menu_grid=WidgetGridConfig(row=language_row, column=1, sticky="w", pady=4),
+            widget_attr="_locale_menu",
+            command_attr="_on_gui_locale_selected",
+        ),
+        OptionMenuSpec(
+            text_key="gui_appearance",
+            variable_attr="appearance_var",
+            tooltip_key="gui_appearance",
+            values_kind="appearance",
+            label_grid=WidgetGridConfig(row=appearance_row, column=0, sticky="w", padx=(14, 8), pady=4),
+            menu_grid=WidgetGridConfig(row=appearance_row, column=1, sticky="w", pady=4),
+            widget_attr="_appearance_menu",
+            command_attr="_on_gui_appearance_selected",
+        ),
+        OptionMenuSpec(
+            text_key="strict_profile",
+            variable_attr="strict_profile_var",
+            tooltip_key="strict_profile",
+            values_kind="strict_profile",
+            label_grid=WidgetGridConfig(row=strict_profile_row, column=0, sticky="w", padx=(14, 8), pady=4),
+            menu_grid=WidgetGridConfig(row=strict_profile_row, column=1, sticky="w", pady=4),
+        ),
     )
 
 

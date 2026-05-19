@@ -3161,6 +3161,138 @@ def test_gui_option_checkbox_specs_cover_settings_and_repair_rows() -> None:
         assert spec.tooltip_key in tooltip_catalog
 
 
+def test_gui_option_menu_specs_cover_setup_settings_rows() -> None:
+    specs = gui_state_helpers.setup_option_menu_specs(
+        language_row=2,
+        appearance_row=3,
+        strict_profile_row=7,
+    )
+
+    assert [
+        (
+            spec.text_key,
+            spec.variable_attr,
+            spec.tooltip_key,
+            spec.values_kind,
+            spec.widget_attr,
+            spec.command_attr,
+            spec.label_grid.row,
+            spec.menu_grid.kwargs,
+        )
+        for spec in specs
+    ] == [
+        (
+            "gui_language",
+            "locale_var",
+            "gui_language",
+            "locale",
+            "_locale_menu",
+            "_on_gui_locale_selected",
+            2,
+            {"row": 2, "column": 1, "sticky": "w", "padx": 0, "pady": 4},
+        ),
+        (
+            "gui_appearance",
+            "appearance_var",
+            "gui_appearance",
+            "appearance",
+            "_appearance_menu",
+            "_on_gui_appearance_selected",
+            3,
+            {"row": 3, "column": 1, "sticky": "w", "padx": 0, "pady": 4},
+        ),
+        (
+            "strict_profile",
+            "strict_profile_var",
+            "strict_profile",
+            "strict_profile",
+            None,
+            None,
+            7,
+            {"row": 7, "column": 1, "sticky": "w", "padx": 0, "pady": 4},
+        ),
+    ]
+    assert all(spec.label_grid.kwargs["padx"] == (14, 8) for spec in specs)
+
+    app = object.__new__(rpg.GuiApp)
+    app._current_locale = lambda: rpg.GUI_LOCALE_ES_419
+    values = {spec.values_kind: rpg.GuiApp._option_menu_values(app, spec) for spec in specs}
+    assert values["locale"] == [label for _locale, label in rpg.GUI_LOCALE_OPTIONS]
+    assert values["appearance"] == ["Sistema", "Claro", "Oscuro"]
+    assert values["strict_profile"] == ["default", *rpg.strict_profiles.STRICT_PROFILE_CHOICES]
+
+    english = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_DEFAULT]
+    spanish = rpg.GUI_UI_TEXT_BY_LOCALE[rpg.GUI_LOCALE_ES_419]
+    tooltip_catalog = rpg.GUI_TOOLTIP_TEXT
+    for spec in specs:
+        assert spec.text_key in english
+        assert spec.text_key in spanish
+        assert spec.tooltip_key in tooltip_catalog
+
+
+def test_gui_add_option_menu_uses_spec_and_registers_widget() -> None:
+    created: list[object] = []
+    labels: list[tuple[str, str, dict[str, object]]] = []
+    tooltips: list[tuple[object, str]] = []
+
+    class DummyVar:
+        pass
+
+    class DummyLabel:
+        def grid(self, **kwargs: object) -> None:
+            labels[-1] = (labels[-1][0], labels[-1][1], kwargs)
+
+    class DummyMenu:
+        def __init__(self, parent: object, **kwargs: object) -> None:
+            self.parent = parent
+            self.kwargs = kwargs
+            self.grid_kwargs: dict[str, object] = {}
+            created.append(self)
+
+        def grid(self, **kwargs: object) -> None:
+            self.grid_kwargs = kwargs
+
+    class DummyCtk:
+        CTkOptionMenu = DummyMenu
+
+    app = object.__new__(rpg.GuiApp)
+    app.ctk = DummyCtk()
+    app.locale_var = DummyVar()
+    app._secondary_button_fg = "#111111"
+    app._support_button_fg = "#222222"
+    app._support_button_hover = "#333333"
+    app._secondary_button_text = "#444444"
+    app._current_locale = lambda: rpg.GUI_LOCALE_DEFAULT
+    app._on_gui_locale_selected = lambda _value: None
+    app._make_field_label = (
+        lambda _parent, *, text_key, tooltip_key: labels.append((text_key, tooltip_key, {}))
+        or DummyLabel()
+    )
+    app._bind_tooltip_key = lambda widget, tooltip_key: tooltips.append((widget, tooltip_key))
+
+    spec = gui_state_helpers.setup_option_menu_specs(
+        language_row=2,
+        appearance_row=3,
+        strict_profile_row=7,
+    )[0]
+    menu = rpg.GuiApp._add_option_menu(app, "parent", spec)
+
+    assert menu is created[0]
+    assert app._locale_menu is menu
+    assert labels == [("gui_language", "gui_language", spec.label_grid.kwargs)]
+    assert tooltips == [(menu, "gui_language")]
+    assert menu.grid_kwargs == spec.menu_grid.kwargs
+    assert menu.kwargs["variable"] is app.locale_var
+    assert menu.kwargs["values"] == ["English", "Español (Latinoamérica)"]
+    assert menu.kwargs["height"] == 32
+    assert menu.kwargs["corner_radius"] == 8
+    assert menu.kwargs["fg_color"] == "#111111"
+    assert menu.kwargs["button_color"] == "#222222"
+    assert menu.kwargs["button_hover_color"] == "#333333"
+    assert menu.kwargs["text_color"] == "#444444"
+    assert callable(menu.kwargs["command"])
+
+
 def test_gui_path_field_specs_cover_settings_and_repair_rows() -> None:
     root_spec = gui_state_helpers.repositories_root_path_field_spec(row=2)
     assert root_spec.kind == "directory"

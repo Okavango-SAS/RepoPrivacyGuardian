@@ -19,7 +19,7 @@ The repository is already stable in these areas:
 - local release harness and operator runbooks
 - documented versioning, release checklist, and public changelog
 - pinned GitHub Actions updated to Node.js 24-compatible revisions while preserving SHA pins
-- GUI dialog, navigation, and background-worker adapters extracted behind focused tests
+- GUI dialog, navigation, background-worker adapters, and setup option-menu specs extracted behind focused tests
 - CLI and GUI cleanup path for old local `Audit_Results` run folders
 - repeatable large-history benchmark coverage that compares `run_state.json` timings
 - synthetic integration coverage for redacted JSON/HTML report surfaces and local target-resolution/preflight edge cases
@@ -28,11 +28,11 @@ The repository is already stable in these areas:
 
 These are the next improvements that still fit the current product scope:
 
-- continue extracting remaining GUI widget construction helpers behind focused tests
+- continue extracting remaining GUI widget construction helpers behind focused tests, especially larger Audit/Repair card assembly blocks
 - keep target-resolution, preflight, and redaction regression coverage aligned as local and GitHub owner/org repo-selection modes evolve
 - keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract
 - keep docs, help text, packaged policy, and smoke fixtures aligned as defaults evolve
-- continue extracting `repo_privacy_guardian/core.py` and remaining GUI widget construction helpers without breaking compatibility shims; config, redaction, tooling, evidence taxonomy, execution, history parsing, reporting, policy, remediation, scanner, GUI app, GUI background, GUI dialogs, GUI locale, GUI navigation, and GUI state already use explicit dependencies or local constants, remediation owns pure `git-filter-repo` command planning, execution owns the side-effecting Git/subprocess adapters, history parsing owns pure `git log -p` parsing/formatting helpers, evidence taxonomy owns tracked/history secret bucket aggregation, GUI background owns worker/UI-thread scheduling, GUI dialogs owns browse-dialog targeting, GUI navigation owns flow-tab selection/rename behavior, and GUI state owns pure Audit/Repair flow state, collapsible-section visibility, and Reports/Prompts responsive layout decisions
+- continue extracting `repo_privacy_guardian/core.py` and remaining GUI widget construction helpers without breaking compatibility shims; config, redaction, tooling, evidence taxonomy, execution, history parsing, reporting, policy, remediation, scanner, GUI app, GUI background, GUI dialogs, GUI locale, GUI navigation, and GUI state already use explicit dependencies or local constants, remediation owns pure `git-filter-repo` command planning, execution owns the side-effecting Git/subprocess adapters, history parsing owns pure `git log -p` parsing/formatting helpers, evidence taxonomy owns tracked/history secret bucket aggregation, GUI background owns worker/UI-thread scheduling, GUI dialogs owns browse-dialog targeting, GUI navigation owns flow-tab selection/rename behavior, and GUI state owns pure Audit/Repair flow state, setup option-menu specs, collapsible-section visibility, and Reports/Prompts responsive layout decisions
 
 ## Deprioritized for this repository phase
 

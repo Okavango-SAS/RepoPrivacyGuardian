@@ -504,48 +504,17 @@ class GuiApp:  # pragma: no cover
         self._add_text_label(setup_settings_frame, text_specs["settings_status"])
 
         settings_row = 2
-        self._make_field_label(
-            setup_settings_frame,
-            text_key="gui_language",
-            tooltip_key="gui_language",
-        ).grid(row=settings_row, column=0, sticky="w", padx=(14, 8), pady=4)
-        self._locale_menu = ctk.CTkOptionMenu(
-            setup_settings_frame,
-            variable=self.locale_var,
-            values=[label for _locale, label in GUI_LOCALE_OPTIONS],
-            command=self._on_gui_locale_selected,
-            height=32,
-            corner_radius=8,
-            fg_color=self._secondary_button_fg,
-            button_color=self._support_button_fg,
-            button_hover_color=self._support_button_hover,
-            text_color=self._secondary_button_text,
+        language_row = settings_row
+        appearance_row = settings_row + 1
+        setup_menu_specs = gui_state_helpers.setup_option_menu_specs(
+            language_row=language_row,
+            appearance_row=appearance_row,
+            strict_profile_row=appearance_row + 4,
         )
-        self._bind_tooltip_key(self._locale_menu, "gui_language")
-        self._locale_menu.grid(row=settings_row, column=1, sticky="w", pady=4)
+        for menu_spec in setup_menu_specs[:2]:
+            self._add_option_menu(setup_settings_frame, menu_spec)
 
-        settings_row += 1
-        self._make_field_label(
-            setup_settings_frame,
-            text_key="gui_appearance",
-            tooltip_key="gui_appearance",
-        ).grid(row=settings_row, column=0, sticky="w", padx=(14, 8), pady=4)
-        self._appearance_menu = ctk.CTkOptionMenu(
-            setup_settings_frame,
-            variable=self.appearance_var,
-            values=[label for _appearance, label in gui_appearance_options(self._current_locale())],
-            command=self._on_gui_appearance_selected,
-            height=32,
-            corner_radius=8,
-            fg_color=self._secondary_button_fg,
-            button_color=self._support_button_fg,
-            button_hover_color=self._support_button_hover,
-            text_color=self._secondary_button_text,
-        )
-        self._bind_tooltip_key(self._appearance_menu, "gui_appearance")
-        self._appearance_menu.grid(row=settings_row, column=1, sticky="w", pady=4)
-
-        settings_row += 1
+        settings_row = appearance_row + 1
         policy_row = settings_row
 
         settings_row += 1
@@ -568,24 +537,7 @@ class GuiApp:  # pragma: no cover
         self._add_path_field(setup_settings_frame, setup_path_specs["optional_json_copy"])
 
         settings_row += 1
-        self._make_field_label(
-            setup_settings_frame,
-            text_key="strict_profile",
-            tooltip_key="strict_profile",
-        ).grid(row=settings_row, column=0, sticky="w", padx=(14, 8), pady=4)
-        strict_profile_menu = ctk.CTkOptionMenu(
-            setup_settings_frame,
-            variable=self.strict_profile_var,
-            values=["default", *strict_profiles.STRICT_PROFILE_CHOICES],
-            height=32,
-            corner_radius=8,
-            fg_color=self._secondary_button_fg,
-            button_color=self._support_button_fg,
-            button_hover_color=self._support_button_hover,
-            text_color=self._secondary_button_text,
-        )
-        self._bind_tooltip_key(strict_profile_menu, "strict_profile")
-        strict_profile_menu.grid(row=settings_row, column=1, sticky="w", pady=4)
+        self._add_option_menu(setup_settings_frame, setup_menu_specs[2])
         self._make_info_badge_for(setup_settings_frame, "strict_profile").grid(
             row=settings_row,
             column=2,
@@ -2542,6 +2494,47 @@ class GuiApp:  # pragma: no cover
         if spec.widget_attr:
             setattr(self, spec.widget_attr, entry)
         return entry
+
+    def _option_menu_values(self, spec: gui_state_helpers.OptionMenuSpec) -> list[str]:
+        if spec.values_kind == "locale":
+            return [label for _locale, label in GUI_LOCALE_OPTIONS]
+        if spec.values_kind == "appearance":
+            return [label for _appearance, label in gui_appearance_options(self._current_locale())]
+        if spec.values_kind == "strict_profile":
+            return ["default", *strict_profiles.STRICT_PROFILE_CHOICES]
+        raise ValueError(f"Unknown option menu values kind: {spec.values_kind}")
+
+    def _add_option_menu(
+        self,
+        parent,
+        spec: gui_state_helpers.OptionMenuSpec,
+    ):
+        self._make_field_label(
+            parent,
+            text_key=spec.text_key,
+            tooltip_key=spec.tooltip_key,
+        ).grid(**spec.label_grid.kwargs)
+
+        options: dict[str, object] = {}
+        if spec.command_attr:
+            options["command"] = getattr(self, spec.command_attr)
+        menu = self.ctk.CTkOptionMenu(
+            parent,
+            variable=getattr(self, spec.variable_attr),
+            values=self._option_menu_values(spec),
+            height=32,
+            corner_radius=8,
+            fg_color=self._secondary_button_fg,
+            button_color=self._support_button_fg,
+            button_hover_color=self._support_button_hover,
+            text_color=self._secondary_button_text,
+            **options,
+        )
+        self._bind_tooltip_key(menu, spec.tooltip_key)
+        menu.grid(**spec.menu_grid.kwargs)
+        if spec.widget_attr:
+            setattr(self, spec.widget_attr, menu)
+        return menu
 
     def _add_path_field(
         self,
