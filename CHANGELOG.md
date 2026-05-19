@@ -46,6 +46,7 @@ All notable user-facing changes to this project are documented here.
 - Extracted pure GUI heading, explanatory-label, and status-panel specs while preserving i18n keys, help badges, wraplengths, theme color roles, and staged Audit/Repair/Reports/Prompts layout behavior.
 - Extracted pure GUI dynamic presentation state for repository empty states, prompt cards, and Reports artifact summaries while preserving relocalization, responsive layout, artifact actions, and themed status colors.
 - Extracted pure GUI setup option-menu specs for language, appearance, and strict profile controls while preserving values, commands, tooltips, and layout.
+- Extracted pure GUI Audit/Repair card specs for target, identity, repair options, repair actions, repository list, and execution log cards while preserving grids, widget attributes, and responsive weights.
 - Extracted pure GUI theme update helpers for palette snapshots, token translation, widget option updates, and special-widget theme maps while preserving runtime theme switching.
 - Extracted GUI asset/icon loading, theming, label refresh, and window-icon updates into a dedicated adapter while preserving runtime fallbacks and visual refresh behavior.
 - Extracted GUI window lifecycle helpers for root creation, theme initialization, geometry sizing, appearance callbacks, and mainloop dispatch while preserving desktop startup behavior.

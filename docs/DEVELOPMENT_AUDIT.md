@@ -215,8 +215,9 @@ Highest-value debt to pay down next:
 
 - `repo_privacy_guardian/gui/app.py` is still about 4,000 lines and should keep
   losing remaining widget-construction logic to narrower modules; setup
-  option-menu construction is now spec-driven, but larger Audit/Repair card
-  assembly blocks remain inline.
+  option-menu construction and top-level Audit/Repair card construction are now
+  spec-driven, but Settings/Reports/Prompts cards and nested gate/list-shell
+  frames remain inline.
 - `repo_privacy_guardian/core.py` is still about 2,700 lines and remains the
   main compatibility aggregation surface.
 - CI pinned action revisions now target Node.js 24-compatible action releases,
@@ -236,7 +237,8 @@ Highest-value debt to pay down next:
 Suggested priority order:
 
 1. Continue extracting remaining GUI widget-construction helpers behind focused
-   tests, starting with larger Audit/Repair card assembly blocks.
+   tests, starting with Settings/Reports/Prompts cards and nested Repair
+   gate/list-shell frames.
 2. Continue shrinking `core.py` while preserving stable `1.x` compatibility
    facades.
 3. Keep synthetic redaction, target-resolution, and preflight contracts aligned

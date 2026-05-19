@@ -3161,6 +3161,114 @@ def test_gui_option_checkbox_specs_cover_settings_and_repair_rows() -> None:
         assert spec.tooltip_key in tooltip_catalog
 
 
+def test_gui_audit_repair_card_specs_cover_layouts() -> None:
+    specs = gui_state_helpers.audit_repair_card_specs()
+
+    assert list(specs) == [
+        "audit_target",
+        "identity",
+        "repair_options",
+        "repair_actions",
+        "repositories",
+        "execution_log",
+    ]
+    assert {
+        key: (
+            spec.grid.kwargs,
+            [(config.column, config.weight) for config in spec.column_configs],
+            [(config.column, config.weight) for config in spec.row_configs],
+            spec.widget_attrs,
+        )
+        for key, spec in specs.items()
+    } == {
+        "audit_target": (
+            {"row": 0, "column": 0, "sticky": "we", "padx": 10, "pady": (8, 8)},
+            [(1, 1)],
+            [],
+            (),
+        ),
+        "identity": (
+            {"row": 1, "column": 0, "sticky": "we", "padx": 10, "pady": (10, 8)},
+            [(1, 1)],
+            [],
+            ("_identity_card",),
+        ),
+        "repair_options": (
+            {"row": 1, "column": 0, "sticky": "we", "padx": 10, "pady": (0, 8)},
+            [(0, 1), (1, 1)],
+            [],
+            ("_options_card", "_repair_options_card"),
+        ),
+        "repair_actions": (
+            {"row": 2, "column": 0, "sticky": "we", "padx": 10, "pady": (0, 8)},
+            [(0, 1)],
+            [],
+            (),
+        ),
+        "repositories": (
+            {"row": 0, "column": 0, "sticky": "nsew", "padx": (0, 8), "pady": 0},
+            [(0, 1), (1, 0)],
+            [(2, 1)],
+            ("_repos_card",),
+        ),
+        "execution_log": (
+            {"row": 0, "column": 1, "sticky": "nsew", "padx": (8, 0), "pady": 0},
+            [(0, 1)],
+            [(1, 1)],
+            ("_output_card",),
+        ),
+    }
+    assert all(spec.fg_color_role == "surface" for spec in specs.values())
+    assert all(spec.border_color_role == "card_border" for spec in specs.values())
+    assert all(spec.corner_radius == 12 and spec.border_width == 1 for spec in specs.values())
+
+
+def test_gui_make_card_uses_spec_and_registers_widgets() -> None:
+    created: list[object] = []
+
+    class DummyFrame:
+        def __init__(self, parent: object, **kwargs: object) -> None:
+            self.parent = parent
+            self.kwargs = kwargs
+            self.grid_kwargs: dict[str, object] = {}
+            self.column_configs: list[tuple[object, int]] = []
+            self.row_configs: list[tuple[object, int]] = []
+            created.append(self)
+
+        def grid(self, **kwargs: object) -> None:
+            self.grid_kwargs = kwargs
+
+        def grid_columnconfigure(self, column: object, *, weight: int) -> None:
+            self.column_configs.append((column, weight))
+
+        def grid_rowconfigure(self, row: object, *, weight: int) -> None:
+            self.row_configs.append((row, weight))
+
+    class DummyCtk:
+        CTkFrame = DummyFrame
+
+    app = object.__new__(rpg.GuiApp)
+    app.ctk = DummyCtk()
+    app._theme_color_role = lambda role: {"surface": "#111111", "card_border": "#222222"}[role]
+
+    spec = gui_state_helpers.audit_repair_card_specs()["repair_options"]
+    card = rpg.GuiApp._make_card(app, "parent", spec)
+
+    assert card is created[0]
+    assert app._options_card is card
+    assert app._repair_options_card is card
+    assert card.parent == "parent"
+    assert card.kwargs == {
+        "fg_color": "#111111",
+        "corner_radius": 12,
+        "border_width": 1,
+        "border_color": "#222222",
+    }
+    assert card.grid_kwargs == spec.grid.kwargs
+    assert card.column_configs == [(0, 1), (1, 1)]
+    assert card.row_configs == []
+
+
 def test_gui_option_menu_specs_cover_setup_settings_rows() -> None:
     specs = gui_state_helpers.setup_option_menu_specs(
         language_row=2,

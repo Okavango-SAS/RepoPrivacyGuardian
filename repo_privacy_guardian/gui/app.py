@@ -339,6 +339,7 @@ class GuiApp:  # pragma: no cover
         self._app_frame = app
         heading_specs = gui_state_helpers.gui_section_heading_specs()
         panel_specs = gui_state_helpers.gui_panel_specs()
+        card_specs = gui_state_helpers.audit_repair_card_specs()
         text_specs = gui_state_helpers.gui_text_label_specs()
 
         header = ctk.CTkFrame(app, fg_color=self._header_fg, corner_radius=18)
@@ -399,15 +400,7 @@ class GuiApp:  # pragma: no cover
         settings_tab.grid_columnconfigure(0, weight=1)
         repair_tab.grid_columnconfigure(0, weight=1)
 
-        audit_target_card = ctk.CTkFrame(
-            audit_tab,
-            fg_color=self._surface_fg,
-            corner_radius=12,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        audit_target_card.grid(row=0, column=0, sticky="we", padx=10, pady=(8, 8))
-        audit_target_card.grid_columnconfigure(1, weight=1)
+        audit_target_card = self._make_card(audit_tab, card_specs["audit_target"])
         self._add_section_heading(audit_target_card, heading_specs["audit_target"])
         self._add_text_label(audit_target_card, text_specs["audit_target_body"])
         self._add_path_field(
@@ -622,15 +615,7 @@ class GuiApp:  # pragma: no cover
         for entry_spec in gui_state_helpers.owner_profile_entry_field_specs(start_row=2):
             self._add_entry_field(profile_card, entry_spec)
 
-        identity_card = ctk.CTkFrame(
-            audit_tab,
-            fg_color=self._surface_fg,
-            corner_radius=12,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        identity_card.grid(row=1, column=0, sticky="we", padx=10, pady=(10, 8))
-        identity_card.grid_columnconfigure(1, weight=1)
+        identity_card = self._make_card(audit_tab, card_specs["identity"])
         self._add_text_label(identity_card, text_specs["optional_git_identity"])
 
         for entry_spec in gui_state_helpers.git_identity_entry_field_specs():
@@ -646,7 +631,6 @@ class GuiApp:  # pragma: no cover
         ]
 
         self._add_text_label(identity_card, text_specs["identity_help"])
-        self._identity_card = identity_card
         self._set_advanced_identity_visibility(False)
         self._set_setup_settings_visibility(self._setup_settings_visible)
 
@@ -667,18 +651,7 @@ class GuiApp:  # pragma: no cover
         self._bind_tooltip_key(self._repair_options_toggle_button, "repair_options_toggle")
         self._repair_options_toggle_button.grid(row=0, column=1, sticky="e", padx=(10, 12), pady=10)
 
-        options_card = ctk.CTkFrame(
-            repair_tab,
-            fg_color=self._surface_fg,
-            corner_radius=12,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        options_card.grid(row=1, column=0, sticky="we", padx=10, pady=(0, 8))
-        options_card.grid_columnconfigure(0, weight=1)
-        options_card.grid_columnconfigure(1, weight=1)
-        self._options_card = options_card
-        self._repair_options_card = options_card
+        options_card = self._make_card(repair_tab, card_specs["repair_options"])
         self._add_section_heading(options_card, heading_specs["repair_options"])
 
         safe_options = self._make_panel(options_card, panel_specs["repair_review_options"])
@@ -732,15 +705,7 @@ class GuiApp:  # pragma: no cover
         self._sync_push_guardrail_controls()
         self._set_repair_options_visibility(False)
 
-        repair_actions_card = ctk.CTkFrame(
-            repair_tab,
-            fg_color=self._surface_fg,
-            corner_radius=12,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        repair_actions_card.grid(row=2, column=0, sticky="we", padx=10, pady=(0, 8))
-        repair_actions_card.grid_columnconfigure(0, weight=1)
+        repair_actions_card = self._make_card(repair_tab, card_specs["repair_actions"])
         self._add_section_heading(repair_actions_card, heading_specs["repair_flow"])
         repair_status_panel = self._make_panel(repair_actions_card, panel_specs["repair_status"])
         self._add_text_label(repair_status_panel, text_specs["repair_status_badge"])
@@ -824,18 +789,7 @@ class GuiApp:  # pragma: no cover
         results_row.grid_rowconfigure(0, weight=1)
         self._results_row = results_row
 
-        repos_card = ctk.CTkFrame(
-            results_row,
-            fg_color=self._surface_fg,
-            corner_radius=12,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        repos_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=0)
-        repos_card.grid_columnconfigure(0, weight=1)
-        repos_card.grid_columnconfigure(1, weight=0)
-        repos_card.grid_rowconfigure(2, weight=1)
-        self._repos_card = repos_card
+        repos_card = self._make_card(results_row, card_specs["repositories"])
         repo_header = ctk.CTkFrame(repos_card, fg_color="transparent")
         repo_header.grid(row=0, column=0, columnspan=2, sticky="we", padx=14, pady=(12, 6))
         repo_header.grid_columnconfigure(0, weight=1)
@@ -995,17 +949,7 @@ class GuiApp:  # pragma: no cover
         self._bind_tooltip_key(clear_log_button, "clear_log")
         clear_log_button.pack(side="left", padx=8)
 
-        output_card = ctk.CTkFrame(
-            results_row,
-            fg_color=self._surface_fg,
-            corner_radius=12,
-            border_width=1,
-            border_color=self._card_border,
-        )
-        output_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0), pady=0)
-        output_card.grid_columnconfigure(0, weight=1)
-        output_card.grid_rowconfigure(1, weight=1)
-        self._output_card = output_card
+        output_card = self._make_card(results_row, card_specs["execution_log"])
         self._add_section_heading(output_card, heading_specs["execution_log"])
         self.output = ctk.CTkTextbox(
             output_card,
@@ -2195,6 +2139,23 @@ class GuiApp:  # pragma: no cover
         if spec.widget_attr:
             setattr(self, spec.widget_attr, panel)
         return panel
+
+    def _make_card(self, parent, spec: gui_state_helpers.CardSpec):
+        card = self.ctk.CTkFrame(
+            parent,
+            fg_color=self._theme_color_role(spec.fg_color_role),
+            corner_radius=spec.corner_radius,
+            border_width=spec.border_width,
+            border_color=self._theme_color_role(spec.border_color_role),
+        )
+        card.grid(**spec.grid.kwargs)
+        for config in spec.column_configs:
+            card.grid_columnconfigure(config.column, weight=config.weight)
+        for config in spec.row_configs:
+            card.grid_rowconfigure(config.column, weight=config.weight)
+        for widget_attr in spec.widget_attrs:
+            setattr(self, widget_attr, card)
+        return card
 
     def _add_text_label(self, parent, spec: gui_state_helpers.TextLabelSpec):
         label_options: dict[str, object] = {

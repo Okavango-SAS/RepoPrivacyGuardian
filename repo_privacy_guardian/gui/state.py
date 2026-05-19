@@ -239,6 +239,18 @@ class PanelSpec:
 
 
 @dataclass(frozen=True)
+class CardSpec:
+    grid: WidgetGridConfig
+    column_configs: tuple[GridColumnConfig, ...] = ()
+    row_configs: tuple[GridColumnConfig, ...] = ()
+    fg_color_role: FillColorRole = "surface"
+    border_color_role: FillColorRole = "card_border"
+    corner_radius: int = 12
+    border_width: int = 1
+    widget_attrs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ActionButtonSpec:
     text_key: str
     tooltip_key: str
@@ -768,6 +780,47 @@ def gui_panel_specs(
             grid=WidgetGridConfig(row=2, column=0, sticky="we", padx=14, pady=(0, 12), columnspan=2),
             column_configs=(GridColumnConfig(column=1, weight=1),),
             widget_attr="_prompts_workflow_guide",
+        ),
+    }
+
+
+def audit_repair_card_specs() -> dict[str, CardSpec]:
+    return {
+        "audit_target": CardSpec(
+            grid=WidgetGridConfig(row=0, column=0, sticky="we", padx=10, pady=(8, 8)),
+            column_configs=(GridColumnConfig(column=1, weight=1),),
+        ),
+        "identity": CardSpec(
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=10, pady=(10, 8)),
+            column_configs=(GridColumnConfig(column=1, weight=1),),
+            widget_attrs=("_identity_card",),
+        ),
+        "repair_options": CardSpec(
+            grid=WidgetGridConfig(row=1, column=0, sticky="we", padx=10, pady=(0, 8)),
+            column_configs=(
+                GridColumnConfig(column=0, weight=1),
+                GridColumnConfig(column=1, weight=1),
+            ),
+            widget_attrs=("_options_card", "_repair_options_card"),
+        ),
+        "repair_actions": CardSpec(
+            grid=WidgetGridConfig(row=2, column=0, sticky="we", padx=10, pady=(0, 8)),
+            column_configs=(GridColumnConfig(column=0, weight=1),),
+        ),
+        "repositories": CardSpec(
+            grid=WidgetGridConfig(row=0, column=0, sticky="nsew", padx=(0, 8), pady=0),
+            column_configs=(
+                GridColumnConfig(column=0, weight=1),
+                GridColumnConfig(column=1, weight=0),
+            ),
+            row_configs=(GridColumnConfig(column=2, weight=1),),
+            widget_attrs=("_repos_card",),
+        ),
+        "execution_log": CardSpec(
+            grid=WidgetGridConfig(row=0, column=1, sticky="nsew", padx=(8, 0), pady=0),
+            column_configs=(GridColumnConfig(column=0, weight=1),),
+            row_configs=(GridColumnConfig(column=1, weight=1),),
+            widget_attrs=("_output_card",),
         ),
     }
 
