@@ -21,12 +21,12 @@ The repository is already stable in these areas:
 - pinned GitHub Actions updated to Node.js 24-compatible revisions while preserving SHA pins
 - GUI dialog, navigation, and background-worker adapters extracted behind focused tests
 - CLI and GUI cleanup path for old local `Audit_Results` run folders
+- repeatable large-history benchmark coverage that compares `run_state.json` timings
 
 ## Near-term improvements with real value
 
 These are the next improvements that still fit the current product scope:
 
-- add repeatable benchmark coverage for large-history scanning and compare `run_state.json` phase timings across changes
 - expand synthetic integration coverage for redaction edge cases and remaining GUI widget construction helpers
 - expand target-resolution and preflight regression coverage further as local and GitHub owner/org repo-selection modes evolve
 - keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract

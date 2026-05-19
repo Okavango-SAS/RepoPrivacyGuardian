@@ -318,6 +318,13 @@ python -m pytest -q
 python scripts/release_readiness.py --skip-self-audit
 ```
 
+For performance work on history scanning, generate a local synthetic baseline and keep the resulting evidence under ignored `.local-meta/`:
+
+```sh
+python scripts/benchmark_large_history.py --commits 120 --files 8
+python scripts/benchmark_large_history.py --baseline-run-state .local-meta/benchmarks/<run>/Audit_Results/<run_id>/run_state.json --max-regression-percent 25
+```
+
 Use [LOCAL_DEVELOPMENT](docs/LOCAL_DEVELOPMENT.md) for the maintained contributor workflow, repository map, and validation variants.
 
 ## 🚀 Command Reference
@@ -702,6 +709,7 @@ Validation tiers for this repository:
 - docs-only changes stay local-first: run `python scripts/check_release_contract.py`; if branch protection needs the current smoke check for a docs-only PR, run `workflow_dispatch` without extended checks on that branch/commit
 - manual extended CI: `ruff`, `pyright`, tracked `pytest`, package smoke for `wheel` and `sdist`, plus Windows GUI smoke
 - local maintainer release gate: `python scripts/release_readiness.py`, including `pip-audit` checks for dev/GUI/remediation requirement files
+- local performance benchmark: `python scripts/benchmark_large_history.py`, which creates a synthetic large-history repo, audits it, and compares `run_state.json` timings against an optional baseline
 
 ## 📚 Release Engineering Docs
 

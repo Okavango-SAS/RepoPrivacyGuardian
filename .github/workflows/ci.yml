@@ -31,6 +31,8 @@ on:
       - "repo_privacy_guardian*.py"
       - "repo_privacy_guardian_assets/**"
       - "repo_privacy_guardian_resources/**"
+      - "scripts/benchmark_large_history.py"
+      - "scripts/benchmark_large_history.py"
       - "scripts/check_release_contract.py"
       - "scripts/release_readiness.py"
       - "scripts/visual_qa_gui.py"

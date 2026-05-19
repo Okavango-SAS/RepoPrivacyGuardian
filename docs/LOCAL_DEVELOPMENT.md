@@ -101,6 +101,7 @@ Start here when changing behavior:
 - `repo_privacy_guardian_*.py`: root compatibility shims for imports kept stable in the `1.x` line
 - `repo_privacy_guardian_assets/`: packaged raster assets used only by the optional GUI
 - `tests/`: tracked regression tests plus release smoke coverage
+- `scripts/benchmark_large_history.py`: local synthetic benchmark for history-scan timings from `run_state.json`
 - `scripts/release_readiness.py`: owned end-to-end local validation harness
 - `repo_privacy_guardian_resources/POLICY.md`: packaged policy resource used by installed builds
 - `docs/`: runbooks, architecture notes, policy, prompts, and release guidance

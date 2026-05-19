@@ -85,6 +85,23 @@ Useful flags:
 - `--skip-self-audit`: skip the final self-audit, useful while the worktree still has local changes
 - `--skip-clean-build-artifacts`: keep existing build outputs if you intentionally want to inspect them
 
+## Large-history benchmark
+
+Use the repository-owned benchmark when changing history parsing, scanner
+streaming, execution adapters, or performance-sensitive policy code:
+
+```sh
+python scripts/benchmark_large_history.py --commits 120 --files 8
+python scripts/benchmark_large_history.py --baseline-run-state .local-meta/benchmarks/<run>/Audit_Results/<run_id>/run_state.json --max-regression-percent 25 --export-json .local-meta/benchmarks/<run>/summary.json
+```
+
+The benchmark creates a synthetic Git repository with many commits under
+ignored `.local-meta/benchmarks/`, runs the real audit pipeline, reads the
+resulting `run_state.json`, and reports total, phase, and per-repository audit
+timing deltas. Use the first command to establish local evidence and the second
+to compare a later change against a reviewed baseline. Treat the artifacts like
+other local audit evidence and do not commit them.
+
 ## Environment variables
 
 Repo Privacy Guardian does not auto-load a `.env` file. Configure environment variables explicitly in the shell or execution environment.

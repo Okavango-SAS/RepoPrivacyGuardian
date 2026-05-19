@@ -7,6 +7,7 @@ All notable user-facing changes to this project are documented here.
 ### Added
 
 - Added a reviewed network-context bucket so Repo Privacy Guardian's own GitHub API probes and Windows App Installer bootstrap command remain traceable without keeping self-audits in manual-review state.
+- Added a large-history benchmark helper that creates a synthetic Git history, runs the real audit pipeline, and compares `run_state.json` timings against an optional baseline.
 - Added a count-only report comparison workflow for re-audits: CLI `--compare-reports` and a GUI Reports action compare the latest `report.json` with an earlier run without exposing raw finding evidence.
 - Added a CLI/GUI cleanup workflow for old local `Audit_Results` run folders, including dry-run preview, keep-count control, confirmation gates, and symlink-safe deletion.
 - Added dark-mode GUI screenshots to the README desktop preview with neutral visible paths.

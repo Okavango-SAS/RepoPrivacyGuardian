@@ -185,6 +185,9 @@ Findings:
   install smoke, dependency audit, self-audit, CLI smoke, GUI smoke, and tracked
   tests in one repeatable flow.
 - Performance metrics are already emitted in `run_state.json`.
+- `scripts/benchmark_large_history.py` now creates a synthetic many-commit
+  repository, runs the real audit pipeline, and compares `run_state.json`
+  timings against an optional baseline.
 - The product has useful fast paths such as scoped `--repos`, GitHub fast mode,
   and bounded remote clone worker settings.
 
@@ -192,16 +195,17 @@ Optimization risks:
 
 - Very large repositories can still spend significant time in history patch
   scanning.
-- There is no formal performance budget or benchmark fixture for worst-case
-  Git history scans.
+- There is no enforced release-blocking performance budget for worst-case Git
+  history scans.
 - More module extraction is still needed before the largest runtime modules are
   easy to profile and optimize in isolation.
 
 Recommended next actions:
 
-- Add a repeatable benchmark fixture for large-history scanning.
+- Use the large-history benchmark before and after performance-sensitive
+  scanner changes.
 - Preserve and compare phase timings from `run_state.json` during performance
-  work.
+  work, and promote a budget only after enough local baselines are collected.
 - Continue extracting pure planning/parsing code away from side-effecting
   adapters so hotspots can be tested and profiled independently.
 
@@ -215,7 +219,8 @@ Highest-value debt to pay down next:
   main compatibility aggregation surface.
 - CI pinned action revisions now target Node.js 24-compatible action releases,
   but they still need normal dependency-review cadence.
-- Large-history performance lacks explicit benchmark thresholds.
+- Large-history performance now has a repeatable benchmark path, but release
+  thresholds are still advisory until enough baselines exist.
 - Artifact retention/cleanup is now an ergonomic CLI/GUI workflow, but it
   should stay scoped to local ignored run artifacts only.
 - Provider-specific secret rotation is intentionally out of scope, but the docs
@@ -225,7 +230,8 @@ Highest-value debt to pay down next:
 
 Suggested priority order:
 
-1. Add benchmark coverage for large-history scanning and track timing deltas.
+1. Expand synthetic integration coverage for redaction edge cases and
+   target-resolution/preflight paths.
 2. Continue extracting remaining GUI widget-construction helpers behind focused
    tests.
 3. Continue shrinking `core.py` while preserving stable `1.x` compatibility

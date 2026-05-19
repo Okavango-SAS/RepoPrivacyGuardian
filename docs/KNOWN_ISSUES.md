@@ -20,7 +20,7 @@ Workaround: use `--purge-all-detected-secret-files` only after manual review.
 1. Large repositories can take significant time during history patch scanning.
 
 Impact: medium.
-Workaround: audit specific repos first with `--repos` and use staged execution.
+Workaround: audit specific repos first with `--repos`, use staged execution, and run `python scripts/benchmark_large_history.py` before/after scanner changes to compare `run_state.json` timing deltas.
 
 1. History rewrite changes commit SHAs and requires force push.
 

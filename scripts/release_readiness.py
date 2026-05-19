@@ -70,6 +70,7 @@ RELEASE_BYTE_COMPILE_PATHS = (
     "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_prompts.py",
     "repo_privacy_guardian_runtime.py",
+    "scripts/benchmark_large_history.py",
     "scripts/check_release_contract.py",
     "scripts/release_readiness.py",
     "scripts/visual_qa_gui.py",
