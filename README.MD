@@ -723,6 +723,7 @@ Validation tiers for this repository:
 - [DOGFOODING](docs/DOGFOODING.md): audit-only workflow for using the tool defensively on other repositories
 - [TROUBLESHOOTING](docs/TROUBLESHOOTING.md): common operator failures and fast diagnosis paths
 - [RELEASE_NOTES_TEMPLATE](docs/RELEASE_NOTES_TEMPLATE.md): lightweight notes template for public releases
+- [v1.5.1 release notes](docs/releases/v1.5.1.md): public tag notes and validation evidence for the current patch
 - [ROADMAP](docs/ROADMAP.md): current maturity, next hardening steps, and out-of-scope boundaries
 
 ## 🏗️ Repository Layout

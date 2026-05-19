@@ -908,6 +908,28 @@ def test_changelog_records_stable_release() -> None:
     assert "Initial stable public release." in changelog
 
 
+def test_current_release_notes_are_public_safe_and_validated() -> None:
+    root = _repo_root()
+    readme = (root / "README.MD").read_text(encoding="utf-8")
+    notes_path = root / "docs" / "releases" / "v1.5.1.md"
+    notes = notes_path.read_text(encoding="utf-8")
+
+    assert "[v1.5.1 release notes](docs/releases/v1.5.1.md)" in readme
+    assert "# Repo Privacy Guardian v1.5.1" in notes
+    assert "`v1.5.1` is a refactor-closure and release-readiness patch" in notes
+    assert "no flag, default, exit-code, report-schema, policy-key, or remediation-default changes" in notes
+    assert "python scripts/release_readiness.py --skip-self-audit" in notes
+    assert "Self-audit dogfood" in notes
+    assert "GitHub automatic push CI" in notes
+    assert "GitHub Dependency Graph update" in notes
+    assert "Changed defaults: none." in notes
+    assert "Migration or operator action required: none" in notes
+    assert "Follow-up candidates" in notes
+    assert "C:\\Users\\" not in notes
+    assert "/Users/" not in notes
+    assert "gho_" not in notes
+
+
 def test_pyproject_version_matches_current_release_line() -> None:
     pyproject = (_repo_root() / "pyproject.toml").read_text(encoding="utf-8")
     readme = (_repo_root() / "README.MD").read_text(encoding="utf-8")
