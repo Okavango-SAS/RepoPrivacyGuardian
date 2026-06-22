@@ -4,6 +4,12 @@ All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Refreshed the development audit, roadmap, and operations runbook after the
+  June 2026 maintainer hygiene pass, including branch/worktree cleanup guidance
+  and local artifact retention evidence.
+
 ## [1.5.1] - 2026-05-19
 
 ### Added

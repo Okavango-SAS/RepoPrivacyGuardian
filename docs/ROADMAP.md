@@ -21,6 +21,7 @@ The repository is already stable in these areas:
 - pinned GitHub Actions updated to Node.js 24-compatible revisions while preserving SHA pins
 - GUI dialog, navigation, background-worker adapters, setup option-menu specs, and card specs for Audit, Settings, Reports, Prompts, Repair, repository list shells, and empty states extracted behind focused tests
 - CLI and GUI cleanup path for old local `Audit_Results` run folders
+- maintainer branch/worktree hygiene documented for public-repository cleanup and handoff work
 - repeatable large-history benchmark coverage that compares `run_state.json` timings
 - synthetic integration coverage for redacted JSON/HTML report surfaces and local target-resolution/preflight edge cases
 
@@ -28,10 +29,11 @@ The repository is already stable in these areas:
 
 These are the next improvements that still fit the current product scope:
 
-- monitor the public `v1.5.1` release for real installation, audit, GUI, and documentation feedback before opening a new implementation cycle
+- use the `v1.5.1` post-release hygiene audit as the current baseline and continue to monitor the public `v1.5.1` release for real installation, audit, GUI, and documentation feedback
 - choose the next user-facing improvement from observed operator friction, with likely candidates in report actionability, remediation guidance, artifact cleanup ergonomics, or remote-audit review flow
 - keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract
 - keep docs, help text, packaged policy, and smoke fixtures aligned as defaults evolve
+- keep branch/worktree cleanup boring and explicit: prune remotes, fast-forward `main`, delete only merged local branches, and prune stale worktree metadata after review
 - keep shrinking `repo_privacy_guardian/core.py` and the broad `GuiApp` coordinator only when a behavior-bearing boundary is clear, testable, and useful to users; extraction by itself is no longer a near-term release goal
 
 ## Deprioritized for this repository phase

@@ -1,8 +1,10 @@
-# Development Audit - 2026-05-18
+# Development Audit - 2026-06-22
 
-This audit records the current development state of Repo Privacy Guardian on
-`main` after the 1.5.x modularization work and before the documentation update
-that introduced this file.
+This audit records the current development and repository-hygiene state of Repo
+Privacy Guardian on `main` after the `v1.5.1` release and the post-release
+documentation audit cleanup. It preserves the 2026-05-18 release-readiness
+evidence as the last full release gate and adds the 2026-06-22 maintenance
+self-audit, branch/worktree review, and local artifact cleanup.
 
 ## Scope and evidence
 
@@ -10,13 +12,45 @@ Audited surfaces:
 
 - CLI audit, remediation preview, reporting, policy, GitHub hardening, and
   release-contract surfaces.
+- Git branch, remote, tag, and worktree hygiene for the public checkout.
 - GUI companion flow across Audit, Reports, Prompts, Settings, and gated
   Repair tabs.
-- Local persistence and generated artifacts.
+- Local persistence, generated artifacts, build outputs, and cache retention.
 - Dependency, packaging, static-analysis, smoke, visual, and self-audit
   evidence.
 
-Validation evidence from this audit:
+Current validation and hygiene evidence from the 2026-06-22 maintenance pass:
+
+- `python -m Repo_Privacy_Guardian --help`: passed.
+- `python -m Repo_Privacy_Guardian --check-tooling`: passed; `git` reported
+  READY.
+- `python -m Repo_Privacy_Guardian --root ... --repos RepoPrivacyGuardian
+  --dry-run --yes --agent-summary --audit-github-hardening`: repository status
+  PASS with zero blocking findings and one advisory GitHub hardening review
+  item for administrator branch-protection bypass.
+- Self-audit artifact: `Audit_Results/20260622-001652/` stayed in ignored local
+  evidence and was not committed.
+- `git fetch --prune --tags origin`, `git switch main`, and
+  `git pull --ff-only origin main`: `main` was already synchronized with
+  `origin/main`.
+- `git branch --merged main`, `git branch --no-merged main`, and
+  `git for-each-ref refs/remotes/origin`: only `main` and `origin/main` were
+  present after pruning; no secondary merged or unmerged branches needed
+  deletion.
+- `git worktree list --porcelain` and `git worktree prune --dry-run`: only the
+  primary checkout was registered, with no stale worktrees to prune.
+- `python scripts/check_release_contract.py`: passed.
+- `python -m Repo_Privacy_Guardian --cleanup-audit-results --keep-audit-runs
+  20 --dry-run --yes`: selected 324 old timestamped run folders for cleanup
+  and skipped one non-run entry.
+- `python -m Repo_Privacy_Guardian --cleanup-audit-results --keep-audit-runs
+  20 --yes`: deleted the 324 old ignored run folders and retained the newest
+  20 run folders.
+- Ignored local build/cache artifacts were removed from the checkout after path
+  validation: `.coverage`, `dist/`, `repo_privacy_guardian.egg-info/`, and
+  Python `__pycache__/` directories.
+
+Release validation evidence retained from the 2026-05-18 full release audit:
 
 - `python -m ruff check .`: passed.
 - `python -m pyright -p pyrightconfig.json`: passed with 0 errors.
@@ -40,21 +74,23 @@ Validation evidence from this audit:
 Current phase: stable `1.5.x` CLI-first product with an optional desktop GUI
 companion.
 
-Status: release-ready for the current public scope, with advisory or accepted
-operational risks documented below.
+Status: maintenance-ready for the current public scope, with no branch or
+worktree cleanup remaining and with advisory or accepted operational risks
+documented below.
 
 No blocking functional, security, persistence, packaging, or test failures were
-found in the tracked validation suite. The remaining work is mostly hardening,
-continued modular extraction, performance baselining for very large histories,
-and operational polish.
+found in the latest self-audit, branch/worktree review, release-contract check,
+or retained full release validation suite. The remaining work is mostly
+hardening, continued modular extraction, performance baselining for very large
+histories, and operational polish.
 
 ## Cybersecurity audit
 
 Findings:
 
-- The self-audit reported zero blocking findings, zero dirty-tree findings,
-  zero path leaks, zero fsck failures, zero execution errors, and zero
-  high-confidence tracked, history, or Git metadata secrets.
+- The 2026-06-22 dry-run self-audit reported zero blocking findings, zero
+  dirty-tree findings, zero path leaks, zero fsck failures, zero execution
+  errors, and zero high-confidence tracked, history, or Git metadata secrets.
 - Fixture and documentation examples were classified into safe fixture or
   documentation buckets instead of blocking release status.
 - Repo-owned GitHub API probes and the Windows App Installer bootstrap path were
@@ -67,6 +103,9 @@ Findings:
   advisory finding when the accepted-risk flag is not set. For this public
   solo-maintainer repository, admin bypass is an intentional operating model
   only when explicitly recorded with `--accept-github-admin-bypass`.
+- Branch/worktree hygiene found no secondary local branches, no unmerged local
+  branches, no stale remote-tracking branches after prune, and no stale
+  worktrees.
 - GitHub Actions emitted a Node.js 20 deprecation warning for pinned actions in
   the latest remote CI run reviewed during the audit. Follow-up hardening
   updated the workflow to `actions/checkout` v6.0.2 and `actions/setup-python`
@@ -80,6 +119,8 @@ Residual risk:
 - Generated audit artifacts are redacted where designed, but they can still
   contain sensitive operational context. They must remain ignored local evidence
   unless explicitly sanitized for publication.
+- Ignored build, coverage, and audit outputs can accumulate in maintainer
+  checkouts and should be pruned locally before release or handoff work.
 - Advisory exfiltration and low-confidence identity heuristics still require
   operator classification by design.
 
@@ -89,6 +130,9 @@ Recommended next actions:
   preserving SHA pins.
 - Keep self-audit release runs paired with the explicit accepted-risk flag when
   this solo-maintainer admin-bypass model is intentional.
+- Keep branch/worktree hygiene in the maintainer checklist: fetch/prune,
+  fast-forward `main`, review merged/unmerged branches, and prune stale
+  worktrees before release work.
 - Keep `pip-audit`, release readiness, and self-audit in the release checklist.
 
 ## Functionality audit
@@ -164,12 +208,18 @@ Findings:
 - Existing tests verify that GUI settings persist user preferences without
   persisting Git identity secrets.
 - Artifact directories are ignored by the repository guardrails.
+- The 2026-06-22 maintenance pass pruned old ignored audit runs with the
+  project-owned cleanup command, kept the newest 20 runs, and removed local
+  ignored build/cache artifacts from the checkout.
 
 Persistence risks:
 
 - Audit artifacts can accumulate and may retain sensitive operational context
-  even when secrets are redacted; the CLI/GUI cleanup path now removes old
+  even when secrets are redacted; the CLI/GUI cleanup path removes old
   timestamp-named local runs after preview or confirmation.
+- Local build outputs, coverage files, and Python caches are ignored but can
+  obscure the real repository state during maintainer audits if they are not
+  pruned periodically.
 - Suppression files are powerful policy inputs and must stay narrow, reviewed,
   and versioned when committed.
 
@@ -177,6 +227,8 @@ Recommended next actions:
 
 - Keep retention guidance visible and use `--cleanup-audit-results --dry-run`
   before deleting old ignored audit artifacts.
+- Keep build/cache cleanup outside Git staging and verify paths before
+  recursive local deletion.
 - Keep suppression schema validation and release-contract checks strict.
 
 ## Optimization audit
@@ -238,14 +290,16 @@ Highest-value debt to pay down next:
 
 Suggested priority order:
 
-1. Monitor `v1.5.1` post-release for real installation, audit, GUI, and docs
-   feedback before opening a new implementation cycle.
-2. Choose the next user-facing improvement from observed operator friction,
+1. Use the `v1.5.1` post-release hygiene pass as the current baseline for
+   future release and maintainer-audit work.
+2. Continue monitoring real installation, audit, GUI, and documentation
+   feedback before opening a broad new implementation cycle.
+3. Choose the next user-facing improvement from observed operator friction,
    likely in report actionability, remediation guidance, artifact cleanup
    ergonomics, or remote-audit review flow.
-3. Continue shrinking `core.py` and the broad GUI coordinator only when the
+4. Continue shrinking `core.py` and the broad GUI coordinator only when the
    next boundary is behavior-bearing and covered by focused tests.
-4. Keep synthetic redaction, target-resolution, and preflight contracts aligned
+5. Keep synthetic redaction, target-resolution, and preflight contracts aligned
    as new report fields or target-selection modes are added.
-5. Defer provider-specific secret rotation and hosted backend features unless
+6. Defer provider-specific secret rotation and hosted backend features unless
    the product scope changes.

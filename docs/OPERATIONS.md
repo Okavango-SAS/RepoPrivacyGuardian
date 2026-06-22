@@ -39,6 +39,32 @@ Cheap contract-drift check from a repository checkout:
 python scripts/check_release_contract.py
 ```
 
+## Branch and worktree hygiene
+
+Before release, cleanup, or maintainer handoff work, make the checkout state
+explicit and keep `main` synchronized:
+
+```sh
+git fetch --prune --tags origin
+git switch main
+git pull --ff-only origin main
+git branch --merged main
+git branch --no-merged main
+git worktree list --porcelain
+git worktree prune --dry-run
+```
+
+Delete a local branch only after it is listed by `git branch --merged main`,
+has no active worktree, and no longer carries unpushed work. Use
+`git branch -d <branch>` for merged local branches so Git refuses unsafe
+deletion. Delete a remote branch only after confirming the corresponding work
+is merged or intentionally abandoned in GitHub.
+
+Run `git worktree prune --dry-run` first. If it reports stale administrative
+entries only, rerun without `--dry-run` to prune those entries. Do not remove a
+real checkout directory through `git worktree prune`; inspect and delete the
+directory intentionally after confirming it contains no local work.
+
 ## External design-spec hygiene
 
 The root `DESIGN.md` follows the public Google Labs `google-labs-code/design.md` format, pinned to release `0.1.0` while the upstream spec is still `alpha`.
