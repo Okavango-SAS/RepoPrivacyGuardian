@@ -40,7 +40,10 @@ normal-temp cases. The installed refresh is verified by four source hashes, link
 checkout resolution, successful CLI help, and skill validation.
 
 Final validation of the current product tree passes: **655 tests passed, one
-POSIX-specific skip, 84.49% statement coverage**, with the 80% gate unchanged.
+POSIX-specific skip, 84.54% statement coverage**, with the 80% gate unchanged,
+in an isolated `[gui,test]` environment without system packages. The test/dev
+requirements now declare the build helper's `setuptools` dependency; a clean
+install, `pip check`, and the updated 43-package developer audit pass.
 Ruff, Pyright, and the release contract exit with zero. The local harness's
 artifact/smoke steps validate the latest source: CLI/GUI smoke, module/direct help,
 wheel/sdist builds, isolated installs, and all three resolved dependency audits
@@ -50,7 +53,14 @@ with both PowerShell runtimes, including help/tooling and a complete audit-only
 fixture. Native empty/nonempty subprocess input works under ordinary and protected
 execution without conflicting stdin arguments.
 
-The plan records publication self-audit and synchronization separately. A visual
+The clean-worktree release-profile self-audit passes at implementation commit
+`3fc400156cea804a8b2a7c4f8b13498e1662fac9`: policy and summary PASS, completed run,
+zero blocking/manual-review entries, and one documented accepted administrator-
+bypass risk. Public-fixture refinements retain redaction/import-guard behavior
+and pass 42 focused regressions. Automatic CI and all five configured extended
+jobs pass at dependency-correction commit `c99bb2ffea123ebf7327f87c99107d656d466cf9`,
+including Linux pytest and Windows GUI smoke. The plan links the public run records.
+A visual
 QA capture was attempted but was uniformly black; screenshot review is unavailable
 in this execution environment despite passing initialization, layout, callback,
 and GUI smoke checks. This is a capture limitation, not evidence of a product

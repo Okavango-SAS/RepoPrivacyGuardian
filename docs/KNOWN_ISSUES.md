@@ -13,10 +13,14 @@ without a speculative production locking change.
 See the [repository and skill improvement plan](REPO_SKILL_IMPROVEMENT_PLAN.md)
 for the original evidence, implementation details, and final gate results.
 The corrections pass final local validation: 655 tracked tests passed, one
-POSIX-specific skip, and 84.49% statement coverage with the 80% gate unchanged.
+POSIX-specific skip, and 84.54% statement coverage with the 80% gate unchanged,
+in an isolated environment without system packages. The build helper's
+`setuptools` dependency is declared in the test/dev extras and requirements.
 Static, artifact, smoke, dependency, installed-skill, and repeated timing/report-
 parity checks pass as recorded in the plan. Historical baseline counts remain
-separate evidence. No release or tag is announced by these corrections.
+separate evidence. The clean-worktree release-profile self-audit passes with zero
+blocking/manual-review entries and the documented accepted administrator-bypass
+risk. No release or tag is announced by these corrections.
 
 Remaining operational limits:
 

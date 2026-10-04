@@ -25,6 +25,8 @@ All notable user-facing changes to this project are documented here.
   resources and retained materialized Open files until GUI shutdown.
 - Isolated wheel/sdist validation from source imports and verified installed
   entry points, module origins, policy, prompt hashes, and environment consistency.
+- Declared the build helper's test dependency explicitly so fresh test/dev
+  environments collect the packaging regressions without ambient system packages.
 - Bounded Git streaming waits with concurrent output draining, capped stderr
   diagnostics, and lifecycle cleanup on timeout, cancellation, and early exit.
 - Corrected explicit subprocess input handling so reviewed rewrites can pass

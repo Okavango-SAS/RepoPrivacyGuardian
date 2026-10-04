@@ -14,8 +14,10 @@ tag or release, rewrite history, or change remote repository settings.
 
 The table records the completed corrections and their acceptance checks. The
 final tracked suite passes with **655 tests passed, one POSIX-specific test
-skipped, and 84.49% statement coverage**, including the scanner. Clean-worktree
-self-audit and remote synchronization remain the post-commit publication steps.
+skipped, and 84.54% statement coverage**, including the scanner, in an isolated
+`[gui,test]` environment without system packages. The clean-worktree
+release-profile self-audit also passes with zero blocking or manual-review entries
+and one previously accepted administrator-bypass risk.
 The historical 457-test/85.86% result below describes the original audited
 baseline, not this implementation.
 
@@ -29,7 +31,7 @@ baseline, not this implementation.
 | F06 | Skill refresh validates a sibling staging copy before replacement, retains the previous copy until the swap succeeds, and rolls back handled failures. Cleanup validates containment and reparse safety. Unicode paths use native directory moves, and collisions preserve concurrently created destinations and recovery backups. | Failure-injection, byte-preserving rollback, destination/staging collisions, neighbor safety, Unicode paths, successful refresh, and write-free preview cases pass. The installed refresh is complete; four public files match source hashes. Abrupt termination can leave a recovery backup; replacement is not crash-atomic. |
 | F07 | Installer/resolver shell inputs use PowerShell provider paths before filesystem containment checks, so relative inputs follow `Set-Location`. | Complete: relative-location, spaces, nonexistent destination, and provider rejection cases pass in the skill suite. |
 | F08 | Fallback scenarios use explicitly external temporary roots and assert checkout-ancestor isolation; workspace-first product precedence is unchanged. | Complete: in-checkout and normal-temp skill cases pass. Independent installed-metadata resolution from a neutral external workspace passes with both PowerShell versions; help/tooling and explicit-target audit-only execution return zero with complete PASS guidance. |
-| F09 | The scanner-wide coverage exclusion is removed; the global 80% gate is unchanged. Behavior tests cover audit, lifecycle, remediation, and failure boundaries. Temporary mapping creation cleans its owned directory on failure and preserves the original error, refusing replaced-directory traversal. | Complete: the final tracked suite passes at 84.49% coverage with the scanner included. Twelve focused mapping-helper cases include eight new creation-failure/cleanup cases. |
+| F09 | The scanner-wide coverage exclusion is removed; the global 80% gate is unchanged. Behavior tests cover audit, lifecycle, remediation, and failure boundaries. Temporary mapping creation cleans its owned directory on failure and preserves the original error, refusing replaced-directory traversal. | Complete: the final isolated tracked suite passes at 84.54% coverage with the scanner included. Twelve focused mapping-helper cases include eight new creation-failure/cleanup cases. |
 | F10 | Metadata fields and tracked-file inventory are collected once per audit, eligible text is decoded once, and history detectors share a traversal while preserving independent scopes and caps. Caches remain per-audit. | Complete: eighteen repeated clean-corpus runs show equivalent normalized reports and median improvements of 26.2% and 17.3% over the audited implementation. Finding-bearing reports match in six bounded-baseline cases and two original-baseline cases. Concurrent readers increase peak traced memory; comparison limits are recorded below. |
 | F11 | Scanner subphase timings and bounded numeric workload counters are additive metrics. Timing records survive errors and cancellation through `finally` paths. | Complete: success/error/cancellation metric tests pass. Three 10,000-call samples measure median overhead of 0.554 microseconds per counter call and 0.604 microseconds per phase call. |
 | F12 | Local read-only phases, file/history loops, and command waits poll the shared cancellation signal. CLI interruption records an aborted partial run. Repeated Ctrl+C during active CLI repair writes is deferred until the batch returns, with child-process signal isolation and preserved abort evidence. | Complete: 56 focused cancellation/signal/boundary cases and integrated CLI/GUI tests pass. Read-only cases target a response within two seconds. One POSIX-specific case is explicitly skipped locally. |
@@ -43,8 +45,8 @@ The final product tree was checked after the last native stdin/input correction:
 
 | Validation | Final local result | Scope |
 | --- | --- | --- |
-| Full tracked pytest | 655 passed, one POSIX-specific skip; 656 collected; 139.31 seconds | Current product tree; the POSIX-specific path is not claimed as locally executed |
-| Statement coverage | 84.49%; global 80% gate unchanged | Scanner class included; original blanket exclusion removed |
+| Full tracked pytest | 655 passed, one POSIX-specific skip; 656 collected; 152.74 seconds | Isolated `[gui,test]` environment without system packages; the POSIX-specific path is not claimed as locally executed |
+| Statement coverage | 84.54%; global 80% gate unchanged | Scanner class included; original blanket exclusion removed |
 | Ruff, Pyright, release contract | All exited with zero | Current product tree after the last native input correction |
 | Local release harness | `release_readiness.py --skip-self-audit` exited with zero | Final artifact/smoke steps ran after the last correction; the final full pytest above supersedes the harness's earlier test collection |
 | CLI/GUI smoke; module/direct-script help | Passed | Current product/artifact checks; visual capture is qualified separately below |
@@ -52,12 +54,28 @@ The final product tree was checked after the last native stdin/input correction:
 | Three resolved requirement audits | No known vulnerabilities | Development, GUI, and remediation sets at validation time; not a guarantee about all allowed versions |
 | Installed skill refresh and forward check | Passed | Four public source hashes match. Both PowerShell runtimes resolve installed metadata from a neutral external workspace; help/tooling exit with zero and an explicit-target audit-only fixture returns policy/summary PASS, complete/finished, and zero blocking/advisory entries; local metadata and artifacts remain unpublished |
 | Finding-bearing scanner parity | Eight cases passed | Six bounded-baseline cap/incident combinations and two original-baseline cap-50 combinations; comparison limits are recorded below |
+| Clean-worktree self-audit | Policy/summary PASS, complete, exit zero; no blocking or manual-review entries | Release profile and opt-in GitHub hardening at implementation commit `3fc400156cea804a8b2a7c4f8b13498e1662fac9`; one documented administrator-bypass risk remains accepted |
+| Automatic GitHub CI | Passed | [Push run at the dependency correction](https://github.com/Okavango-SAS/RepoPrivacyGuardian/actions/runs/37180277345), commit `c99bb2ffea123ebf7327f87c99107d656d466cf9` |
+| Extended GitHub CI | All five jobs passed | [Configured Linux/Windows validation](https://github.com/Okavango-SAS/RepoPrivacyGuardian/actions/runs/37180333448): Ubuntu Python 3.13 pytest, Ruff/Pyright, package/CLI checks, and Windows Python 3.11 GUI smoke |
 
 Earlier passing harness snapshots are superseded by the final tracked-suite
-result above. **Post-commit publication steps still pending:** clean-worktree
-self-audit and remote synchronization. Record their actual results after they
-finish. Local checks do not claim a new tag, release, full supported-platform CI
-run, or successful visual capture.
+result above. The self-audit record is
+`Audit_Results/implementation-final/20261004-022305/`; its operational artifacts
+remain local and ignored. Redaction fixtures build synthetic path values at
+runtime, and import guards patch blocked APIs through explicit attribute lists;
+42 focused regressions verify those public-fixture refinements. The implementation
+and dependency correction are published on `main`; automatic and configured
+extended CI pass at the dependency-correction commit. Final documentation receives
+a clean-worktree self-audit and normal push before the delivery is closed.
+Local checks do not claim a new tag, release, or successful visual capture.
+
+The clean Linux CI exposed a missing test dependency on `setuptools` for the
+build-helper regressions. It is now explicit in the test/dev extras and developer
+requirements, matching the build-system requirement. A fresh environment without
+system packages installs the declared extras, passes `pip check`, imports the
+helper, and passes all 655 tests. The updated developer requirement audit resolves
+43 packages with no known vulnerabilities. The earlier 84.49% Windows result
+used a system-package-enabled environment and is superseded by the isolated run.
 
 Fresh screenshot review is unavailable in this execution environment. Visual QA
 was attempted, but its capture was uniformly black rather than usable desktop
