@@ -53,3 +53,4 @@ desktop.ini
 
 # Local-only agent/meta working material
 .local-meta/
+codex/skills/*/.local/

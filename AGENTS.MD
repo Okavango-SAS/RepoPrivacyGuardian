@@ -50,6 +50,8 @@ Notes:
 
 Repo Privacy Guardian is meant to be easy to delegate to coding agents while preserving operator control.
 
+- The maintained Codex skill is `codex/skills/repo-privacy-guardian/SKILL.md`; install or refresh it with `scripts/dev/install_codex_skill.ps1` (`-WhatIf` previews, `-Force` replaces the installed copy).
+- The installed skill links to this checkout using local-only `.local/install.json`. Never put personal backend paths into the public skill source. `REPO_PRIVACY_GUARDIAN_REPO` and the console CLI on PATH are fallback resolution options.
 - For a fresh clone of this tool, use `docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md`.
 - For audit-only dogfooding against another repository, use `docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md`.
 - For reviewed audit-and-repair work, use `docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md`.

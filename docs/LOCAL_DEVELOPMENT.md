@@ -27,6 +27,21 @@ python -m Repo_Privacy_Guardian --check-tooling
 
 Optional GitHub hardening auth variables are documented in the tracked `.env.example` reference file, but the tool does not auto-load it.
 
+### Repo-linked Codex skill
+
+The maintained [Codex skill](../codex/skills/repo-privacy-guardian/SKILL.md) is an adapter to the existing CLI. From the repository root, install or refresh it with PowerShell:
+
+```powershell
+./scripts/dev/install_codex_skill.ps1 -WhatIf
+./scripts/dev/install_codex_skill.ps1
+./scripts/dev/install_codex_skill.ps1 -Force -WhatIf
+./scripts/dev/install_codex_skill.ps1 -Force
+```
+
+The installer uses `CODEX_HOME/skills` when configured, otherwise the user profile's `.codex/skills`; `-CodexHome` selects another Codex home. `-WhatIf` previews without changing files. Existing installations require `-Force`, which replaces this skill's installed files with the maintained source. The checkout link belongs only in the installed `.local/install.json`; never copy personal paths or that metadata into tracked files.
+
+The resolver prefers a RepoPrivacyGuardian checkout in the current workspace or its parents, then valid installed metadata, then `REPO_PRIVACY_GUARDIAN_REPO`, then the console CLI on PATH. After installation, open a new Codex chat and invoke `$repo-privacy-guardian` with an explicit target and audit-only scope. See the [README setup](../README.MD#codex-skill-linked-to-this-checkout) and [dogfooding runbook](DOGFOODING.md#codex-skill-targets-and-evidence) for usage and artifact placement.
+
 ## 2. Fast local loops
 
 Useful commands during day-to-day work:
@@ -46,6 +61,8 @@ python -m Repo_Privacy_Guardian --help
 
 Both `pytest -q` and `python -m pytest -q` are supported from a repository checkout.
 Repo-owned smoke and subprocess-backed tests run non-interactively with bounded timeouts; keep new helper scripts the same way so local validation cannot hang an agent or CI runner.
+
+`tests/test_codex_skill.py` covers installer previews, safe replacement, checkout linking, and resolver precedence/fallbacks. Its subprocess regressions require `pwsh` or `powershell` and skip when neither is available.
 
 Use the GUI smoke path only when a desktop session is available:
 
@@ -101,6 +118,8 @@ Start here when changing behavior:
 - `repo_privacy_guardian_*.py`: root compatibility shims for imports kept stable in the `1.x` line
 - `repo_privacy_guardian_assets/`: packaged raster assets used only by the optional GUI
 - `tests/`: tracked regression tests plus release smoke coverage
+- `codex/skills/repo-privacy-guardian/`: portable Codex skill, backend resolver, and reviewed-operation reference
+- `scripts/dev/install_codex_skill.ps1`: installs the maintained skill and creates its local-only checkout link
 - `scripts/benchmark_large_history.py`: local synthetic benchmark for history-scan timings from `run_state.json`
 - `scripts/release_readiness.py`: owned end-to-end local validation harness
 - `repo_privacy_guardian_resources/POLICY.md`: packaged policy resource used by installed builds

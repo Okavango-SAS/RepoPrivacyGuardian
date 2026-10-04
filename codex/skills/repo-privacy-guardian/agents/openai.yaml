@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repo Privacy Guardian"
+  short_description: "Audit repository privacy and review release readiness"
+  default_prompt: "Use $repo-privacy-guardian to audit the selected repository without changes, classify redacted findings, and prepare a reviewed repair plan."

@@ -25,6 +25,15 @@ Dejar Repo Privacy Guardian listo para ser usado desde una IDE agentica o coding
    - `python -m pytest -q`
 7. Si falta tooling, reportar el bloqueo y pedir aprobacion antes de usar `--install-missing-tools` o instalar dependencias de sistema.
 
+## Integracion opcional con Codex
+
+Si el operador pidio instalar la skill de Codex, usar la fuente mantenida en
+`codex/skills/repo-privacy-guardian/SKILL.md` y ejecutar desde este checkout
+`./scripts/dev/install_codex_skill.ps1`. `-WhatIf` permite previsualizar;
+`-Force` actualiza una copia ya instalada. La vinculacion del checkout se guarda
+solo en `.local/install.json` dentro de la skill instalada, fuera del repo.
+Consultar `docs/LOCAL_DEVELOPMENT.md` para resolucion, actualizacion y validacion.
+
 ## Guardrails
 
 - No ejecutar `--fix`, `--push`, `--github-owner`, ni auditorias sobre otros repositorios en este prompt.

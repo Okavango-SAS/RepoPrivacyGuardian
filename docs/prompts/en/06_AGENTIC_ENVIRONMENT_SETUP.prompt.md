@@ -25,6 +25,15 @@ Leave Repo Privacy Guardian ready for use from an agentic IDE or coding agent su
    - `python -m pytest -q`
 7. If tooling is missing, report the blocker and ask for approval before using `--install-missing-tools` or installing system dependencies.
 
+## Optional Codex Integration
+
+When the operator requested Codex skill installation, use the maintained source
+at `codex/skills/repo-privacy-guardian/SKILL.md` and run
+`./scripts/dev/install_codex_skill.ps1` from this checkout. `-WhatIf` previews
+installation; `-Force` refreshes an installed copy. The checkout link is stored
+only in `.local/install.json` inside the installed skill, outside the repository.
+See `docs/LOCAL_DEVELOPMENT.md` for resolution, updates, and validation.
+
 ## Guardrails
 
 - Do not run `--fix`, `--push`, `--github-owner`, or audits against other repositories in this prompt.

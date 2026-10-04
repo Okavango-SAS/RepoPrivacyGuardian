@@ -4,8 +4,18 @@ All notable user-facing changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Added the maintained `$repo-privacy-guardian` Codex skill, with a checkout-linked
+  installer, backend resolution from other workspaces, audit-only first-pass
+  guidance, and reviewed repair workflows using the existing CLI.
+- Added installer/resolver regression coverage for local metadata linkage,
+  portable paths, refresh, mutation-free previews, and unsafe destinations.
+
 ### Changed
 
+- Documented Codex skill setup, updates, target selection, and local evidence
+  locations without publishing personal checkout paths or installed metadata.
 - Refreshed the development audit, roadmap, and operations runbook after the
   June 2026 maintainer hygiene pass, including branch/worktree cleanup guidance
   and local artifact retention evidence.

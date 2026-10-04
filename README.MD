@@ -122,6 +122,18 @@ How to read the first result:
 
 All run evidence stays local under `Audit_Results/<run_id>/` as `agent_summary.json`, `report.json`, `report.html`, and `run.log`.
 
+## Codex skill linked to this checkout
+
+The maintained skill lives in [codex/skills/repo-privacy-guardian](codex/skills/repo-privacy-guardian/SKILL.md). Install it from this checkout with PowerShell:
+
+```powershell
+./scripts/dev/install_codex_skill.ps1
+```
+
+The installer uses `CODEX_HOME/skills` when configured, otherwise the user profile's `.codex/skills`. Preview with `-WhatIf`; refresh after source changes with `-Force`. Open a new Codex chat after installation and invoke `$repo-privacy-guardian` to audit a selected repository. The skill resolves this checkout even from another workspace and keeps the initial pass audit-only. See [local skill setup and validation](docs/LOCAL_DEVELOPMENT.md#repo-linked-codex-skill) and the [audit-only skill workflow](docs/DOGFOODING.md#codex-skill-targets-and-evidence).
+
+The checkout link is stored only in the installed skill's `.local/install.json`. Personal paths are never added to the public skill source. To use another checkout, reinstall from that checkout with `-Force`, or set `REPO_PRIVACY_GUARDIAN_REPO` when no valid workspace/installed link takes precedence. Resolution also supports the console CLI on PATH.
+
 ## 🧭 Start Here
 
 Pick the shortest path for your role. Most users only need the first two rows; the rest of the README is reference material.

@@ -37,6 +37,20 @@ The maintained automation contract is CLI-first:
 
 The GUI is a parity companion for manual use. Agentic dogfooding should prefer CLI so commands, artifacts, and outcomes are reproducible; the GUI `Prompts` tab exists to copy the same maintained CLI-first workflows into agentic IDE sessions.
 
+## Codex skill targets and evidence
+
+Install the maintained [repo-privacy-guardian skill](../codex/skills/repo-privacy-guardian/SKILL.md) using the [local setup guide](LOCAL_DEVELOPMENT.md#repo-linked-codex-skill), then start a new Codex chat with an explicit audit-only request:
+
+```text
+Use $repo-privacy-guardian to audit only <target-repo> under <repos-root>.
+Start with help and a dry-run audit, classify findings, and report redacted evidence.
+Do not apply fixes, rewrite history, or push.
+```
+
+Record the target before resolving the backend or changing working directory. The resolver's `cwd` identifies where to execute the CLI; a linked checkout is the backend, while explicit `--root` and `--repos` select the audit targets. With a checkout backend, evidence goes to that checkout's `Audit_Results/<run_id>/`; with the PATH fallback, it goes to the current working directory's `Audit_Results/<run_id>/`. `--root` does not relocate evidence, and `--report-dir` accepts only that working directory's `Audit_Results` tree.
+
+Treat those artifact paths as sensitive local outputs even when the backend is this public repository. Installing or invoking the skill does not authorize remediation or push; the same reviewed-repair gates below apply.
+
 ## Baseline Commands
 
 Safe local audit:
