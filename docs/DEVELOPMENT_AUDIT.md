@@ -1,4 +1,33 @@
-# Development Audit - 2026-06-22
+# Development Audit
+
+## Latest audit — 2026-10-04
+
+The [repository and Codex skill audit and implementation plan](REPO_SKILL_IMPROVEMENT_PLAN.md)
+is the current development baseline at public commit
+`9f9355cd2add14a01e50c2cef3ef9a3d73ca02ca`. This delivery publishes audit findings
+and documentation; code, packaging, CI, and skill corrections remain pending.
+
+The tracked suite passed with 457 tests and 85.86% reported statement coverage.
+The self-audit returned policy PASS with zero blocking findings and one advisory
+for the documented solo-maintainer administrator-bypass model. Ruff, release
+contract, skill validation, and wheel building passed; three resolved dependency
+sets had no known vulnerabilities at audit time. Pyright was unavailable, and
+the complete release harness and fresh visual GUI QA were not run.
+
+The review identified misleading decision guidance for incomplete/failed runs,
+missing installed GUI prompt resources, source-shadowed artifact checks, streaming
+deadline weaknesses, skill adapter reliability gaps, and measured repeated scanner
+work. Fresh-process imports also identified circular dependencies in two internal
+helper modules; supported CLI/facade paths passed. The scanner's class-wide
+coverage exclusion hides 917 executable
+statements; a diagnostic recount gives 82.55% global and 65.23% scanner coverage
+when only that exclusion is removed. See the plan for evidence, qualifications,
+acceptance tests, staged implementation, and public-safe artifact handling.
+
+The records below preserve historical evidence. Their release-readiness and
+no-regression conclusions apply to their stated dates, not to this latest audit.
+
+## Historical audit — 2026-06-22
 
 This audit records the current development and repository-hygiene state of Repo
 Privacy Guardian on `main` after the `v1.5.1` release and the post-release

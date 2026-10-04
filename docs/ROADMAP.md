@@ -4,7 +4,9 @@ This roadmap reflects the current stable `1.5.x` stage of the repository instead
 
 ## Current baseline
 
-The repository is already stable in these areas:
+The 2026-10-04 [repository and Codex skill audit](REPO_SKILL_IMPROVEMENT_PLAN.md) is the current improvement baseline. The default tracked suite passed with 457 tests and reported 85.86% coverage; the scanner class's broad coverage exclusion limits what that percentage establishes. The audit also confirmed open report-completion, installed-prompt, stream-lifecycle, and skill-reliability defects. This is an audit and implementation plan, not a completed release gate or a claim that the planned fixes have shipped.
+
+Established product surfaces include:
 
 - CLI-first audit and remediation workflow
 - optional GUI parity on the shared execution pipeline
@@ -24,13 +26,24 @@ The repository is already stable in these areas:
 - maintainer branch/worktree hygiene documented for public-repository cleanup and handoff work
 - repeatable large-history benchmark coverage that compares `run_state.json` timings
 - synthetic integration coverage for redacted JSON/HTML report surfaces and local target-resolution/preflight edge cases
+- maintained repo-linked Codex skill with local-only installation metadata and CLI backend resolution
 
 ## Near-term improvements with real value
 
-These are the next improvements that still fit the current product scope:
+Apply the [detailed implementation plan](REPO_SKILL_IMPROVEMENT_PLAN.md) in reviewed stages, preserving the stable `1.x` interfaces and shared CLI/GUI behavior. No runtime or skill changes are included in the audit documentation delivery.
 
-- use the `v1.5.1` post-release hygiene audit as the current baseline and continue to monitor the public `v1.5.1` release for real installation, audit, GUI, and documentation feedback
-- choose the next user-facing improvement from observed operator friction, with likely candidates in report actionability, remediation guidance, artifact cleanup ergonomics, or remote-audit review flow
+1. Make summary, HTML, and GUI decisions account for failed, aborted, empty, and incomplete runs; retain policy status separately from execution completion.
+2. Package the eight bilingual GUI prompts and validate installed wheel/sdist behavior outside the source checkout.
+3. Bound streaming subprocess deadlines, drain stderr safely, and clean up child processes; then improve cooperative cancellation at safe audit boundaries.
+4. Validate skill Python candidates, make forced skill refresh transactional, and resolve relative PowerShell paths from the shell location. Isolate fallback tests from checkout ancestors.
+5. Remove the blanket scanner coverage exclusion and add meaningful behavior tests while retaining the existing coverage gate; correct the direct-import cycles in redaction/tooling and investigate the location-sensitive lock test result before prescribing a fix.
+6. Measure incremental scanner optimizations: reuse audit-scoped metadata and tracked-file work before consolidating history passes, preserving finding taxonomy, limits, and report parity.
+7. Align CI event path filters and strengthen package-install validation, then run the complete tracked release checks and desktop parity checks before release.
+
+Continue maintenance alongside these stages:
+
+- monitor the public `v1.5.1` release for real installation, audit, GUI, and documentation feedback
+- choose the next user-facing improvement from observed operator friction, using measured audit results rather than extraction size alone
 - keep GUI companion screenshots, prompt registry, and locale coverage aligned with the CLI contract
 - keep docs, help text, packaged policy, and smoke fixtures aligned as defaults evolve
 - keep branch/worktree cleanup boring and explicit: prune remotes, fast-forward `main`, delete only merged local branches, and prune stale worktree metadata after review

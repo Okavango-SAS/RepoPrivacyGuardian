@@ -147,9 +147,11 @@ Presentation-only GUI features and launcher-only CLI flags are permitted only wh
 - Decision: release validation must be reproducible from a clean clone, and `pytest` collection must ignore local-only/untracked test files.
 - Rationale: local ignored tests can make the workspace look healthier than `HEAD`, which breaks release trust and CI parity.
 - Implementation notes:
-- meaningful coverage must live under tracked `tests/`;
-- collection should not depend on editor scratch tests or ignored local files;
-- minimal CI must execute the same tracked suite from a clean checkout.
+  - meaningful coverage must live under tracked `tests/`;
+  - collection should not depend on editor scratch tests or ignored local files;
+  - automatic CI runs the documented CLI/release-contract smoke checks from a clean checkout;
+  - manual extended CI and the local release harness run the full tracked suite; automatic smoke is not equivalent to that full release signal;
+  - the 2026-10-04 audit identified coverage exclusions and temporary-directory-dependent skill tests to address in the [repository and skill improvement plan](REPO_SKILL_IMPROVEMENT_PLAN.md).
 
 ## DEC-010 - Default entrypoints are CLI-first and side-effect free
 

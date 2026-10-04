@@ -151,7 +151,7 @@ Pick the shortest path for your role. Most users only need the first two rows; t
 - Linux CLI: supported; automatic CI smoke runs on Ubuntu with Python `3.13`
 - Windows CLI: supported target; validate through the manual extended CI suite plus local release validation before changing support claims
 - macOS CLI: supported target; validate through local/manual release validation before changing support claims
-- Windows GUI: supported; manual extended CI smoke runs on `windows-latest` with Python `3.11`
+- Windows GUI: supported; manual extended CI smoke runs on `windows-2025-vs2026` with Python `3.11`
 - Linux GUI desktop: best-effort and depends on Tk availability plus a graphical session
 - macOS GUI: best-effort / not a release priority
 - Headless and CI environments: CLI only
@@ -737,6 +737,8 @@ Validation tiers for this repository:
 - [RELEASE_NOTES_TEMPLATE](docs/RELEASE_NOTES_TEMPLATE.md): lightweight notes template for public releases
 - [v1.5.1 release notes](docs/releases/v1.5.1.md): public tag notes and validation evidence for the current patch
 - [ROADMAP](docs/ROADMAP.md): current maturity, next hardening steps, and out-of-scope boundaries
+- [Repository and skill audit plan](docs/REPO_SKILL_IMPROVEMENT_PLAN.md): 2026-10-04 findings, validation limits, and staged implementation plan; implementation is pending
+- [KNOWN_ISSUES](docs/KNOWN_ISSUES.md): confirmed open defects, mitigations, and intentional operating limits
 
 ## 🏗️ Repository Layout
 

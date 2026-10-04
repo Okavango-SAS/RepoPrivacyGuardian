@@ -14,6 +14,11 @@ All notable user-facing changes to this project are documented here.
 
 ### Changed
 
+- Documented the 2026-10-04 repository and Codex skill audit, confirmed open
+  defects, validation limits, and detailed staged implementation plan. Runtime
+  and skill fixes remain pending; this documentation does not announce a release.
+- Updated the roadmap baseline and known issues, corrected the documented Windows
+  GUI runner, and clarified automatic smoke versus full tracked release checks.
 - Documented Codex skill setup, updates, target selection, and local evidence
   locations without publishing personal checkout paths or installed metadata.
 - Refreshed the development audit, roadmap, and operations runbook after the

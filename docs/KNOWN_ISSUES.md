@@ -1,5 +1,24 @@
 # KNOWN ISSUES
 
+## Open defects from the 2026-10-04 audit
+
+These findings are pending implementation. Evidence, priorities, affected code, and acceptance checks are recorded in the [repository and skill improvement plan](REPO_SKILL_IMPROVEMENT_PLAN.md).
+
+| Finding | Impact | Current mitigation |
+| --- | --- | --- |
+| Agent summary and HTML decisions derive from finding counts without consistently accounting for execution failure or completion. An empty, interrupted, or failed run can appear as `PASS`. | High: an operator or agent may interpret incomplete evidence as publication readiness. | Check the CLI exit code, `run_state.json`, expected target count, and individual repository status before accepting a summary decision. |
+| Built packages omit the eight English/Spanish prompt files consumed by the GUI Prompts actions. | Medium: copying or opening a prompt from an installed wheel fails even when checkout-based smoke tests pass. | Use the maintained prompt files from a source checkout until package-resource loading is implemented. |
+| History streaming checks deadlines after stdout delivers a line, while stderr is not drained concurrently. | Medium: a blocked reader or full stderr pipe can prevent the intended timeout from bounding a run. | Supervise long audits and inspect process/run progress; the existing stream timeout alone is not a complete wall-clock guarantee. This finding comes from code inspection. |
+| The skill resolver selects Python candidates by file/command existence without proving they run a supported Python version. | Medium: a broken local environment or Python older than 3.10 can shadow a usable interpreter. | Repair the selected environment and verify Python 3.10 or newer before invoking the skill. |
+| Forced skill installation removes the existing installed copy before all replacement files and metadata are successfully written. | Medium: a failed refresh can leave no working installed skill. | Keep a local backup before refresh and inspect `-WhatIf`; transactional replacement and rollback are planned. |
+| Relative paths in the PowerShell installer/resolver use process-level path normalization, which can differ from the current `Set-Location` directory. | Medium: a path can resolve to the wrong backend or installation location. | Pass absolute paths when setting the checkout or Codex installation location. |
+| Skill fallback tests depend on temporary-directory placement: a temporary directory inside this checkout triggers the intended workspace-ancestor resolution before fallback. | Low: an in-checkout `--basetemp` produces failures that do not reproduce with the default external temporary directory. | Use external temporary directories for fallback scenarios; preserve workspace-first runtime behavior when isolating the tests. |
+| Fresh-process imports of the internal `redaction` and `tooling` modules fail through circular dependencies on `core`. | Low: standalone helper reuse depends on import order; supported CLI/facade paths still work. | Use the supported facade until the narrow import-boundary correction and isolated import regressions are implemented. |
+
+Validation follow-ups also remain open. The scanner class has a blanket `# pragma: no cover`, so the reported 85.86% coverage does not measure most scanner behavior. A Windows lock-metadata assertion failed only in the in-checkout temporary-directory run; the default suite passed all 457 tests, so its reproducibility must be established before describing it as a general runtime defect. Installed-artifact module checks can import the source checkout because they run from it; those checks need an external working directory and import-origin assertions.
+
+The audit did not run the complete release harness or a new visual GUI smoke, and Pyright was unavailable in that environment. These are validation limits, not passing release evidence.
+
 ## Current limitations
 
 1. Real-shaped examples outside test/fixture contexts may still require manual classification.
