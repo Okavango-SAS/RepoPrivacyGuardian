@@ -39,7 +39,12 @@
     "scripts/benchmark_large_history.py",
     "scripts/check_release_contract.py",
     "scripts/release_readiness.py",
-    "scripts/visual_qa_gui.py"
+    "scripts/visual_qa_gui.py",
+    "build_helpers.py",
+    "scripts/check_artifact_install.py",
+    "repo_privacy_guardian/redaction_patterns.py",
+    "repo_privacy_guardian/tooling_common.py",
+    "repo_privacy_guardian/run_decision.py"
   ],
   "pythonVersion": "3.10",
   "typeCheckingMode": "standard"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import re
 import shutil
 import sys
@@ -316,6 +317,8 @@ def persist_run_outputs(
     resolve_optional_json_export_path: Callable[[str | None, str], Path | None],
     optional_json_export: str | None = None,
     optional_supply_chain_payload: dict[str, object] | None = None,
+    exit_code: int | None = None,
+    run_context: dict[str, object] | None = None,
     now_factory: Callable[[], datetime] = datetime.now,
 ) -> None:
     finished_at = now_factory()
@@ -324,15 +327,21 @@ def persist_run_outputs(
     write_private_text_file(artifacts.json_path, payload_json)
     logger(f"[INFO] JSON report written to {artifacts.json_path}")
 
-    html_report = render_html_report(
-        reports=reports,
-        artifacts=artifacts,
-        root_path=root_path,
-        policy_path=policy_path,
-        run_settings=run_settings,
-        finished_at=finished_at,
-        optional_supply_chain_payload=optional_supply_chain_payload,
-    )
+    html_kwargs: dict[str, object] = {
+        "reports": reports,
+        "artifacts": artifacts,
+        "root_path": root_path,
+        "policy_path": policy_path,
+        "run_settings": run_settings,
+        "finished_at": finished_at,
+        "optional_supply_chain_payload": optional_supply_chain_payload,
+    }
+    render_parameters = inspect.signature(render_html_report).parameters
+    accepts_kwargs = any(parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in render_parameters.values())
+    for name, value in (("exit_code", exit_code), ("run_context", run_context)):
+        if name in render_parameters or accepts_kwargs:
+            html_kwargs[name] = value
+    html_report = render_html_report(**html_kwargs)
     write_private_text_file(artifacts.html_path, html_report)
     logger(f"[INFO] HTML report written to {artifacts.html_path}")
     logger(f"[INFO] LOG report written to {artifacts.log_path}")

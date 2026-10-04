@@ -44,6 +44,7 @@ from typing import Any, Callable, Iterable, Mapping, cast
 from repo_privacy_guardian import artifacts as artifact_helpers
 from repo_privacy_guardian import agent_summary as agent_summary_helpers  # noqa: F401 - re-exported for extracted reporting
 from repo_privacy_guardian import config as config_helpers
+from repo_privacy_guardian import execution as execution_helpers
 from repo_privacy_guardian import github as github_helpers
 from repo_privacy_guardian import github_fix_guide
 from repo_privacy_guardian.gui import assets as gui_asset_helpers
@@ -51,7 +52,46 @@ from repo_privacy_guardian.gui import locale as gui_locale_helpers
 from repo_privacy_guardian import metrics as metrics_helpers
 from repo_privacy_guardian import policy as policy_helpers
 from repo_privacy_guardian import prompts as prompt_helpers  # noqa: F401 - re-exported for extracted GUI
+from repo_privacy_guardian import run_decision as run_decision_helpers
 from repo_privacy_guardian import runtime
+from repo_privacy_guardian.redaction_patterns import (  # noqa: F401 - compatibility re-exports
+    DEFAULT_PLACEHOLDER,
+    REDACTED_EMAIL,
+    REDACTED_IDENTITY_TOKEN,
+    REDACTED_SECRET,
+    REDACTED_PATH,
+    EMAIL_NOISE_DOMAINS,
+    SSH_REMOTE_PSEUDO_EMAILS,
+    ENV_SENSITIVE_FILENAME_RE,
+    SENSITIVE_FILENAME_RE,
+    HIGH_CONFIDENCE_SECRET_CONTENT_RE,
+    SECRET_CONTENT_RE,
+    LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE,
+    SECRET_FIXTURE_PATH_RE,
+    SECRET_DOCUMENTATION_PATH_RE,
+    SECRET_DOCUMENTATION_FILE_RE,
+    SECRET_SAFE_PLACEHOLDER_RE,
+    SECRET_REMEDIATE_FILENAME_RE,
+    PERSONAL_PATH_RE,
+    PERSONAL_PATH_LITERAL_PATTERNS,
+    EMAIL_RE,
+    SIMPLE_EMAIL_RE,
+    EMAIL_FIXTURE_PATH_RE,
+    EMAIL_FIXTURE_SNIPPET_RE,
+    EMAIL_LOW_CONFIDENCE_PATH_RE,
+    EMAIL_LOW_CONFIDENCE_FILE_RE,
+    EMAIL_LOW_CONFIDENCE_SNIPPET_RE,
+)
+from repo_privacy_guardian.tooling_common import (  # noqa: F401 - compatibility re-exports
+    GUI_DRAG_DROP_INSTALL_PACKAGES,
+    GUI_INSTALL_PACKAGES,
+    REMEDIATION_INSTALL_PACKAGES,
+    WINGET_BOOTSTRAP_URL,
+    WINGET_PACKAGE_FAMILY_NAME,
+    DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    subprocess_stdin,
+    ToolingCheck,
+)
 from repo_privacy_guardian import strict_profiles
 from repo_privacy_guardian import suppressions as suppression_helpers
 from repo_privacy_guardian import report_diff as report_diff_helpers
@@ -113,14 +153,10 @@ def default_policy_path() -> Path:
 DEFAULT_ROOT = default_root_dir()
 DEFAULT_POLICY = default_policy_path()
 DEFAULT_NOREPLY = "noreply@github.com"
-DEFAULT_PLACEHOLDER = "redacted-contributor@example.invalid"
 DEFAULT_RESULTS_DIR = default_results_dir()
 GUI_DEFAULT_PUBLIC_ONLY = False
 GUI_INSTALL_EXTRA = "repo-privacy-guardian[gui]"
 REMEDIATION_INSTALL_EXTRA = "repo-privacy-guardian[remediation]"
-GUI_DRAG_DROP_INSTALL_PACKAGES = ["tkinterdnd2>=0.4.3,<0.5"]
-GUI_INSTALL_PACKAGES = ["customtkinter>=5.2.2,<6", *GUI_DRAG_DROP_INSTALL_PACKAGES]
-REMEDIATION_INSTALL_PACKAGES = ["git-filter-repo>=2.45,<3"]
 GUI_SETTINGS_ENV_VAR = "REPO_PRIVACY_GUARDIAN_GUI_SETTINGS"
 GUI_SETTINGS_SCHEMA_VERSION = 1
 GUI_SETTINGS_MAX_BYTES = 32 * 1024
@@ -149,35 +185,10 @@ GUI_THEMEABLE_ASSET_FILENAMES = gui_asset_helpers.GUI_THEMEABLE_ASSET_FILENAMES
 gui_asset_path = gui_asset_helpers.gui_asset_path
 parse_hex_rgb = gui_asset_helpers.parse_hex_rgb
 blend_near_white_gui_asset_background = gui_asset_helpers.blend_near_white_gui_asset_background
-WINGET_BOOTSTRAP_URL = "https://aka.ms/getwinget"
-WINGET_PACKAGE_FAMILY_NAME = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe"
 GITHUB_EMAIL_SETTINGS_URL = "https://github.com/settings/emails"
 LITELLM_INCIDENT_ID = "litellm-2026-03"
 EXFIL_INDICATOR_MODE = "advisory"
 GITHUB_HARDENING_MODE = "advisory"
-REDACTED_EMAIL = "<redacted-email>"
-REDACTED_IDENTITY_TOKEN = "<redacted-identity-token>"
-# Redaction placeholder, not a credential.
-REDACTED_SECRET = "<redacted-secret>"  # nosec B105
-REDACTED_PATH = "<redacted-path>"
-
-
-EMAIL_NOISE_DOMAINS = {
-    "example.com",
-    "example.org",
-    "example.net",
-    "localhost",
-    "localdomain",
-}
-SSH_REMOTE_PSEUDO_EMAILS = {
-    ("git", "github.com"),
-    ("git", "ssh.github.com"),
-    ("git", "gitlab.com"),
-    ("git", "bitbucket.org"),
-    ("git", "ssh.dev.azure.com"),
-    ("git", "vs-ssh.visualstudio.com"),
-    ("hg", "bitbucket.org"),
-}
 GITHUB_EMAIL_PRIVACY_HELP = gui_locale_helpers.GITHUB_EMAIL_PRIVACY_HELP
 
 DEFAULT_IGNORE_BASELINE = [
@@ -206,7 +217,6 @@ DEFAULT_IGNORE_BASELINE = [
     "desktop.ini",
 ]
 MAX_TRACKED_TEXT_SCAN_BYTES = 5 * 1024 * 1024
-DEFAULT_SUBPROCESS_TIMEOUT_SECONDS = 300
 DEFAULT_GIT_STREAM_TIMEOUT_SECONDS = 300
 REPO_LOCK_FILENAME = "repo-privacy-guardian.lock"
 REPO_LOCK_WAIT_SECONDS = 10.0
@@ -222,155 +232,6 @@ normalize_repo_filters = config_helpers.normalize_repo_filters
 normalize_csv_values = config_helpers.normalize_csv_values
 normalize_text_values = config_helpers.normalize_text_values
 
-# Allow committed template files such as `.env.example` while keeping real
-# environment files and local variants sensitive by default.
-ENV_SENSITIVE_FILENAME_RE = r"(^|/)\.env(?:\.(?!example$)[^/]+)?$"
-
-SENSITIVE_FILENAME_RE = re.compile(
-    ENV_SENSITIVE_FILENAME_RE
-    + r"|"
-    r"\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|"
-    r"(^|/)id_(?:rsa|dsa|ecdsa|ed25519)$|"
-    r"(^|/)\.(?:npmrc|pypirc|netrc|dockercfg)$|"
-    r"(^|/)\.docker/config\.json$|"
-    r"(^|/)\.aws/credentials$|"
-    r"(^|/)\.kube/config$|"
-    r"(^|/)kubeconfig$|"
-    r"(^|/)(secrets?|credentials?|token)([._-]|$)|"
-    r"(^|/)__pycache__(/|$)|"
-    r"\.pyc$",
-    re.IGNORECASE,
-)
-
-HIGH_CONFIDENCE_SECRET_CONTENT_RE = re.compile(
-    r"gh[opsru]_[A-Za-z0-9]{36,}|"
-    r"github_pat_[A-Za-z0-9_]{40,}|"
-    r"\bgl(?:pat|oas|dt|rtr|rt|cbt|ptt|ft|imt|agent|wt|soat)-[A-Za-z0-9_-]{16,}\b|"
-    r"\bcf(?:k|ut|at)_[A-Za-z0-9]{40,}\b|"
-    r"AKIA[0-9A-Z]{16}|"
-    r"(?i:aws[_-]?secret[_-]?access[_-]?key)\s*[=:]\s*['\"]?[A-Za-z0-9/+=]{40}['\"]?|"
-    r"AIza[0-9A-Za-z\-_]{35}|"
-    r"\bya29\.[0-9A-Za-z\-_]{32,}\b|"
-    r"\bsk-(?:proj|svcacct)-[A-Za-z0-9_-]{32,}\b|"
-    r"\bsk-ant-(?:api\d{2}-|admin)[A-Za-z0-9_-]{20,}\b|"
-    r"x(?:ox[baprs]|app|wfp)-[A-Za-z0-9-]+|"
-    r"https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+|"
-    r"https://discord(?:app)?\.com/api/webhooks/\d{17,20}/[A-Za-z0-9_-]{32,}|"
-    r"(?:sk|rk)_live_[0-9A-Za-z]{24,}|"
-    r"SG\.[A-Za-z0-9\-_]{22,}\.[A-Za-z0-9\-_]{43,}|"
-    r"npm_[A-Za-z0-9]{36}|"
-    r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b|"
-    r"\b[MN][A-Za-z\d]{23,}\.[\w-]{6}\.[\w-]{27,}\b|"
-    r"(?i:heroku[_-]?api[_-]?key)\s*[=:]\s*['\"]?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}['\"]?|"
-    r"(?i:(?:AccountKey|storage[_-]?key))\s*[=:]\s*['\"]?[A-Za-z0-9+/=]{88}['\"]?|"
-    r"(?i:cloudflare[_-]?(?:api[_-]?)?(?:token|key))\s*[=:]\s*['\"]?[A-Za-z0-9_-]{37,64}['\"]?|"
-    r"(?i:datadog[_-]?(?:api|app(?:lication)?)?[_-]?key)\s*[=:]\s*['\"]?[0-9a-f]{32,40}['\"]?|"
-    r"(?i:twilio[_-]?auth[_-]?token)\s*[=:]\s*['\"]?[0-9a-f]{32}['\"]?|"
-    r"(?i:mailgun[_-]?api[_-]?key)\s*[=:]\s*['\"]?key-[0-9a-f]{32}['\"]?|"
-    r"(?i:\b(?:https?|ssh|ftp|ftps|sftp|mongodb(?:\+srv)?|mysql|postgres(?:ql)?|redis|rediss|amqp|amqps)://[^\s:/?#'\"`<>]+:[^\s@'\"`<>]{3,}@[^\s'\"`<>]+)|"
-    r"(?i:\bauthorization\s*:\s*(?:bearer|token|basic)\s+[A-Za-z0-9._~+/=-]{16,})|"
-    r"BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY"
-)
-SECRET_CONTENT_RE = HIGH_CONFIDENCE_SECRET_CONTENT_RE
-
-LOW_CONFIDENCE_SECRET_ASSIGNMENT_RE = re.compile(
-    r"(?i)(?P<key>\b(?:password|passwd|pwd|passphrase|secret|api[_-]?key|apikey|"
-    r"access[_-]?token|auth[_-]?token|refresh[_-]?token|client[_-]?secret|"
-    r"private[_-]?key|connection[_-]?string|webhook[_-]?url|dsn)\b)"
-    r"(?P<sep>\s*(?:=|:)\s*)"
-    r"(?P<quote>['\"]?)"
-    r"(?P<value>[A-Za-z0-9][A-Za-z0-9._~:/?#\[\]@!$&()*+,;=%-]{12,})"
-    r"(?P=quote)"
-)
-
-SECRET_FIXTURE_PATH_RE = re.compile(
-    r"(^|/)(test|tests|fixture|fixtures|mock|mocks|sample|samples|demo|spec|benchmarks?)(/|$)",
-    re.IGNORECASE,
-)
-SECRET_DOCUMENTATION_PATH_RE = re.compile(r"(^|/)(docs?|examples?)(/|$)", re.IGNORECASE)
-SECRET_DOCUMENTATION_FILE_RE = re.compile(
-    r"readme|changelog|contributing|copilot|instructions|policy|roadmap|"
-    r"checklist|known_issues|lessons|operations|troubleshooting|versioning",
-    re.IGNORECASE,
-)
-SECRET_SAFE_PLACEHOLDER_RE = re.compile(
-    r"(?i)\b(?:example|sample|dummy|fake|fixture|mock|placeholder|redacted|"
-    r"changeme|change-me|not-a-real|your[_-]?(?:token|key|secret|password)|"
-    r"insert[_-]?here|todo|example\.invalid|localhost)\b|"
-    r"<[^>\n]{1,80}>|"
-    r"\$\{[A-Za-z0-9_:-]{1,80}\}|"
-    r"%[A-Za-z0-9_]{1,80}%|"
-    r"\b[A-Z0-9_]{2,}_(?:TOKEN|KEY|SECRET|PASSWORD)\b|"
-    r"\b(?:x{8,}|a{16,}|b{16,}|c{16,}|0{16,})\b|"
-    r"([A-Za-z0-9])\1{15,}"
-)
-
-SECRET_REMEDIATE_FILENAME_RE = re.compile(
-    ENV_SENSITIVE_FILENAME_RE
-    + r"|"
-    r"\.pem$|\.key$|\.p12$|\.pfx$|\.kdbx$|"
-    r"(^|/)id_(?:rsa|dsa|ecdsa|ed25519)$|"
-    r"(^|/)\.(?:npmrc|pypirc|netrc|dockercfg)$|"
-    r"(^|/)\.docker/config\.json$|"
-    r"(^|/)\.aws/credentials$|"
-    r"(^|/)\.kube/config$|"
-    r"(^|/)kubeconfig$|"
-    r"(^|/)(secret|credential|token|password|passwd|api[_-]?key)([._-]|$)",
-    re.IGNORECASE,
-)
-
-PERSONAL_PATH_RE = re.compile(
-    r"(?i)"
-    r"[A-Za-z]:(?:\\\\|\\|/)(?:Users|Documents and Settings|home)(?:\\\\|\\|/)[A-Za-z0-9][A-Za-z0-9._-]*"
-    r"|/(?:Users|home)/[A-Za-z0-9][A-Za-z0-9._-]*"
-)
-PERSONAL_PATH_LITERAL_PATTERNS = (
-    re.compile(
-        r"(?i)[A-Za-z]:/(?:Users|home)/[A-Za-z0-9][A-Za-z0-9._-]*"
-        r"(?:/[^\s\"'`<>|]+){0,8}"
-    ),
-    re.compile(
-        r"(?i)[A-Za-z]:\\(?:Users|home)\\[A-Za-z0-9][A-Za-z0-9._-]*"
-        r"(?:\\[^\s\"'`<>|]+){0,8}"
-    ),
-    re.compile(
-        r"(?i)[A-Za-z]:\\\\(?:Users|home)\\\\[A-Za-z0-9][A-Za-z0-9._-]*"
-        r"(?:\\\\[^\s\"'`<>|]+){0,8}"
-    ),
-    re.compile(
-        r"(?i)/(?:Users|home)/[A-Za-z0-9][A-Za-z0-9._-]*"
-        r"(?:/[^\s\"'`<>|]+){0,8}"
-    ),
-)
-EMAIL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-SIMPLE_EMAIL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
-
-EMAIL_FIXTURE_PATH_RE = re.compile(
-    r"(^|/)(test|tests|fixture|fixtures|mock|mocks|sample|samples|demo|benchmarks?|spec)(/|$)",
-    re.IGNORECASE,
-)
-
-EMAIL_FIXTURE_SNIPPET_RE = re.compile(
-    r"\b(mock|fixture|dummy|sample|placeholder|test|assert|expect|pytest|unittest)\b|"
-    r"vi\.spyon|mockresolvedvalue|auth\.login\(",
-    re.IGNORECASE,
-)
-
-EMAIL_LOW_CONFIDENCE_PATH_RE = re.compile(
-    r"(^|/)(test|tests|docs|doc|example|examples|fixture|fixtures|mock|mocks|"
-    r"sample|samples|demo|benchmarks?|spec)(/|$)",
-    re.IGNORECASE,
-)
-EMAIL_LOW_CONFIDENCE_FILE_RE = re.compile(
-    r"readme|changelog|contributing|copilot|instructions|policy|roadmap|"
-    r"checklist|known_issues|lessons",
-    re.IGNORECASE,
-)
-EMAIL_LOW_CONFIDENCE_SNIPPET_RE = re.compile(
-    r"\b(mock|fixture|dummy|sample|placeholder|test|assert|expect|pytest|unittest)\b|"
-    r"vi\.spyon|mockresolvedvalue|auth\.login\(|next_public_support_email",
-    re.IGNORECASE,
-)
 POLICY_MINIMUM_BASELINE_RE = re.compile(r"^(minimum baseline|minimo recomendado)\b", re.IGNORECASE)
 POLICY_MINIMUM_BASELINE_END_RE = re.compile(
     r"^(check currently ignored sensitive paths|comprobar ignored)\b",
@@ -443,10 +304,6 @@ def process_exists(pid: int) -> bool | None:
     except OSError:
         return None
     return True
-
-
-def subprocess_stdin(input_text: str | None = None) -> int:
-    return subprocess.PIPE if input_text is not None else subprocess.DEVNULL
 
 
 def streaming_popen_kwargs() -> dict[str, Any]:
@@ -635,11 +492,43 @@ def write_private_json_file(path: Path, payload: dict[str, object]) -> None:
 
 
 def create_private_temp_text_file(prefix: str, filename: str, content: str) -> Path:
+    filename_path = Path(filename)
+    if not filename or filename in {".", ".."} or filename_path.name != filename or filename_path.is_absolute() or filename_path.drive:
+        raise ValueError("A private temporary file requires a single filename")
     temp_dir = Path(tempfile.mkdtemp(prefix=prefix))
-    ensure_private_directory(temp_dir)
-    out_path = temp_dir / filename
-    write_private_text_file(out_path, content)
-    return out_path
+    created_identity = temp_dir.lstat()
+    created_root = temp_dir.resolve()
+    try:
+        ensure_private_directory(temp_dir)
+        out_path = temp_dir / filename
+        if out_path.resolve().parent != created_root:
+            raise RuntimeError("Private temporary file escaped its created directory")
+        write_private_text_file(out_path, content)
+        return out_path
+    except BaseException:
+        try:
+            current_identity = temp_dir.lstat()
+            same_directory = (
+                current_identity.st_dev == created_identity.st_dev
+                and current_identity.st_ino == created_identity.st_ino
+            )
+            if (
+                same_directory
+                and not temp_dir.is_symlink()
+                and not _path_has_existing_symlink_ancestor(temp_dir)
+                and temp_dir.resolve() == created_root
+            ):
+                # Remove direct files/links only; never recurse or follow a link.
+                for child in temp_dir.iterdir():
+                    if child.parent.resolve() != created_root:
+                        continue
+                    if child.is_symlink() or child.is_file():
+                        child.unlink()
+                temp_dir.rmdir()
+        except BaseException:
+            # Cleanup is best effort and must not replace the creation failure.
+            pass
+        raise
 
 
 def cleanup_private_temp_text_file(path: Path | None) -> None:
@@ -873,16 +762,6 @@ class RepoExecutionLock:
     owner_token: str
     acquired_at: datetime
     lock_fd: int
-
-
-@dataclass
-class ToolingCheck:
-    name: str
-    state: str
-    blocking: bool
-    detail: str
-    install_hint: str | None = None
-    auto_install_command: list[str] | None = None
 
 
 @dataclass
@@ -1728,6 +1607,9 @@ def execute_guard_pipeline(
     state_tracker = RunStateTracker(artifacts.state_path, artifacts=artifacts, config=config)
     run_metrics = metrics_helpers.RunMetrics()
     suppression_rules: list[suppression_helpers.SuppressionRule] = []
+    preflight_started: float | None = None
+    discovery_started: float | None = None
+    write_cancel_requested = False
 
     guard_kwargs: dict[str, object] = {
         "root": config.root,
@@ -1762,6 +1644,8 @@ def execute_guard_pipeline(
     guard.rewrite_personal_paths = config.rewrite_personal_paths
 
     def cancellation_requested() -> bool:
+        if write_cancel_requested:
+            return True
         if cancel_callback is None:
             return False
         try:
@@ -1780,6 +1664,23 @@ def execute_guard_pipeline(
             completed_repositories=completed,
             current_repository="",
         )
+
+    guard.cancel_requested = cancellation_requested if cancel_callback is not None else None
+
+    def terminal_run_context() -> dict[str, object]:
+        return {
+            "phase": "finished",
+            "total_repositories": max(total_repositories, len(reports)),
+            "completed_repositories": len(reports),
+            "execution_error_count": sum(len(rep.execution_errors) for rep in reports)
+            + int(exit_code == EXIT_RUNTIME_ERROR),
+            "policy_failed": exit_code == EXIT_POLICY_FAILED,
+        }
+
+    def merge_scanner_metrics() -> None:
+        scanner_metrics = getattr(guard, "scanner_metrics", None)
+        if isinstance(scanner_metrics, metrics_helpers.RunMetrics):
+            run_metrics.merge_scanner(scanner_metrics)
 
     try:
         preflight_started = run_metrics.begin_phase()
@@ -1830,6 +1731,7 @@ def execute_guard_pipeline(
                     )
                     return exit_code
             run_metrics.end_phase("preflight", preflight_started)
+            preflight_started = None
             state_tracker.update(performance=run_metrics.snapshot())
             if config.low_confidence_email_mode == "blocking":
                 logger("[INFO] Email policy: low-confidence findings are blocking.")
@@ -1922,6 +1824,7 @@ def execute_guard_pipeline(
                                 current_repository="",
                             )
                 run_metrics.end_phase("discovery", discovery_started)
+                discovery_started = None
                 state_tracker.update(performance=run_metrics.snapshot())
             total_repositories = len(repos) + len(reports)
             if exit_code == EXIT_OK:
@@ -2005,6 +1908,7 @@ def execute_guard_pipeline(
                     repo_lock: RepoExecutionLock | None = None
                     report = RepoReport(name=repo_name, path=str(repo))
                     report.low_confidence_email_mode = config.low_confidence_email_mode
+                    repair_completed = False
 
                     try:
                         acquire_repo_lock = getattr(guard, "acquire_repo_lock", None)
@@ -2012,10 +1916,13 @@ def execute_guard_pipeline(
                             repo_lock = cast(RepoExecutionLock | None, acquire_repo_lock(repo))
                         logger(f"[AUDIT] {repo_name}")
                         audit_started = run_metrics.begin_phase()
-                        report = guard.audit_repo(repo)
-                        audit_elapsed = time.perf_counter() - audit_started
-                        run_metrics.end_phase("audit", audit_started)
-                        run_metrics.add_repo_timing(repo_name, "audit", audit_elapsed)
+                        try:
+                            report = guard.audit_repo(repo)
+                        finally:
+                            audit_elapsed = time.perf_counter() - audit_started
+                            run_metrics.end_phase("audit", audit_started)
+                            run_metrics.add_repo_timing(repo_name, "audit", audit_elapsed)
+                            merge_scanner_metrics()
 
                         if config.fix:
                             run_fix = True
@@ -2027,24 +1934,73 @@ def execute_guard_pipeline(
                                     f"[INFO] {repo_name}: repair skipped because the run was cancelled."
                                 )
                                 report.fix_actions.append("repair skipped because the run was cancelled")
+                                mark_aborted(
+                                    "Run cancelled before reviewed repair started.",
+                                    phase="aborted",
+                                    completed=len(reports),
+                                    total=total_repositories,
+                                )
                             elif run_fix:
                                 logger(f"[FIX] {repo_name}")
                                 fix_started = run_metrics.begin_phase()
-                                fixed = guard.apply_fixes(repo, report)
-                                fix_elapsed = time.perf_counter() - fix_started
-                                run_metrics.end_phase("fix", fix_started)
-                                run_metrics.add_repo_timing(repo_name, "fix", fix_elapsed)
+                                guard.cancel_requested = None
+                                write_scope = execution_helpers.ConsoleCancellationScope()
+                                try:
+                                    with write_scope:
+                                        fixed = guard.apply_fixes(repo, report)
+                                finally:
+                                    write_cancel_requested = write_cancel_requested or write_scope.requested()
+                                    guard.cancel_requested = cancellation_requested if cancel_callback is not None else None
+                                    fix_elapsed = time.perf_counter() - fix_started
+                                    run_metrics.end_phase("fix", fix_started)
+                                    run_metrics.add_repo_timing(repo_name, "fix", fix_elapsed)
+                                repair_completed = True
+                                report.backups_created = fixed.backups_created
+                                report.fix_actions = fixed.fix_actions
+                                report.fix_errors = fixed.fix_errors
+                                if cancellation_requested():
+                                    report.fix_actions.append("re-audit skipped because the run was cancelled")
+                                    mark_aborted(
+                                        "Run cancelled after repair reached a Git-safe boundary; re-audit required.",
+                                        phase="aborted",
+                                        completed=len(reports),
+                                        total=total_repositories,
+                                    )
+                                    apply_report_policy_post_processing(
+                                        report, config=config, suppression_rules=suppression_rules,
+                                    )
+                                    reports.append(report)
+                                    print_report(report, logger)
+                                    break
                                 logger(f"[RE-AUDIT] {repo_name}")
                                 reaudit_started = run_metrics.begin_phase()
-                                report = guard.audit_repo(repo)
-                                reaudit_elapsed = time.perf_counter() - reaudit_started
-                                run_metrics.end_phase("re-audit", reaudit_started)
-                                run_metrics.add_repo_timing(repo_name, "re-audit", reaudit_elapsed)
+                                try:
+                                    report = guard.audit_repo(repo)
+                                finally:
+                                    reaudit_elapsed = time.perf_counter() - reaudit_started
+                                    run_metrics.end_phase("re-audit", reaudit_started)
+                                    run_metrics.add_repo_timing(repo_name, "re-audit", reaudit_elapsed)
+                                    merge_scanner_metrics()
                                 report.backups_created = fixed.backups_created
                                 report.fix_actions = fixed.fix_actions
                                 report.fix_errors = fixed.fix_errors
                             else:
                                 report.fix_actions.append("fix skipped by per-repository confirmation gate")
+                    except (AuditCancelled, KeyboardInterrupt):
+                        if repair_completed or (config.fix and (report.backups_created or report.fix_actions)):
+                            report.fix_actions.append("re-audit incomplete after cancellation; review repair evidence and re-audit")
+                            apply_report_policy_post_processing(
+                                report, config=config, suppression_rules=suppression_rules,
+                            )
+                            reports.append(report)
+                            print_report(report, logger)
+                        mark_aborted(
+                            "Run interrupted; review partial evidence and re-audit selected targets.",
+                            phase="aborted",
+                            completed=len(reports),
+                            total=total_repositories,
+                        )
+                        break
                     except Exception as exc:
                         report.execution_errors.append(str(exc))
                         logger(f"[ERROR] {repo_name}: repository execution failed: {exc}")
@@ -2069,6 +2025,8 @@ def execute_guard_pipeline(
                         total_repositories=total_repositories,
                         performance=run_metrics.snapshot(),
                     )
+                    if exit_code == EXIT_ABORTED:
+                        break
 
                 if repos and exit_code == EXIT_OK and cancellation_requested() and completed_repo_iterations < len(repos):
                     mark_aborted(
@@ -2099,12 +2057,16 @@ def execute_guard_pipeline(
                 state_tracker.update(phase="supply-chain")
                 supply_chain_root = remote_temp_root if config.github_owner and remote_temp_root else config.root
                 supply_chain_repo_filters = None if config.github_owner else config.repos
-                supply_chain_payload = run_litellm_global_supply_chain_scan(
-                    root=supply_chain_root,
-                    repo_filters=supply_chain_repo_filters,
-                    max_matches=config.max_matches,
-                    logger=logger,
-                )
+                supply_chain_started = run_metrics.begin_phase()
+                try:
+                    supply_chain_payload = run_litellm_global_supply_chain_scan(
+                        root=supply_chain_root,
+                        repo_filters=supply_chain_repo_filters,
+                        max_matches=config.max_matches,
+                        logger=logger,
+                    )
+                finally:
+                    run_metrics.end_phase("supply_chain", supply_chain_started)
                 global_severity = str(supply_chain_payload.get("severity", "NONE")).upper()
                 if global_severity in {"CRITICAL", "HIGH"} and exit_code == EXIT_OK:
                     logger(
@@ -2112,11 +2074,22 @@ def execute_guard_pipeline(
                         "Run marked as FAIL-equivalent for operator action."
                     )
                     exit_code = EXIT_POLICY_FAILED
+    except (AuditCancelled, KeyboardInterrupt):
+        mark_aborted(
+            "Run interrupted by operator; review partial artifacts and re-audit selected targets.",
+            phase="aborted",
+            completed=len(reports),
+            total=total_repositories,
+        )
     except Exception as exc:
         logger(f"[ERROR] Unhandled runtime error: {exc}")
         logger(traceback.format_exc())
         exit_code = EXIT_RUNTIME_ERROR
     finally:
+        if preflight_started is not None:
+            run_metrics.end_phase("preflight", preflight_started)
+        if discovery_started is not None:
+            run_metrics.end_phase("discovery", discovery_started)
         try:
             state_tracker.update(
                 phase="persisting",
@@ -2127,8 +2100,9 @@ def execute_guard_pipeline(
         except Exception:
             pass
 
+        persisted_exit_code = exit_code
+        persist_started = run_metrics.begin_phase()
         try:
-            persist_started = run_metrics.begin_phase()
             persist_kwargs: dict[str, Any] = {
                 "reports": reports,
                 "artifacts": artifacts,
@@ -2139,6 +2113,7 @@ def execute_guard_pipeline(
                 "optional_json_export": config.report_json,
                 "optional_supply_chain_payload": supply_chain_payload,
                 "exit_code": exit_code,
+                "run_context": terminal_run_context(),
             }
 
             persist_params = inspect.signature(persist_run_outputs).parameters
@@ -2146,8 +2121,9 @@ def execute_guard_pipeline(
                 persist_kwargs.pop("optional_supply_chain_payload", None)
             if "exit_code" not in persist_params:
                 persist_kwargs.pop("exit_code", None)
+            if "run_context" not in persist_params:
+                persist_kwargs.pop("run_context", None)
             cast(Any, persist_run_outputs)(**persist_kwargs)
-            run_metrics.end_phase("report_persistence", persist_started)
             if config.audit_litellm_incident and supply_chain_payload is not None:
                 persist_litellm_supply_chain_output(
                     artifacts=artifacts,
@@ -2161,20 +2137,39 @@ def execute_guard_pipeline(
             logger(traceback.format_exc())
             exit_code = EXIT_RUNTIME_ERROR
         finally:
+            run_metrics.end_phase("report_persistence", persist_started)
             if remote_temp_root is not None:
                 cleanup_started = run_metrics.begin_phase()
-                removed, cleanup_error = remove_private_temp_tree(
-                    remote_temp_root,
-                    required_prefix="repo-privacy-guardian-github-",
-                )
-                run_metrics.end_phase("remote_clone_cleanup", cleanup_started)
-                if removed:
-                    logger("[INFO] Removed temporary GitHub clone directory.")
-                else:
-                    logger(f"[WARN] Could not remove temporary GitHub clone directory: {cleanup_error}")
+                try:
+                    removed, cleanup_error = remove_private_temp_tree(
+                        remote_temp_root,
+                        required_prefix="repo-privacy-guardian-github-",
+                    )
+                    if removed:
+                        logger("[INFO] Removed temporary GitHub clone directory.")
+                    else:
+                        logger(f"[ERROR] Could not remove temporary GitHub clone directory: {cleanup_error}")
+                        exit_code = EXIT_RUNTIME_ERROR
+                except Exception as exc:
+                    logger(f"[ERROR] Temporary clone cleanup failed: {exc}")
+                    exit_code = EXIT_RUNTIME_ERROR
+                finally:
+                    run_metrics.end_phase("remote_clone_cleanup", cleanup_started)
             passed = sum(1 for rep in reports if rep.status == "PASS")
             failed = len(reports) - passed
             try:
+                decision = run_decision_helpers.evaluate_run_decision(
+                    exit_code=exit_code,
+                    policy_failed=bool(failed),
+                    manual_review_count=sum(
+                        len(value)
+                        for report in reports
+                        for key in agent_summary_helpers.MANUAL_REVIEW_CATEGORY_KEYS
+                        if isinstance(value := getattr(report, key, []), list)
+                    ),
+                    available_repositories=len(reports),
+                    run_context=terminal_run_context(),
+                )
                 state_tracker.update(
                     status=resolve_run_status(exit_code),
                     phase="finished",
@@ -2184,10 +2179,31 @@ def execute_guard_pipeline(
                     pass_count=passed,
                     fail_count=failed,
                     exit_code=exit_code,
+                    execution_error_count=terminal_run_context()["execution_error_count"],
+                    policy_failed=bool(failed) or exit_code == EXIT_POLICY_FAILED,
+                    completion=decision.completion,
+                    decision=decision.status,
+                    decision_reason=decision.reason,
                     performance=run_metrics.snapshot(),
                 )
             except Exception:
-                pass
+                logger("[ERROR] Failed to finalize run state.")
+                exit_code = EXIT_RUNTIME_ERROR
+            if exit_code != persisted_exit_code:
+                try:
+                    reporting_helpers.refresh_run_guidance(
+                        reports=reports,
+                        artifacts=artifacts,
+                        root_path=config.root,
+                        policy_path=config.policy,
+                        run_settings=run_settings,
+                        logger=logger,
+                        optional_supply_chain_payload=supply_chain_payload,
+                        exit_code=exit_code,
+                        run_context=terminal_run_context(),
+                    )
+                except Exception:
+                    logger("[ERROR] Unable to refresh failed-run guidance; verify the final exit code and run log.")
 
     return exit_code
 
@@ -2363,7 +2379,7 @@ def resolve_identity_repo_path(root: Path, selected_repo_names: list[str]) -> tu
     return None, "Select one repository first (or set Root to a git repository)."
 
 
-from repo_privacy_guardian.scanner import RepoPublicationGuard  # noqa: E402
+from repo_privacy_guardian.scanner import AuditCancelled, RepoPublicationGuard  # noqa: E402
 
 def default_gui_settings_path(env: Mapping[str, str] | None = None) -> Path:
     current_env = os.environ if env is None else env

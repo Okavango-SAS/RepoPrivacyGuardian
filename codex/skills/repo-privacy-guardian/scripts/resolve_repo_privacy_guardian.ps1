@@ -7,6 +7,18 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Resolve-FileSystemPath {
+    param([string]$Candidate)
+
+    $provider = $null
+    $drive = $null
+    $resolved = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Candidate, [ref]$provider, [ref]$drive)
+    if ($provider.Name -ne 'FileSystem') {
+        throw 'Backend paths must use the filesystem provider.'
+    }
+    return $resolved
+}
+
 function Test-GuardianCheckout {
     param([string]$Candidate)
 
@@ -16,14 +28,14 @@ function Test-GuardianCheckout {
             return $false
         }
     }
-    $project = Get-Content -LiteralPath (Join-Path $Candidate 'pyproject.toml') -Raw
+    $project = Get-Content -LiteralPath (Join-Path $Candidate 'pyproject.toml') -Raw -Encoding UTF8
     return $project -match '(?ms)^\[project\]\s*\r?\n(?:(?!^\[).)*?^name\s*=\s*["'']repo-privacy-guardian["'']\s*$'
 }
 
 function Find-WorkspaceCheckout {
     param([string]$Candidate)
 
-    $current = [IO.Path]::GetFullPath($Candidate)
+    $current = Resolve-FileSystemPath $Candidate
     if (Test-Path -LiteralPath $current -PathType Leaf) { $current = Split-Path -Parent $current }
     while ($current) {
         if (Test-GuardianCheckout $current) { return $current }
@@ -39,18 +51,75 @@ function Get-CheckoutCommand {
 
     foreach ($relative in @('.venv/Scripts/python.exe', '.venv/bin/python')) {
         $localPython = Join-Path $Checkout $relative
-        if (Test-Path -LiteralPath $localPython -PathType Leaf) {
+        if ((Test-Path -LiteralPath $localPython -PathType Leaf) -and (Test-SupportedPython $localPython @())) {
             return @($localPython, '-m', 'Repo_Privacy_Guardian')
         }
     }
     foreach ($name in @('python', 'py', 'python3')) {
-        $pythonCommand = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($pythonCommand) {
-            if ($name -eq 'py') { return @($pythonCommand.Source, '-3', '-m', 'Repo_Privacy_Guardian') }
-            return @($pythonCommand.Source, '-m', 'Repo_Privacy_Guardian')
+        foreach ($pythonCommand in @(Get-Command $name -CommandType Application -All -ErrorAction SilentlyContinue)) {
+            $prefix = if ($name -eq 'py') { @('-3') } else { @() }
+            if (Test-SupportedPython $pythonCommand.Source $prefix) {
+                return @($pythonCommand.Source) + $prefix + @('-m', 'Repo_Privacy_Guardian')
+            }
         }
     }
     throw 'A RepoPrivacyGuardian checkout was found, but Python is unavailable. Prepare Python 3.10 or newer.'
+}
+
+function Test-SupportedPython {
+    param([string]$Executable, [string[]]$PrefixArguments)
+
+    $process = [Diagnostics.Process]::new()
+    try {
+        $info = [Diagnostics.ProcessStartInfo]::new()
+        $arguments = ($PrefixArguments + @('-c', '"import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)"')) -join ' '
+        $info.FileName = $Executable
+        $info.Arguments = $arguments
+        if ([Environment]::OSVersion.Platform -eq 'Win32NT' -and [IO.Path]::GetExtension($Executable) -in @('.cmd', '.bat')) {
+            # Expansion happens once inside quotes, including paths containing spaces or percent signs.
+            $info.FileName = $env:ComSpec
+            $info.EnvironmentVariables['RPG_PYTHON_PROBE_EXECUTABLE'] = $Executable
+            $info.Arguments = '/d /s /c ""%RPG_PYTHON_PROBE_EXECUTABLE%" ' + $arguments + '"'
+        }
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        $process.StartInfo = $info
+        if (-not $process.Start()) { return $false }
+        # Consume both pipes without exposing candidate diagnostics or retaining their contents.
+        $stdout = $process.StandardOutput.BaseStream.CopyToAsync([IO.Stream]::Null)
+        $stderr = $process.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
+        if (-not $process.WaitForExit(3000)) {
+            if ($process.GetType().GetMethod('Kill', [type[]]@([bool]))) {
+                $process.Kill($true)
+            }
+            elseif ([Environment]::OSVersion.Platform -eq 'Win32NT') {
+                # .NET Framework has no tree-aware Kill overload (Windows PowerShell 5.1).
+                $cleanup = [Diagnostics.Process]::new()
+                try {
+                    $cleanup.StartInfo.FileName = Join-Path $env:SystemRoot 'System32/taskkill.exe'
+                    $cleanup.StartInfo.Arguments = '/PID ' + $process.Id + ' /T /F'
+                    $cleanup.StartInfo.UseShellExecute = $false
+                    $cleanup.StartInfo.CreateNoWindow = $true
+                    $cleanup.StartInfo.RedirectStandardOutput = $true
+                    $cleanup.StartInfo.RedirectStandardError = $true
+                    if ($cleanup.Start()) {
+                        $cleanupOut = $cleanup.StandardOutput.BaseStream.CopyToAsync([IO.Stream]::Null)
+                        $cleanupError = $cleanup.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
+                        if (-not $cleanup.WaitForExit(1000)) { $cleanup.Kill() }
+                    }
+                }
+                finally { $cleanup.Dispose() }
+            }
+            else { $process.Kill() }
+            $null = $process.WaitForExit(1000)
+            return $false
+        }
+        return $process.ExitCode -eq 0
+    }
+    catch { return $false }
+    finally { $process.Dispose() }
 }
 
 $checkout = Find-WorkspaceCheckout $StartPath
@@ -60,9 +129,10 @@ if (-not $checkout) {
     $metadataPath = Join-Path $skillRoot '.local/install.json'
     if (Test-Path -LiteralPath $metadataPath -PathType Leaf) {
         try {
-            $metadata = Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
-            if ($metadata.schemaVersion -eq 1 -and (Test-GuardianCheckout ([string]$metadata.repoRoot))) {
-                $checkout = [IO.Path]::GetFullPath([string]$metadata.repoRoot)
+            $metadata = Get-Content -LiteralPath $metadataPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $metadataRoot = Resolve-FileSystemPath ([string]$metadata.repoRoot)
+            if ($metadata.schemaVersion -eq 1 -and (Test-GuardianCheckout $metadataRoot)) {
+                $checkout = $metadataRoot
                 $source = 'installed-metadata'
             }
         }
@@ -71,9 +141,12 @@ if (-not $checkout) {
             $checkout = $null
         }
     }
-    if (-not $checkout -and $env:REPO_PRIVACY_GUARDIAN_REPO -and (Test-GuardianCheckout $env:REPO_PRIVACY_GUARDIAN_REPO)) {
-        $checkout = [IO.Path]::GetFullPath($env:REPO_PRIVACY_GUARDIAN_REPO)
-        $source = 'env'
+    if (-not $checkout -and $env:REPO_PRIVACY_GUARDIAN_REPO) {
+        $environmentRoot = Resolve-FileSystemPath $env:REPO_PRIVACY_GUARDIAN_REPO
+        if (Test-GuardianCheckout $environmentRoot) {
+            $checkout = $environmentRoot
+            $source = 'env'
+        }
     }
 }
 

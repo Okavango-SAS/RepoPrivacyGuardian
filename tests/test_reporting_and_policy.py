@@ -1407,7 +1407,7 @@ def test_process_exists_posix_signal_paths(monkeypatch) -> None:
 
 def test_repo_execution_lock_blocks_overlap_across_processes(tmp_path: Path, monkeypatch) -> None:
     repo = tmp_path / "repo-a"
-    (repo / ".git").mkdir(parents=True)
+    subprocess.run(["git", "init", "--quiet", str(repo)], check=True, capture_output=True)
     monkeypatch.setattr(rpg, "REPO_LOCK_WAIT_SECONDS", 0.0)
     monkeypatch.setattr(rpg, "REPO_LOCK_RETRY_SECONDS", 0.0)
 
@@ -1473,7 +1473,7 @@ guard.release_repo_lock(lock)
 def test_repo_execution_lock_reuses_existing_metadata_file(tmp_path: Path) -> None:
     repo = tmp_path / "repo-a"
     git_dir = repo / ".git"
-    git_dir.mkdir(parents=True)
+    subprocess.run(["git", "init", "--quiet", str(repo)], check=True, capture_output=True)
     lock_path = git_dir / rpg.REPO_LOCK_FILENAME
     rpg.write_private_json_file(
         lock_path,
@@ -1500,8 +1500,7 @@ def test_repo_execution_lock_reuses_existing_metadata_file(tmp_path: Path) -> No
 
 def test_release_repo_lock_owner_change_still_releases_os_lock(tmp_path: Path) -> None:
     repo = tmp_path / "repo-a"
-    git_dir = repo / ".git"
-    git_dir.mkdir(parents=True)
+    subprocess.run(["git", "init", "--quiet", str(repo)], check=True, capture_output=True)
     messages: list[str] = []
     guard = _make_guard(tmp_path, logger=messages.append)
 
@@ -5267,7 +5266,7 @@ def test_execution_adapter_preserves_cwd_input_and_timeout_contract() -> None:
     kwargs = calls[0]["kwargs"]
     assert kwargs["cwd"] == str(Path("C:/repos/demo"))
     assert kwargs["input"] == "y\n"
-    assert kwargs["stdin"] == subprocess.PIPE
+    assert "stdin" not in kwargs
     assert kwargs["timeout"] == 7
     assert kwargs["capture_output"] is True
     assert kwargs["encoding"] == "utf-8"
@@ -5526,7 +5525,7 @@ def test_guard_run_uses_non_interactive_stdin(monkeypatch, tmp_path: Path) -> No
 
     assert captured[0]["stdin"] == subprocess.DEVNULL
     assert captured[0]["input"] is None
-    assert captured[1]["stdin"] == subprocess.PIPE
+    assert "stdin" not in captured[1]
     assert captured[1]["input"] == "y\n"
 
 

@@ -36,6 +36,8 @@ ROOT_LAYOUT_OFFENDERS = [
 ]
 
 ROOT_LAYOUT_ALLOWED_TOP_LEVEL = {
+    "MANIFEST.in",
+    "build_helpers.py",
     ".editorconfig",
     ".env.example",
     ".github",
@@ -64,6 +66,8 @@ ROOT_LAYOUT_ALLOWED_TOP_LEVEL = {
 }
 
 ROOT_LAYOUT_REQUIRED = [
+    "MANIFEST.in",
+    "build_helpers.py",
     "CHANGELOG.md",
     ".env.example",
     "Repo_Privacy_Guardian.py",
@@ -96,14 +100,17 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian/policy.py",
     "repo_privacy_guardian/prompts.py",
     "repo_privacy_guardian/redaction.py",
+    "repo_privacy_guardian/redaction_patterns.py",
     "repo_privacy_guardian/remediation.py",
     "repo_privacy_guardian/report_diff.py",
     "repo_privacy_guardian/reporting.py",
     "repo_privacy_guardian/runtime.py",
+    "repo_privacy_guardian/run_decision.py",
     "repo_privacy_guardian/scanner.py",
     "repo_privacy_guardian/strict_profiles.py",
     "repo_privacy_guardian/suppressions.py",
     "repo_privacy_guardian/tooling.py",
+    "repo_privacy_guardian/tooling_common.py",
     "repo_privacy_guardian_artifacts.py",
     "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_prompts.py",
@@ -132,6 +139,7 @@ ROOT_LAYOUT_REQUIRED = [
     "repo_privacy_guardian_resources/POLICY.md",
     "scripts/benchmark_large_history.py",
     "scripts/check_release_contract.py",
+    "scripts/check_artifact_install.py",
     "scripts/release_readiness.py",
     "scripts/visual_qa_gui.py",
     "scripts/dev/install_codex_skill.ps1",
@@ -1292,7 +1300,16 @@ def test_ci_workflow_matches_cost_first_validation_contract() -> None:
         assert docs_only_path not in pull_request_block
     assert "dist/*.whl" in workflow
     assert "dist/*.tar.gz" in workflow
-    assert workflow.count("python tests/release_smoke_cli.py") >= 3
+    assert "python tests/release_smoke_cli.py" in workflow
+    assert "python scripts/check_artifact_install.py dist/*.whl dist/*.tar.gz" in workflow
+    filters = [re.findall(r'      - "([^\n]+)"', block) for block in (push_block, pull_request_block)]
+    assert filters[0] == filters[1]
+    assert len(filters[0]) == len(set(filters[0]))
+    for required in ("pyrightconfig.json", "MANIFEST.in", "build_helpers.py", "scripts/check_artifact_install.py"):
+        assert required in filters[0]
+    from repo_privacy_guardian.prompts import PROMPT_REGISTRY
+
+    assert {prompt.relative_path for prompt in PROMPT_REGISTRY} <= set(filters[0])
 
 
 def test_release_docs_describe_cost_first_validation_tiers() -> None:

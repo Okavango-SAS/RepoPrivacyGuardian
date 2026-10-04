@@ -1,0 +1,9 @@
+include build_helpers.py
+include docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md
+include docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md
+include docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md
+include docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md
+include docs/prompts/en/04_AGENTIC_CLI_EXECUTION.prompt.md
+include docs/prompts/en/05_DOGFOODING_AUDIT_ONLY.prompt.md
+include docs/prompts/en/06_AGENTIC_ENVIRONMENT_SETUP.prompt.md
+include docs/prompts/en/07_AGENTIC_AUDIT_AND_REPAIR.prompt.md

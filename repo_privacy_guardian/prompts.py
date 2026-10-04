@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from importlib import resources
+from pathlib import Path, PurePosixPath
+import tempfile
 
 
 PROMPT_LOCALE_DEFAULT = "en"
@@ -119,4 +121,52 @@ def agentic_prompt_cards(locale: str | None) -> tuple[AgenticPrompt, ...]:
 
 
 def read_prompt_text(prompt: AgenticPrompt, repo_root: Path) -> str:
-    return prompt.path(repo_root).read_text(encoding="utf-8")
+    return resolve_prompt_resource(prompt, repo_root).read_text(encoding="utf-8")
+
+
+def prompt_resource_parts(prompt: AgenticPrompt) -> tuple[str, ...]:
+    """Map a maintained document to its generated package resource."""
+    path = PurePosixPath(prompt.relative_path)
+    if path.parts[:2] != ("docs", "prompts") or any(part == ".." for part in path.parts):
+        raise ValueError("Prompt resources must use a document under docs/prompts.")
+    return path.parts[2:]
+
+
+def resolve_prompt_resource(prompt: AgenticPrompt, repo_root: Path):
+    """Prefer canonical checkout content, otherwise read the installed resource."""
+    source_path = prompt.path(repo_root)
+    if source_path.is_file():
+        return source_path
+    packaged = resources.files("repo_privacy_guardian_resources").joinpath("prompts")
+    for part in prompt_resource_parts(prompt):
+        packaged = packaged.joinpath(part)
+    if not packaged.is_file():
+        raise FileNotFoundError(
+            "Prompt content is unavailable. Reinstall a complete Repo Privacy Guardian "
+            "package or use its source checkout."
+        )
+    return packaged
+
+
+class PromptFileSession:
+    """Keep packaged prompt files available until the desktop session closes."""
+
+    def __init__(self) -> None:
+        self._temporary_directory: tempfile.TemporaryDirectory[str] | None = None
+
+    def materialize(self, prompt: AgenticPrompt, repo_root: Path) -> Path:
+        resource = resolve_prompt_resource(prompt, repo_root)
+        source_path = prompt.path(repo_root)
+        if resource == source_path:
+            return source_path
+        if self._temporary_directory is None:
+            self._temporary_directory = tempfile.TemporaryDirectory(prefix="rpg-prompts-")
+        target = Path(self._temporary_directory.name).joinpath(*prompt_resource_parts(prompt))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(resource.read_bytes())
+        return target
+
+    def close(self) -> None:
+        if self._temporary_directory is not None:
+            self._temporary_directory.cleanup()
+            self._temporary_directory = None

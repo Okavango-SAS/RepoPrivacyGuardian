@@ -11,12 +11,49 @@ All notable user-facing changes to this project are documented here.
   guidance, and reviewed repair workflows using the existing CLI.
 - Added installer/resolver regression coverage for local metadata linkage,
   portable paths, refresh, mutation-free previews, and unsafe destinations.
+- Added shared completion-aware guidance for CLI handoff, agent summary, HTML,
+  and GUI Reports, preserving policy status and existing exit codes.
+- Added scanner subphase timings and bounded numeric workload counters that
+  retain elapsed failed and cancelled work without storing finding values.
+
+### Fixed
+
+- Prevented failed, aborted, empty, incomplete, and legacy context-free runs from
+  receiving misleading PASS guidance; late finalization failures refresh safe
+  summary/HTML outcomes.
+- Included all eight canonical English/Spanish GUI prompts in generated package
+  resources and retained materialized Open files until GUI shutdown.
+- Isolated wheel/sdist validation from source imports and verified installed
+  entry points, module origins, policy, prompt hashes, and environment consistency.
+- Bounded Git streaming waits with concurrent output draining, capped stderr
+  diagnostics, and lifecycle cleanup on timeout, cancellation, and early exit.
+- Corrected explicit subprocess input handling so reviewed rewrites can pass
+  input without conflicting stdin arguments. Failed mapping-file creation now
+  cleans its owned temporary files while preserving the original error.
+- Cleared stale GUI PASS guidance and repair authorization after worker failures.
+- Corrected native explicit-input subprocess execution so empty and nonempty
+  input work under ordinary and protected execution without conflicting stdin
+  arguments.
+- Probed skill interpreter readiness, preserved installed skills on handled
+  refresh failures, and resolved relative PowerShell inputs from the shell
+  location. Isolated fallback tests from checkout ancestors.
+- Removed the scanner-wide coverage exemption while retaining the 80% gate,
+  corrected redaction/tooling import cycles, and initialized isolated Git lock
+  fixtures so they cannot discover the enclosing checkout.
+- Aligned unique push/PR CI inputs, including typechecker/build support and the
+  exact canonical prompt documents used by installed builds.
 
 ### Changed
 
-- Documented the 2026-10-04 repository and Codex skill audit, confirmed open
-  defects, validation limits, and detailed staged implementation plan. Runtime
-  and skill fixes remain pending; this documentation does not announce a release.
+- Recorded the 2026-10-04 repository and Codex skill audit and its authorized
+  implementation, retaining original evidence separately from follow-up checks.
+  Version `1.5.1` remains unchanged; this does not announce a release.
+- Shared audit-scoped metadata, tracked-file decoding, and history traversal
+  without persistent content caches, preserving independent detector scopes and
+  match caps. Repeated timing and report-parity acceptance is recorded in the
+  implementation plan, including the concurrent-reader memory tradeoff.
+- Improved cooperative cancellation within read-only local audit phases and
+  command waits; active repair writes retain Git-safe interruption boundaries.
 - Updated the roadmap baseline and known issues, corrected the documented Windows
   GUI runner, and clarified automatic smoke versus full tracked release checks.
 - Documented Codex skill setup, updates, target selection, and local evidence

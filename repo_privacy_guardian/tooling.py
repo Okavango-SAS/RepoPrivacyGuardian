@@ -9,21 +9,23 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
-from repo_privacy_guardian.core import (
+from repo_privacy_guardian.tooling_common import (
     DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     GUI_DRAG_DROP_INSTALL_PACKAGES,
     GUI_INSTALL_PACKAGES,
-    GuardRunConfig,
     REMEDIATION_INSTALL_PACKAGES,
     ToolingCheck,
     WINGET_BOOTSTRAP_URL,
     WINGET_PACKAGE_FAMILY_NAME,
-    read_github_cli_token,
-    resolve_github_hardening_token,
     subprocess_stdin,
 )
+
+from repo_privacy_guardian.github import read_github_cli_token, resolve_github_hardening_token
+
+if TYPE_CHECKING:
+    from repo_privacy_guardian.core import GuardRunConfig
 
 
 def _missing_executable_message(executable: str) -> str:

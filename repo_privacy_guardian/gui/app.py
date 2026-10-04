@@ -280,6 +280,8 @@ class GuiApp:  # pragma: no cover
         self._repair_gate_note_label = None
         self._last_run_artifacts: artifact_helpers.RunArtifacts | None = None
         self._last_run_exit_code: int | None = None
+        self._last_run_context: dict[str, object] | None = None
+        self._last_run_reports_payload: list[dict[str, object]] = []
         self._last_run_action = ""
         self._gui_warnings: list[str] = []
         self._gui_debug_warnings = os.environ.get("REPO_PRIVACY_GUARDIAN_GUI_DEBUG", "").lower() in {
@@ -1560,7 +1562,11 @@ class GuiApp:  # pragma: no cover
 
     def _open_prompt_file(self, prompt: prompt_helpers.AgenticPrompt, repo_root: Path) -> None:
         try:
-            self._open_local_path(prompt.path(repo_root))
+            session = getattr(self, "_prompt_file_session", None)
+            if session is None:
+                session = prompt_helpers.PromptFileSession()
+                self._prompt_file_session = session
+            self._open_local_path(session.materialize(prompt, repo_root))
         except Exception as exc:
             self.log(f"[WARN] {self._t('prompt_open_failed', error=exc)}")
 
@@ -1580,6 +1586,7 @@ class GuiApp:  # pragma: no cover
             "html": artifacts.html_path,
             "json": artifacts.json_path,
             "log": artifacts.log_path,
+            "state": artifacts.state_path,
             "folder": artifacts.run_dir,
         }
         target = targets.get(kind)
@@ -1658,6 +1665,8 @@ class GuiApp:  # pragma: no cover
         if artifacts is not None and not artifacts.run_dir.exists():
             self._last_run_artifacts = None
             self._last_run_exit_code = None
+            self._last_run_context = None
+            self._last_run_reports_payload = []
             self._last_run_action = ""
             self._refresh_reports_tab()
 
@@ -1669,12 +1678,16 @@ class GuiApp:  # pragma: no cover
             return redact_sensitive_text(str(path))
 
     def _reports_summary_counts(self, reports_payload: list[dict[str, object]] | None = None) -> dict[str, int]:
-        payload = getattr(self, "_last_audit_reports_payload", []) if reports_payload is None else reports_payload
+        payload = (
+            getattr(self, "_last_run_reports_payload", getattr(self, "_last_audit_reports_payload", []))
+            if reports_payload is None else reports_payload
+        )
         return {
             "total": len(payload),
             "passed": sum(1 for item in payload if item.get("status") == "PASS"),
             "failed": sum(1 for item in payload if item.get("status") == "FAIL"),
             "blocking": sum(self._report_item_count(item, "failures") for item in payload),
+            "execution_errors": sum(self._report_item_count(item, "execution_errors") for item in payload),
             "manual": sum(self._manual_review_signal_count(item) for item in payload),
             "fixture": sum(self._safe_context_count(item) for item in payload),
         }
@@ -1686,6 +1699,7 @@ class GuiApp:  # pragma: no cover
             exit_policy_failed=EXIT_POLICY_FAILED,
             exit_runtime_error=EXIT_RUNTIME_ERROR,
             exit_aborted=EXIT_ABORTED,
+            run_context=getattr(self, "_last_run_context", None),
         )
 
     def _reports_next_action_key(self, counts: dict[str, int], exit_code: int | None, has_artifacts: bool) -> str:
@@ -1697,6 +1711,7 @@ class GuiApp:  # pragma: no cover
             exit_policy_failed=EXIT_POLICY_FAILED,
             exit_runtime_error=EXIT_RUNTIME_ERROR,
             exit_aborted=EXIT_ABORTED,
+            run_context=getattr(self, "_last_run_context", None),
         )
 
     def _refresh_reports_decision_panel(self) -> None:
@@ -1796,6 +1811,7 @@ class GuiApp:  # pragma: no cover
             exit_policy_failed=EXIT_POLICY_FAILED,
             exit_runtime_error=EXIT_RUNTIME_ERROR,
             exit_aborted=EXIT_ABORTED,
+            run_context=getattr(self, "_last_run_context", None),
         )
         visibility_state = presentation_state.visibility
         self._refresh_reports_decision_panel()
@@ -1842,6 +1858,17 @@ class GuiApp:  # pragma: no cover
     ) -> None:
         self._last_run_artifacts = artifacts
         self._last_run_exit_code = exit_code
+        self._last_run_reports_payload = reports_payload
+        self._last_run_context = None
+        try:
+            state = json.loads(artifacts.state_path.read_text(encoding="utf-8"))
+            if isinstance(state, dict):
+                self._last_run_context = {
+                    key: state.get(key)
+                    for key in ("phase", "total_repositories", "completed_repositories", "execution_error_count", "policy_failed")
+                }
+        except (OSError, ValueError):
+            pass
         self._last_run_action = self._t("action_repair" if run_fix else "action_audit")
         if reports_payload:
             self._last_audit_reports_payload = reports_payload
@@ -2527,6 +2554,12 @@ class GuiApp:  # pragma: no cover
         if getattr(event, "widget", None) is self.root:
             self._gui_destroying = True
             self._unregister_appearance_mode_callback()
+            session = getattr(self, "_prompt_file_session", None)
+            if session is not None:
+                try:
+                    session.close()
+                except OSError as exc:
+                    self.log(f"[WARN] Unable to clean temporary prompt files: {exc}")
 
     def _apply_responsive_layout(self) -> None:
         if getattr(self, "_gui_destroying", False):
@@ -3798,7 +3831,7 @@ class GuiApp:  # pragma: no cover
             return
         token.request_cancel()
         self.log(
-            "[INFO] Cancellation requested. The current repository step will finish before the run stops."
+            "[INFO] Cancellation requested. Read-only audit work will stop promptly; an active repair finishes at a Git-safe boundary."
         )
         self._update_run_buttons_state()
 
@@ -4056,6 +4089,7 @@ class GuiApp:  # pragma: no cover
         run_fix: bool,
         selection_signature: tuple[str, ...] | None,
     ) -> None:
+        worker_artifacts: artifact_helpers.RunArtifacts | None = None
         try:
             root = Path(self.root_var.get())
             policy = Path(self.policy_var.get())
@@ -4078,6 +4112,7 @@ class GuiApp:  # pragma: no cover
                 gui_background_helpers.schedule_on_ui(self.root, _emit)
 
             artifacts = create_run_artifacts(enforced_results_dir)
+            worker_artifacts = artifacts
             gui_logger = RunLogger(
                 artifacts.log_path,
                 sink=_ui_sink,
@@ -4159,13 +4194,12 @@ class GuiApp:  # pragma: no cover
             )
 
             reports_payload: list[dict[str, object]] = []
-            if not run_fix:
-                try:
-                    loaded = json.loads(artifacts.json_path.read_text(encoding="utf-8"))
-                    if isinstance(loaded, list):
-                        reports_payload = [item for item in loaded if isinstance(item, dict)]
-                except Exception:
-                    reports_payload = []
+            try:
+                loaded = json.loads(artifacts.json_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, list):
+                    reports_payload = [item for item in loaded if isinstance(item, dict)]
+            except (OSError, ValueError):
+                reports_payload = []
 
             def _finish_ui() -> None:
                 self._remember_last_run_artifacts(
@@ -4180,12 +4214,26 @@ class GuiApp:  # pragma: no cover
 
             gui_background_helpers.schedule_on_ui(self.root, _finish_ui)
         except Exception:
-            error_trace = traceback.format_exc().strip()
+            error_trace = redact_sensitive_text(traceback.format_exc().strip())
 
             def _finish_ui_error() -> None:
+                self._last_run_artifacts = worker_artifacts
+                self._last_run_exit_code = EXIT_RUNTIME_ERROR
+                self._last_run_reports_payload = []
+                self._last_run_context = {
+                    "phase": "finished",
+                    "total_repositories": len(selected or []),
+                    "completed_repositories": 0,
+                    "execution_error_count": 1,
+                    "policy_failed": False,
+                }
+                self._last_run_action = self._t("action_repair" if run_fix else "action_audit")
+                self._last_audit_reports_payload = []
+                self._last_audit_selection_signature = None
                 self.log("[ERROR] GUI worker failed unexpectedly.")
                 self.log(error_trace)
                 self._on_gui_run_finished(run_fix, selection_signature, [], EXIT_RUNTIME_ERROR)
+                self._refresh_reports_tab()
 
             gui_background_helpers.schedule_on_ui(self.root, _finish_ui_error)
 

@@ -3090,6 +3090,9 @@ def test_gui_reports_next_action_tracks_policy_state() -> None:
 
     assert app._reports_status_label(blocking_counts, rpg.EXIT_POLICY_FAILED) == "FAIL"
     assert app._reports_next_action_key(blocking_counts, rpg.EXIT_POLICY_FAILED, True) == "next_action_failed"
+    assert app._reports_status_label(reviewed_context_counts, rpg.EXIT_OK) == "PASS/REVIEW"
+    assert app._reports_next_action_key(reviewed_context_counts, rpg.EXIT_OK, True) == "next_action_review_artifacts"
+    app._last_run_context = {"phase": "finished", "total_repositories": 1, "completed_repositories": 1}
     assert app._reports_status_label(manual_counts, rpg.EXIT_OK) == "PASS/REVIEW"
     assert app._reports_next_action_key(manual_counts, rpg.EXIT_OK, True) == "next_action_manual"
     assert app._reports_status_label(reviewed_context_counts, rpg.EXIT_OK) == "PASS"
@@ -4027,6 +4030,7 @@ def test_gui_action_button_specs_cover_identity_reports_and_prompts() -> None:
             "icon-folder.png",
             6,
         ),
+        ("open_run_state_action", "run_state", "artifact", "state", None, "icon-report.png", 7),
     ]
 
     prompt_specs = gui_state_helpers.prompt_card_action_button_specs()

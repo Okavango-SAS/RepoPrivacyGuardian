@@ -130,9 +130,13 @@ The maintained skill lives in [codex/skills/repo-privacy-guardian](codex/skills/
 ./scripts/dev/install_codex_skill.ps1
 ```
 
-The installer uses `CODEX_HOME/skills` when configured, otherwise the user profile's `.codex/skills`. Preview with `-WhatIf`; refresh after source changes with `-Force`. Open a new Codex chat after installation and invoke `$repo-privacy-guardian` to audit a selected repository. The skill resolves this checkout even from another workspace and keeps the initial pass audit-only. See [local skill setup and validation](docs/LOCAL_DEVELOPMENT.md#repo-linked-codex-skill) and the [audit-only skill workflow](docs/DOGFOODING.md#codex-skill-targets-and-evidence).
+The installer uses `CODEX_HOME/skills` when configured, otherwise the user profile's `.codex/skills`. Preview with `-WhatIf`; refresh after source changes with `-Force`. Refresh stages and validates the replacement before swapping it, with rollback for handled failures. Relative filesystem inputs follow the current PowerShell location. Open a new Codex chat after installation and invoke `$repo-privacy-guardian` to audit a selected repository. The skill resolves this checkout even from another workspace and keeps the initial pass audit-only. See [local skill setup and validation](docs/LOCAL_DEVELOPMENT.md#repo-linked-codex-skill) for recovery limits and the [audit-only skill workflow](docs/DOGFOODING.md#codex-skill-targets-and-evidence).
 
 The checkout link is stored only in the installed skill's `.local/install.json`. Personal paths are never added to the public skill source. To use another checkout, reinstall from that checkout with `-Force`, or set `REPO_PRIVACY_GUARDIAN_REPO` when no valid workspace/installed link takes precedence. Resolution also supports the console CLI on PATH.
+
+Checkout execution probes candidate interpreters with a bounded timeout and
+requires Python 3.10 or newer, skipping broken or unsupported candidates. The
+resolver does not install dependencies or change persistent configuration.
 
 ## 🧭 Start Here
 
@@ -237,7 +241,7 @@ GitHub hardening findings and warnings are also advisory/manual-review only by d
 - CLI does not open a browser automatically.
 - Use `--open-report` only when you explicitly want the HTML report opened after a CLI run.
 - Use `--agent-summary` when you want the CLI to print a privacy-safe handoff summary for a coding agent; `agent_summary.json` is written for every run even without the flag.
-- GUI runs can be cancelled; cancellation stops after the active repository step completes and the run is recorded as `ABORTED`.
+- GUI and CLI runs support cooperative cancellation during read-only local audit phases, file/history iteration, and command waits; an interrupted run is recorded as `ABORTED`. Active repair writes stop at the next Git-safe boundary.
 - In the GUI, `Open HTML report automatically` is opt-in and off by default.
 - The GUI keeps the staged `Audit -> Repair` interaction so operators cannot jump straight to write actions.
 - The GUI stores non-secret setup preferences locally after setup, then collapses policy/output/GitHub/identity controls into Settings so the main screen stays focused on repository selection, Audit, and the log.
@@ -537,6 +541,13 @@ suggestion: Review the cited findings, run a dry-run fix preview, and authorize 
 
 Use the CLI summary for the operator decision, then open the JSON or HTML artifact only if you need the detailed finding list.
 
+Decision guidance combines policy findings with execution and completion context.
+Runtime errors and known policy failures produce FAIL; aborted, empty, incomplete,
+or legacy runs with unknown completion cannot produce PASS. A clean selected run
+must be complete before PASS guidance is available. Advisory findings can still
+produce REVIEW when repository policy status is PASS. Exit codes and policy
+status remain separate from this guidance.
+
 ## 🧩 GUI Contract
 
 GUI and CLI share:
@@ -584,6 +595,12 @@ Each run writes local artifacts under `Audit_Results/<run_id>/`:
 - `run_state.json`
 
 The HTML report starts with a `Decision first` section that separates blockers, advisory/manual-review signals, fixture/documentation context, suppressed findings, and the next action. JSON and HTML reports redact repository labels, settings, rendered samples, failures, and artifact paths through the shared redaction layer, but they still contain operational security context and should be treated as sensitive local outputs.
+
+Agent summary, HTML, CLI handoff, and GUI Reports share completion-aware decision
+guidance. Category totals count bucket entries and can overlap; they are not a
+count of unique leaks. The additive `run_state.json` metrics include scanner
+subphase timings and bounded numeric workload counters, including failed or
+cancelled elapsed work, without storing file bodies or detected values.
 
 Use `--compare-reports` or the GUI `Compare previous run` action after a re-audit to confirm whether blocking or manual-review categories were resolved, added, or unchanged before deciding the next repair step.
 
@@ -649,6 +666,12 @@ The 60-second flow above is the primary agentic path: run the CLI locally, keep 
 | Compact agentic CLI workflow | [`04_EJECUCION_AGENTICA_CLI.prompt.md`](docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md) | [`04_AGENTIC_CLI_EXECUTION.prompt.md`](docs/prompts/en/04_AGENTIC_CLI_EXECUTION.prompt.md) |
 
 For dogfooding against another repository, use [DOGFOODING](docs/DOGFOODING.md). It keeps artifact handling, fixture/leak classification, and redacted evidence review explicit.
+
+The eight English/Spanish documents in this registry are canonical build inputs.
+Wheel and sdist installs include generated prompt resources, so GUI Copy/Open
+works without a source checkout. Checkout documents take precedence when present;
+temporary files for opening packaged prompts stay available for the GUI session
+and are cleaned on shutdown.
 
 ### Recommended agent prompt template
 
@@ -719,8 +742,8 @@ Pytest collection is restricted to tracked test files so local ignored test file
 Validation tiers for this repository:
 
 - automatic CI smoke: runs on protected-branch pull requests and `main` pushes when executable, packaging, resource, test, or validation-tooling surfaces change; checks `repo-privacy-guardian --help`, module/direct-script help, `python scripts/check_release_contract.py`, and `python tests/release_smoke_cli.py`
-- docs-only changes stay local-first: run `python scripts/check_release_contract.py`; if branch protection needs the current smoke check for a docs-only PR, run `workflow_dispatch` without extended checks on that branch/commit
-- manual extended CI: `ruff`, `pyright`, tracked `pytest`, package smoke for `wheel` and `sdist`, plus Windows GUI smoke
+- docs-only changes stay local-first: run `python scripts/check_release_contract.py`; if branch protection needs the current smoke check for a docs-only PR, run `workflow_dispatch` without extended checks on that branch/commit. The eight canonical packaged prompt documents are explicitly filtered runtime inputs and trigger automatic smoke.
+- manual extended CI: `ruff`, `pyright`, tracked `pytest`, isolated package smoke for `wheel` and `sdist` outside the checkout with import-origin and policy/prompt-hash checks, plus Windows GUI smoke
 - local maintainer release gate: `python scripts/release_readiness.py`, including `pip-audit` checks for dev/GUI/remediation requirement files
 - local performance benchmark: `python scripts/benchmark_large_history.py`, which creates a synthetic large-history repo, audits it, and compares `run_state.json` timings against an optional baseline
 
@@ -737,7 +760,7 @@ Validation tiers for this repository:
 - [RELEASE_NOTES_TEMPLATE](docs/RELEASE_NOTES_TEMPLATE.md): lightweight notes template for public releases
 - [v1.5.1 release notes](docs/releases/v1.5.1.md): public tag notes and validation evidence for the current patch
 - [ROADMAP](docs/ROADMAP.md): current maturity, next hardening steps, and out-of-scope boundaries
-- [Repository and skill audit plan](docs/REPO_SKILL_IMPROVEMENT_PLAN.md): 2026-10-04 findings, validation limits, and staged implementation plan; implementation is pending
+- [Repository and skill audit plan](docs/REPO_SKILL_IMPROVEMENT_PLAN.md): original 2026-10-04 evidence, implemented corrections, acceptance checks, and validation limits
 - [KNOWN_ISSUES](docs/KNOWN_ISSUES.md): confirmed open defects, mitigations, and intentional operating limits
 
 ## 🏗️ Repository Layout
@@ -746,7 +769,7 @@ Validation tiers for this repository:
 - `repo_privacy_guardian/`: internal implementation package for core orchestration, scanner/remediation, reporting, redaction, tooling, GUI app/locale, artifacts, GitHub helpers, agent summary, strict profiles, suppressions, metrics, and prompt/runtime helpers
 - `repo_privacy_guardian_*.py`: root compatibility shims for imports kept stable in the `1.x` line
 - `repo_privacy_guardian_assets/`: packaged GUI raster assets for the optional desktop interface
-- `repo_privacy_guardian_resources/`: packaged policy resource used by installed builds
+- `repo_privacy_guardian_resources/`: packaged policy and generated prompt resources used by installed builds; maintained prompt texts remain under `docs/prompts/`
 - `config/requirements/`: compatibility dependency manifests
 - `docs/`: policy, dogfooding runbook, prompts, release docs, and engineering rationale
 - `tests/`: tracked regression, packaging, smoke coverage, and release hygiene

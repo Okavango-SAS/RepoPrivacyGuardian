@@ -18,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import Repo_Privacy_Guardian as rpg  # noqa: E402
+from scripts.check_artifact_install import install_smoke_for_artifact  # noqa: E402
 
 
 DEFAULT_TIMEOUTS = {
@@ -33,6 +34,7 @@ DEPENDENCY_AUDIT_REQUIREMENT_FILES = (
     "config/requirements/requirements-remediation.txt",
 )
 RELEASE_BYTE_COMPILE_PATHS = (
+    "build_helpers.py",
     "Repo_Privacy_Guardian.py",
     "repo_privacy_guardian/__init__.py",
     "repo_privacy_guardian/agent_summary.py",
@@ -58,20 +60,24 @@ RELEASE_BYTE_COMPILE_PATHS = (
     "repo_privacy_guardian/policy.py",
     "repo_privacy_guardian/prompts.py",
     "repo_privacy_guardian/redaction.py",
+    "repo_privacy_guardian/redaction_patterns.py",
     "repo_privacy_guardian/remediation.py",
     "repo_privacy_guardian/report_diff.py",
     "repo_privacy_guardian/reporting.py",
     "repo_privacy_guardian/runtime.py",
+    "repo_privacy_guardian/run_decision.py",
     "repo_privacy_guardian/scanner.py",
     "repo_privacy_guardian/strict_profiles.py",
     "repo_privacy_guardian/suppressions.py",
     "repo_privacy_guardian/tooling.py",
+    "repo_privacy_guardian/tooling_common.py",
     "repo_privacy_guardian_artifacts.py",
     "repo_privacy_guardian_github.py",
     "repo_privacy_guardian_prompts.py",
     "repo_privacy_guardian_runtime.py",
     "scripts/benchmark_large_history.py",
     "scripts/check_release_contract.py",
+    "scripts/check_artifact_install.py",
     "scripts/release_readiness.py",
     "scripts/visual_qa_gui.py",
 )
@@ -251,28 +257,6 @@ def venv_console(venv_dir: Path, name: str) -> Path:
         if candidate.exists():
             return candidate
     raise FileNotFoundError(f"Console entrypoint not found for {name} in {scripts_dir}")
-
-
-def install_smoke_for_artifact(repo_root: Path, artifact: Path) -> None:
-    with tempfile.TemporaryDirectory(prefix="rpg-release-check-") as temp_dir:
-        venv_dir = Path(temp_dir) / "venv"
-        run_command([sys.executable, "-m", "venv", str(venv_dir)], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["install"])
-        py = venv_python(venv_dir)
-        run_command([py, "-m", "pip", "install", "--upgrade", "pip"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["install"])
-        run_command([py, "-m", "pip", "install", str(artifact)], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["install"])
-        run_command([py, "-m", "pip", "check"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["quick"])
-        run_command([venv_console(venv_dir, "repo-privacy-guardian"), "--help"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["quick"])
-        run_command([py, "-m", "Repo_Privacy_Guardian", "--help"], cwd=repo_root, timeout=DEFAULT_TIMEOUTS["quick"])
-        run_command(
-            [
-                py,
-                "-c",
-                "from pathlib import Path; import Repo_Privacy_Guardian as rpg; "
-                "assert Path(rpg.DEFAULT_POLICY).exists(), rpg.DEFAULT_POLICY",
-            ],
-            cwd=repo_root,
-            timeout=DEFAULT_TIMEOUTS["quick"],
-        )
 
 
 def latest_artifact(repo_root: Path, pattern: str) -> Path:

@@ -10,16 +10,29 @@ on:
       - "config/requirements/**"
       - "codex/skills/repo-privacy-guardian/**"
       - "pyproject.toml"
+      - "pyrightconfig.json"
+      - "MANIFEST.in"
+      - "build_helpers.py"
       - "Repo_Privacy_Guardian.py"
       - "repo_privacy_guardian/**"
       - "repo_privacy_guardian*.py"
       - "repo_privacy_guardian_assets/**"
       - "repo_privacy_guardian_resources/**"
+      - "scripts/benchmark_large_history.py"
+      - "scripts/check_artifact_install.py"
       - "scripts/check_release_contract.py"
       - "scripts/dev/install_codex_skill.ps1"
       - "scripts/release_readiness.py"
       - "scripts/visual_qa_gui.py"
       - "tests/**"
+      - "docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md"
+      - "docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md"
+      - "docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md"
+      - "docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md"
+      - "docs/prompts/en/04_AGENTIC_CLI_EXECUTION.prompt.md"
+      - "docs/prompts/en/05_DOGFOODING_AUDIT_ONLY.prompt.md"
+      - "docs/prompts/en/06_AGENTIC_ENVIRONMENT_SETUP.prompt.md"
+      - "docs/prompts/en/07_AGENTIC_AUDIT_AND_REPAIR.prompt.md"
   pull_request:
     branches:
       - main
@@ -29,18 +42,29 @@ on:
       - "config/requirements/**"
       - "codex/skills/repo-privacy-guardian/**"
       - "pyproject.toml"
+      - "pyrightconfig.json"
+      - "MANIFEST.in"
+      - "build_helpers.py"
       - "Repo_Privacy_Guardian.py"
       - "repo_privacy_guardian/**"
       - "repo_privacy_guardian*.py"
       - "repo_privacy_guardian_assets/**"
       - "repo_privacy_guardian_resources/**"
       - "scripts/benchmark_large_history.py"
-      - "scripts/benchmark_large_history.py"
+      - "scripts/check_artifact_install.py"
       - "scripts/check_release_contract.py"
       - "scripts/dev/install_codex_skill.ps1"
       - "scripts/release_readiness.py"
       - "scripts/visual_qa_gui.py"
       - "tests/**"
+      - "docs/prompts/04_EJECUCION_AGENTICA_CLI.prompt.md"
+      - "docs/prompts/05_DOGFOODING_AUDIT_ONLY.prompt.md"
+      - "docs/prompts/06_PREPARACION_ENTORNO_AGENTICA.prompt.md"
+      - "docs/prompts/07_AUDITORIA_REPARACION_AGENTICA.prompt.md"
+      - "docs/prompts/en/04_AGENTIC_CLI_EXECUTION.prompt.md"
+      - "docs/prompts/en/05_DOGFOODING_AUDIT_ONLY.prompt.md"
+      - "docs/prompts/en/06_AGENTIC_ENVIRONMENT_SETUP.prompt.md"
+      - "docs/prompts/en/07_AGENTIC_AUDIT_AND_REPAIR.prompt.md"
   workflow_dispatch:
     inputs:
       extended_checks:
@@ -59,6 +83,7 @@ permissions:
 jobs:
   # Cost-first policy: automatic CI is path-gated to executable and validation-tooling surfaces.
   # Docs-only changes stay local-first; use workflow_dispatch when a protected PR needs a check.
+  # Canonical packaged prompt texts are runtime inputs, so their exact paths trigger checks.
   smoke:
     name: CLI smoke + release contract (automatic, ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
@@ -175,26 +200,8 @@ jobs:
           python -m pip install build
           python -m build
 
-      - name: Install wheel in clean venv
-        run: |
-          python -m venv .pkg-venv
-          .pkg-venv/bin/python -m pip install --upgrade pip
-          .pkg-venv/bin/python -m pip install dist/*.whl
-          .pkg-venv/bin/repo-privacy-guardian --help
-          .pkg-venv/bin/python -m Repo_Privacy_Guardian --help
-          .pkg-venv/bin/python -c "from pathlib import Path; import Repo_Privacy_Guardian as rpg; assert Path(rpg.DEFAULT_POLICY).exists(), rpg.DEFAULT_POLICY"
-          .pkg-venv/bin/python tests/release_smoke_cli.py
-
-      - name: Install sdist in clean venv
-        run: |
-          rm -rf .pkg-venv
-          python -m venv .pkg-venv
-          .pkg-venv/bin/python -m pip install --upgrade pip
-          .pkg-venv/bin/python -m pip install dist/*.tar.gz
-          .pkg-venv/bin/repo-privacy-guardian --help
-          .pkg-venv/bin/python -m Repo_Privacy_Guardian --help
-          .pkg-venv/bin/python -c "from pathlib import Path; import Repo_Privacy_Guardian as rpg; assert Path(rpg.DEFAULT_POLICY).exists(), rpg.DEFAULT_POLICY"
-          .pkg-venv/bin/python tests/release_smoke_cli.py
+      - name: Validate wheel and sdist outside the checkout
+        run: python scripts/check_artifact_install.py dist/*.whl dist/*.tar.gz
 
   gui-smoke-windows:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_checks }}

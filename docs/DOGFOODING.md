@@ -51,6 +51,27 @@ Record the target before resolving the backend or changing working directory. Th
 
 Treat those artifact paths as sensitive local outputs even when the backend is this public repository. Installing or invoking the skill does not authorize remediation or push; the same reviewed-repair gates below apply.
 
+The resolver checks that checkout Python candidates run Python 3.10 or newer
+before selection; an unusable local environment no longer shadows a supported
+fallback. A forced refresh validates a staging copy and rolls back handled
+failures. See the setup guide for the remaining abrupt-termination recovery
+limit; these adapter checks do not replace the CLI tooling preflight.
+
+## Completion-aware handoff
+
+`agent_summary.json`, HTML, CLI handoff, and GUI Reports share decision guidance
+based on policy findings and run completion. Runtime failure is FAIL; cancellation
+or incomplete/empty evidence cannot be PASS. Legacy artifacts without completion
+context remain REVIEW. Check `completion`, `exit_code`, expected/completed targets
+in `run_context`, and `run_state.json` before accepting publication readiness.
+Repository policy PASS can coexist with advisory REVIEW. Counts describe bucket
+entries and can overlap; do not call them a count of unique leaks.
+
+Local read-only audits poll cancellation during phases, file/history iteration,
+and command waits. Active repair writes stop only at the next Git-safe boundary;
+optional remote checks keep their own bounded timeouts. Preserve partial artifacts
+and rerun the intended scope after an abort or runtime issue.
+
 ## Baseline Commands
 
 Safe local audit:
@@ -135,6 +156,7 @@ Use this shape when reporting a dogfooding run:
 
 ```text
 Decision: PASS | FAIL | REVIEW
+Completion: complete | incomplete | aborted | unknown
 Commands run:
 - repo-privacy-guardian --help
 - repo-privacy-guardian --root ... --repos ... --dry-run --yes

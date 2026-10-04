@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Callable
 from repo_privacy_guardian import agent_summary as agent_summary_helpers
 from repo_privacy_guardian import artifacts as artifact_helpers
 from repo_privacy_guardian.artifacts import RunArtifacts
+from repo_privacy_guardian.run_decision import evaluate_run_decision
 from repo_privacy_guardian.policy import (
     classify_litellm_incident_severity as classify_litellm_incident_severity,
     classify_repo_severity as classify_repo_severity,
@@ -299,6 +300,8 @@ def render_html_report(
     run_settings: dict[str, str],
     finished_at: datetime,
     optional_supply_chain_payload: dict[str, object] | None = None,
+    exit_code: int | None = None,
+    run_context: dict[str, object] | None = None,
 ) -> str:
     esc = html.escape
 
@@ -354,28 +357,28 @@ def render_html_report(
         for rep in reports
     )
     suppressed_findings = sum(len(rep.suppressed_findings) for rep in reports)
-    decision = "FAIL" if failed else ("REVIEW" if manual_review_findings else "PASS")
+    guidance = evaluate_run_decision(
+        exit_code=exit_code,
+        policy_failed=any(rep.status == "FAIL" for rep in reports),
+        execution_error_count=sum(len(rep.execution_errors) for rep in reports),
+        blocking_count=blocking_findings,
+        manual_review_count=manual_review_findings,
+        available_repositories=len(reports),
+        run_context=run_context,
+    )
+    decision = guidance.status
     decision_class = {
         "FAIL": "decision-fail",
         "REVIEW": "decision-review",
         "PASS": "decision-pass",
     }[decision]
-    if decision == "FAIL":
-        decision_next_action = (
-            "Do not publish yet. Review blocking categories first, authorize only reviewed fixes, then re-run."
-        )
-    elif decision == "REVIEW":
-        decision_next_action = (
-            "Classify advisory/manual-review findings before publication. Blocking policy status is PASS."
-        )
-    else:
-        decision_next_action = "No blocking or advisory action is required by the current policy."
+    decision_next_action = guidance.next_action
 
     decision_rows = "".join(
         (
-            f"<tr><td>Blocking findings</td><td class=\"num\">{blocking_findings}</td></tr>"
-            f"<tr><td>Advisory/manual-review findings</td><td class=\"num\">{manual_review_findings}</td></tr>"
-            f"<tr><td>Fixture/documentation findings</td><td class=\"num\">{fixture_documentation_findings}</td></tr>"
+            f"<tr><td>Blocking bucket entries</td><td class=\"num\">{blocking_findings}</td></tr>"
+            f"<tr><td>Advisory/manual-review bucket entries</td><td class=\"num\">{manual_review_findings}</td></tr>"
+            f"<tr><td>Fixture/documentation bucket entries</td><td class=\"num\">{fixture_documentation_findings}</td></tr>"
             f"<tr><td>Suppressed findings</td><td class=\"num\">{suppressed_findings}</td></tr>"
         )
     )
@@ -924,7 +927,9 @@ def render_html_report(
     <section class=\"panel decision-first\">
       <h2>Decision first</h2>
       <p><span class=\"decision-badge {decision_class}\">{decision}</span></p>
+      <p><strong>Completion:</strong> {esc(guidance.completion)} | <strong>Exit code:</strong> {esc(str(exit_code))}</p>
       <p><strong>Next action:</strong> {esc(decision_next_action)}</p>
+      <p>Category totals are bucket entries and can overlap; they are not a count of unique leaks.</p>
       <div class=\"table-wrap\">
         <table>
           <tr><th>Signal</th><th class=\"num\">Count</th></tr>
@@ -1005,6 +1010,7 @@ def persist_run_outputs(
     optional_json_export: str | None = None,
     optional_supply_chain_payload: dict[str, object] | None = None,
     exit_code: int | None = None,
+    run_context: dict[str, object] | None = None,
 ) -> None:
     from repo_privacy_guardian.core import (
         resolve_optional_json_export_path,
@@ -1025,8 +1031,35 @@ def persist_run_outputs(
         resolve_optional_json_export_path=resolve_optional_json_export_path,
         optional_json_export=optional_json_export,
         optional_supply_chain_payload=optional_supply_chain_payload,
+        exit_code=exit_code,
+        run_context=run_context,
         now_factory=datetime.now,
     )
+    _persist_agent_summary(
+        reports=reports,
+        artifacts=artifacts,
+        root_path=root_path,
+        policy_path=policy_path,
+        run_settings=run_settings,
+        logger=logger,
+        exit_code=exit_code,
+        run_context=run_context,
+    )
+
+
+def _persist_agent_summary(
+    *,
+    reports: list[RepoReport],
+    artifacts: RunArtifacts,
+    root_path: Path,
+    policy_path: Path,
+    run_settings: dict[str, str],
+    logger: Callable[[str], None],
+    exit_code: int | None,
+    run_context: dict[str, object] | None,
+) -> None:
+    from repo_privacy_guardian.core import write_private_text_file
+
     reports_payload = [sanitize_report_for_export(rep) for rep in reports]
     summary = agent_summary_helpers.build_agent_summary(
         reports_payload=reports_payload,
@@ -1036,12 +1069,64 @@ def persist_run_outputs(
         run_settings=run_settings,
         exit_code=exit_code,
         generated_at=datetime.now(),
+        run_context=run_context,
     )
     agent_summary_path = artifacts.agent_summary_path or artifacts.run_dir / "agent_summary.json"
     write_private_text_file(agent_summary_path, json.dumps(summary, indent=2))
     logger(f"[INFO] Agent summary written to {agent_summary_path}")
     if run_settings.get("agent_summary") == "True":
         logger(agent_summary_helpers.format_agent_summary_handoff(summary))
+
+
+def refresh_run_guidance(
+    reports: list[RepoReport],
+    artifacts: RunArtifacts,
+    root_path: Path,
+    policy_path: Path,
+    run_settings: dict[str, str],
+    logger: Callable[[str], None],
+    optional_supply_chain_payload: dict[str, object] | None = None,
+    exit_code: int | None = None,
+    run_context: dict[str, object] | None = None,
+) -> None:
+    """Refresh guidance after a late failure without repeating external exports.
+
+    Attempt both independent artifacts even when one destination is unavailable.
+    The coordinator remains responsible for recording/reporting persistence errors.
+    """
+    from repo_privacy_guardian.core import write_private_text_file
+
+    errors: list[Exception] = []
+    try:
+        html_report = render_html_report(
+            reports=reports,
+            artifacts=artifacts,
+            root_path=root_path,
+            policy_path=policy_path,
+            run_settings=run_settings,
+            finished_at=datetime.now(),
+            optional_supply_chain_payload=optional_supply_chain_payload,
+            exit_code=exit_code,
+            run_context=run_context,
+        )
+        write_private_text_file(artifacts.html_path, html_report)
+    except Exception as exc:
+        errors.append(exc)
+    try:
+        _persist_agent_summary(
+            reports=reports,
+            artifacts=artifacts,
+            root_path=root_path,
+            policy_path=policy_path,
+            run_settings=run_settings,
+            logger=logger,
+            exit_code=exit_code,
+            run_context=run_context,
+        )
+    except Exception as exc:
+        errors.append(exc)
+    if errors:
+        raise RuntimeError("Unable to refresh one or more run guidance artifacts") from errors[0]
 
 
 def open_html_report_in_browser(

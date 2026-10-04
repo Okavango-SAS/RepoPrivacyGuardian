@@ -1,23 +1,50 @@
 # KNOWN ISSUES
 
-## Open defects from the 2026-10-04 audit
+## Follow-up to the 2026-10-04 audit
 
-These findings are pending implementation. Evidence, priorities, affected code, and acceptance checks are recorded in the [repository and skill improvement plan](REPO_SKILL_IMPROVEMENT_PLAN.md).
+The identified decision-context, installed-prompt, stream-lifecycle, skill
+interpreter/refresh/path, fallback-test, CI-filter, and standalone-import
+corrections are implemented. Scanner coverage now uses its actual statements,
+and isolated artifact checks verify installed origins and resources. The
+location-sensitive lock assertion was caused by an empty `.git` test fixture
+discovering an enclosing checkout; initialized isolated fixtures correct it
+without a speculative production locking change.
 
-| Finding | Impact | Current mitigation |
-| --- | --- | --- |
-| Agent summary and HTML decisions derive from finding counts without consistently accounting for execution failure or completion. An empty, interrupted, or failed run can appear as `PASS`. | High: an operator or agent may interpret incomplete evidence as publication readiness. | Check the CLI exit code, `run_state.json`, expected target count, and individual repository status before accepting a summary decision. |
-| Built packages omit the eight English/Spanish prompt files consumed by the GUI Prompts actions. | Medium: copying or opening a prompt from an installed wheel fails even when checkout-based smoke tests pass. | Use the maintained prompt files from a source checkout until package-resource loading is implemented. |
-| History streaming checks deadlines after stdout delivers a line, while stderr is not drained concurrently. | Medium: a blocked reader or full stderr pipe can prevent the intended timeout from bounding a run. | Supervise long audits and inspect process/run progress; the existing stream timeout alone is not a complete wall-clock guarantee. This finding comes from code inspection. |
-| The skill resolver selects Python candidates by file/command existence without proving they run a supported Python version. | Medium: a broken local environment or Python older than 3.10 can shadow a usable interpreter. | Repair the selected environment and verify Python 3.10 or newer before invoking the skill. |
-| Forced skill installation removes the existing installed copy before all replacement files and metadata are successfully written. | Medium: a failed refresh can leave no working installed skill. | Keep a local backup before refresh and inspect `-WhatIf`; transactional replacement and rollback are planned. |
-| Relative paths in the PowerShell installer/resolver use process-level path normalization, which can differ from the current `Set-Location` directory. | Medium: a path can resolve to the wrong backend or installation location. | Pass absolute paths when setting the checkout or Codex installation location. |
-| Skill fallback tests depend on temporary-directory placement: a temporary directory inside this checkout triggers the intended workspace-ancestor resolution before fallback. | Low: an in-checkout `--basetemp` produces failures that do not reproduce with the default external temporary directory. | Use external temporary directories for fallback scenarios; preserve workspace-first runtime behavior when isolating the tests. |
-| Fresh-process imports of the internal `redaction` and `tooling` modules fail through circular dependencies on `core`. | Low: standalone helper reuse depends on import order; supported CLI/facade paths still work. | Use the supported facade until the narrow import-boundary correction and isolated import regressions are implemented. |
+See the [repository and skill improvement plan](REPO_SKILL_IMPROVEMENT_PLAN.md)
+for the original evidence, implementation details, and final gate results.
+The corrections pass final local validation: 655 tracked tests passed, one
+POSIX-specific skip, and 84.49% statement coverage with the 80% gate unchanged.
+Static, artifact, smoke, dependency, installed-skill, and repeated timing/report-
+parity checks pass as recorded in the plan. Historical baseline counts remain
+separate evidence. No release or tag is announced by these corrections.
 
-Validation follow-ups also remain open. The scanner class has a blanket `# pragma: no cover`, so the reported 85.86% coverage does not measure most scanner behavior. A Windows lock-metadata assertion failed only in the in-checkout temporary-directory run; the default suite passed all 457 tests, so its reproducibility must be established before describing it as a general runtime defect. Installed-artifact module checks can import the source checkout because they run from it; those checks need an external working directory and import-origin assertions.
+Remaining operational limits:
 
-The audit did not run the complete release harness or a new visual GUI smoke, and Pyright was unavailable in that environment. These are validation limits, not passing release evidence.
+- Legacy artifact sets without completion context show REVIEW. Re-audit with
+  current tooling before interpreting them as publication readiness.
+- Skill refresh rolls back handled errors, but abrupt process/machine termination
+  between moves can leave a sibling `.repo-privacy-guardian.backup-*` directory.
+  Inspect and preserve that local backup until the installed skill and link have
+  been verified; `-WhatIf` remains the write-free preview path.
+- A concurrent destination created during skill replacement can prevent safe
+  automatic restoration. The installer preserves that destination and the prior
+  copy's backup for reviewed recovery instead of overwriting either.
+- Read-only local audits poll cancellation within work and waits. Active repair
+  writes wait for the next Git-safe boundary, and optional remote checks retain
+  their own bounded timeouts. Ordinary CLI Ctrl+C records an aborted partial run;
+  repeated Ctrl+C during active repair writes is deferred. External forced
+  termination remains outside cooperative cancellation.
+- Local Windows/PowerShell checks do not substitute for supported-platform CI
+  and a fresh release gate. Performance claims require the recorded benchmark
+  workloads and comparison evidence.
+- Concurrent stream readers add traced Python memory compared with the original
+  implementation. The measured scanner sharing reduces that cost versus bounded
+  unoptimized execution and improves synthetic audit medians; it does not claim
+  universally lower memory or total process RSS. See the plan's tradeoff table.
+- Fresh screenshot review is unavailable in the current execution environment:
+  the attempted visual QA capture was uniformly black. Initialization, layout,
+  callbacks, and GUI smoke pass, but usable desktop capture still
+  requires a working graphical capture environment.
 
 ## Current limitations
 
@@ -49,7 +76,7 @@ Workaround: always create bundle backups and coordinate with collaborators.
 1. GUI does not include pause/resume controls.
 
 Impact: low.
-Workaround: GUI supports cooperative cancellation, but it only stops after the active repository step completes. Use CLI for tighter control over long runs.
+Workaround: GUI supports cooperative cancellation through the shared CLI pipeline during read-only local audit phases, file/history iteration, and command waits. Active repair writes stop at the next Git-safe boundary. Optional remote checks keep their own bounded timeouts.
 
 1. `repo_privacy_guardian/core.py` and `repo_privacy_guardian/gui/app.py` are still large after the package split and recent GUI helper extractions.
 

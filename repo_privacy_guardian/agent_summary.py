@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from repo_privacy_guardian.run_decision import evaluate_run_decision
 
 AGENT_SUMMARY_SCHEMA_VERSION = 1
 
@@ -69,28 +70,6 @@ def _category_counts(payload: dict[str, object], keys: tuple[str, ...]) -> dict[
     }
 
 
-def _decision_from_counts(blocking_count: int, manual_review_count: int) -> str:
-    if blocking_count:
-        return "FAIL"
-    if manual_review_count:
-        return "REVIEW"
-    return "PASS"
-
-
-def _next_action(decision: str) -> str:
-    if decision == "FAIL":
-        return (
-            "Review blocking categories in report.json/report.html, authorize only reviewed fixes, "
-            "then re-run until PASS."
-        )
-    if decision == "REVIEW":
-        return (
-            "Classify advisory/manual-review findings as confirmed leak, fixture/documentation, "
-            "false positive, or accepted risk before publication."
-        )
-    return "No blocking or advisory action is required by the current policy."
-
-
 def build_agent_summary(
     *,
     reports_payload: list[dict[str, object]],
@@ -100,6 +79,7 @@ def build_agent_summary(
     run_settings: dict[str, str],
     exit_code: int | None = None,
     generated_at: datetime | None = None,
+    run_context: dict[str, object] | None = None,
 ) -> dict[str, object]:
     generated = generated_at or datetime.now()
     repositories: list[dict[str, object]] = []
@@ -120,12 +100,29 @@ def build_agent_summary(
         total_fixture_documentation += fixture_documentation_count
         total_accepted_risk += accepted_risk_count
         total_suppressed += suppressed_count
-        decision = _decision_from_counts(blocking_count, manual_review_count)
+        report_status = report.get("status")
+        repository_context: dict[str, object] | None = None
+        if report_status == "PASS" or report_status == "FAIL":
+            repository_context = {
+                "phase": "finished",
+                "total_repositories": 1,
+                "completed_repositories": 1,
+            }
+        decision = evaluate_run_decision(
+            exit_code=0 if repository_context is not None else None,
+            policy_failed=report_status == "FAIL",
+            execution_error_count=len(_safe_list(report.get("execution_errors"))),
+            blocking_count=blocking_count,
+            manual_review_count=manual_review_count,
+            run_context=repository_context,
+        )
         repositories.append(
             {
                 "name": str(report.get("name", "")),
                 "status": str(report.get("status", "PASS")),
-                "decision": decision,
+                "decision": decision.status,
+                "completion": decision.completion,
+                "decision_reason": decision.reason,
                 "blocking_count": blocking_count,
                 "manual_review_count": manual_review_count,
                 "fixture_documentation_count": fixture_documentation_count,
@@ -142,19 +139,29 @@ def build_agent_summary(
                     ACCEPTED_RISK_CATEGORY_KEYS,
                 ),
                 "failure_reasons": _safe_list(report.get("failures")),
-                "next_action": _next_action(decision),
+                "next_action": decision.next_action,
             }
         )
 
     failed = sum(1 for report in reports_payload if report.get("status") == "FAIL")
     passed = len(reports_payload) - failed
-    overall_decision = _decision_from_counts(total_blocking, total_manual_review)
+    overall_decision = evaluate_run_decision(
+        exit_code=exit_code,
+        policy_failed=bool(failed),
+        execution_error_count=sum(len(_safe_list(report.get("execution_errors"))) for report in reports_payload),
+        blocking_count=total_blocking,
+        manual_review_count=total_manual_review,
+        available_repositories=len(reports_payload),
+        run_context=run_context,
+    )
 
     return {
         "schema_version": AGENT_SUMMARY_SCHEMA_VERSION,
         "generated_at": generated.isoformat(timespec="seconds"),
         "run_id": getattr(artifacts, "run_id", ""),
-        "status": overall_decision,
+        "status": overall_decision.status,
+        "completion": overall_decision.completion,
+        "decision_reason": overall_decision.reason,
         "exit_code": exit_code,
         "counts": {
             "repositories": len(reports_payload),
@@ -182,9 +189,10 @@ def build_agent_summary(
             "dry_run": run_settings.get("dry_run", ""),
             "fix": run_settings.get("fix", ""),
             "push": run_settings.get("push", ""),
+            **overall_decision.completion_context(),
         },
         "repositories": repositories,
-        "next_action": _next_action(overall_decision),
+        "next_action": overall_decision.next_action,
     }
 
 
@@ -197,11 +205,14 @@ def format_agent_summary_handoff(summary: dict[str, object]) -> str:
         [
             "[AGENT-SUMMARY]",
             f"status: {summary.get('status', 'UNKNOWN')}",
+            f"exit_code: {summary.get('exit_code')}",
+            f"completion: {summary.get('completion', 'unknown')}",
             f"repositories: {counts.get('repositories', 0)}",
             f"blocking_findings: {counts.get('blocking_findings', 0)}",
             f"manual_review_findings: {counts.get('manual_review_findings', 0)}",
             f"accepted_risks: {counts.get('accepted_risks', 0)}",
             f"suppressed_findings: {counts.get('suppressed_findings', 0)}",
+            "category_counts: bucket entries; categories can overlap",
             f"next_action: {summary.get('next_action', '')}",
             "artifacts: "
             f"{artifacts.get('agent_summary', 'agent_summary.json')}, "

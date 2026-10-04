@@ -1,11 +1,68 @@
 # Development Audit
 
-## Latest audit — 2026-10-04
+## Implementation follow-up — 2026-10-04
+
+The operator authorized implementation of the [repository and Codex skill
+improvement plan](REPO_SKILL_IMPROVEMENT_PLAN.md). The shared run-decision path now
+accounts for execution and completion, built artifacts include the eight
+canonical bilingual prompts, artifact checks run outside the source checkout,
+and Git streaming has bounded lifecycle management. The skill now probes Python
+readiness, stages refreshes with rollback for handled failures, and follows
+PowerShell provider paths for relative inputs.
+
+The scanner-wide coverage exclusion is removed without lowering the 80% gate.
+Audit-scoped metadata, tracked text, and history work are shared; subphase metrics
+and numeric counters record failed work as well as success. Read-only audit work
+supports cooperative cancellation within phase, file, history, and command waits,
+while repair writes retain Git-safe boundaries. CI filters and narrow standalone
+module imports are corrected. The intermittent lock assertion came from a test
+fixture discovering the enclosing checkout, so isolated Git initialization fixes
+the regression without changing production lock-descriptor semantics.
+
+Post-integration checks also cover stale GUI PASS guidance after worker failure,
+helper-owned cleanup when temporary mapping creation raises, and repeated CLI Ctrl+C during a
+repair batch. CLI write interruption is deferred to a Git-safe boundary while
+read-only audit cancellation retains prompt cleanup. The focused signal suite
+passes locally with its POSIX-specific case explicitly skipped.
+
+Three-repetition comparisons across two clean synthetic corpus sizes preserve
+normalized full reports and measure median audit improvements of 26.2% and 17.3%
+over the audited implementation. The required concurrent stream readers increase
+peak traced Python memory relative to that implementation; the plan records this
+tradeoff rather than claiming a general memory reduction. Finding-bearing full
+reports also match for six cap/incident combinations against bounded unoptimized
+execution and two original-baseline cap-50 combinations. Original low-cap cases
+timed out, so those parity comparisons use the bounded baseline explicitly.
+
+The maintained skill has 66 passing in-checkout-temp behavioral cases across the
+available Windows PowerShell 5.1 and PowerShell 7 runtimes, plus 20 passing focused
+normal-temp cases. The installed refresh is verified by four source hashes, linked
+checkout resolution, successful CLI help, and skill validation.
+
+Final validation of the current product tree passes: **655 tests passed, one
+POSIX-specific skip, 84.49% statement coverage**, with the 80% gate unchanged.
+Ruff, Pyright, and the release contract exit with zero. The local harness's
+artifact/smoke steps validate the latest source: CLI/GUI smoke, module/direct help,
+wheel/sdist builds, isolated installs, and all three resolved dependency audits
+pass. The final full tracked-suite result supersedes earlier harness collection.
+Independent installed-skill execution from a neutral external workspace passes
+with both PowerShell runtimes, including help/tooling and a complete audit-only
+fixture. Native empty/nonempty subprocess input works under ordinary and protected
+execution without conflicting stdin arguments.
+
+The plan records publication self-audit and synchronization separately. A visual
+QA capture was attempted but was uniformly black; screenshot review is unavailable
+in this execution environment despite passing initialization, layout, callback,
+and GUI smoke checks. This is a capture limitation, not evidence of a product
+defect or a passing visual gate. The baseline below remains historical. Version
+`1.5.1` is unchanged.
+
+## Original audit — 2026-10-04
 
 The [repository and Codex skill audit and implementation plan](REPO_SKILL_IMPROVEMENT_PLAN.md)
 is the current development baseline at public commit
-`9f9355cd2add14a01e50c2cef3ef9a3d73ca02ca`. This delivery publishes audit findings
-and documentation; code, packaging, CI, and skill corrections remain pending.
+`9f9355cd2add14a01e50c2cef3ef9a3d73ca02ca`. The initial delivery published audit
+findings and documentation, leaving implementation for the authorized follow-up.
 
 The tracked suite passed with 457 tests and 85.86% reported statement coverage.
 The self-audit returned policy PASS with zero blocking findings and one advisory

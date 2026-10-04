@@ -3,13 +3,132 @@
 Audit date: **2026-10-04**. Audited baseline: public `main` at
 `9f9355cd2add14a01e50c2cef3ef9a3d73ca02ca`, stable `1.5.x`.
 
-This delivery records the audit, implementation decisions, and documentation
-updates. **All code, packaging, CI, and skill corrections below remain pending.**
-The operator selected an integral implementation in later stages, preserving
-the `1.x` contract, and direct pushes to `main` under the documented
-solo-maintainer operating model. This document does not authorize unrelated
-repository audits, dependency installation, history rewrites, or remote settings
-changes.
+The initial delivery recorded the audit and the staged implementation plan. The
+operator subsequently authorized implementation, documentation, commit, and push
+on **2026-10-04**, preserving the `1.x` contract and the documented solo-maintainer
+operating model. The implementation record below is separate from the original
+audit evidence. Version `1.5.1` remains unchanged; this work does not announce a
+tag or release, rewrite history, or change remote repository settings.
+
+## Implementation record — 2026-10-04
+
+The table records the completed corrections and their acceptance checks. The
+final tracked suite passes with **655 tests passed, one POSIX-specific test
+skipped, and 84.49% statement coverage**, including the scanner. Clean-worktree
+self-audit and remote synchronization remain the post-commit publication steps.
+The historical 457-test/85.86% result below describes the original audited
+baseline, not this implementation.
+
+| Finding | Implementation | Current acceptance evidence |
+| --- | --- | --- |
+| F01 | One shared decision helper combines policy findings with explicit exit, completion, and target context. CLI handoff, agent summary, HTML, and GUI Reports use it. Late finalization errors refresh summary/HTML guidance without replaying JSON export. GUI worker errors clear stale PASS guidance before or after artifact creation. Legacy context is unknown and gives REVIEW. | Complete: decision, partial/error, advisory, legacy, artifact-persistence, and CLI/GUI regressions pass. The 74 focused GUI/reporting cases include four worker-error scenarios. |
+| F02 | The build helper generates eight bilingual prompt resources from canonical `docs/prompts/` files. Checkout reads remain authoritative; installed reads use package resources. GUI Copy/Open share resolution, and materialized Open files live until GUI shutdown. | Complete: source/resource parity, controlled GUI callbacks, and current wheel/sdist isolated installs pass with all eight prompt resources. |
+| F03 | Artifact validation runs outside the checkout with source-injecting `PYTHONPATH` removed. It checks import origin, entry points, policy, all eight prompt hashes, and `pip check`. CI and the local harness use this validator. | Complete: isolated validator regressions and both current built-artifact checks pass. |
+| F04 | The streaming adapter owns deadlines and concurrent readers, caps stderr diagnostics at 16,384 characters, and cleans up processes, readers, and pipes on success, timeout, cancellation, or early exit. Reader/finalization failures preserve cleanup as well as the original error. Native explicit-input commands avoid conflicting subprocess stdin/input arguments. | Complete: controlled lifecycle/deadline/cleanup cases and four benign native input tests pass, including empty/nonempty input under normal and protected execution. |
+| F05 | The skill probes interpreter readiness and Python 3.10+ support with a bounded non-interactive child process before selecting a candidate. | Complete: 66 skill cases pass with available Windows PowerShell 5.1 and PowerShell 7 using an in-checkout temporary root; 20 focused cases also pass with normal temporary placement. |
+| F06 | Skill refresh validates a sibling staging copy before replacement, retains the previous copy until the swap succeeds, and rolls back handled failures. Cleanup validates containment and reparse safety. Unicode paths use native directory moves, and collisions preserve concurrently created destinations and recovery backups. | Failure-injection, byte-preserving rollback, destination/staging collisions, neighbor safety, Unicode paths, successful refresh, and write-free preview cases pass. The installed refresh is complete; four public files match source hashes. Abrupt termination can leave a recovery backup; replacement is not crash-atomic. |
+| F07 | Installer/resolver shell inputs use PowerShell provider paths before filesystem containment checks, so relative inputs follow `Set-Location`. | Complete: relative-location, spaces, nonexistent destination, and provider rejection cases pass in the skill suite. |
+| F08 | Fallback scenarios use explicitly external temporary roots and assert checkout-ancestor isolation; workspace-first product precedence is unchanged. | Complete: in-checkout and normal-temp skill cases pass. Independent installed-metadata resolution from a neutral external workspace passes with both PowerShell versions; help/tooling and explicit-target audit-only execution return zero with complete PASS guidance. |
+| F09 | The scanner-wide coverage exclusion is removed; the global 80% gate is unchanged. Behavior tests cover audit, lifecycle, remediation, and failure boundaries. Temporary mapping creation cleans its owned directory on failure and preserves the original error, refusing replaced-directory traversal. | Complete: the final tracked suite passes at 84.49% coverage with the scanner included. Twelve focused mapping-helper cases include eight new creation-failure/cleanup cases. |
+| F10 | Metadata fields and tracked-file inventory are collected once per audit, eligible text is decoded once, and history detectors share a traversal while preserving independent scopes and caps. Caches remain per-audit. | Complete: eighteen repeated clean-corpus runs show equivalent normalized reports and median improvements of 26.2% and 17.3% over the audited implementation. Finding-bearing reports match in six bounded-baseline cases and two original-baseline cases. Concurrent readers increase peak traced memory; comparison limits are recorded below. |
+| F11 | Scanner subphase timings and bounded numeric workload counters are additive metrics. Timing records survive errors and cancellation through `finally` paths. | Complete: success/error/cancellation metric tests pass. Three 10,000-call samples measure median overhead of 0.554 microseconds per counter call and 0.604 microseconds per phase call. |
+| F12 | Local read-only phases, file/history loops, and command waits poll the shared cancellation signal. CLI interruption records an aborted partial run. Repeated Ctrl+C during active CLI repair writes is deferred until the batch returns, with child-process signal isolation and preserved abort evidence. | Complete: 56 focused cancellation/signal/boundary cases and integrated CLI/GUI tests pass. Read-only cases target a response within two seconds. One POSIX-specific case is explicitly skipped locally. |
+| F13 | Push/PR filters are equal and unique, include typecheck/build/skill/benchmark inputs, and explicitly include the eight packaged prompt documents as runtime inputs. Broad documentation-only changes keep the local-first tier. | Complete: per-event equality, uniqueness, registry-input regressions, and the final release-contract check pass. |
+| F14 | Shared constants and type-only imports remove the eager redaction/tooling dependency on the coordinator, retaining facade aliases and override behavior. | Complete: eight fresh-process import-order cases and full facade/parity regressions pass. |
+| O01 | Investigation demonstrated fixture leakage: an empty `.git` directory let Git discover the enclosing checkout. Fixtures now initialize real isolated repositories; no held-descriptor production fix was needed. | Complete: six focused lock lifecycle cases pass with external and in-checkout temporary roots. |
+
+### Final integrated validation
+
+The final product tree was checked after the last native stdin/input correction:
+
+| Validation | Final local result | Scope |
+| --- | --- | --- |
+| Full tracked pytest | 655 passed, one POSIX-specific skip; 656 collected; 139.31 seconds | Current product tree; the POSIX-specific path is not claimed as locally executed |
+| Statement coverage | 84.49%; global 80% gate unchanged | Scanner class included; original blanket exclusion removed |
+| Ruff, Pyright, release contract | All exited with zero | Current product tree after the last native input correction |
+| Local release harness | `release_readiness.py --skip-self-audit` exited with zero | Final artifact/smoke steps ran after the last correction; the final full pytest above supersedes the harness's earlier test collection |
+| CLI/GUI smoke; module/direct-script help | Passed | Current product/artifact checks; visual capture is qualified separately below |
+| Wheel/sdist build and isolated installs | Passed | Current artifacts; module origin, entry points, policy, all eight prompt hashes, materialization cleanup, and `pip check` verified outside the checkout |
+| Three resolved requirement audits | No known vulnerabilities | Development, GUI, and remediation sets at validation time; not a guarantee about all allowed versions |
+| Installed skill refresh and forward check | Passed | Four public source hashes match. Both PowerShell runtimes resolve installed metadata from a neutral external workspace; help/tooling exit with zero and an explicit-target audit-only fixture returns policy/summary PASS, complete/finished, and zero blocking/advisory entries; local metadata and artifacts remain unpublished |
+| Finding-bearing scanner parity | Eight cases passed | Six bounded-baseline cap/incident combinations and two original-baseline cap-50 combinations; comparison limits are recorded below |
+
+Earlier passing harness snapshots are superseded by the final tracked-suite
+result above. **Post-commit publication steps still pending:** clean-worktree
+self-audit and remote synchronization. Record their actual results after they
+finish. Local checks do not claim a new tag, release, full supported-platform CI
+run, or successful visual capture.
+
+Fresh screenshot review is unavailable in this execution environment. Visual QA
+was attempted, but its capture was uniformly black rather than usable desktop
+evidence. GUI initialization, callbacks, layout tests, and the final GUI smoke
+passed; they do not replace human review of a captured screen. Keep this capture
+limit distinct from a product defect and from a passing visual gate.
+
+### Measured scanner tradeoff
+
+The clean-corpus comparison uses three repetitions for each of three
+implementations across two synthetic corpus sizes: **18 timed runs**. Normalized
+full reports and policy decisions match for those runs. The audited implementation
+is the original comparison; the bounded unoptimized implementation adds the
+required stream lifecycle without the subsequent scanner work sharing.
+
+| Synthetic corpus | Audited median | Implemented median | Change from audited | Improvement over bounded unoptimized |
+| --- | --- | --- | --- | --- |
+| 120 commits, 8 files | 1.0163 seconds | 0.7501 seconds | 26.2% faster | 56.7% faster |
+| 480 commits, 32 files | 1.8184 seconds | 1.5038 seconds | 17.3% faster | 65.3% faster |
+
+| Median peak traced memory | Audited | Bounded unoptimized | Implemented |
+| --- | --- | --- | --- |
+| 120 commits, 8 files | 66.7 KB | 392 KB | 370.3 KB |
+| 480 commits, 32 files | 67.7 KB | 395 KB | 370.7 KB |
+
+These are `tracemalloc` measurements of Python allocations, not complete process
+RSS. Concurrent readers required to enforce deadlines increase memory relative to
+the audited implementation. Scanner sharing reduces that cost relative to the
+bounded unoptimized variant, and the implemented peak stays approximately stable
+when this history corpus grows fourfold. This is an explicit correctness/speed
+tradeoff, not a claim of lower overall memory than the original implementation or
+bounded total memory for every repository shape.
+
+Independent finding-bearing comparisons preserve normalized full reports in six
+cases against the bounded unoptimized baseline: match caps 1, 2, and 50, each
+with optional incident audit off/on. Two additional cases match the original
+audited baseline at cap 50 with incident audit off/on. The original low-cap
+reader stalled until timeout, so its low-cap cases use the bounded baseline
+instead. This comparison boundary is explicit; the timed clean-corpus comparison
+above does not imply that all original-reader cases completed.
+
+Instrumentation was measured in three samples of 10,000 calls: median counter
+overhead is 0.554 microseconds per call and phase overhead 0.604 microseconds per
+call. Timing and memory conclusions apply only to these recorded local workloads.
+
+### Operational limits retained
+
+- Legacy artifacts without completion context remain REVIEW; run a fresh audit
+  before treating their guidance as publication readiness.
+- Cancellation is cooperative. Read-only local audit work polls the signal;
+  ordinary CLI Ctrl+C records an aborted partial run, and active repair writes
+  defer interruption to the next safe boundary. Pause/resume is not added.
+  External forced termination is outside the cooperative cancellation scope.
+- Handled skill-refresh failures restore the previous installation. An abrupt
+  process or machine termination between directory moves can leave a sibling
+  `.repo-privacy-guardian.backup-*` directory for reviewed local recovery.
+- A destination created concurrently during replacement is preserved alongside
+  the prior copy's backup when automatic restoration cannot safely proceed.
+- Optional remote discovery and GitHub checks retain their own bounded network
+  and command timeouts. They do not become implicit local-audit behavior.
+- Measurements apply to their recorded synthetic workloads and platforms.
+  Cross-platform CI and fresh release validation remain distinct evidence.
+- A usable fresh desktop capture is unavailable in the current execution
+  environment. Passing GUI smoke and layout/callback tests do not establish
+  screenshot or pixel review.
+
+## Original audit and proposed implementation
+
+The following sections preserve the findings and acceptance decisions from the
+original audit. Present-tense defect descriptions refer to the audited commit,
+not to the implementation record above.
 
 ## Scope and public evidence
 
@@ -354,8 +473,8 @@ manual/local tiers.
 
 Acceptance: relevant source/config paths trigger both events consistently; docs
 remain governed by the intended cost policy. The README runner and DEC-009
-description were corrected in this documentation delivery; workflow changes
-remain pending.
+description were corrected in the initial documentation delivery; workflow
+changes were pending at that time.
 
 ### F14 — Two internal modules depend on importing the facade first (P3)
 

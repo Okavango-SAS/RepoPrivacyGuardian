@@ -4,7 +4,7 @@ This roadmap reflects the current stable `1.5.x` stage of the repository instead
 
 ## Current baseline
 
-The 2026-10-04 [repository and Codex skill audit](REPO_SKILL_IMPROVEMENT_PLAN.md) is the current improvement baseline. The default tracked suite passed with 457 tests and reported 85.86% coverage; the scanner class's broad coverage exclusion limits what that percentage establishes. The audit also confirmed open report-completion, installed-prompt, stream-lifecycle, and skill-reliability defects. This is an audit and implementation plan, not a completed release gate or a claim that the planned fixes have shipped.
+The 2026-10-04 [repository and Codex skill audit and implementation record](REPO_SKILL_IMPROVEMENT_PLAN.md) is the current improvement baseline. Its authorized follow-up implements shared completion-aware decisions, packaged prompts and isolated artifact checks, bounded stream lifecycles, and skill reliability corrections. The scanner coverage exclusion is removed, audit work is shared, metrics are expanded, and cancellation is cooperative within read-only local work. Final validation passes with 655 tracked tests, one POSIX-specific skip, and 84.49% coverage; static, artifact, smoke, dependency, and installed-skill checks pass. Repeated timing/report-parity comparisons include an explicit concurrent-reader memory tradeoff. Fresh screenshot review is unavailable in this capture environment. The original 457-test/85.86% audit result remains historical evidence. Version `1.5.1` is unchanged, and no new release is announced.
 
 Established product surfaces include:
 
@@ -30,15 +30,15 @@ Established product surfaces include:
 
 ## Near-term improvements with real value
 
-Apply the [detailed implementation plan](REPO_SKILL_IMPROVEMENT_PLAN.md) in reviewed stages, preserving the stable `1.x` interfaces and shared CLI/GUI behavior. No runtime or skill changes are included in the audit documentation delivery.
+Keep the completed [implementation plan](REPO_SKILL_IMPROVEMENT_PLAN.md) as a
+measured baseline while preserving stable `1.x` interfaces and shared CLI/GUI
+behavior.
 
-1. Make summary, HTML, and GUI decisions account for failed, aborted, empty, and incomplete runs; retain policy status separately from execution completion.
-2. Package the eight bilingual GUI prompts and validate installed wheel/sdist behavior outside the source checkout.
-3. Bound streaming subprocess deadlines, drain stderr safely, and clean up child processes; then improve cooperative cancellation at safe audit boundaries.
-4. Validate skill Python candidates, make forced skill refresh transactional, and resolve relative PowerShell paths from the shell location. Isolate fallback tests from checkout ancestors.
-5. Remove the blanket scanner coverage exclusion and add meaningful behavior tests while retaining the existing coverage gate; correct the direct-import cycles in redaction/tooling and investigate the location-sensitive lock test result before prescribing a fix.
-6. Measure incremental scanner optimizations: reuse audit-scoped metadata and tracked-file work before consolidating history passes, preserving finding taxonomy, limits, and report parity.
-7. Align CI event path filters and strengthen package-install validation, then run the complete tracked release checks and desktop parity checks before release.
+1. Preserve corrected-denominator coverage and the 80% gate, with completed, failed, aborted, and legacy CLI/GUI guidance covered by behavior tests.
+2. Continue isolated wheel/sdist resource and entry-point checks; exercise the skipped POSIX signal path in supported-platform validation and obtain usable screenshot review in a working desktop-capture environment.
+3. Preserve finding taxonomy, scopes, and independent limits through future scanner changes; repeat the accepted multi-corpus report-parity and median/memory comparisons instead of extrapolating the current speedup to all repositories.
+4. Keep the verified installed skill aligned with maintained source and preserve local metadata outside Git; retain rollback and abrupt-termination recovery checks when installer behavior changes.
+5. Keep supported-platform validation separate from local evidence, and run the complete release gate before a future version or tag.
 
 Continue maintenance alongside these stages:
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from repo_privacy_guardian.core import (
+from repo_privacy_guardian.redaction_patterns import (
     DEFAULT_PLACEHOLDER,
     EMAIL_FIXTURE_PATH_RE,
     EMAIL_FIXTURE_SNIPPET_RE,

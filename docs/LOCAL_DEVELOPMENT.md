@@ -38,9 +38,24 @@ The maintained [Codex skill](../codex/skills/repo-privacy-guardian/SKILL.md) is 
 ./scripts/dev/install_codex_skill.ps1 -Force
 ```
 
-The installer uses `CODEX_HOME/skills` when configured, otherwise the user profile's `.codex/skills`; `-CodexHome` selects another Codex home. `-WhatIf` previews without changing files. Existing installations require `-Force`, which replaces this skill's installed files with the maintained source. The checkout link belongs only in the installed `.local/install.json`; never copy personal paths or that metadata into tracked files.
+The installer uses `CODEX_HOME/skills` when configured, otherwise the user profile's `.codex/skills`; `-CodexHome` selects another Codex home. Relative filesystem inputs follow the current PowerShell `Set-Location` location. `-WhatIf` previews without changing files. Existing installations require `-Force`, which prepares and validates a sibling staging copy before replacing this skill's installed files. Handled copy, metadata, or swap failures preserve or restore the previous copy. The checkout link belongs only in the installed `.local/install.json`; never copy personal paths or that metadata into tracked files.
+
+An abrupt process or machine termination between directory moves can leave a
+sibling `.repo-privacy-guardian.backup-*` directory. Inspect and preserve that
+local backup until the installed skill and link have been verified. Replacement
+handles normal failures with rollback; it does not claim crash-atomic recovery.
+If another process creates a destination during the swap, the installer preserves
+that destination and the previous copy's recovery backup rather than overwriting
+either. Unicode paths and interpreter-probe output use UTF-8 consistently.
 
 The resolver prefers a RepoPrivacyGuardian checkout in the current workspace or its parents, then valid installed metadata, then `REPO_PRIVACY_GUARDIAN_REPO`, then the console CLI on PATH. After installation, open a new Codex chat and invoke `$repo-privacy-guardian` with an explicit target and audit-only scope. See the [README setup](../README.MD#codex-skill-linked-to-this-checkout) and [dogfooding runbook](DOGFOODING.md#codex-skill-targets-and-evidence) for usage and artifact placement.
+
+For checkout execution, the resolver probes local virtual-environment and PATH
+Python candidates non-interactively with a bounded timeout and requires Python
+3.10 or newer. A broken or unsupported candidate is skipped in favor of the next
+usable candidate. Resolution does not install dependencies or change persistent
+configuration; run the resulting argument array from the returned working
+directory.
 
 ## 2. Fast local loops
 
@@ -62,7 +77,18 @@ python -m Repo_Privacy_Guardian --help
 Both `pytest -q` and `python -m pytest -q` are supported from a repository checkout.
 Repo-owned smoke and subprocess-backed tests run non-interactively with bounded timeouts; keep new helper scripts the same way so local validation cannot hang an agent or CI runner.
 
-`tests/test_codex_skill.py` covers installer previews, safe replacement, checkout linking, and resolver precedence/fallbacks. Its subprocess regressions require `pwsh` or `powershell` and skip when neither is available.
+Active CLI repair batches defer repeated Ctrl+C until the next Git-safe boundary
+and preserve abort evidence after the batch returns. Read-only audits retain
+ordinary interruption cleanup and cooperative cancellation polling. Keep native
+process signal/boundary regressions platform-aware; a skipped POSIX case on
+Windows is not evidence that the POSIX path passed locally.
+
+`tests/test_codex_skill.py` covers installer previews, staged replacement and
+rollback, checkout linking, provider-relative paths, interpreter probes, and
+resolver precedence/fallbacks. Its subprocess regressions exercise available
+`pwsh` and `powershell` runtimes and skip when neither is available. Fallback
+fixtures explicitly isolate checkout ancestry, so an in-checkout `--basetemp`
+does not change the expected backend priority.
 
 Use the GUI smoke path only when a desktop session is available:
 
@@ -105,7 +131,8 @@ The harness currently validates:
 - CLI and GUI smoke scripts
 - module and direct-script help paths
 - `wheel` and `sdist` builds
-- install smoke for both built artifacts
+- isolated install smoke for both built artifacts, from empty working directories outside the source checkout with source-injecting `PYTHONPATH` removed
+- installed import-origin, module/console entry-point, packaged-policy, and all eight bilingual prompt-hash checks
 - `pip check` inside each isolated install-smoke environment
 - final self-audit when the worktree is clean
 
@@ -123,6 +150,8 @@ Start here when changing behavior:
 - `scripts/benchmark_large_history.py`: local synthetic benchmark for history-scan timings from `run_state.json`
 - `scripts/release_readiness.py`: owned end-to-end local validation harness
 - `repo_privacy_guardian_resources/POLICY.md`: packaged policy resource used by installed builds
+- `build_helpers.py`: deterministic build support that generates packaged prompts from the canonical registry-selected files under `docs/prompts/`; do not maintain a second tracked copy of those texts
+- `scripts/check_artifact_install.py`: isolated artifact-install origin/resource/entry-point validator shared by CI and the local harness
 - `docs/`: runbooks, architecture notes, policy, prompts, and release guidance
 
 The repository root is intentionally small and allowlisted by release-hygiene tests. Keep support docs, prompts, requirements, scripts, screenshots, generated reports, build outputs, and agent scratch material in their documented subfolders instead of adding new tracked root files.
@@ -154,3 +183,36 @@ The tracked repo-owned quality gate today is intentionally practical:
 - self-audit
 
 The repo-owned typecheck command is `pyright -p pyrightconfig.json`. Keep any future typecheck expansion stable enough that it improves release confidence instead of adding noise.
+
+Scanner statement coverage includes `RepoPublicationGuard`; keep the existing
+80% global gate and use behavior tests rather than broad exclusions. Isolate
+coverage output for concurrent validation runs. `run_state.json` metrics add
+metadata/tracked/history/fsck timings and bounded numeric workload counters;
+elapsed failed or cancelled work remains recorded without storing finding values
+or file bodies.
+
+Automatic CI keeps equal, unique push/PR filters. Broad docs-only edits remain
+local-first, while the eight canonical packaged prompt documents are explicit
+runtime inputs and trigger smoke. Full tracked tests, package checks, and desktop
+smoke retain their manual/local validation tiers.
+
+### Scanner performance changes
+
+Use synthetic workloads and preserve the baseline `run_state.json` path printed
+by the benchmark. For a subsequent run, replace the quoted placeholder below with
+that actual local evidence path:
+
+```sh
+python scripts/benchmark_large_history.py --commits 120 --files 8
+python scripts/benchmark_large_history.py --commits 120 --files 8 --baseline-run-state "baseline-run-state-path" --max-regression-percent 25
+```
+
+Run at least three repetitions per baseline and changed corpus, use matched
+commit/file counts, and compare medians. The helper checks timing regressions
+against an optional percentage budget; it does not itself prove finding parity
+or collect a complete memory profile. Compare normalized full reports and policy
+outcomes separately, record peak-memory evidence alongside timings, and retain
+optimization only when findings remain equivalent and measurements justify it.
+Keep fixtures, profiling output, and benchmark artifacts under ignored local
+paths. Audit-scoped caches must be rebuilt after repair and before re-audit;
+never persist tracked bodies or detected values as a performance cache.

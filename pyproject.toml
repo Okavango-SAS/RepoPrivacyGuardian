@@ -72,8 +72,11 @@ py-modules = ["Repo_Privacy_Guardian", "repo_privacy_guardian_artifacts", "repo_
 packages = ["repo_privacy_guardian", "repo_privacy_guardian.gui", "repo_privacy_guardian_resources", "repo_privacy_guardian_assets"]
 
 [tool.setuptools.package-data]
-repo_privacy_guardian_resources = ["POLICY.md"]
+repo_privacy_guardian_resources = ["POLICY.md", "prompts/*.prompt.md", "prompts/en/*.prompt.md"]
 repo_privacy_guardian_assets = ["*.png"]
+
+[tool.setuptools.cmdclass]
+build_py = "build_helpers.BuildPromptResources"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

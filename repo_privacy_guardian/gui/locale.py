@@ -35,6 +35,7 @@ def gui_font_candidates(platform_name: str | None = None) -> dict[str, tuple[str
 
 
 GUI_TOOLTIP_TEXT: dict[str, str] = {
+    "run_state": "Opens run_state.json to review completion, exit code, phase timings, and numeric scanner workload counters from the same CLI/GUI run.",
     "repositories_root": (
         "Local folder that contains one or more git repositories. Drop repository folders into the list "
         "or use Browse/Refresh to update local targets."
@@ -218,6 +219,7 @@ GUI_TOOLTIP_TEXT: dict[str, str] = {
 }
 
 GUI_TOOLTIP_TEXT_ES_419: dict[str, str] = {
+    "run_state": "Abre run_state.json para revisar finalización, código de salida, tiempos por etapa y contadores numéricos del escáner de la misma corrida CLI/GUI.",
     "repositories_root": (
         "Carpeta local que contiene uno o más repositorios git. Arrastrá carpetas de repositorios a la lista "
         "o usá Buscar/Actualizar para refrescar los objetivos locales."
@@ -431,11 +433,11 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "latest_artifacts_none": "Run Audit to create report.json, report.html, run.log, and run_state.json.",
         "next_action": "Next action",
         "next_action_run_audit": "Run Audit first, then review local artifacts here before copying anything into an agent session.",
-        "next_action_review_artifacts": "Open report.json and run.log to confirm the run produced repository results before delegating analysis.",
+        "next_action_review_artifacts": "Open run_state.json and run.log to verify completion. Re-run all selected targets if the audit was incomplete or completion is unknown.",
         "next_action_failed": "Review blocking categories in report.html, then copy the agent handoff for classification before enabling Repair.",
         "next_action_manual": "Classify advisory findings with an agent before publication. Repair stays optional and reviewed.",
-        "next_action_pass": "No blocking publication findings are present. Keep artifacts for review or copy the handoff for agent sign-off.",
-        "next_action_error": "Open run.log and run_state.json, resolve the runtime issue, then run Audit again.",
+        "next_action_pass": "The selected audit completed without blocking or advisory findings. Keep artifacts for review or copy the handoff for agent sign-off.",
+        "next_action_error": "Check run.log and run_state.json, resolve any runtime issue or re-run an interrupted audit before publication.",
         "agent_step_evidence": "1. Review redacted evidence",
         "agent_step_copy": "2. Copy agent handoff",
         "agent_step_prompt": "3. Choose a reviewed prompt",
@@ -468,6 +470,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "report_diff_no_previous": "No previous report.json was found under Audit_Results.",
         "report_diff_failed": "Run comparison failed: {error}",
         "open_run_log_action": "Open run.log",
+        "open_run_state_action": "Open run_state.json",
         "open_artifacts_folder_action": "Open artifacts folder",
         "cleanup_audit_results_action": "Clean old runs",
         "dialog_cleanup_audit_results_title": "Clean old Audit_Results runs?",
@@ -780,11 +783,11 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "latest_artifacts_none": "Ejecutá Auditar para crear report.json, report.html, run.log y run_state.json.",
         "next_action": "Próxima acción",
         "next_action_run_audit": "Ejecutá Auditar primero. Después revisá acá los artefactos locales antes de pasar contexto a una sesión agéntica.",
-        "next_action_review_artifacts": "Abrí report.json y run.log para confirmar que la corrida produjo resultados antes de delegar análisis.",
+        "next_action_review_artifacts": "Abrí run_state.json y run.log para verificar la finalización. Repetí todos los objetivos seleccionados si la auditoría quedó incompleta o su finalización es desconocida.",
         "next_action_failed": "Revisá categorías bloqueantes en report.html. Después copiá el contexto agéntico para clasificar evidencia antes de Reparar.",
         "next_action_manual": "Clasificá señales consultivas con un agente antes de publicar. Reparar queda opcional y revisado.",
-        "next_action_pass": "No hay bloqueos de publicación en los resultados. Conservá artefactos o copiá el contexto para una revisión agéntica final.",
-        "next_action_error": "Abrí run.log y run_state.json, resolvé el problema de ejecución y repetí Auditar.",
+        "next_action_pass": "La auditoría seleccionada terminó sin hallazgos bloqueantes ni consultivos. Conservá artefactos o copiá el contexto para una revisión agéntica final.",
+        "next_action_error": "Revisá run.log y run_state.json, resolvé errores de ejecución o repetí una auditoría interrumpida antes de publicar.",
         "agent_step_evidence": "1. Revisar evidencia redactada",
         "agent_step_copy": "2. Copiar contexto agéntico",
         "agent_step_prompt": "3. Elegir instrucción revisada",
@@ -817,6 +820,7 @@ GUI_UI_TEXT_BY_LOCALE: dict[str, dict[str, str]] = {
         "report_diff_no_previous": "No se encontró un report.json anterior en Audit_Results.",
         "report_diff_failed": "Falló la comparación de corridas: {error}",
         "open_run_log_action": "Abrir run.log",
+        "open_run_state_action": "Abrir run_state.json",
         "open_artifacts_folder_action": "Abrir carpeta de artefactos",
         "cleanup_audit_results_action": "Limpiar corridas antiguas",
         "dialog_cleanup_audit_results_title": "¿Limpiar corridas antiguas de Audit_Results?",

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
+from repo_privacy_guardian.run_decision import RunDecision, evaluate_run_decision
 
 WidgetState = Literal["normal", "disabled"]
 RepairGateTone = Literal["locked", "review", "ready"]
@@ -1755,6 +1756,14 @@ def report_artifact_action_button_specs() -> tuple[ActionButtonSpec, ...]:
             grid=WidgetGridConfig(row=0, column=6, sticky="w", padx=(0, 8), pady=0),
             icon="icon-folder.png",
         ),
+        ActionButtonSpec(
+            text_key="open_run_state_action",
+            tooltip_key="run_state",
+            command_kind="artifact",
+            command_arg="state",
+            grid=WidgetGridConfig(row=0, column=7, sticky="w", padx=(0, 8), pady=0),
+            icon="icon-report.png",
+        ),
     )
 
 
@@ -1785,6 +1794,7 @@ def reports_status_label(
     exit_policy_failed: int,
     exit_runtime_error: int,
     exit_aborted: int,
+    run_context: dict[str, object] | None = None,
 ) -> str:
     if counts["failed"] or counts["blocking"] or exit_code == exit_policy_failed:
         return "FAIL"
@@ -1792,9 +1802,12 @@ def reports_status_label(
         return "ERROR"
     if exit_code == exit_aborted:
         return "ABORTED"
-    if counts["manual"] or counts["total"] == 0:
-        return "PASS/REVIEW"
-    return "PASS"
+    guidance = reports_run_decision(counts, exit_code, run_context=run_context)
+    if guidance.reason == "runtime_error":
+        return "ERROR"
+    if guidance.reason == "policy_failure":
+        return "FAIL"
+    return "PASS" if guidance.status == "PASS" else "PASS/REVIEW"
 
 
 def reports_next_action_key(
@@ -1806,20 +1819,44 @@ def reports_next_action_key(
     exit_policy_failed: int,
     exit_runtime_error: int,
     exit_aborted: int,
+    run_context: dict[str, object] | None = None,
 ) -> str:
     if not has_artifacts:
         return "next_action_run_audit"
-    if exit_code in {exit_runtime_error, exit_aborted}:
+    canonical_exit = {
+        exit_ok: 0,
+        exit_aborted: 1,
+        exit_policy_failed: 2,
+        exit_runtime_error: 3,
+    }.get(exit_code) if exit_code is not None else None
+    guidance = reports_run_decision(counts, canonical_exit, run_context=run_context)
+    if guidance.reason in {"runtime_error", "aborted"}:
         return "next_action_error"
-    if exit_code not in {None, exit_ok, exit_policy_failed}:
-        return "next_action_error"
-    if counts["failed"] or counts["blocking"] or exit_code == exit_policy_failed:
+    if guidance.reason == "policy_failure":
         return "next_action_failed"
-    if counts["manual"]:
+    if guidance.reason == "advisory":
         return "next_action_manual"
-    if counts["total"] == 0:
-        return "next_action_review_artifacts"
-    return "next_action_pass"
+    if guidance.status == "PASS":
+        return "next_action_pass"
+    return "next_action_review_artifacts"
+
+
+def reports_run_decision(
+    counts: dict[str, int],
+    exit_code: int | None,
+    *,
+    run_context: dict[str, object] | None = None,
+) -> RunDecision:
+    """Keep report guidance consistent with the persisted CLI artifacts."""
+    return evaluate_run_decision(
+        exit_code=exit_code,
+        policy_failed=bool(counts["failed"]),
+        execution_error_count=counts.get("execution_errors", 0),
+        blocking_count=counts["blocking"],
+        manual_review_count=counts["manual"],
+        available_repositories=counts["total"],
+        run_context=run_context,
+    )
 
 
 def reports_badge_color_roles(status_label: str) -> tuple[FillColorRole, TextColorRole]:
@@ -1864,6 +1901,7 @@ def reports_run_presentation_state(
     exit_policy_failed: int,
     exit_runtime_error: int,
     exit_aborted: int,
+    run_context: dict[str, object] | None = None,
 ) -> ReportsRunPresentationState:
     visibility = reports_action_visibility_state(has_artifacts=has_artifacts)
     next_action = reports_next_action_key(
@@ -1874,6 +1912,7 @@ def reports_run_presentation_state(
         exit_policy_failed=exit_policy_failed,
         exit_runtime_error=exit_runtime_error,
         exit_aborted=exit_aborted,
+        run_context=run_context,
     )
     if not has_artifacts:
         return ReportsRunPresentationState(
@@ -1892,6 +1931,7 @@ def reports_run_presentation_state(
         exit_policy_failed=exit_policy_failed,
         exit_runtime_error=exit_runtime_error,
         exit_aborted=exit_aborted,
+        run_context=run_context,
     )
     badge_fg_role, badge_text_role = reports_badge_color_roles(status_label)
     summary_text = repair_summary_text
